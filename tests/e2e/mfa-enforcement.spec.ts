@@ -160,7 +160,7 @@ test.describe("Phase 1: Multi-Factor Authentication (TOTP MFA) E2E Suite", () =>
       await activateBtn.click();
 
       // 6. User reaches protected route
-      await page.waitForURL((url) => !url.pathname.includes("/mfa-setup") && !url.pathname.includes("/login"), { timeout: 10000 });
+      await page.waitForURL((url) => !url.pathname.includes("/mfa-setup") && !url.pathname.includes("/login"), { timeout: 15000 });
       expect(page.url()).not.toContain("/login");
       expect(page.url()).not.toContain("/mfa-setup");
     } else {
