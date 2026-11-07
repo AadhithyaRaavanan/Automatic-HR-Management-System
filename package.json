@@ -9,7 +9,7 @@
     "lint": "next lint",
     "test": "vitest run tests/unit",
     "test:watch": "vitest tests/unit",
-    "test:db": "vitest run tests/database",
+    "test:db": "npx supabase db reset && vitest run tests/database --no-file-parallelism",
     "test:all": "vitest run",
     "test:e2e": "playwright test"
   },

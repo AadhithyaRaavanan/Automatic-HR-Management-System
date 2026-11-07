@@ -403,8 +403,7 @@ DROP TABLE public.user_roles;
 CREATE VIEW public.user_roles WITH (security_invoker = true) AS
     SELECT user_id, role, created_at FROM public.organization_members;
 
-REVOKE ALL ON public.user_roles FROM PUBLIC, anon;
-REVOKE INSERT, UPDATE, DELETE ON public.user_roles FROM authenticated;
+REVOKE ALL ON public.user_roles FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.user_roles TO authenticated, service_role;
 
 -- ============================================================================
@@ -1446,6 +1445,14 @@ BEGIN
         pg_catalog.hashtext('org_admin_lock_' || v_caller_org::text)
     );
 
+    -- Re-verify caller's active admin role after acquiring advisory lock
+    IF NOT EXISTS (
+        SELECT 1 FROM public.organization_members
+        WHERE organization_id = v_caller_org AND user_id = v_caller_id AND role = 'admin' AND status = 'active'
+    ) THEN
+        RAISE EXCEPTION 'Forbidden: Caller is no longer an active administrator of the organization.' USING ERRCODE = '42501';
+    END IF;
+
     INSERT INTO public.organization_members (organization_id, user_id, role, status)
     VALUES (v_caller_org, p_user_id, p_role, 'active')
     ON CONFLICT (user_id) DO UPDATE 
@@ -1456,7 +1463,7 @@ BEGIN
     VALUES (
         v_caller_org,
         v_caller_id,
-        'member_added',
+        'MEMBER_ADDED',
         'organization_members',
         p_user_id,
         jsonb_build_object('user_id', p_user_id, 'role', p_role)
@@ -1517,6 +1524,14 @@ BEGIN
         pg_catalog.hashtext('org_admin_lock_' || v_caller_org::text)
     );
 
+    -- Re-verify caller's active admin role after acquiring advisory lock
+    IF NOT EXISTS (
+        SELECT 1 FROM public.organization_members
+        WHERE organization_id = v_caller_org AND user_id = v_caller_id AND role = 'admin' AND status = 'active'
+    ) THEN
+        RAISE EXCEPTION 'Forbidden: Caller is no longer an active administrator of the organization.' USING ERRCODE = '42501';
+    END IF;
+
     SELECT role INTO v_current_role
     FROM public.organization_members
     WHERE organization_id = v_caller_org AND user_id = p_user_id AND status = 'active';
@@ -1549,7 +1564,7 @@ BEGIN
     VALUES (
         v_caller_org,
         v_caller_id,
-        'member_role_updated',
+        'MEMBER_ROLE_UPDATED',
         'organization_members',
         p_user_id,
         jsonb_build_object('user_id', p_user_id, 'old_role', v_current_role, 'new_role', p_new_role)
@@ -1605,6 +1620,14 @@ BEGIN
         pg_catalog.hashtext('org_admin_lock_' || v_caller_org::text)
     );
 
+    -- Re-verify caller's active admin role after acquiring advisory lock
+    IF NOT EXISTS (
+        SELECT 1 FROM public.organization_members
+        WHERE organization_id = v_caller_org AND user_id = v_caller_id AND role = 'admin' AND status = 'active'
+    ) THEN
+        RAISE EXCEPTION 'Forbidden: Caller is no longer an active administrator of the organization.' USING ERRCODE = '42501';
+    END IF;
+
     SELECT role INTO v_current_role
     FROM public.organization_members
     WHERE organization_id = v_caller_org AND user_id = p_user_id;
@@ -1636,7 +1659,7 @@ BEGIN
     VALUES (
         v_caller_org,
         v_caller_id,
-        'member_removed',
+        'MEMBER_REMOVED',
         'organization_members',
         p_user_id,
         jsonb_build_object('user_id', p_user_id, 'removed_role', v_current_role)
@@ -1702,7 +1725,7 @@ BEGIN
 
     -- Audit log entry
     INSERT INTO public.audit_logs (organization_id, actor_id, action, table_name, record_id, new_data)
-    VALUES (v_caller_org, v_caller_id, 'employee_created', 'employees', p_user_id, jsonb_build_object('email', p_email, 'role', p_role));
+    VALUES (v_caller_org, v_caller_id, 'EMPLOYEE_CREATED', 'employees', p_user_id, jsonb_build_object('email', p_email, 'role', p_role));
 
     RETURN jsonb_build_object('success', true);
 END;
@@ -1717,7 +1740,8 @@ CREATE OR REPLACE FUNCTION public.admin_update_employee(
     p_primary_location_id UUID DEFAULT NULL,
     p_work_target_minutes INTEGER DEFAULT NULL,
     p_expected_office_days INTEGER[] DEFAULT NULL,
-    p_required_office_days_per_week INTEGER DEFAULT NULL
+    p_required_office_days_per_week INTEGER DEFAULT NULL,
+    p_timezone TEXT DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -1791,6 +1815,7 @@ BEGIN
         work_target_minutes = COALESCE(p_work_target_minutes, work_target_minutes),
         expected_office_days = COALESCE(p_expected_office_days, expected_office_days),
         required_office_days_per_week = COALESCE(p_required_office_days_per_week, required_office_days_per_week),
+        timezone = COALESCE(p_timezone, timezone),
         updated_at = pg_catalog.now()
     WHERE id = p_employee_id;
 
@@ -1800,7 +1825,7 @@ BEGIN
     ) VALUES (
         v_caller_org,
         v_caller_id,
-        'employee_updated',
+        'EMPLOYEE_UPDATED',
         'employees',
         p_employee_id,
         jsonb_build_object(
@@ -1810,7 +1835,8 @@ BEGIN
             'primary_location_id', p_primary_location_id,
             'work_target_minutes', p_work_target_minutes,
             'expected_office_days', p_expected_office_days,
-            'required_office_days_per_week', p_required_office_days_per_week
+            'required_office_days_per_week', p_required_office_days_per_week,
+            'timezone', p_timezone
         )
     );
 
@@ -1830,8 +1856,8 @@ GRANT ALL ON FUNCTION public.admin_remove_org_member(UUID, UUID) TO authenticate
 REVOKE ALL ON FUNCTION public.admin_create_employee(UUID, TEXT, TEXT, TEXT, UUID, TEXT, UUID) FROM PUBLIC, anon;
 GRANT ALL ON FUNCTION public.admin_create_employee(UUID, TEXT, TEXT, TEXT, UUID, TEXT, UUID) TO authenticated, service_role;
 
-REVOKE ALL ON FUNCTION public.admin_update_employee(UUID, UUID, TEXT, TEXT, UUID, INTEGER, INTEGER[], INTEGER) FROM PUBLIC, anon;
-GRANT ALL ON FUNCTION public.admin_update_employee(UUID, UUID, TEXT, TEXT, UUID, INTEGER, INTEGER[], INTEGER) TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.admin_update_employee(UUID, UUID, TEXT, TEXT, UUID, INTEGER, INTEGER[], INTEGER, TEXT) FROM PUBLIC, anon;
+GRANT ALL ON FUNCTION public.admin_update_employee(UUID, UUID, TEXT, TEXT, UUID, INTEGER, INTEGER[], INTEGER, TEXT) TO authenticated, service_role;
 
 -- ============================================================================
 -- SECTION 12: Defense-in-Depth Triggers (Field Protection & IP Range Gate)
@@ -1859,7 +1885,8 @@ BEGIN
            NEW.primary_location_id IS DISTINCT FROM OLD.primary_location_id OR
            NEW.work_target_minutes IS DISTINCT FROM OLD.work_target_minutes OR
            NEW.expected_office_days IS DISTINCT FROM OLD.expected_office_days OR
-           NEW.required_office_days_per_week IS DISTINCT FROM OLD.required_office_days_per_week THEN
+           NEW.required_office_days_per_week IS DISTINCT FROM OLD.required_office_days_per_week OR
+           NEW.timezone IS DISTINCT FROM OLD.timezone THEN
             RAISE EXCEPTION 'Permission denied: Employees cannot modify administrative attributes.';
         END IF;
     END IF;
@@ -2015,7 +2042,7 @@ GRANT SELECT ON public.audit_logs TO authenticated;
 
 -- employees: authenticated has SELECT only at table level, and UPDATE only on non-administrative self-service attributes
 GRANT SELECT ON public.employees TO authenticated;
-GRANT UPDATE (full_name, avatar_url, timezone) ON public.employees TO authenticated;
+GRANT UPDATE (full_name, avatar_url) ON public.employees TO authenticated;
 
 -- 3. Routine privileges: Revoke all from PUBLIC and anon, grant ONLY required RPCs to authenticated
 REVOKE ALL ON ALL ROUTINES IN SCHEMA public FROM PUBLIC, anon, authenticated;
@@ -2037,7 +2064,7 @@ GRANT EXECUTE ON FUNCTION public.admin_add_org_member(UUID, UUID, TEXT) TO authe
 GRANT EXECUTE ON FUNCTION public.admin_update_org_member_role(UUID, UUID, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_remove_org_member(UUID, UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_create_employee(UUID, TEXT, TEXT, TEXT, UUID, TEXT, UUID) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.admin_update_employee(UUID, UUID, TEXT, TEXT, UUID, INTEGER, INTEGER[], INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_update_employee(UUID, UUID, TEXT, TEXT, UUID, INTEGER, INTEGER[], INTEGER, TEXT) TO authenticated;
 
 -- custom_access_token_hook is called by supabase_auth_admin and service_role
 GRANT EXECUTE ON FUNCTION public.custom_access_token_hook(JSONB) TO supabase_auth_admin, service_role;

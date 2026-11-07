@@ -29,7 +29,19 @@ function getDatabaseUrl(): string | null {
   return null;
 }
 
-const dbUrl = getDatabaseUrl();
+function enforceLocalDatabaseHost(url: string | null): string {
+  if (!url) {
+    throw new Error("DATABASE_URL must be configured in .env.staging or process.env");
+  }
+  const hostMatch = url.match(/@([^:/]+)/);
+  const host = hostMatch ? hostMatch[1] : "";
+  if (host !== "127.0.0.1" && host !== "localhost") {
+    throw new Error(`CRITICAL SECURITY FAILURE: Database tests are strictly restricted to local test instances (127.0.0.1 or localhost). Attempted connection to: ${host}`);
+  }
+  return url;
+}
+
+const dbUrl = enforceLocalDatabaseHost(getDatabaseUrl());
 
 describe("Database Grants Snapshot Test", () => {
   let client: Client;
@@ -85,6 +97,7 @@ describe("Database Grants Snapshot Test", () => {
       { table_name: "attendance_policies", privilege_type: "UPDATE" },
       { table_name: "attendance_sessions", privilege_type: "SELECT" },
       { table_name: "audit_logs", privilege_type: "SELECT" },
+      { table_name: "departments", privilege_type: "SELECT" },
       { table_name: "employee_shift_assignments", privilege_type: "DELETE" },
       { table_name: "employee_shift_assignments", privilege_type: "INSERT" },
       { table_name: "employee_shift_assignments", privilege_type: "SELECT" },
@@ -112,13 +125,23 @@ describe("Database Grants Snapshot Test", () => {
       { table_name: "shift_templates", privilege_type: "INSERT" },
       { table_name: "shift_templates", privilege_type: "SELECT" },
       { table_name: "shift_templates", privilege_type: "UPDATE" },
-      { table_name: "user_roles", privilege_type: "REFERENCES" },
       { table_name: "user_roles", privilege_type: "SELECT" },
-      { table_name: "user_roles", privilege_type: "TRIGGER" },
-      { table_name: "user_roles", privilege_type: "TRUNCATE" },
     ];
 
     expect(res.rows).toEqual(expectedTableGrants);
+  });
+
+  it("ensures role 'authenticated' holds ZERO TRUNCATE, TRIGGER, or REFERENCES on any public table or view", async () => {
+    const res = await client.query(`
+      SELECT table_name, privilege_type 
+      FROM information_schema.role_table_grants 
+      WHERE table_schema = 'public' 
+        AND grantee = 'authenticated'
+        AND privilege_type IN ('TRUNCATE', 'TRIGGER', 'REFERENCES')
+      ORDER BY table_name, privilege_type;
+    `);
+
+    expect(res.rows).toEqual([]);
   });
 
   it("ensures kiosk_devices hides enrollment_token_hash from authenticated SELECT", async () => {
@@ -168,10 +191,11 @@ describe("Database Grants Snapshot Test", () => {
     `);
 
     const allowedUpdateColumns = updateColumns.rows.map((r: any) => r.column_name);
-    expect(allowedUpdateColumns).toEqual(["avatar_url", "full_name", "timezone"]);
+    expect(allowedUpdateColumns).toEqual(["avatar_url", "full_name"]);
 
-    // Sensitive governance columns must NOT have UPDATE privilege
+    // Sensitive governance and timezone attributes must NOT have direct UPDATE privilege
     const sensitiveColumns = [
+      "timezone",
       "manager_id",
       "status",
       "work_mode",
@@ -200,10 +224,23 @@ describe("Database Grants Snapshot Test", () => {
     const routineNames = res.rows.map((r: any) => r.proname);
     const expectedRoutines = [
       "admin_add_org_member",
-      "admin_create_employee",
+      "admin_assign_shift",
+      "admin_create_department",
+      "admin_create_location",
+      "admin_create_shift_template",
+      "admin_deactivate_member",
+      "admin_delete_department",
+      "admin_delete_location",
+      "admin_delete_shift_template",
       "admin_remove_org_member",
+      "admin_update_attendance_policy",
+      "admin_update_department",
       "admin_update_employee",
+      "admin_update_employee_governance",
+      "admin_update_location",
       "admin_update_org_member_role",
+      "admin_update_organization_settings",
+      "admin_update_shift_template",
       "approve_regularization",
       "check_in",
       "check_out",

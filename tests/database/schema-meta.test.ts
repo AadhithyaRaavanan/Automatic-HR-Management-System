@@ -33,7 +33,19 @@ function getDatabaseUrl(): string | null {
   return null;
 }
 
-const dbUrl = getDatabaseUrl();
+function enforceLocalDatabaseHost(url: string | null): string {
+  if (!url) {
+    throw new Error("DATABASE_URL must be configured in .env.staging or process.env");
+  }
+  const hostMatch = url.match(/@([^:/]+)/);
+  const host = hostMatch ? hostMatch[1] : "";
+  if (host !== "127.0.0.1" && host !== "localhost") {
+    throw new Error(`CRITICAL SECURITY FAILURE: Database tests are strictly restricted to local test instances (127.0.0.1 or localhost). Attempted connection to: ${host}`);
+  }
+  return url;
+}
+
+const dbUrl = enforceLocalDatabaseHost(getDatabaseUrl());
 
 const ORG_ID_EXEMPTIONS = new Set([
   "organizations",
@@ -42,33 +54,28 @@ const ORG_ID_EXEMPTIONS = new Set([
 ]);
 
 describe("PostgreSQL Schema Meta-Test Suite", () => {
-  let client: Client | null = null;
-  let isConnected = false;
+  let client: Client;
 
   beforeAll(async () => {
-    if (!dbUrl) return;
-    try {
-      const isLocal = dbUrl.includes("127.0.0.1") || dbUrl.includes("localhost");
-      client = new Client({
-        connectionString: dbUrl,
-        ssl: isLocal ? false : { rejectUnauthorized: false },
-        connectionTimeoutMillis: 5000,
-      });
-      await client.connect();
-      isConnected = true;
-    } catch {
-      isConnected = false;
+    if (!dbUrl) {
+      throw new Error("DATABASE_URL must be configured in .env.staging or process.env");
     }
+    const isLocal = dbUrl.includes("127.0.0.1") || dbUrl.includes("localhost");
+    client = new Client({
+      connectionString: dbUrl,
+      ssl: isLocal ? false : { rejectUnauthorized: false },
+      connectionTimeoutMillis: 5000,
+    });
+    await client.connect();
   });
 
   afterAll(async () => {
-    if (client && isConnected) {
+    if (client) {
       await client.end().catch(() => {});
     }
   });
 
   it("fails if any public table lacks organization_id (excluding documented exemptions)", async () => {
-    if (!isConnected || !client) return;
 
     const tablesRes = await client.query(`
       SELECT table_name 
@@ -98,7 +105,6 @@ describe("PostgreSQL Schema Meta-Test Suite", () => {
   });
 
   it("fails if any public table lacks Row Level Security (RLS)", async () => {
-    if (!isConnected || !client) return;
 
     const res = await client.query(`
       SELECT tablename, rowsecurity 
@@ -117,7 +123,6 @@ describe("PostgreSQL Schema Meta-Test Suite", () => {
   });
 
   it("fails if any view in public is not configured with security_invoker = true", async () => {
-    if (!isConnected || !client) return;
 
     const res = await client.query(`
       SELECT c.relname AS view_name, c.reloptions
@@ -139,7 +144,6 @@ describe("PostgreSQL Schema Meta-Test Suite", () => {
   });
 
   it("fails if any SECURITY DEFINER function in public lacks an empty search_path", async () => {
-    if (!isConnected || !client) return;
 
     const res = await client.query(`
       SELECT p.proname, p.proconfig
@@ -162,7 +166,6 @@ describe("PostgreSQL Schema Meta-Test Suite", () => {
   });
 
   it("fails if any SECURITY DEFINER function in public has execute grants for PUBLIC or anon", async () => {
-    if (!isConnected || !client) return;
 
     const res = await client.query(`
       SELECT 
@@ -190,7 +193,6 @@ describe("PostgreSQL Schema Meta-Test Suite", () => {
   });
 
   it("confirms cron_run_state has a surrogate primary key with no expression", async () => {
-    if (!isConnected || !client) return;
 
     const res = await client.query(`
       SELECT kcu.column_name
@@ -208,7 +210,6 @@ describe("PostgreSQL Schema Meta-Test Suite", () => {
   });
 
   it("verifies organization_id derivation triggers automatically derive org in system context with null auth.uid()", async () => {
-    if (!isConnected || !client) return;
 
     const empRes = await client.query(`SELECT id, organization_id FROM public.employees LIMIT 1;`);
     expect(empRes.rows.length).toBeGreaterThan(0);
@@ -263,7 +264,6 @@ describe("PostgreSQL Schema Meta-Test Suite", () => {
   });
 
   it("verifies admin_create_organization access control: service_role succeeds; authenticated/anon are denied", async () => {
-    if (!isConnected || !client) return;
 
     // As postgres / service_role: succeeds
     const orgRes = await client.query(`
@@ -298,7 +298,6 @@ describe("PostgreSQL Schema Meta-Test Suite", () => {
   });
 
   it("verifies custom_access_token_hook: allows active/trial, rejects suspended/cancelled, handles unassociated user", async () => {
-    if (!isConnected || !client) return;
 
     const uActive = "00000000-0000-0000-0000-000000000901";
     const uTrial = "00000000-0000-0000-0000-000000000902";
@@ -401,7 +400,6 @@ describe("PostgreSQL Schema Meta-Test Suite", () => {
   });
 
   it("verifies hybrid timezone resolution at first punch of day before work location is established", async () => {
-    if (!isConnected || !client) return;
 
     // Create hybrid employee with Asia/Tokyo timezone in Org with Europe/London timezone
     const orgId = (await client.query(`

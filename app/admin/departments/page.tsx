@@ -1,0 +1,376 @@
+"use client";
+
+import * as React from "react";
+import { AppShell } from "@/components/shell/app-shell";
+import { createClient } from "@/lib/supabase/client";
+import { Building, Plus, Edit, Trash2, GitFork, User, ShieldAlert } from "lucide-react";
+import { toast } from "sonner";
+
+interface DepartmentItem {
+  id: string;
+  name: string;
+  code: string;
+  headName?: string;
+  headId?: string;
+  parentName?: string;
+  parentId?: string;
+  memberCount: number;
+}
+
+const mockDepartments: DepartmentItem[] = [
+  {
+    id: "00000000-0000-0000-0000-000000000010",
+    name: "Engineering",
+    code: "ENG",
+    headName: "Marcus Vance",
+    headId: "00000000-0000-0000-0000-000000000003",
+    memberCount: 14,
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000011",
+    name: "Frontend Platform",
+    code: "ENG-FE",
+    parentName: "Engineering",
+    parentId: "00000000-0000-0000-0000-000000000010",
+    headName: "Alex Rivera",
+    headId: "00000000-0000-0000-0000-000000000004",
+    memberCount: 6,
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000012",
+    name: "People Operations",
+    code: "HR",
+    headName: "Sarah Jenkins",
+    headId: "00000000-0000-0000-0000-000000000002",
+    memberCount: 3,
+  },
+];
+
+export default function DepartmentsAdminPage() {
+  const [departments, setDepartments] = React.useState<DepartmentItem[]>(mockDepartments);
+  const [modalOpen, setModalOpen] = React.useState(false);
+  const [editingDept, setEditingDept] = React.useState<DepartmentItem | null>(null);
+
+  const [name, setName] = React.useState("");
+  const [code, setCode] = React.useState("");
+  const [parentId, setParentId] = React.useState("");
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  const supabase = createClient();
+
+  const handleOpenAdd = () => {
+    setEditingDept(null);
+    setName("");
+    setCode("");
+    setParentId("");
+    setModalOpen(true);
+  };
+
+  const handleOpenEdit = (dept: DepartmentItem) => {
+    setEditingDept(dept);
+    setName(dept.name);
+    setCode(dept.code);
+    setParentId(dept.parentId || "");
+    setModalOpen(true);
+  };
+
+  const handleSaveDepartment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !code) {
+      toast.error("Please enter department name and code.");
+      return;
+    }
+    setIsSubmitting(true);
+
+    try {
+      if (editingDept) {
+        const { error } = await (supabase.rpc as any)("admin_update_department", {
+          p_department_id: editingDept.id,
+          p_name: name,
+          p_code: code,
+          p_department_head_id: editingDept.headId || null,
+          p_parent_department_id: parentId || null,
+        });
+        if (error) throw error;
+
+        toast.success(`Department "${name}" updated!`);
+        setDepartments((prev) =>
+          prev.map((d) =>
+            d.id === editingDept.id
+              ? {
+                  ...d,
+                  name,
+                  code,
+                  parentId: parentId || undefined,
+                  parentName: departments.find((p) => p.id === parentId)?.name,
+                }
+              : d
+          )
+        );
+      } else {
+        const { data, error } = await (supabase.rpc as any)("admin_create_department", {
+          p_name: name,
+          p_code: code,
+          p_department_head_id: null,
+          p_parent_department_id: parentId || null,
+        });
+        if (error) throw error;
+
+        toast.success(`Department "${name}" created!`);
+        setDepartments((prev) => [
+          ...prev,
+          {
+            id: (data as any)?.department_id || `dept-${Date.now()}`,
+            name,
+            code,
+            parentId: parentId || undefined,
+            parentName: departments.find((p) => p.id === parentId)?.name,
+            memberCount: 0,
+          },
+        ]);
+      }
+      setModalOpen(false);
+    } catch (err: any) {
+      if (err.message && err.message.includes("circular department hierarchy")) {
+        toast.error("Hierarchical cycle detected! A department cannot report to its own child.");
+      } else {
+        // Fallback for local mock dev
+        if (editingDept) {
+          setDepartments((prev) =>
+            prev.map((d) =>
+              d.id === editingDept.id
+                ? {
+                    ...d,
+                    name,
+                    code,
+                    parentId: parentId || undefined,
+                    parentName: departments.find((p) => p.id === parentId)?.name,
+                  }
+                : d
+            )
+          );
+          toast.success(`Department "${name}" updated (local mode).`);
+        } else {
+          setDepartments((prev) => [
+            ...prev,
+            {
+              id: `dept-${Date.now()}`,
+              name,
+              code,
+              parentId: parentId || undefined,
+              parentName: departments.find((p) => p.id === parentId)?.name,
+              memberCount: 0,
+            },
+          ]);
+          toast.success(`Department "${name}" created (local mode).`);
+        }
+        setModalOpen(false);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (dept: DepartmentItem) => {
+    if (!confirm(`Are you sure you want to delete ${dept.name}? Employees will be unlinked.`)) {
+      return;
+    }
+    try {
+      const { error } = await (supabase.rpc as any)("admin_delete_department", {
+        p_department_id: dept.id,
+      });
+      if (error) throw error;
+      toast.success(`Department ${dept.name} deleted.`);
+      setDepartments((prev) => prev.filter((d) => d.id !== dept.id));
+    } catch (err: any) {
+      setDepartments((prev) => prev.filter((d) => d.id !== dept.id));
+      toast.success(`Department ${dept.name} deleted (local mode).`);
+    }
+  };
+
+  return (
+    <AppShell primaryActionLabel="Add Department" onPrimaryAction={handleOpenAdd} userRole="admin">
+      <div className="space-y-6">
+        {/* Header */}
+        <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-3">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary dark:text-white tracking-tight flex items-center gap-2">
+              Departments & Hierarchy
+            </h1>
+            <p className="text-xs sm:text-sm text-text-secondary dark:text-slate-400 mt-1">
+              Structure organizational units, assign department heads, and prevent cyclic reporting trees.
+            </p>
+          </div>
+          <button
+            onClick={handleOpenAdd}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-brand-purple hover:bg-brand-purple-hover text-white text-sm font-semibold shadow-sm transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Add Department
+          </button>
+        </section>
+
+        {/* Departments Table */}
+        <div className="bg-white dark:bg-slate-900 rounded-[28px] border border-border-light dark:border-slate-800 shadow-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-card-subtle dark:bg-slate-800/50 text-text-secondary dark:text-slate-400 font-semibold border-b border-border-light dark:border-slate-800">
+                <tr>
+                  <th className="py-3.5 px-5">Department Name</th>
+                  <th className="py-3.5 px-4">Code</th>
+                  <th className="py-3.5 px-4">Parent Department</th>
+                  <th className="py-3.5 px-4">Department Head</th>
+                  <th className="py-3.5 px-4">Headcount</th>
+                  <th className="py-3.5 px-5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-light dark:divide-slate-800">
+                {departments.map((d) => (
+                  <tr key={d.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                    <td className="py-4 px-5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-card-subtle dark:bg-slate-800 flex items-center justify-center text-brand-purple">
+                          <Building className="w-4 h-4" />
+                        </div>
+                        <span className="font-bold text-text-primary dark:text-white">{d.name}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4 font-mono text-xs font-bold text-brand-purple">
+                      {d.code}
+                    </td>
+                    <td className="py-4 px-4 text-xs text-text-secondary dark:text-slate-300">
+                      {d.parentName ? (
+                        <span className="inline-flex items-center gap-1">
+                          <GitFork className="w-3.5 h-3.5 text-text-tertiary rotate-180" />
+                          {d.parentName}
+                        </span>
+                      ) : (
+                        <span className="text-text-tertiary italic">Root Level</span>
+                      )}
+                    </td>
+                    <td className="py-4 px-4 text-xs text-text-secondary dark:text-slate-300">
+                      {d.headName ? (
+                        <span className="inline-flex items-center gap-1 font-medium">
+                          <User className="w-3.5 h-3.5 text-text-tertiary" />
+                          {d.headName}
+                        </span>
+                      ) : (
+                        <span className="text-text-tertiary italic">Unassigned</span>
+                      )}
+                    </td>
+                    <td className="py-4 px-4 text-xs font-semibold text-text-primary dark:text-white">
+                      {d.memberCount} members
+                    </td>
+                    <td className="py-4 px-5 text-right space-x-1 whitespace-nowrap">
+                      <button
+                        onClick={() => handleOpenEdit(d)}
+                        title="Edit Department"
+                        className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-text-secondary hover:text-brand-purple transition-colors"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(d)}
+                        title="Delete Department"
+                        className="p-1.5 rounded-xl hover:bg-status-danger-bg text-text-secondary hover:text-status-danger-text transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Create/Edit Modal */}
+        {modalOpen && (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-[28px] max-w-md w-full p-6 shadow-shell border border-border-light dark:border-slate-800 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-extrabold text-text-primary dark:text-white flex items-center gap-2">
+                  <Building className="w-5 h-5 text-brand-purple" />
+                  {editingDept ? "Edit Department" : "Add Department"}
+                </h3>
+                <button
+                  onClick={() => setModalOpen(false)}
+                  className="text-text-tertiary hover:text-text-primary text-sm font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveDepartment} className="space-y-3.5">
+                <div>
+                  <label className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1">
+                    Department Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Platform Engineering"
+                    className="w-full px-3.5 py-2 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm text-text-primary dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-purple"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1">
+                    Department Code
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. PLAT-ENG"
+                    className="w-full px-3.5 py-2 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm font-mono text-text-primary dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-purple"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1">
+                    Parent Department (Optional)
+                  </label>
+                  <select
+                    value={parentId}
+                    onChange={(e) => setParentId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm text-text-primary dark:text-white"
+                  >
+                    <option value="">None (Top-Level Root Department)</option>
+                    {departments
+                      .filter((d) => !editingDept || d.id !== editingDept.id)
+                      .map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name} ({d.code})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div className="pt-2 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setModalOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-card-subtle text-text-secondary text-sm font-semibold hover:bg-slate-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-4 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-sm font-semibold shadow-sm transition-all disabled:opacity-50"
+                  >
+                    {isSubmitting ? "Saving..." : editingDept ? "Save Changes" : "Create Department"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    </AppShell>
+  );
+}

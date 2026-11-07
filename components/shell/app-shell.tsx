@@ -24,7 +24,7 @@ export function AppShell({
   return (
     <div className="min-h-screen w-full bg-shell flex flex-col md:flex-row transition-colors duration-300 relative">
       {/* Left Docked Curved Sidebar */}
-      <CurvedSidebar />
+      <CurvedSidebar userRole={userRole} />
 
       {/* Main Full-Width Application Area */}
       <div className="flex-1 flex flex-col min-w-0 px-4 sm:px-6 md:px-8 lg:px-10 py-5 pb-20 md:pb-8">

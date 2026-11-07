@@ -38,7 +38,19 @@ function getDatabaseUrl(): string | null {
   return null;
 }
 
-const dbUrl = getDatabaseUrl();
+function enforceLocalDatabaseHost(url: string | null): string {
+  if (!url) {
+    throw new Error("DATABASE_URL must be configured in .env.staging or process.env");
+  }
+  const hostMatch = url.match(/@([^:/]+)/);
+  const host = hostMatch ? hostMatch[1] : "";
+  if (host !== "127.0.0.1" && host !== "localhost") {
+    throw new Error(`CRITICAL SECURITY FAILURE: Database tests are strictly restricted to local test instances (127.0.0.1 or localhost). Attempted connection to: ${host}`);
+  }
+  return url;
+}
+
+const dbUrl = enforceLocalDatabaseHost(getDatabaseUrl());
 
 // Canonical test users from seed.sql
 const USERS = {
@@ -50,32 +62,24 @@ const USERS = {
 };
 
 describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
-  let client: Client | null = null;
-  let isConnected = false;
+  let client: Client;
 
   beforeAll(async () => {
     if (!dbUrl) {
-      console.warn("DATABASE_URL not found. Skipping live PostgreSQL test matrix.");
-      return;
+      throw new Error("DATABASE_URL must be configured in .env.staging or process.env");
     }
 
-    try {
-      const isLocal = dbUrl.includes("127.0.0.1") || dbUrl.includes("localhost");
-      client = new Client({
-        connectionString: dbUrl,
-        ssl: isLocal ? false : { rejectUnauthorized: false },
-        connectionTimeoutMillis: 5000,
-      });
-      await client.connect();
-      isConnected = true;
-    } catch (err: any) {
-      console.warn(`Could not connect to database (${err.message}). Database matrix tests will be skipped.`);
-      isConnected = false;
-    }
+    const isLocal = dbUrl.includes("127.0.0.1") || dbUrl.includes("localhost");
+    client = new Client({
+      connectionString: dbUrl,
+      ssl: isLocal ? false : { rejectUnauthorized: false },
+      connectionTimeoutMillis: 5000,
+    });
+    await client.connect();
   });
 
   afterAll(async () => {
-    if (client && isConnected) {
+    if (client) {
       try {
         await client.end();
       } catch {}
@@ -115,7 +119,6 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
   // -------------------------------------------------------------
   describe("1. Engine Schema Hardening", () => {
     it("confirms RLS is enabled on all 10 public tables", async () => {
-      if (!isConnected || !client) return;
 
       const res = await client.query(`
         SELECT tablename, rowsecurity 
@@ -135,7 +138,6 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
     });
 
     it("verifies privileged SECURITY DEFINER functions have empty search_path", async () => {
-      if (!isConnected || !client) return;
 
       const res = await client.query(`
         SELECT p.proname, p.prosecdef, p.proconfig
@@ -160,7 +162,6 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
   describe("2. Table-by-Table RLS Operation Matrix", () => {
     // A. audit_logs
     it("audit_logs: Employee/Manager denied SELECT; HR/Admin at AAL1 blocked by RESTRICTIVE policy; HR/Admin at AAL2 allowed SELECT", async () => {
-      if (!isConnected || !client) return;
 
       // Employee cannot read audit_logs
       await runAsAuthenticated(USERS.employee, "employee", "aal1", async (pg) => {
@@ -203,7 +204,6 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
 
     // B. attendance_policies
     it("attendance_policies: all roles can SELECT; mutations denied for Employee/Manager; HR/Admin at AAL1 blocked from UPDATE; HR/Admin at AAL2 can UPDATE", async () => {
-      if (!isConnected || !client) return;
 
       // Employee can SELECT policies
       await runAsAuthenticated(USERS.employee, "employee", "aal1", async (pg) => {
@@ -230,7 +230,6 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
 
     // C. user_roles
     it("user_roles: users view own role; employee cannot view peers; admin at AAL1 blocked from mutating; admin at AAL2 can view all", async () => {
-      if (!isConnected || !client) return;
 
       // Employee can view own role, but not other users' roles
       await runAsAuthenticated(USERS.employee, "employee", "aal1", async (pg) => {
@@ -260,7 +259,6 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
 
     // D. attendance_sessions & attendance_days
     it("attendance_sessions & attendance_days: Employee views own data; cannot view peer's; Manager views report's data", async () => {
-      if (!isConnected || !client) return;
 
       // Employee views own sessions, but peer sessions return 0 rows
       await runAsAuthenticated(USERS.employee, "employee", "aal1", async (pg) => {
@@ -283,7 +281,6 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
 
     // E. notifications
     it("notifications: user can only SELECT and UPDATE own notifications; cannot access peer's", async () => {
-      if (!isConnected || !client) return;
 
       await runAsAuthenticated(USERS.employee, "employee", "aal1", async (pg) => {
         const peerNotifs = await pg.query(`SELECT * FROM public.notifications WHERE user_id = '${USERS.peer}';`);
@@ -296,7 +293,6 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
 
     // F. holidays
     it("holidays: authenticated users can SELECT; mutations denied for Employee/Manager; HR at AAL1 blocked; HR at AAL2 allowed", async () => {
-      if (!isConnected || !client) return;
 
       await runAsAuthenticated(USERS.employee, "employee", "aal1", async (pg) => {
         const res = await pg.query("SELECT * FROM public.holidays;");
@@ -325,7 +321,6 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
 
     // G. employees
     it("employees: Employee views own record only; Manager views direct reports only; HR/Admin at AAL1 blocked by RESTRICTIVE policy; HR/Admin at AAL2 can view all", async () => {
-      if (!isConnected || !client) return;
 
       // 1. Employee at AAL1 views own profile, but peer returns 0 rows
       await runAsAuthenticated(USERS.employee, "employee", "aal1", async (pg) => {
@@ -405,7 +400,6 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
 
     // H. regularization_requests
     it("regularization_requests: Employee reads own and cannot insert for peers; HR/Admin at AAL1 blocked by RESTRICTIVE policy; HR/Admin at AAL2 view all", async () => {
-      if (!isConnected || !client) return;
 
       // 1. Employee at AAL1 reads own requests only; peer requests return 0 rows
       await runAsAuthenticated(USERS.employee, "employee", "aal1", async (pg) => {
@@ -459,7 +453,6 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
 
     // I. auth_rate_limits
     it("auth_rate_limits: direct access denied for all authenticated roles (employee, manager, hr, admin) at both aal1 and aal2", async () => {
-      if (!isConnected || !client) return;
 
       const roles = ["employee", "manager", "hr", "admin"] as const;
       const aals = ["aal1", "aal2"] as const;
@@ -529,7 +522,6 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
   describe("3. Privileged RPC Function Authorization & Denial Suite", () => {
     // A. lock_month
     it("lock_month: Employee and Manager denied; HR at AAL1 denied; HR and Admin at AAL2 permitted", async () => {
-      if (!isConnected || !client) return;
 
       // Employee denied
       await runAsAuthenticated(USERS.employee, "employee", "aal1", async (pg) => {
@@ -582,7 +574,6 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
 
     // B. approve_regularization & reject_regularization
     it("approve_regularization / reject_regularization: separation of duties prevents self-approval; unauthorized employees denied; designated manager allowed", async () => {
-      if (!isConnected || !client) return;
 
       // Setup a pending regularization request owned by James Sullivan (employee)
       let reqId: string;
@@ -666,7 +657,6 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
 
     // C. check_in & check_out authorization
     it("check_in / check_out: non-admin caller cannot punch in on behalf of another employee", async () => {
-      if (!isConnected || !client) return;
 
       // Clean any pre-existing session before test
       await client.query(`UPDATE public.attendance_sessions SET check_out_at = NOW() WHERE employee_id = '${USERS.employee}' AND check_out_at IS NULL;`);
@@ -690,7 +680,6 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
 
     // C2. punch_verified: server-only verified punch internal RPC (revoked from PUBLIC, anon, authenticated)
     it("punch_verified: authenticated users denied execution; service_role/internal can execute successfully", async () => {
-      if (!isConnected || !client) return;
 
       // Authenticated user (even admin) directly calling punch_verified is denied execution
       await runAsAuthenticated(USERS.admin, "admin", "aal2", async (pg) => {
@@ -724,7 +713,6 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
 
     // D. unlock_month (Admin-only privileged RPC with AAL2)
     it("unlock_month: non-admin denied; Admin at AAL1 denied; Admin at AAL2 permitted", async () => {
-      if (!isConnected || !client) return;
 
       // Non-admin (Employee) denied
       await runAsAuthenticated(USERS.employee, "employee", "aal1", async (pg) => {

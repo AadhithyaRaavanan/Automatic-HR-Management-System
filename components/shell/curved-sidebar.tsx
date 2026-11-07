@@ -15,6 +15,11 @@ import {
   ShieldAlert,
   Bell,
   Sparkles,
+  Building,
+  MapPin,
+  CalendarClock,
+  ScrollText,
+  UserCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,19 +32,34 @@ export interface NavItem {
   roles?: string[];
 }
 
-const navItems: NavItem[] = [
+const baseNavItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Attendance", href: "/attendance", icon: Clock },
-  { label: "Team", href: "/team", icon: Users, badge: "3", badgeColor: "green" },
+  { label: "Team", href: "/team", icon: Users, badge: "3", badgeColor: "green", roles: ["manager", "hr", "admin"] },
   { label: "Requests", href: "/requests", icon: FileCheck2 },
-  { label: "Reports", href: "/reports", icon: BarChart3 },
+  { label: "Reports", href: "/reports", icon: BarChart3, roles: ["hr", "admin"] },
+  { label: "Workforce", href: "/admin/users", icon: UserCheck, roles: ["hr", "admin"] },
+  { label: "Departments", href: "/admin/departments", icon: Building, roles: ["admin"] },
+  { label: "Locations", href: "/admin/locations", icon: MapPin, roles: ["admin"] },
+  { label: "Shifts", href: "/admin/shifts", icon: CalendarClock, roles: ["admin"] },
+  { label: "Audits", href: "/admin/audits", icon: ScrollText, roles: ["admin"] },
   { label: "Holidays", href: "/holidays", icon: CalendarDays },
-  { label: "Gallery", href: "/gallery", icon: Sparkles },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
-export function CurvedSidebar({ className }: { className?: string }) {
+export function CurvedSidebar({
+  className,
+  userRole = "employee",
+}: {
+  className?: string;
+  userRole?: "employee" | "manager" | "hr" | "admin";
+}) {
   const pathname = usePathname();
+
+  const navItems = baseNavItems.filter((item) => {
+    if (!item.roles) return true;
+    return item.roles.includes(userRole);
+  });
 
   return (
     <aside

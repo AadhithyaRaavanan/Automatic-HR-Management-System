@@ -32,7 +32,19 @@ function getDatabaseUrl(): string | null {
   return null;
 }
 
-const dbUrl = getDatabaseUrl();
+function enforceLocalDatabaseHost(url: string | null): string {
+  if (!url) {
+    throw new Error("DATABASE_URL must be configured in .env.staging or process.env");
+  }
+  const hostMatch = url.match(/@([^:/]+)/);
+  const host = hostMatch ? hostMatch[1] : "";
+  if (host !== "127.0.0.1" && host !== "localhost") {
+    throw new Error(`CRITICAL SECURITY FAILURE: Database tests are strictly restricted to local test instances (127.0.0.1 or localhost). Attempted connection to: ${host}`);
+  }
+  return url;
+}
+
+const dbUrl = enforceLocalDatabaseHost(getDatabaseUrl());
 
 const ORG_1_ID = "00000000-0000-0000-0000-000000000001"; // Demo Org
 const ORG_2_ID = "00000000-0000-0000-0000-000000000002"; // Acme Corp (Test only)
@@ -54,8 +66,7 @@ const ORG_2_USERS = {
 };
 
 describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
-  let client: Client | null = null;
-  let isConnected = false;
+  let client: Client;
 
   let org1ReqId: string;
   let org2ReqId: string;
@@ -65,16 +76,16 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
   let org2SessionId: string;
 
   beforeAll(async () => {
-    if (!dbUrl) return;
-    try {
-      const isLocal = dbUrl.includes("127.0.0.1") || dbUrl.includes("localhost");
-      client = new Client({
-        connectionString: dbUrl,
-        ssl: isLocal ? false : { rejectUnauthorized: false },
-        connectionTimeoutMillis: 5000,
-      });
-      await client.connect();
-      isConnected = true;
+    if (!dbUrl) {
+      throw new Error("DATABASE_URL must be configured in .env.staging or process.env");
+    }
+    const isLocal = dbUrl.includes("127.0.0.1") || dbUrl.includes("localhost");
+    client = new Client({
+      connectionString: dbUrl,
+      ssl: isLocal ? false : { rejectUnauthorized: false },
+      connectionTimeoutMillis: 5000,
+    });
+    await client.connect();
 
       // 1. Seed Org 2 in organizations
       await client.query(`
@@ -100,8 +111,8 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
 
         // 4. Insert into public.employees
         await client.query(`
-          INSERT INTO public.employees (id, organization_id, email, first_name, last_name, work_mode, timezone)
-          VALUES ('${uid}', '${ORG_2_ID}', 'acme-${role}@example.com', 'Acme', '${role}', 'hybrid', 'America/New_York')
+          INSERT INTO public.employees (id, organization_id, email, full_name, work_mode, timezone)
+          VALUES ('${uid}', '${ORG_2_ID}', 'acme-${role}@example.com', 'Acme ${role}', 'hybrid', 'America/New_York')
           ON CONFLICT (id) DO UPDATE SET organization_id = '${ORG_2_ID}', work_mode = 'hybrid';
         `);
       }
@@ -163,27 +174,23 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
         ON CONFLICT (employee_id, work_date) DO UPDATE SET locked = false;
       `);
 
-      // 8. Attendance session fixture for Org 2
+      // 8. Attendance session fixture for Org 2 (closed session so employee has no open session)
       const s2 = await client.query(`
-        INSERT INTO public.attendance_sessions (organization_id, employee_id, work_date, check_in_at, source)
-        VALUES ('${ORG_2_ID}', '${ORG_2_USERS.employee}', '2026-11-12', '2026-11-12 09:00:00-05', 'web')
+        INSERT INTO public.attendance_sessions (organization_id, employee_id, work_date, check_in_at, check_out_at, source)
+        VALUES ('${ORG_2_ID}', '${ORG_2_USERS.employee}', '2026-11-12', '2026-11-12 09:00:00-05', '2026-11-12 17:00:00-05', 'web')
         RETURNING id;
       `);
       org2SessionId = s2.rows[0].id;
 
       // 9. Attendance policy fixture for Org 2
       await client.query(`
-        INSERT INTO public.attendance_policies (organization_id, standard_daily_hours, allowed_grace_minutes)
-        VALUES ('${ORG_2_ID}', 8.0, 15)
-        ON CONFLICT (organization_id) DO UPDATE SET standard_daily_hours = 8.0;
+        INSERT INTO public.attendance_policies (organization_id, grace_minutes, half_day_minutes)
+        VALUES ('${ORG_2_ID}', 15, 240);
       `);
-    } catch {
-      isConnected = false;
-    }
-  });
+    });
 
   afterAll(async () => {
-    if (client && isConnected) {
+    if (client) {
       try {
         await client.query(`RESET ROLE;`);
         // Clean up all Org 2 test data
@@ -220,7 +227,8 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
     orgId: string,
     role: string,
     aal: "aal1" | "aal2",
-    queryFn: (c: Client) => Promise<T>
+    queryFn: (c: Client) => Promise<T>,
+    options: { commit?: boolean } = {}
   ): Promise<T> {
     if (!client) throw new Error("No client");
     const claims = JSON.stringify({
@@ -235,9 +243,16 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
     try {
       await client.query("SET LOCAL ROLE authenticated;");
       await client.query(`SELECT set_config('request.jwt.claims', '${claims}', true);`);
-      return await queryFn(client);
-    } finally {
-      await client.query("ROLLBACK;");
+      const res = await queryFn(client);
+      if (options.commit) {
+        await client.query("COMMIT;");
+      } else {
+        await client.query("ROLLBACK;");
+      }
+      return res;
+    } catch (err) {
+      await client.query("ROLLBACK;").catch(() => {});
+      throw err;
     }
   }
 
@@ -252,7 +267,6 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
       const aal = role === "hr" || role === "admin" ? "aal2" : "aal1";
 
       it(`Org 2 ${role} CANNOT see Org 1 employees (Positive Control: CAN see Org 2 employees)`, async () => {
-        if (!isConnected || !client) return;
         const uid = ORG_2_USERS[role];
 
         // 1. Cross-tenant denial
@@ -269,7 +283,6 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
       });
 
       it(`Org 2 ${role} CANNOT see Org 1 attendance_sessions (Positive Control: CAN see Org 2 sessions)`, async () => {
-        if (!isConnected || !client) return;
         const uid = ORG_2_USERS[role];
 
         // 1. Cross-tenant denial
@@ -292,7 +305,6 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
       });
 
       it(`Org 2 ${role} CANNOT see Org 1 attendance_days (Positive Control: CAN see Org 2 days)`, async () => {
-        if (!isConnected || !client) return;
         const uid = ORG_2_USERS[role];
 
         // 1. Cross-tenant denial
@@ -309,7 +321,6 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
       });
 
       it(`Org 2 ${role} CANNOT see Org 1 regularization_requests (Positive Control: CAN see Org 2 requests)`, async () => {
-        if (!isConnected || !client) return;
         const uid = ORG_2_USERS[role];
 
         // 1. Cross-tenant denial
@@ -326,7 +337,6 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
       });
 
       it(`Org 2 ${role} CANNOT see Org 1 locations (Positive Control: CAN see Org 2 locations)`, async () => {
-        if (!isConnected || !client) return;
         const uid = ORG_2_USERS[role];
 
         // 1. Cross-tenant denial
@@ -343,7 +353,6 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
       });
 
       it(`Org 2 ${role} CANNOT see Org 1 attendance_policies (Positive Control: CAN see Org 2 policies)`, async () => {
-        if (!isConnected || !client) return;
         const uid = ORG_2_USERS[role];
 
         // 1. Cross-tenant denial
@@ -367,7 +376,6 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
 
   describe("Cross-Tenant Write Mutation Rejection & Positive Controls", () => {
     it("Org 2 Admin CANNOT insert into Org 1 locations (Positive Control: CAN insert into Org 2 locations)", async () => {
-      if (!isConnected || !client) return;
 
       // 1. Cross-tenant denial (WITH CHECK constraint fails)
       await expect(
@@ -391,13 +399,12 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
     });
 
     it("Org 2 Admin CANNOT update Org 1 attendance_policies (Positive Control: CAN update Org 2 policies)", async () => {
-      if (!isConnected || !client) return;
 
       // 1. Cross-tenant denial (0 rows affected by RLS USING filter)
       const cross = await asUser(ORG_2_USERS.admin, ORG_2_ID, "admin", "aal2", async (c) => {
         return c.query(`
           UPDATE public.attendance_policies 
-          SET allowed_grace_minutes = 99 
+          SET grace_minutes = 99 
           WHERE organization_id = '${ORG_1_ID}';
         `);
       });
@@ -407,7 +414,7 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
       const own = await asUser(ORG_2_USERS.admin, ORG_2_ID, "admin", "aal2", async (c) => {
         return c.query(`
           UPDATE public.attendance_policies 
-          SET allowed_grace_minutes = 20 
+          SET grace_minutes = 20 
           WHERE organization_id = '${ORG_2_ID}'
           RETURNING organization_id;
         `);
@@ -416,13 +423,13 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
     });
 
     it("Org 2 Admin CANNOT delete Org 1 employees (Positive Control: Org 2 employees remain accessible)", async () => {
-      if (!isConnected || !client) return;
 
-      // 1. Cross-tenant denial
-      const cross = await asUser(ORG_2_USERS.admin, ORG_2_ID, "admin", "aal2", async (c) => {
-        return c.query(`DELETE FROM public.employees WHERE id = '${ORG_1_USERS.employee}';`);
-      });
-      expect(cross.rowCount).toBe(0);
+      // 1. Cross-tenant denial: direct DELETE is denied (by lack of DELETE grant or RLS)
+      await expect(
+        asUser(ORG_2_USERS.admin, ORG_2_ID, "admin", "aal2", async (c) => {
+          return c.query(`DELETE FROM public.employees WHERE id = '${ORG_1_USERS.employee}';`);
+        })
+      ).rejects.toThrow();
 
       // 2. Positive Control: Org 1 employee still exists in database
       const check = await client.query(`SELECT id FROM public.employees WHERE id = '${ORG_1_USERS.employee}';`);
@@ -436,7 +443,6 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
 
   describe("Privileged RPC Cross-Tenant Rejection & Positive Controls", () => {
     it("check_in override: Org 2 HR/Admin calling check_in for Org 1 employee is rejected (Positive Control: succeeds for Org 2 employee)", async () => {
-      if (!isConnected || !client) return;
 
       // 1. Cross-tenant denial
       const res = await asUser(ORG_2_USERS.hr, ORG_2_ID, "hr", "aal2", async (c) => {
@@ -455,12 +461,18 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
     });
 
     it("lock_month: Org 2 HR calling lock_month ONLY locks Org 2 days, Org 1 remains unlocked (Positive Control: Org 2 days locked)", async () => {
-      if (!isConnected || !client) return;
 
       // Org 2 locks November 2026
-      await asUser(ORG_2_USERS.hr, ORG_2_ID, "hr", "aal2", async (c) => {
-        return c.query(`SELECT public.lock_month(2026, 11);`);
-      });
+      await asUser(
+        ORG_2_USERS.hr,
+        ORG_2_ID,
+        "hr",
+        "aal2",
+        async (c) => {
+          return c.query(`SELECT public.lock_month(2026, 11);`);
+        },
+        { commit: true }
+      );
 
       // Positive Control: Verify Org 2 day is locked
       const o2Day = await client.query(`
@@ -476,7 +488,6 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
     });
 
     it("approve_regularization: Org 2 HR approving Org 1 request is rejected (Positive Control: succeeds for Org 2 request)", async () => {
-      if (!isConnected || !client) return;
 
       // 1. Cross-tenant denial
       const res = await asUser(ORG_2_USERS.hr, ORG_2_ID, "hr", "aal2", async (c) => {
@@ -491,9 +502,16 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
       expect(reqCheck.rows[0].status).toBe("pending");
 
       // 2. Positive Control: Org 2 HR approving Org 2 request succeeds
-      const pos = await asUser(ORG_2_USERS.hr, ORG_2_ID, "hr", "aal2", async (c) => {
-        return c.query(`SELECT public.approve_regularization('${org2ReqId}', 'Approved own org request') AS result;`);
-      });
+      const pos = await asUser(
+        ORG_2_USERS.hr,
+        ORG_2_ID,
+        "hr",
+        "aal2",
+        async (c) => {
+          return c.query(`SELECT public.approve_regularization('${org2ReqId}', 'Approved own org request') AS result;`);
+        },
+        { commit: true }
+      );
       const posResult = pos.rows[0].result;
       expect(posResult.success).toBe(true);
 
@@ -502,7 +520,6 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
     });
 
     it("reject_regularization: Org 2 HR rejecting Org 1 request is rejected (Positive Control: succeeds for Org 2 request)", async () => {
-      if (!isConnected || !client) return;
 
       // 1. Cross-tenant denial
       const res = await asUser(ORG_2_USERS.hr, ORG_2_ID, "hr", "aal2", async (c) => {
@@ -517,9 +534,16 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
       expect(reqCheck.rows[0].status).toBe("pending");
 
       // 2. Positive Control: Org 2 HR rejecting Org 2 request succeeds
-      const pos = await asUser(ORG_2_USERS.hr, ORG_2_ID, "hr", "aal2", async (c) => {
-        return c.query(`SELECT public.reject_regularization('${org2Req2Id}', 'Rejected own org request') AS result;`);
-      });
+      const pos = await asUser(
+        ORG_2_USERS.hr,
+        ORG_2_ID,
+        "hr",
+        "aal2",
+        async (c) => {
+          return c.query(`SELECT public.reject_regularization('${org2Req2Id}', 'Rejected own org request') AS result;`);
+        },
+        { commit: true }
+      );
       const posResult = pos.rows[0].result;
       expect(posResult.success).toBe(true);
 
@@ -528,7 +552,6 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
     });
 
     it("punch_verified: Calling punch_verified for Org 1 employee with Org 2 location is rejected (Positive Control: succeeds with Org 1 location)", async () => {
-      if (!isConnected || !client) return;
 
       // 1. Cross-tenant rejection
       const res = await client.query(`
@@ -539,6 +562,7 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
       expect(result.error).toMatch(/location does not belong to employee organization/i);
 
       // 2. Positive Control: Calling punch_verified for Org 1 employee with Org 1 location succeeds
+      await client.query(`UPDATE public.attendance_sessions SET check_out_at = now() WHERE employee_id = '${ORG_1_USERS.employee}' AND check_out_at IS NULL;`);
       const pos = await client.query(`
         SELECT public.punch_verified('${ORG_1_USERS.employee}', 'office_ip', '${org1LocId}', 'Verified own punch') AS result;
       `);

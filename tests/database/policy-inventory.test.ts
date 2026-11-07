@@ -29,7 +29,19 @@ function getDatabaseUrl(): string | null {
   return null;
 }
 
-const dbUrl = getDatabaseUrl();
+function enforceLocalDatabaseHost(url: string | null): string {
+  if (!url) {
+    throw new Error("DATABASE_URL must be configured in .env.staging or process.env");
+  }
+  const hostMatch = url.match(/@([^:/]+)/);
+  const host = hostMatch ? hostMatch[1] : "";
+  if (host !== "127.0.0.1" && host !== "localhost") {
+    throw new Error(`CRITICAL SECURITY FAILURE: Database tests are strictly restricted to local test instances (127.0.0.1 or localhost). Attempted connection to: ${host}`);
+  }
+  return url;
+}
+
+const dbUrl = enforceLocalDatabaseHost(getDatabaseUrl());
 
 // Canonical Expected RLS Policy Inventory (65 Policies across 13 public tables)
 const EXPECTED_POLICY_INVENTORY: Array<{
@@ -113,6 +125,18 @@ const EXPECTED_POLICY_INVENTORY: Array<{
   {
     "tablename": "audit_logs",
     "policyname": "enforce_mfa_aal2_audit_logs",
+    "permissive": "RESTRICTIVE",
+    "cmd": "ALL"
+  },
+  {
+    "tablename": "departments",
+    "policyname": "departments_select_policy",
+    "permissive": "PERMISSIVE",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "departments",
+    "policyname": "enforce_active_org_membership_departments",
     "permissive": "RESTRICTIVE",
     "cmd": "ALL"
   },
@@ -431,23 +455,19 @@ const EXPECTED_POLICY_INVENTORY: Array<{
 ];
 
 describe("Policy Inventory Snapshot Test", () => {
-  let client: Client | null = null;
-  let isConnected = false;
+  let client: Client;
 
   beforeAll(async () => {
-    if (!dbUrl) return;
-    try {
-      const isLocal = dbUrl.includes("127.0.0.1") || dbUrl.includes("localhost");
-      client = new Client({
-        connectionString: dbUrl,
-        ssl: isLocal ? false : { rejectUnauthorized: false },
-        connectionTimeoutMillis: 5000,
-      });
-      await client.connect();
-      isConnected = true;
-    } catch {
-      isConnected = false;
+    if (!dbUrl) {
+      throw new Error("DATABASE_URL must be configured in .env.staging or process.env");
     }
+    const isLocal = dbUrl.includes("127.0.0.1") || dbUrl.includes("localhost");
+    client = new Client({
+      connectionString: dbUrl,
+      ssl: isLocal ? false : { rejectUnauthorized: false },
+      connectionTimeoutMillis: 5000,
+    });
+    await client.connect();
   });
 
   afterAll(async () => {
@@ -457,8 +477,6 @@ describe("Policy Inventory Snapshot Test", () => {
   });
 
   it("matches the exact canonical inventory of RLS policies across all public tables", async () => {
-    if (!isConnected || !client) return;
-
     const res = await client.query(`
       SELECT 
         tablename, 

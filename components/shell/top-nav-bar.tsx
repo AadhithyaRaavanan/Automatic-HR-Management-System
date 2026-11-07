@@ -33,11 +33,18 @@ export function TopNavBar({
     { label: "Requests", href: "/requests" },
     { label: "Team", href: "/team", requiresManager: true },
     { label: "Reports", href: "/reports", requiresHR: true },
+    { label: "Directory", href: "/admin/users", requiresHR: true },
+    { label: "Departments", href: "/admin/departments", requiresAdmin: true },
+    { label: "Locations", href: "/admin/locations", requiresAdmin: true },
+    { label: "Shifts", href: "/admin/shifts", requiresAdmin: true },
+    { label: "Admin Settings", href: "/admin/settings", requiresAdmin: true },
+    { label: "Audits", href: "/admin/audits", requiresAdmin: true },
     { label: "Gallery", href: "/gallery" },
   ].filter((tab) => {
     if (tab.requiresManager && userRole === "employee") return false;
     if (tab.requiresHR && (userRole === "employee" || userRole === "manager"))
       return false;
+    if (tab.requiresAdmin && userRole !== "admin") return false;
     return true;
   });
 

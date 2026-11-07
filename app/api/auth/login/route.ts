@@ -191,20 +191,16 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
       if ((memberRow as any)?.role) {
         userRole = (memberRow as any).role as EmployeeRole;
-      } else {
-        const { data: roleRow } = await (supabase as any)
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", authData.user.id)
-          .maybeSingle();
-        if ((roleRow as any)?.role) {
-          userRole = (roleRow as any).role as EmployeeRole;
-        }
       }
     }
 
+    // Refuse access to accounts with no active organization membership
     if (!userRole) {
-      userRole = "employee";
+      await supabase.auth.signOut();
+      return NextResponse.json(
+        { error: "Access Denied: No active organization membership found for this account. Please contact your administrator." },
+        { status: 403 }
+      );
     }
 
     // Helper to preserve auth session cookies from createServerClient
