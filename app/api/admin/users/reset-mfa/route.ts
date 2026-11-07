@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     await supabaseAdmin.from("audit_logs").insert({
       organization_id: context.organizationId,
       actor_id: context.userId,
-      action: "mfa_reset",
+      action: "MFA_RESET",
       table_name: "auth.mfa_factors",
       record_id: targetUserId,
       old_data: { factors_count: factors.length },

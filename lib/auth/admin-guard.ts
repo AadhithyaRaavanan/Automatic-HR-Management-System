@@ -81,24 +81,17 @@ export async function verifyAdminRouteCaller(
     };
   }
 
-  // MFA AAL2 Enforcement for Admin & HR
+  // MFA AAL2 Enforcement for Admin & HR: Unconditionally require aal2
   const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   const currentAal = aalData?.currentLevel || (user.app_metadata?.aal as string) || "aal1";
 
   if ((role === "admin" || role === "hr") && currentAal !== "aal2") {
-    // Check if user has enrolled factors
-    const { data: factors } = await supabaseAdmin.auth.admin.mfa.listFactors({
-      userId: user.id,
-    });
-    const hasEnrolled = factors?.factors?.some((f: any) => f.status === "verified");
-    if (hasEnrolled) {
-      return {
-        response: NextResponse.json(
-          { error: "Forbidden: Elevated action requires active AAL2 multi-factor authentication." },
-          { status: 403 }
-        ),
-      };
-    }
+    return {
+      response: NextResponse.json(
+        { error: "Forbidden: Elevated action requires active AAL2 multi-factor authentication." },
+        { status: 403 }
+      ),
+    };
   }
 
   return {

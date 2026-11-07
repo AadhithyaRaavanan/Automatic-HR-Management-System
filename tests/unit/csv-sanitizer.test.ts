@@ -27,3 +27,4 @@ describe("Formula Injection Sanitizer (sanitizeCsvCell)", () => {
     expect(sanitizeCsvCell(undefined)).toBe("");
   });
 });
+

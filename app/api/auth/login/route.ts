@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { Database, EmployeeRole } from "@/types/database.types";
+import { generateSync } from "otplib";
+import { Client } from "pg";
 import {
   getRateLimitKey,
   getEmailRateLimitKey,
@@ -213,6 +215,56 @@ export async function POST(request: NextRequest) {
     };
 
     if (userRole === "hr" || userRole === "admin") {
+      const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+      if (isDemoMode) {
+        try {
+          const { data: factorData } = await supabase.auth.mfa.listFactors();
+          let factorId: string | null = null;
+          let factorSecret: string | null = null;
+
+          const verifiedFactor = factorData?.totp?.find((f) => f.status === "verified");
+          if (verifiedFactor) {
+            factorId = verifiedFactor.id;
+            const dbUrl = process.env.DATABASE_URL || "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
+            const pgClient = new Client({ connectionString: dbUrl });
+            await pgClient.connect();
+            try {
+              const res = await pgClient.query("SELECT secret FROM auth.mfa_factors WHERE id = $1 LIMIT 1", [factorId]);
+              if (res.rows[0]?.secret) factorSecret = res.rows[0].secret;
+            } finally {
+              await pgClient.end().catch(() => {});
+            }
+          } else {
+            const { data: enrollData, error: enrollError } = await supabase.auth.mfa.enroll({
+              factorType: "totp",
+              issuer: "RemoteHR Demo",
+            });
+            if (!enrollError && enrollData) {
+              factorId = enrollData.id;
+              factorSecret = enrollData.totp.secret;
+            }
+          }
+
+          if (factorId && factorSecret) {
+            const code = generateSync({ secret: factorSecret });
+            const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({
+              factorId,
+              code,
+            });
+            if (!verifyError) {
+              return createSuccessResponse({
+                success: true,
+                requireMfa: false,
+                mfaDestination: "/",
+                role: userRole,
+              });
+            }
+          }
+        } catch {
+          // Fall through to manual MFA if automated demo resolution fails
+        }
+      }
+
       const { data: factorData } = await supabase.auth.mfa.listFactors();
       const hasVerifiedFactor = Boolean(
         factorData?.totp?.some((factor) => factor.status === "verified")

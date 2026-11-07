@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     await supabaseAdmin.from("audit_logs").insert({
       organization_id: context.organizationId,
       actor_id: context.userId,
-      action: "force_signout",
+      action: "FORCE_SIGNOUT",
       table_name: "auth.sessions",
       record_id: targetUserId,
       old_data: null,
@@ -67,3 +67,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

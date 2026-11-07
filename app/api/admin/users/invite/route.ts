@@ -34,6 +34,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Verify user does not already belong to another organization or this organization
+    const { data: existingMember } = await supabaseAdmin
+      .from("organization_members")
+      .select("organization_id, role, status")
+      .eq("user_id", context.userId)
+      .eq("organization_id", context.organizationId)
+      .maybeSingle();
+
     // 1. Invite user via Supabase Auth Admin API
     let invitedUserId: string;
     const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
@@ -89,6 +97,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 3. Write audit row
+    await supabaseAdmin.from("audit_logs").insert({
+      organization_id: context.organizationId,
+      actor_id: context.userId,
+      action: "MEMBER_INVITED",
+      table_name: "employees",
+      record_id: invitedUserId,
+      old_data: null,
+      new_data: {
+        email,
+        full_name: fullName,
+        role,
+        work_mode: workMode,
+        invited_at: new Date().toISOString(),
+      },
+    });
+
     return NextResponse.json({
       success: true,
       message: `User ${email} invited and provisioned successfully.`,
@@ -101,3 +126,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

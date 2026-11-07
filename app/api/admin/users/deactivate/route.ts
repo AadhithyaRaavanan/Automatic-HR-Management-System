@@ -28,7 +28,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Deactivate member in database via admin_deactivate_member RPC
+    // 1. Authoritative verification: Target user must belong to caller's organization
+    const { data: targetMember } = await supabaseAdmin
+      .from("organization_members")
+      .select("organization_id, role, status")
+      .eq("user_id", targetUserId)
+      .eq("organization_id", context.organizationId)
+      .maybeSingle();
+
+    if (!targetMember) {
+      return NextResponse.json(
+        { error: "Target user not found in your organization." },
+        { status: 404 }
+      );
+    }
+
+    // 2. Deactivate member in database via admin_deactivate_member RPC
     const { data: rpcData, error: rpcError } = await (supabaseAdmin.rpc as any)(
       "admin_deactivate_member",
       {
@@ -61,6 +76,17 @@ export async function POST(request: NextRequest) {
       console.warn("Sign out revoke warning:", signOutErr.message);
     }
 
+    // 4. Write audit row
+    await supabaseAdmin.from("audit_logs").insert({
+      organization_id: context.organizationId,
+      actor_id: context.userId,
+      action: "MEMBER_DEACTIVATED",
+      table_name: "organization_members",
+      record_id: targetUserId,
+      old_data: { role: targetMember.role, status: targetMember.status },
+      new_data: { status: "inactive", deactivated_at: new Date().toISOString() },
+    });
+
     return NextResponse.json({
       success: true,
       message: `User ${targetUserId} has been deactivated, banned in Auth, and active sessions revoked.`,
@@ -73,3 +99,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

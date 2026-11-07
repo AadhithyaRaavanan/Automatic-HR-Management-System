@@ -53,6 +53,17 @@ export async function GET(request: NextRequest) {
 
   const records = logs || [];
 
+  // Audit log the export action
+  await supabaseAdmin.from("audit_logs").insert({
+    organization_id: context.organizationId,
+    actor_id: context.userId,
+    action: "AUDIT_LOGS_EXPORTED",
+    table_name: "audit_logs",
+    record_id: context.userId,
+    old_data: null,
+    new_data: { format: formatType, record_count: records.length, exported_at: new Date().toISOString() },
+  });
+
   if (formatType === "xlsx") {
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "Automatic HR Management System";
@@ -126,3 +137,4 @@ export async function GET(request: NextRequest) {
     },
   });
 }
+
