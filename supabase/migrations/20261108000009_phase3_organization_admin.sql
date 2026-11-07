@@ -1125,8 +1125,7 @@ BEGIN
         start_time = p_start_time,
         end_time = p_end_time,
         break_duration_minutes = p_break_minutes,
-        grace_minutes = p_grace_minutes,
-        updated_at = pg_catalog.now()
+        grace_minutes = p_grace_minutes
     WHERE id = p_shift_id
     RETURNING to_jsonb(shift_templates.*) INTO v_new_data;
 
