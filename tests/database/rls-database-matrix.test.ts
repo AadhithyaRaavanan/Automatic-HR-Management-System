@@ -122,7 +122,7 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
         FROM pg_tables 
         WHERE schemaname = 'public' 
           AND tablename IN (
-            'employees', 'user_roles', 'attendance_policies',
+            'employees', 'organization_members', 'attendance_policies',
             'attendance_sessions', 'attendance_days', 'regularization_requests',
             'notifications', 'holidays', 'audit_logs', 'auth_rate_limits'
           );
@@ -241,9 +241,14 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
         const peerRole = await pg.query(`SELECT * FROM public.user_roles WHERE user_id = '${USERS.peer}';`);
         expect(peerRole.rows.length).toBe(0);
 
-        // Direct UPDATE by employee denied
-        const updateRes = await pg.query(`UPDATE public.user_roles SET role = 'admin' WHERE user_id = '${USERS.employee}';`);
-        expect(updateRes.rowCount).toBe(0);
+        // Direct UPDATE by employee denied (write privileges revoked on compatibility view)
+        let updateErr: any = null;
+        try {
+          await pg.query(`UPDATE public.user_roles SET role = 'admin' WHERE user_id = '${USERS.employee}';`);
+        } catch (e) {
+          updateErr = e;
+        }
+        expect(updateErr).not.toBeNull();
       });
 
       // Admin at AAL2 can view all roles
@@ -331,9 +336,14 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
         const peerRes = await pg.query(`SELECT * FROM public.employees WHERE id = '${USERS.peer}';`);
         expect(peerRes.rows.length).toBe(0);
 
-        // Employee cannot update status or role
-        const updateRes = await pg.query(`UPDATE public.employees SET status = 'inactive' WHERE id = '${USERS.peer}';`);
+        // Employee cannot update peer's profile (RLS returns 0 rows)
+        const updateRes = await pg.query(`UPDATE public.employees SET full_name = 'Hacked' WHERE id = '${USERS.peer}';`);
         expect(updateRes.rowCount).toBe(0);
+
+        // Employee cannot update status (denied by column privileges)
+        await expect(
+          pg.query(`UPDATE public.employees SET status = 'inactive' WHERE id = '${USERS.peer}';`)
+        ).rejects.toThrow();
       });
 
       // 2. Manager at AAL1 views own profile and direct report (James Sullivan), but non-report (Sarah Connor) returns 0 rows
@@ -353,7 +363,7 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
         const hrRes = await pg.query("SELECT * FROM public.employees;");
         expect(hrRes.rows.length).toBe(0);
 
-        const updateRes = await pg.query(`UPDATE public.employees SET status = 'inactive' WHERE id = '${USERS.employee}';`);
+        const updateRes = await pg.query(`UPDATE public.employees SET full_name = 'Blocked' WHERE id = '${USERS.employee}';`);
         expect(updateRes.rowCount).toBe(0);
       });
 
@@ -374,8 +384,22 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
         const adminRes = await pg.query("SELECT * FROM public.employees;");
         expect(adminRes.rows.length).toBeGreaterThanOrEqual(8);
 
-        const updateRes = await pg.query(`UPDATE public.employees SET work_target_minutes = 480 WHERE id = '${USERS.employee}';`);
+        // Direct column update on allowed self-service field
+        const updateRes = await pg.query(`UPDATE public.employees SET full_name = 'Sarah Connor' WHERE id = '${USERS.admin}';`);
         expect(updateRes.rowCount).toBe(1);
+
+        // Sensitive governance attribute updated via privileged admin_update_employee RPC
+        const rpcRes = await pg.query(`
+          SELECT public.admin_update_employee(
+            '${USERS.employee}',
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            480
+          );
+        `);
+        expect(rpcRes.rows[0].admin_update_employee.success).toBe(true);
       });
     });
 
@@ -644,11 +668,11 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
     it("check_in / check_out: non-admin caller cannot punch in on behalf of another employee", async () => {
       if (!isConnected || !client) return;
 
+      // Clean any pre-existing session before test
+      await client.query(`UPDATE public.attendance_sessions SET check_out_at = NOW() WHERE employee_id = '${USERS.employee}' AND check_out_at IS NULL;`);
+
       // Employee punches in for self
       await runAsAuthenticated(USERS.employee, "employee", "aal1", async (pg) => {
-        // Clean any pre-existing session
-        await pg.query(`UPDATE public.attendance_sessions SET check_out_at = NOW() WHERE employee_id = '${USERS.employee}' AND check_out_at IS NULL;`);
-        
         const inRes = await pg.query("SELECT public.check_in('My own punch') as result;");
         expect(inRes.rows[0].result.success).toBe(true);
 
@@ -658,14 +682,44 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
 
       // Employee attempts to check in for another employee (peer) -> must fail authorization
       await runAsAuthenticated(USERS.employee, "employee", "aal1", async (pg) => {
+        const res = await pg.query(`SELECT public.check_in('${USERS.peer}'::uuid, 'Malicious peer punch') as result;`);
+        expect(res.rows[0].result.success).toBe(false);
+        expect(res.rows[0].result.error).toMatch(/Unauthorized check-in attempt for another employee/i);
+      });
+    });
+
+    // C2. punch_verified: server-only verified punch internal RPC (revoked from PUBLIC, anon, authenticated)
+    it("punch_verified: authenticated users denied execution; service_role/internal can execute successfully", async () => {
+      if (!isConnected || !client) return;
+
+      // Authenticated user (even admin) directly calling punch_verified is denied execution
+      await runAsAuthenticated(USERS.admin, "admin", "aal2", async (pg) => {
         let err: any = null;
         try {
-          await pg.query(`SELECT public.check_in('2026-11-07'::date, '00000000-0000-0000-0000-000000000001'::uuid, '${USERS.peer}'::uuid);`);
+          await pg.query(`SELECT public.punch_verified('${USERS.employee}'::uuid, 'kiosk', NULL, 'Direct call attempt');`);
         } catch (e) {
           err = e;
         }
-        expect(err !== null || true).toBe(true);
+        expect(err).not.toBeNull();
+        expect(err.message).toMatch(/permission denied for function punch_verified/i);
       });
+
+      // Directly via database connection (service_role / superuser context)
+      // Clean open sessions for USERS.employee first
+      await client.query(`UPDATE public.attendance_sessions SET check_out_at = NOW() WHERE employee_id = '${USERS.employee}' AND check_out_at IS NULL;`);
+      const punchRes = await client.query(`
+        SELECT public.punch_verified(
+          '${USERS.employee}'::uuid,
+          'kiosk',
+          NULL,
+          'Kiosk verified test punch'
+        ) as result;
+      `);
+      expect(punchRes.rows[0].result.success).toBe(true);
+      expect(punchRes.rows[0].result.session_id).toBeDefined();
+
+      // Clean up test punch session
+      await client.query(`DELETE FROM public.attendance_sessions WHERE id = '${punchRes.rows[0].result.session_id}';`);
     });
 
     // D. unlock_month (Admin-only privileged RPC with AAL2)
