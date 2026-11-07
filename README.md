@@ -90,6 +90,51 @@ RemoteHR enforces 4 distinct roles stored in the dedicated `user_roles` table (n
 
 ---
 
+## 🛡️ Production Security Hardening & Break-Glass Procedures
+
+### 1. Supabase Auth Dashboard Hardening Checklist
+Before taking RemoteHR to production, configure the following settings in your Supabase Project Dashboard (`Authentication` -> `Providers` & `Configuration`):
+
+1. **Disable Public Sign-ups**:
+   - Navigate to `Authentication` -> `Providers` -> `Email`.
+   - Set **"Enable Signups"** to **OFF**. All employees must be provisioned via the admin invite flow.
+2. **Password Policy & Leaked-Password Protection**:
+   - Navigate to `Authentication` -> `Password Policy`.
+   - Set **Minimum Password Length** to **12** characters.
+   - Toggle **"Prevent Leaked Passwords"** to **ON** (checks against HaveIBeenPwned API).
+3. **Multi-Factor Authentication (TOTP)**:
+   - Navigate to `Authentication` -> `Multi-Factor Authentication`.
+   - Enable **TOTP** (RFC 6238 time-based one-time passwords).
+   - In RemoteHR, `hr` and `admin` roles are subject to **RESTRICTIVE AAL2 policies**; unverified sessions cannot reach management tools.
+4. **Custom SMTP (Resend / SendGrid)**:
+   - Navigate to `Authentication` -> `SMTP Settings`.
+   - Toggle **Enable Custom SMTP**.
+   - Host: `smtp.resend.com` • Port: `465` / `587` • Encryption: `TLS` • User: `resend` • Password: `<RESEND_API_KEY>`.
+
+### 2. Demo Mode Isolation
+In production, demo accounts and one-click role switchers are strictly disabled by default:
+* The demo role switcher on `/login` renders **only** when `NEXT_PUBLIC_DEMO_MODE=true` is set.
+* In production `.env.local`, leave `NEXT_PUBLIC_DEMO_MODE` omitted or `false`.
+* To rotate or delete seeded demo accounts once your real admin is enrolled with TOTP MFA, run:
+  ```bash
+  npx tsx scripts/cleanup-demo-accounts.ts --action=rotate
+  # Or permanently delete:
+  npx tsx scripts/cleanup-demo-accounts.ts --action=delete
+  ```
+
+### 3. Emergency Break-Glass Procedure (Admin MFA Recovery)
+If an administrator loses their TOTP device or authenticator backup and cannot sign in to an elevated role:
+1. Open the [Supabase Dashboard](https://supabase.com/dashboard/project/_/sql) -> **SQL Editor**.
+2. Run the following emergency break-glass query to reset the factor for the affected admin:
+   ```sql
+   -- Emergency Break-Glass MFA Factor Reset (Dashboard SQL Editor Only)
+   DELETE FROM auth.mfa_factors
+   WHERE user_id = (SELECT id FROM auth.users WHERE email = 'your-admin@company.com');
+   ```
+3. The administrator can now sign in using password/magic link and immediately re-enroll a new TOTP factor at `/settings`. All actions are immutably logged to `audit_logs`.
+
+---
+
 ## 💾 Supabase Free Tier Optimization
 
 This project is engineered to operate comfortably within Supabase's **Free Tier (500 MB database limit)** for over 10 years of startup usage:
@@ -196,6 +241,41 @@ Verifies TypeScript compilation, route bundling, and SSR compatibility:
 ```bash
 npm run build
 ```
+
+---
+
+## 🔒 Enterprise Security & Attack Protection
+
+### 1. Multi-Factor Authentication (TOTP MFA / AAL2)
+* Privileged roles (`hr` and `admin`) require Authenticator-based TOTP (RFC 6238) verification before accessing protected dashboard routes or administrative RPCs.
+* **MFA Lockout Protection**: Privileged users with zero enrolled factors are routed directly to `/mfa-setup` at `aal1` with QR code / secret key enrollment. Enrolled users are prompted at `/mfa-challenge`.
+* **RESTRICTIVE Database Policies**: All 8 sensitive public tables enforce `AS RESTRICTIVE` AAL2 policies for HR and Admin queries.
+
+### 2. Multi-Tier Rate Limiting & Bot Protection
+* **Platform-Trusted Client IP**: The server-side login endpoint (`/api/auth/login`) inspects strictly Vercel's platform-level header `x-vercel-ip` (or `request.ip`), preventing client-side spoofing via forged `x-forwarded-for` headers.
+* **Shared Persistent Store**: Login rate limiting operates across serverless lambda instances using:
+  1. **Upstash Redis** (when `UPSTASH_REDIS_REST_URL` & `UPSTASH_REDIS_REST_TOKEN` are set).
+  2. **Supabase Shared Table** (`public.auth_rate_limits`, managed via `service_role`).
+  3. Ephemeral in-memory fallback for local unit tests.
+* **Cloudflare Turnstile CAPTCHA (Fail-Closed in Production)**:
+  - If `TURNSTILE_SECRET_KEY` is missing in production (`NODE_ENV === 'production'`), authentication fails closed immediately.
+  - Upstream network errors or invalid tokens reject login requests with HTTP 400.
+* **Supabase Native Bot & Rate Protection**:
+  - Configure **Bot Protection** under Supabase Dashboard $\rightarrow$ Authentication $\rightarrow$ Attack Protection $\rightarrow$ Enable CAPTCHA (Cloudflare Turnstile). Direct calls to `/auth/v1/token` or `/auth/v1/otp` without `{ gotrue_meta_security: { captcha_token } }` are rejected at the edge gateway before touching database resources.
+  - Configure **Rate Limits** under Authentication $\rightarrow$ Rate Limits (e.g. 30 requests / 5 mins per IP, 3 OTPs / 60s).
+
+### 3. Emergency Break-Glass Procedure
+If an administrative lockout occurs (e.g. lost TOTP authenticator with no backup admins):
+1. Obtain the `SUPABASE_SERVICE_ROLE_KEY` from your secure vault or Supabase Dashboard.
+2. In the Supabase SQL Editor, run:
+   ```sql
+   -- Identify user ID
+   SELECT id, email FROM auth.users WHERE email = 'admin@yourcompany.com';
+   
+   -- Delete enrolled MFA factors to allow re-enrollment at aal1
+   DELETE FROM auth.mfa_factors WHERE user_id = '<user-id>';
+   ```
+3. The administrator can then sign in with password at `aal1` and will be immediately routed to `/mfa-setup` to bind a new TOTP factor.
 
 ---
 

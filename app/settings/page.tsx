@@ -5,6 +5,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { BentoGrid } from "@/components/bento/bento-grid";
 import { BentoCard } from "@/components/bento/bento-card";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { TotpMfaManager } from "@/components/shared/totp-mfa-manager";
 import {
   ShieldCheck,
   EyeOff,
@@ -112,6 +113,20 @@ export default function SettingsAndPrivacyPage() {
                 </div>
               </div>
             </div>
+          </BentoCard>
+
+          {/* Two-Factor Authentication Security Card */}
+          <BentoCard
+            title={
+              <div className="flex items-center gap-2">
+                <Lock className="w-4 h-4 text-brand-purple" />
+                <span>Account Security & Two-Factor Authentication (MFA)</span>
+              </div>
+            }
+            subtitle="RFC 6238 TOTP hardware & mobile authenticator enforcement (Required for HR & Admin)"
+            className="lg:col-span-12 p-6"
+          >
+            <TotpMfaManager />
           </BentoCard>
 
           {/* User Preferences Form */}

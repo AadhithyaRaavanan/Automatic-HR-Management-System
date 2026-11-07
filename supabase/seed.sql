@@ -125,6 +125,15 @@ BEGIN
         NOW(), NOW()
     ) ON CONFLICT (id) DO UPDATE SET encrypted_password = EXCLUDED.encrypted_password;
 
+    -- Ensure string token columns are empty strings instead of NULL for GoTrue v2
+    UPDATE auth.users
+    SET confirmation_token = COALESCE(confirmation_token, ''),
+        recovery_token = COALESCE(recovery_token, ''),
+        email_change_token_new = COALESCE(email_change_token_new, ''),
+        email_change_token_current = COALESCE(email_change_token_current, ''),
+        email_change = COALESCE(email_change, ''),
+        reauthentication_token = COALESCE(reauthentication_token, '');
+
 EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'Skipping auth.users creation if running outside direct superuser privileges: %', SQLERRM;
 END $$;
@@ -143,6 +152,15 @@ BEGIN
         ('00000000-0000-0000-0000-000000000007', '00000000-0000-0000-0000-000000000007', '{"sub":"00000000-0000-0000-0000-000000000007","email":"eleanor.pena@remotehr.io"}'::jsonb, 'email', 'eleanor.pena@remotehr.io', NOW(), NOW(), NOW()),
         ('00000000-0000-0000-0000-000000000008', '00000000-0000-0000-0000-000000000008', '{"sub":"00000000-0000-0000-0000-000000000008","email":"devon.lane@remotehr.io"}'::jsonb, 'email', 'devon.lane@remotehr.io', NOW(), NOW(), NOW())
     ON CONFLICT (id, provider) DO NOTHING;
+    -- Ensure string token columns are empty strings instead of NULL for GoTrue v2
+    UPDATE auth.users
+    SET confirmation_token = COALESCE(confirmation_token, ''),
+        recovery_token = COALESCE(recovery_token, ''),
+        email_change_token_new = COALESCE(email_change_token_new, ''),
+        email_change_token_current = COALESCE(email_change_token_current, ''),
+        email_change = COALESCE(email_change, ''),
+        reauthentication_token = COALESCE(reauthentication_token, '');
+
 EXCEPTION WHEN OTHERS THEN
     NULL;
 END $$;

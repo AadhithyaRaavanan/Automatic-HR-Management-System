@@ -227,6 +227,8 @@ export interface Database {
           type: NotificationType;
           title: string;
           body: string;
+          link: string | null;
+          metadata: Json | null;
           read_at: string | null;
           created_at: string;
         };
@@ -236,6 +238,8 @@ export interface Database {
           type: NotificationType;
           title: string;
           body: string;
+          link?: string | null;
+          metadata?: Json | null;
           read_at?: string | null;
           created_at?: string;
         };
@@ -245,6 +249,8 @@ export interface Database {
           type?: NotificationType;
           title?: string;
           body?: string;
+          link?: string | null;
+          metadata?: Json | null;
           read_at?: string | null;
           created_at?: string;
         };
@@ -270,6 +276,26 @@ export interface Database {
           name?: string;
           region?: string;
           created_at?: string;
+        };
+      };
+      auth_rate_limits: {
+        Row: {
+          key: string;
+          attempts: number;
+          locked_until: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          key: string;
+          attempts?: number;
+          locked_until?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          key?: string;
+          attempts?: number;
+          locked_until?: string | null;
+          updated_at?: string;
         };
       };
       audit_logs: {

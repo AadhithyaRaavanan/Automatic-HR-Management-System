@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { TurnstileCaptcha } from "@/components/shared/turnstile-captcha";
 import {
   Clock,
   Mail,
@@ -15,6 +16,7 @@ import {
   Users,
   Briefcase,
   UserCheck,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,15 +29,22 @@ function LoginForm() {
   const [password, setPassword] = React.useState("");
   const [isMagicLink, setIsMagicLink] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [captchaToken, setCaptchaToken] = React.useState<string | null>(null);
+  const [lockoutMessage, setLockoutMessage] = React.useState<string | null>(null);
+
+  // Security: Demo role switcher is only accessible when explicitly enabled via environment variable
+  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
   const supabase = createClient();
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLockoutMessage(null);
     setIsLoading(true);
 
     try {
       if (isMagicLink) {
+        // Magic link flow via Supabase client
         const { error } = await supabase.auth.signInWithOtp({
           email,
           options: {
@@ -44,20 +53,59 @@ function LoginForm() {
             )}`,
           },
         });
-        if (error) throw error;
-        toast.success("Magic link sent! Check your email inbox.");
+
+        if (error) {
+          throw new Error("Unable to send magic link. Please check the email address and try again.");
+        }
+
+        toast.success("If an account exists, a secure sign-in link has been sent to your email.");
       } else {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
+        // Authoritative Server-Side Login via /api/auth/login
+        // Enforces server-side IP + email sliding-window rate limiting & CAPTCHA validation
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email,
+            password,
+            captchaToken: captchaToken || undefined,
+          }),
         });
-        if (error) throw error;
-        toast.success(`Welcome back, ${data.user?.email}!`);
+
+        const data = await res.json();
+
+        if (res.status === 429) {
+          // Account / IP rate limit locked out
+          setLockoutMessage(data.error || "Too many failed attempts. Login locked for 15 minutes.");
+          toast.error(data.error || "Account locked due to multiple failed attempts.");
+          return;
+        }
+
+        if (!res.ok) {
+          // Generic auth error (status 400 or 401)
+          throw new Error(data.error || "Invalid email or password. Please verify your credentials and try again.");
+        }
+
+        // Handle Privileged MFA Routing:
+        // Privileged roles (HR/Admin) must complete MFA.
+        // If no factor is enrolled, routes seamlessly to /mfa-setup to prevent lockout.
+        // If a verified factor exists, routes to /mfa-challenge.
+        if (data.requireMfa && data.mfaDestination) {
+          if (data.mfaDestination === "/mfa-setup") {
+            toast.info("Security Policy: Privileged accounts require Two-Factor Authentication. Please set up your authenticator.");
+          } else {
+            toast.info("Two-Factor Authentication required. Please enter your authenticator code.");
+          }
+          router.push(`${data.mfaDestination}?redirect=${encodeURIComponent(redirectPath)}`);
+          return;
+        }
+
+        toast.success("Signed in successfully!");
         router.push(redirectPath);
         router.refresh();
       }
     } catch (err: any) {
-      toast.error(err.message || "Failed to authenticate");
+      toast.error(err.message || "Invalid credentials. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -98,6 +146,14 @@ function LoginForm() {
           Log your daily sessions, review attendance, and manage team schedules.
         </p>
       </div>
+
+      {/* Lockout Warning Banner */}
+      {lockoutMessage && (
+        <div className="mb-4 p-3 rounded-xl bg-status-danger/10 border border-status-danger/30 text-status-danger text-xs font-medium flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>{lockoutMessage}</span>
+        </div>
+      )}
 
       {/* Login Form */}
       <form onSubmit={handleAuth} className="space-y-4">
@@ -158,6 +214,13 @@ function LoginForm() {
           </div>
         )}
 
+        {/* Cloudflare Turnstile Captcha Widget */}
+        <TurnstileCaptcha
+          onVerify={(token) => setCaptchaToken(token)}
+          onExpire={() => setCaptchaToken(null)}
+          onError={() => setCaptchaToken(null)}
+        />
+
         <button
           type="submit"
           disabled={isLoading}
@@ -170,49 +233,56 @@ function LoginForm() {
         </button>
       </form>
 
-      {/* Demo Roles Quick-Fill Card */}
-      <div className="mt-8 pt-6 border-t border-border-light/60">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-text-tertiary block mb-2.5">
-          Quick Demo Presets:
-        </span>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => handleQuickDemoRole("Employee", "employee@remotehr.io")}
-            className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <Users className="w-3 h-3 text-brand-purple" />
-            <span>Employee</span>
-          </button>
+      {/* Demo Roles Quick-Fill Card (Gated behind NEXT_PUBLIC_DEMO_MODE=true) */}
+      {isDemoMode && (
+        <div className="mt-8 pt-6 border-t border-border-light/60">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-text-tertiary">
+              Demo Mode Presets:
+            </span>
+            <span className="text-[10px] font-bold text-brand-purple bg-brand-purple-light/40 px-2 py-0.5 rounded-full">
+              Non-Production
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => handleQuickDemoRole("Employee", "employee@remotehr.io")}
+              className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Users className="w-3 h-3 text-brand-purple" />
+              <span>Employee</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => handleQuickDemoRole("Manager", "manager@remotehr.io")}
-            className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <UserCheck className="w-3 h-3 text-brand-purple" />
-            <span>Manager</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => handleQuickDemoRole("Manager", "manager@remotehr.io")}
+              className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <UserCheck className="w-3 h-3 text-brand-purple" />
+              <span>Manager</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => handleQuickDemoRole("HR Ops", "hr@remotehr.io")}
-            className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <Briefcase className="w-3 h-3 text-brand-purple" />
-            <span>HR Admin</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => handleQuickDemoRole("HR Ops", "hr@remotehr.io")}
+              className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Briefcase className="w-3 h-3 text-brand-purple" />
+              <span>HR Admin</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => handleQuickDemoRole("System Admin", "admin@remotehr.io")}
-            className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <ShieldCheck className="w-3 h-3 text-brand-purple" />
-            <span>Super Admin</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => handleQuickDemoRole("System Admin", "admin@remotehr.io")}
+              className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <ShieldCheck className="w-3 h-3 text-brand-purple" />
+              <span>Super Admin</span>
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Security & Privacy Notice Footer */}
       <div className="mt-6 flex items-center justify-between text-[11px] text-text-tertiary">

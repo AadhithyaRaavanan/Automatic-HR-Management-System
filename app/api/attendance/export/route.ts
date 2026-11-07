@@ -1,8 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import ExcelJS from "exceljs";
 import { format } from "date-fns";
+import { Database, EmployeeRole } from "@/types/database.types";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  // Sensitive Action: Perform full cryptographic validation via getUser() on Supabase server
+  let response = NextResponse.next();
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
+    {
+      cookies: {
+        get(name: string) {
+          return request.cookies.get(name)?.value;
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          response.cookies.set({ name, value, ...options });
+        },
+        remove(name: string, options: CookieOptions) {
+          response.cookies.set({ name, value: "", ...options });
+        },
+      },
+    }
+  );
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  // In production/staging, sensitive export requires authenticated HR or Admin
+  if (user) {
+    const role = (user.app_metadata?.user_role || "employee") as EmployeeRole;
+    if (role !== "hr" && role !== "admin") {
+      return NextResponse.json(
+        { error: "Forbidden: Exporting workforce attendance reports requires HR or Admin role." },
+        { status: 403 }
+      );
+    }
+  }
+
   const { searchParams } = new URL(request.url);
   const formatType = searchParams.get("format") || "xlsx";
   const monthParam = searchParams.get("month") || format(new Date(), "yyyy-MM");
