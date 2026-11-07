@@ -163,7 +163,8 @@ describe("Intra-Tenant Authorization & Privilege Boundary Suite", () => {
     userId: string,
     role: string,
     aal: "aal1" | "aal2",
-    queryFn: (c: Client) => Promise<T>
+    queryFn: (c: Client) => Promise<T>,
+    options: { commit?: boolean } = {}
   ): Promise<T> {
     if (!client) throw new Error("No client");
     const claims = JSON.stringify({
@@ -175,12 +176,20 @@ describe("Intra-Tenant Authorization & Privilege Boundary Suite", () => {
     });
 
     await client.query("BEGIN;");
+    let committed = false;
     try {
       await client.query("SET LOCAL ROLE authenticated;");
       await client.query(`SELECT set_config('request.jwt.claims', '${claims}', true);`);
-      return await queryFn(client);
+      const result = await queryFn(client);
+      if (options.commit) {
+        await client.query("COMMIT;");
+        committed = true;
+      }
+      return result;
     } finally {
-      await client.query("ROLLBACK;");
+      if (!committed) {
+        await client.query("ROLLBACK;");
+      }
     }
   }
 
@@ -617,38 +626,110 @@ describe("Intra-Tenant Authorization & Privilege Boundary Suite", () => {
       ).rejects.toThrow(/Last admin protection/i);
     });
 
-    it("Concurrent demotion serialization: adding 2nd admin then demoting leaves at least one admin", async () => {
-      if (!isConnected || !client) return;
+    it("Concurrent demotion serialization: two separate DB connections demote each other simultaneously, leaving at least one admin", async () => {
+      if (!isConnected || !client || !dbUrl) return;
+      const isLocal = dbUrl.includes("127.0.0.1") || dbUrl.includes("localhost");
       const secondAdmin = "00000000-0000-0000-0000-000000000088";
-      
-      // Admin adds second admin
-      await asRole(USERS.admin, "admin", "aal2", async (c) => {
-        return c.query(`SELECT public.admin_add_org_member('${ORG_ID}', '${secondAdmin}', 'admin');`);
-      });
 
-      // Verify audit log
-      const audit = await client.query(`
-        SELECT action, table_name, record_id FROM public.audit_logs 
-        WHERE action = 'member_added' AND record_id = '${secondAdmin}';
+      // Setup: Ensure secondAdmin exists and both are active admins
+      await client.query(`
+        INSERT INTO auth.users (id, email) VALUES ('${secondAdmin}', 'second_admin@remotehr.io')
+        ON CONFLICT (id) DO NOTHING;
       `);
-      expect(audit.rowCount).toBeGreaterThan(0);
+      await client.query(`
+        INSERT INTO public.organization_members (organization_id, user_id, role, status)
+        VALUES ('${ORG_ID}', '${secondAdmin}', 'admin', 'active')
+        ON CONFLICT (user_id) DO UPDATE SET role = 'admin', status = 'active';
+      `);
+      await client.query(`
+        INSERT INTO public.organization_members (organization_id, user_id, role, status)
+        VALUES ('${ORG_ID}', '${USERS.admin}', 'admin', 'active')
+        ON CONFLICT (user_id) DO UPDATE SET role = 'admin', status = 'active';
+      `);
 
-      // Demote second admin back to employee
-      await asRole(USERS.admin, "admin", "aal2", async (c) => {
-        return c.query(`SELECT public.admin_update_org_member_role('${ORG_ID}', '${secondAdmin}', 'employee');`);
+      // Verify two active admins exist initially
+      const initialAdmins = await client.query(`
+        SELECT COUNT(*) FROM public.organization_members
+        WHERE organization_id = '${ORG_ID}' AND role = 'admin' AND status = 'active';
+      `);
+      expect(Number(initialAdmins.rows[0].count)).toBe(2);
+
+      // Create two independent database connections
+      const client1 = new Client({
+        connectionString: dbUrl,
+        ssl: isLocal ? false : { rejectUnauthorized: false },
+        connectionTimeoutMillis: 5000,
+      });
+      const client2 = new Client({
+        connectionString: dbUrl,
+        ssl: isLocal ? false : { rejectUnauthorized: false },
+        connectionTimeoutMillis: 5000,
       });
 
-      // Removing/cleaning up second member
-      await asRole(USERS.admin, "admin", "aal2", async (c) => {
-        return c.query(`SELECT public.admin_remove_org_member('${ORG_ID}', '${secondAdmin}');`);
-      });
+      await client1.connect();
+      await client2.connect();
 
-      // Confirm sole admin remaining cannot be demoted
-      await expect(
-        asRole(USERS.admin, "admin", "aal2", async (c) => {
-          return c.query(`SELECT public.admin_update_org_member_role('${ORG_ID}', '${USERS.admin}', 'employee');`);
-        })
-      ).rejects.toThrow(/Last admin protection/i);
+      try {
+        const claims1 = JSON.stringify({
+          sub: USERS.admin,
+          role: "authenticated",
+          user_role: "admin",
+          organization_id: ORG_ID,
+          aal: "aal2",
+        });
+        const claims2 = JSON.stringify({
+          sub: secondAdmin,
+          role: "authenticated",
+          user_role: "admin",
+          organization_id: ORG_ID,
+          aal: "aal2",
+        });
+
+        await client1.query("SET ROLE authenticated;");
+        await client1.query(`SELECT set_config('request.jwt.claims', '${claims1}', false);`);
+
+        await client2.query("SET ROLE authenticated;");
+        await client2.query(`SELECT set_config('request.jwt.claims', '${claims2}', false);`);
+
+        // Both admins fire demotion of the other admin simultaneously
+        const p1 = client1.query(
+          `SELECT public.admin_update_org_member_role('${ORG_ID}', '${secondAdmin}', 'employee');`
+        );
+        const p2 = client2.query(
+          `SELECT public.admin_update_org_member_role('${ORG_ID}', '${USERS.admin}', 'employee');`
+        );
+
+        const [res1, res2] = await Promise.allSettled([p1, p2]);
+
+        const fulfilled = [res1, res2].filter((r) => r.status === "fulfilled");
+        const rejected = [res1, res2].filter((r) => r.status === "rejected");
+
+        // Exactly one demotion must succeed, and the second must be rejected by advisory lock / last-admin check
+        expect(fulfilled.length).toBe(1);
+        expect(rejected.length).toBe(1);
+        expect((rejected[0] as PromiseRejectedResult).reason.message).toMatch(/Last admin protection/i);
+
+        // Assert at least one active admin remains in the organization
+        const finalAdmins = await client.query(`
+          SELECT COUNT(*) FROM public.organization_members
+          WHERE organization_id = '${ORG_ID}' AND role = 'admin' AND status = 'active';
+        `);
+        expect(Number(finalAdmins.rows[0].count)).toBe(1);
+      } finally {
+        await client1.end();
+        await client2.end();
+
+        // Restore USERS.admin as active admin and remove secondAdmin
+        await client.query(`
+          UPDATE public.organization_members
+          SET role = 'admin', status = 'active'
+          WHERE organization_id = '${ORG_ID}' AND user_id = '${USERS.admin}';
+        `);
+        await client.query(`
+          DELETE FROM public.organization_members
+          WHERE organization_id = '${ORG_ID}' AND user_id = '${secondAdmin}';
+        `);
+      }
     });
   });
 
@@ -785,20 +866,26 @@ describe("Intra-Tenant Authorization & Privilege Boundary Suite", () => {
 
     it("Updating employee governance attributes through admin_update_employee RPC: SUCCEEDS and audits", async () => {
       if (!isConnected || !client) return;
-      const res = await asRole(USERS.admin, "admin", "aal2", async (c) => {
-        return c.query(`
-          SELECT public.admin_update_employee(
-            '${USERS.employee}',
-            NULL,
-            'active',
-            'hybrid',
-            '${testLocId}',
-            450,
-            NULL,
-            3
-          );
-        `);
-      });
+      const res = await asRole(
+        USERS.admin,
+        "admin",
+        "aal2",
+        async (c) => {
+          return c.query(`
+            SELECT public.admin_update_employee(
+              '${USERS.employee}',
+              NULL,
+              'active',
+              'hybrid',
+              '${testLocId}',
+              450,
+              NULL,
+              3
+            );
+          `);
+        },
+        { commit: true }
+      );
 
       expect(res.rows[0].admin_update_employee.success).toBe(true);
 
@@ -808,6 +895,28 @@ describe("Intra-Tenant Authorization & Privilege Boundary Suite", () => {
         WHERE action = 'employee_updated' AND record_id = '${USERS.employee}';
       `);
       expect(audit.rowCount).toBeGreaterThan(0);
+
+      // Restore employee state
+      await asRole(
+        USERS.admin,
+        "admin",
+        "aal2",
+        async (c) => {
+          return c.query(`
+            SELECT public.admin_update_employee(
+              '${USERS.employee}',
+              NULL,
+              'active',
+              'remote',
+              NULL,
+              480,
+              NULL,
+              0
+            );
+          `);
+        },
+        { commit: true }
+      );
     });
   });
 
@@ -844,6 +953,237 @@ describe("Intra-Tenant Authorization & Privilege Boundary Suite", () => {
 
       // Cleanup
       await client.query(`DELETE FROM public.locations WHERE code = 'ADMIN-SEC-1';`);
+    });
+  });
+
+  // ==========================================================================
+  // 15. Audit Logging for All Privileged Operations
+  // ==========================================================================
+
+  describe("15. Audit Logging for All Privileged Operations", () => {
+    const auditMemberId = "00000000-0000-0000-0000-000000000099";
+
+    beforeAll(async () => {
+      if (!isConnected || !client) return;
+      await client.query(`
+        INSERT INTO auth.users (id, email) VALUES ('${auditMemberId}', 'audit_test_user@remotehr.io')
+        ON CONFLICT (id) DO NOTHING;
+      `);
+    });
+
+    afterAll(async () => {
+      if (!isConnected || !client) return;
+      await client.query(`
+        DELETE FROM public.organization_members WHERE user_id = '${auditMemberId}';
+        DELETE FROM auth.users WHERE id = '${auditMemberId}';
+      `);
+    });
+
+    it("admin_add_org_member: records audit log with action 'member_added'", async () => {
+      if (!isConnected || !client) return;
+      await asRole(
+        USERS.admin,
+        "admin",
+        "aal2",
+        async (c) => {
+          return c.query(`SELECT public.admin_add_org_member('${ORG_ID}', '${auditMemberId}', 'employee');`);
+        },
+        { commit: true }
+      );
+
+      const audit = await client.query(`
+        SELECT action, table_name, record_id FROM public.audit_logs
+        WHERE action = 'member_added' AND record_id = '${auditMemberId}';
+      `);
+      expect(audit.rowCount).toBeGreaterThan(0);
+      expect(audit.rows[0].table_name).toBe("organization_members");
+    });
+
+    it("admin_update_org_member_role: records audit log with action 'member_role_updated'", async () => {
+      if (!isConnected || !client) return;
+      await asRole(
+        USERS.admin,
+        "admin",
+        "aal2",
+        async (c) => {
+          return c.query(`SELECT public.admin_update_org_member_role('${ORG_ID}', '${auditMemberId}', 'manager');`);
+        },
+        { commit: true }
+      );
+
+      const audit = await client.query(`
+        SELECT action, table_name, record_id FROM public.audit_logs
+        WHERE action = 'member_role_updated' AND record_id = '${auditMemberId}';
+      `);
+      expect(audit.rowCount).toBeGreaterThan(0);
+      expect(audit.rows[0].table_name).toBe("organization_members");
+    });
+
+    it("admin_remove_org_member: records audit log with action 'member_removed'", async () => {
+      if (!isConnected || !client) return;
+      await asRole(
+        USERS.admin,
+        "admin",
+        "aal2",
+        async (c) => {
+          return c.query(`SELECT public.admin_remove_org_member('${ORG_ID}', '${auditMemberId}');`);
+        },
+        { commit: true }
+      );
+
+      const audit = await client.query(`
+        SELECT action, table_name, record_id FROM public.audit_logs
+        WHERE action = 'member_removed' AND record_id = '${auditMemberId}';
+      `);
+      expect(audit.rowCount).toBeGreaterThan(0);
+      expect(audit.rows[0].table_name).toBe("organization_members");
+    });
+
+    it("admin_update_employee: records audit log with action 'employee_updated'", async () => {
+      if (!isConnected || !client) return;
+      await asRole(
+        USERS.admin,
+        "admin",
+        "aal2",
+        async (c) => {
+          return c.query(`
+            SELECT public.admin_update_employee(
+              '${USERS.employee}',
+              NULL,
+              'active',
+              'remote',
+              NULL,
+              480,
+              NULL,
+              0
+            );
+          `);
+        },
+        { commit: true }
+      );
+
+      const audit = await client.query(`
+        SELECT action, table_name, record_id FROM public.audit_logs
+        WHERE action = 'employee_updated' AND record_id = '${USERS.employee}';
+      `);
+      expect(audit.rowCount).toBeGreaterThan(0);
+      expect(audit.rows[0].table_name).toBe("employees");
+    });
+
+    it("lock_month: records audit log with action 'LOCK_MONTH'", async () => {
+      if (!isConnected || !client) return;
+      await asRole(
+        USERS.hr,
+        "hr",
+        "aal2",
+        async (c) => {
+          return c.query(`SELECT public.lock_month(2026, 12);`);
+        },
+        { commit: true }
+      );
+
+      const audit = await client.query(`
+        SELECT action, table_name FROM public.audit_logs
+        WHERE action = 'LOCK_MONTH' AND table_name = 'attendance_days'
+        ORDER BY created_at DESC LIMIT 1;
+      `);
+      expect(audit.rowCount).toBeGreaterThan(0);
+    });
+
+    it("unlock_month: records audit log with action 'UNLOCK_MONTH'", async () => {
+      if (!isConnected || !client) return;
+      await asRole(
+        USERS.admin,
+        "admin",
+        "aal2",
+        async (c) => {
+          return c.query(`SELECT public.unlock_month(2026, 12);`);
+        },
+        { commit: true }
+      );
+
+      const audit = await client.query(`
+        SELECT action, table_name FROM public.audit_logs
+        WHERE action = 'UNLOCK_MONTH' AND table_name = 'attendance_days'
+        ORDER BY created_at DESC LIMIT 1;
+      `);
+      expect(audit.rowCount).toBeGreaterThan(0);
+    });
+
+    it("approve_regularization: records audit log with action 'APPROVE_REGULARIZATION'", async () => {
+      if (!isConnected || !client) return;
+      const reqRes = await client.query(`
+        INSERT INTO public.regularization_requests (
+          organization_id, employee_id, work_date, requested_in, requested_out, reason, status
+        ) VALUES (
+          '${ORG_ID}', '${USERS.employee}', '2026-12-01', '2026-12-01 09:00:00+00', '2026-12-01 17:00:00+00', 'Audit Test Reason', 'pending'
+        ) RETURNING id;
+      `);
+      const reqId = reqRes.rows[0].id;
+
+      await asRole(
+        USERS.hr,
+        "hr",
+        "aal2",
+        async (c) => {
+          return c.query(`SELECT public.approve_regularization('${reqId}', 'Approved for audit test');`);
+        },
+        { commit: true }
+      );
+
+      const audit = await client.query(`
+        SELECT action, table_name, record_id FROM public.audit_logs
+        WHERE action = 'APPROVE_REGULARIZATION' AND record_id = '${reqId}';
+      `);
+      expect(audit.rowCount).toBeGreaterThan(0);
+      expect(audit.rows[0].table_name).toBe("regularization_requests");
+    });
+
+    it("reject_regularization: records audit log with action 'REJECT_REGULARIZATION'", async () => {
+      if (!isConnected || !client) return;
+      const reqRes = await client.query(`
+        INSERT INTO public.regularization_requests (
+          organization_id, employee_id, work_date, requested_in, requested_out, reason, status
+        ) VALUES (
+          '${ORG_ID}', '${USERS.employee}', '2026-12-02', '2026-12-02 09:00:00+00', '2026-12-02 17:00:00+00', 'Audit Reject Test Reason', 'pending'
+        ) RETURNING id;
+      `);
+      const reqId = reqRes.rows[0].id;
+
+      await asRole(
+        USERS.hr,
+        "hr",
+        "aal2",
+        async (c) => {
+          return c.query(`SELECT public.reject_regularization('${reqId}', 'Rejected for audit test');`);
+        },
+        { commit: true }
+      );
+
+      const audit = await client.query(`
+        SELECT action, table_name, record_id FROM public.audit_logs
+        WHERE action = 'REJECT_REGULARIZATION' AND record_id = '${reqId}';
+      `);
+      expect(audit.rowCount).toBeGreaterThan(0);
+      expect(audit.rows[0].table_name).toBe("regularization_requests");
+    });
+
+    it("punch_verified: records audit log with action 'VERIFIED_PUNCH'", async () => {
+      if (!isConnected || !client) return;
+      await client.query("BEGIN;");
+      await client.query("SET LOCAL ROLE service_role;");
+      const pvRes = await client.query(`
+        SELECT public.punch_verified('${USERS.employee}', 'kiosk', '${testLocId}', 'Verified punch audit test');
+      `);
+      await client.query("COMMIT;");
+
+      const sessionId = pvRes.rows[0].punch_verified.session_id;
+      const audit = await client.query(`
+        SELECT action, table_name, record_id FROM public.audit_logs
+        WHERE action = 'VERIFIED_PUNCH' AND record_id = '${sessionId}';
+      `);
+      expect(audit.rowCount).toBeGreaterThan(0);
+      expect(audit.rows[0].table_name).toBe("attendance_sessions");
     });
   });
 
