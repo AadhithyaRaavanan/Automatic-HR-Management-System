@@ -23,6 +23,8 @@ function MfaSetupForm() {
   const [isVerifying, setIsVerifying] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
 
+  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+
   const supabase = createClient();
 
   React.useEffect(() => {
@@ -98,6 +100,35 @@ function MfaSetupForm() {
       window.location.href = redirectPath;
     } catch {
       toast.error("Verification failed. Please try again.");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleDemoAutoVerify = async () => {
+    if (!enrollData?.secret || !enrollData?.factorId) return;
+    setIsVerifying(true);
+    try {
+      const res = await fetch("/api/auth/demo-totp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret: enrollData.secret }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.code) {
+        throw new Error(data.error || "Failed to generate demo code");
+      }
+      setVerifyCode(data.code);
+
+      const { error } = await supabase.auth.mfa.challengeAndVerify({
+        factorId: enrollData.factorId,
+        code: data.code,
+      });
+      if (error) throw error;
+      toast.success("Two-Factor Authentication activated and verified!");
+      window.location.href = redirectPath;
+    } catch (err: any) {
+      toast.error(err.message || "Demo verification failed");
     } finally {
       setIsVerifying(false);
     }
@@ -183,6 +214,26 @@ function MfaSetupForm() {
           </div>
 
           <form onSubmit={handleVerify} className="space-y-3">
+            {isDemoMode && (
+              <div className="p-3 bg-brand-purple/10 border border-brand-purple/20 rounded-2xl flex items-center justify-between gap-2 mb-2">
+                <div>
+                  <p className="text-xs font-bold text-brand-purple flex items-center gap-1">
+                    <span>⚡ Demo Mode</span>
+                  </p>
+                  <p className="text-[11px] text-text-secondary">Skip scanning QR with your phone</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDemoAutoVerify}
+                  disabled={isVerifying}
+                  className="py-1.5 px-3 rounded-xl bg-brand-purple hover:bg-brand-purple/90 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1 active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
+                >
+                  <span>1-Click Complete</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             <div>
               <label className="text-xs font-bold text-text-secondary block mb-1">
                 Enter 6-Digit Code from App

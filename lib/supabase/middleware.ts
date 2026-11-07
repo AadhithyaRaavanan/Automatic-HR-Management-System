@@ -135,11 +135,30 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    // Admin route guard (Admin only)
-    if (pathname.startsWith("/admin") && userRole !== "admin") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/";
-      return NextResponse.redirect(url);
+    // HR route guard (HR and Admin only; unauthorized gets /403)
+    if (pathname.startsWith("/hr")) {
+      if (userRole !== "admin" && userRole !== "hr") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/403";
+        return NextResponse.redirect(url);
+      }
+    }
+
+    // Admin route guard (Admin only; HR is allowed on /admin/users directory; unauthorized gets /403)
+    if (pathname.startsWith("/admin")) {
+      if (pathname.startsWith("/admin/users")) {
+        if (userRole !== "admin" && userRole !== "hr") {
+          const url = request.nextUrl.clone();
+          url.pathname = "/403";
+          return NextResponse.redirect(url);
+        }
+      } else {
+        if (userRole !== "admin") {
+          const url = request.nextUrl.clone();
+          url.pathname = "/403";
+          return NextResponse.redirect(url);
+        }
+      }
     }
   }
 

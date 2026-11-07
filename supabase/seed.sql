@@ -22,10 +22,10 @@ BEGIN
         '00000000-0000-0000-0000-000000000000',
         'authenticated', 'authenticated',
         'admin@remotehr.io', pwd_hash, NOW(),
-        '{"provider":"email","providers":["email"]}'::jsonb,
+        '{"provider":"email","providers":["email"],"user_role":"admin"}'::jsonb,
         '{"full_name":"Sarah Connor"}'::jsonb,
         NOW(), NOW()
-    ) ON CONFLICT (id) DO UPDATE SET encrypted_password = EXCLUDED.encrypted_password;
+    ) ON CONFLICT (id) DO UPDATE SET encrypted_password = EXCLUDED.encrypted_password, raw_app_meta_data = EXCLUDED.raw_app_meta_data;
 
     -- HR Ops: Marcus Vance
     INSERT INTO auth.users (
@@ -36,10 +36,10 @@ BEGIN
         '00000000-0000-0000-0000-000000000000',
         'authenticated', 'authenticated',
         'hr@remotehr.io', pwd_hash, NOW(),
-        '{"provider":"email","providers":["email"]}'::jsonb,
+        '{"provider":"email","providers":["email"],"user_role":"hr"}'::jsonb,
         '{"full_name":"Marcus Vance"}'::jsonb,
         NOW(), NOW()
-    ) ON CONFLICT (id) DO UPDATE SET encrypted_password = EXCLUDED.encrypted_password;
+    ) ON CONFLICT (id) DO UPDATE SET encrypted_password = EXCLUDED.encrypted_password, raw_app_meta_data = EXCLUDED.raw_app_meta_data;
 
     -- Engineering Manager: Alex Morgan
     INSERT INTO auth.users (
@@ -50,10 +50,10 @@ BEGIN
         '00000000-0000-0000-0000-000000000000',
         'authenticated', 'authenticated',
         'manager@remotehr.io', pwd_hash, NOW(),
-        '{"provider":"email","providers":["email"]}'::jsonb,
+        '{"provider":"email","providers":["email"],"user_role":"manager"}'::jsonb,
         '{"full_name":"Alex Morgan"}'::jsonb,
         NOW(), NOW()
-    ) ON CONFLICT (id) DO UPDATE SET encrypted_password = EXCLUDED.encrypted_password;
+    ) ON CONFLICT (id) DO UPDATE SET encrypted_password = EXCLUDED.encrypted_password, raw_app_meta_data = EXCLUDED.raw_app_meta_data;
 
     -- Employee (Design Lead): James Sullivan
     INSERT INTO auth.users (
@@ -64,10 +64,10 @@ BEGIN
         '00000000-0000-0000-0000-000000000000',
         'authenticated', 'authenticated',
         'employee@remotehr.io', pwd_hash, NOW(),
-        '{"provider":"email","providers":["email"]}'::jsonb,
+        '{"provider":"email","providers":["email"],"user_role":"employee"}'::jsonb,
         '{"full_name":"James Sullivan"}'::jsonb,
         NOW(), NOW()
-    ) ON CONFLICT (id) DO UPDATE SET encrypted_password = EXCLUDED.encrypted_password;
+    ) ON CONFLICT (id) DO UPDATE SET encrypted_password = EXCLUDED.encrypted_password, raw_app_meta_data = EXCLUDED.raw_app_meta_data;
 
     -- Team Member 1: Rachel Lee
     INSERT INTO auth.users (
@@ -78,10 +78,10 @@ BEGIN
         '00000000-0000-0000-0000-000000000000',
         'authenticated', 'authenticated',
         'rachel.lee@remotehr.io', pwd_hash, NOW(),
-        '{"provider":"email","providers":["email"]}'::jsonb,
+        '{"provider":"email","providers":["email"],"user_role":"employee"}'::jsonb,
         '{"full_name":"Rachel Lee"}'::jsonb,
         NOW(), NOW()
-    ) ON CONFLICT (id) DO UPDATE SET encrypted_password = EXCLUDED.encrypted_password;
+    ) ON CONFLICT (id) DO UPDATE SET encrypted_password = EXCLUDED.encrypted_password, raw_app_meta_data = EXCLUDED.raw_app_meta_data;
 
     -- Team Member 2: Ken Smith
     INSERT INTO auth.users (
@@ -92,10 +92,10 @@ BEGIN
         '00000000-0000-0000-0000-000000000000',
         'authenticated', 'authenticated',
         'ken.smith@remotehr.io', pwd_hash, NOW(),
-        '{"provider":"email","providers":["email"]}'::jsonb,
+        '{"provider":"email","providers":["email"],"user_role":"employee"}'::jsonb,
         '{"full_name":"Ken Smith"}'::jsonb,
         NOW(), NOW()
-    ) ON CONFLICT (id) DO UPDATE SET encrypted_password = EXCLUDED.encrypted_password;
+    ) ON CONFLICT (id) DO UPDATE SET encrypted_password = EXCLUDED.encrypted_password, raw_app_meta_data = EXCLUDED.raw_app_meta_data;
 
     -- Team Member 3: Eleanor Pena
     INSERT INTO auth.users (
@@ -106,10 +106,10 @@ BEGIN
         '00000000-0000-0000-0000-000000000000',
         'authenticated', 'authenticated',
         'eleanor.pena@remotehr.io', pwd_hash, NOW(),
-        '{"provider":"email","providers":["email"]}'::jsonb,
+        '{"provider":"email","providers":["email"],"user_role":"employee"}'::jsonb,
         '{"full_name":"Eleanor Pena"}'::jsonb,
         NOW(), NOW()
-    ) ON CONFLICT (id) DO UPDATE SET encrypted_password = EXCLUDED.encrypted_password;
+    ) ON CONFLICT (id) DO UPDATE SET encrypted_password = EXCLUDED.encrypted_password, raw_app_meta_data = EXCLUDED.raw_app_meta_data;
 
     -- Team Member 4: Devon Lane
     INSERT INTO auth.users (
@@ -120,10 +120,10 @@ BEGIN
         '00000000-0000-0000-0000-000000000000',
         'authenticated', 'authenticated',
         'devon.lane@remotehr.io', pwd_hash, NOW(),
-        '{"provider":"email","providers":["email"]}'::jsonb,
+        '{"provider":"email","providers":["email"],"user_role":"employee"}'::jsonb,
         '{"full_name":"Devon Lane"}'::jsonb,
         NOW(), NOW()
-    ) ON CONFLICT (id) DO UPDATE SET encrypted_password = EXCLUDED.encrypted_password;
+    ) ON CONFLICT (id) DO UPDATE SET encrypted_password = EXCLUDED.encrypted_password, raw_app_meta_data = EXCLUDED.raw_app_meta_data;
 
     -- Ensure string token columns are empty strings instead of NULL for GoTrue v2
     UPDATE auth.users

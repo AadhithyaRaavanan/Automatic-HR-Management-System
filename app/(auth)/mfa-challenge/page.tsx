@@ -17,6 +17,8 @@ function MfaChallengeForm() {
   const [isLoading, setIsLoading] = React.useState(false);
   const [factorId, setFactorId] = React.useState<string | null>(null);
 
+  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+
   const supabase = createClient();
 
   // Load user's enrolled TOTP factor
@@ -79,6 +81,38 @@ function MfaChallengeForm() {
     }
   };
 
+  const handleAutoFillDemo = async () => {
+    if (!factorId) {
+      toast.error("No authenticator factor found.");
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/auth/demo-totp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ factorId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.code) {
+        throw new Error(data.error || "Failed to fetch demo code");
+      }
+      setTotpCode(data.code);
+
+      const { error } = await supabase.auth.mfa.challengeAndVerify({
+        factorId,
+        code: data.code,
+      });
+      if (error) throw error;
+      toast.success("Two-Factor Authentication verified successfully!");
+      window.location.href = redirectPath;
+    } catch (err: any) {
+      toast.error(err.message || "Auto-verification failed.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push("/login");
@@ -114,6 +148,26 @@ function MfaChallengeForm() {
       </div>
 
       <form onSubmit={handleVerifyTotp} className="space-y-4">
+        {isDemoMode && (
+          <div className="p-3.5 bg-brand-purple/10 border border-brand-purple/20 rounded-2xl flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold text-brand-purple flex items-center gap-1">
+                <span>⚡ Demo Mode</span>
+              </p>
+              <p className="text-[11px] text-text-secondary">Skip manual authenticator app code</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleAutoFillDemo}
+              disabled={isLoading || !factorId}
+              className="py-2 px-3.5 rounded-xl bg-brand-purple hover:bg-brand-purple/90 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
+            >
+              <span>1-Click Sign In</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         <div>
           <label className="text-xs font-bold text-text-secondary block mb-1.5">
             6-Digit Security Code

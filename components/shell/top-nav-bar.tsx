@@ -2,8 +2,9 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Search, Bell, Settings, Download, Plus } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { Search, Bell, Settings, Download, Plus, LogOut } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { CommandPalette } from "@/components/shared/command-palette";
 import { NotificationCenter } from "@/components/shared/notification-center";
@@ -24,13 +25,23 @@ export function TopNavBar({
   className,
 }: TopNavBarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const supabase = createClient();
   const [commandOpen, setCommandOpen] = React.useState(false);
   const [notificationsOpen, setNotificationsOpen] = React.useState(false);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  };
 
   const navTabs = [
     { label: "Dashboard", href: "/" },
     { label: "Attendance", href: "/attendance" },
+    { label: "Leave", href: "/leave" },
     { label: "Requests", href: "/requests" },
+    { label: "Leave Hub", href: "/hr/leave", requiresHR: true },
     { label: "Team", href: "/team", requiresManager: true },
     { label: "Reports", href: "/reports", requiresHR: true },
     { label: "Directory", href: "/admin/users", requiresHR: true },
@@ -127,6 +138,16 @@ export function TopNavBar({
           >
             <Settings className="w-4 h-4" />
           </Link>
+
+          {/* Sign Out Button */}
+          <button
+            type="button"
+            title="Sign Out"
+            onClick={handleSignOut}
+            className="p-2 rounded-full bg-card-subtle hover:bg-red-500/10 hover:text-red-500 border border-border-light text-text-secondary transition-colors cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
 
           {/* Export Data Button with .xlsx Badge */}
           <button
