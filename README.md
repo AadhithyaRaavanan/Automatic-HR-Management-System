@@ -110,6 +110,13 @@ Before taking RemoteHR to production, configure the following settings in your S
    - Navigate to `Authentication` -> `SMTP Settings`.
    - Toggle **Enable Custom SMTP**.
    - Host: `smtp.resend.com` • Port: `465` / `587` • Encryption: `TLS` • User: `resend` • Password: `<RESEND_API_KEY>`.
+5. **Bot Protection & Native CAPTCHA (Cloudflare Turnstile)**:
+   - Navigate to `Authentication` -> `Bot Protection` (or `Security and Protection`).
+   - Toggle **"Enable CAPTCHA protection"** to **ON**.
+   - Select Provider: **Cloudflare Turnstile**.
+   - Input your Cloudflare **Turnstile Site Key** and **Secret Key**.
+   - RemoteHR forwards the single-use `captchaToken` directly to `supabase.auth.signInWithPassword({ options: { captchaToken } })`. GoTrue natively verifies the token against Cloudflare's API, shielding both direct Supabase Auth API calls and route-level actions from credential stuffing and automated bot assaults.
+   - In production (`NODE_ENV=production`), the login route strictly fails closed if a client attempts to authenticate without a `captchaToken`.
 
 ### 2. Demo Mode Isolation
 In production, demo accounts and one-click role switchers are strictly disabled by default:

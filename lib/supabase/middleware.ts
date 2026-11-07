@@ -2,53 +2,6 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { Database, EmployeeRole } from "@/types/database.types";
 
-/**
- * Cryptographically verifies an HMAC-SHA256 (HS256) JWT signature using the Web Crypto API.
- * Supported across standard Node.js, Vercel Edge Middleware, and browser environments.
- */
-async function verifyJwtHmacSha256(
-  token: string,
-  secret: string
-): Promise<Record<string, any> | null> {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const [headerB64, payloadB64, signatureB64] = parts;
-
-    const enc = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      "raw",
-      enc.encode(secret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["verify"]
-    );
-
-    const signedData = enc.encode(`${headerB64}.${payloadB64}`);
-
-    // Decode URL-safe base64 signature
-    const signatureStr = signatureB64.replace(/-/g, "+").replace(/_/g, "/");
-    const padLen = (4 - (signatureStr.length % 4)) % 4;
-    const paddedSig = signatureStr + "=".repeat(padLen);
-    const sigBytes = Uint8Array.from(atob(paddedSig), (c) => c.charCodeAt(0));
-
-    const isValid = await crypto.subtle.verify("HMAC", key, sigBytes, signedData);
-    if (!isValid) {
-      console.warn("[SECURITY] JWT HMAC-SHA256 signature verification failed; rejecting forged token.");
-      return null;
-    }
-
-    // Decode payload once signature is cryptographically verified
-    const payloadStr = payloadB64.replace(/-/g, "+").replace(/_/g, "/");
-    const payloadPad = (4 - (payloadStr.length % 4)) % 4;
-    const payloadJson = atob(payloadStr + "=".repeat(payloadPad));
-    return JSON.parse(payloadJson);
-  } catch (err) {
-    console.warn("[SECURITY] Error during JWT HMAC verification:", err);
-    return null;
-  }
-}
-
 export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
@@ -116,13 +69,13 @@ export async function updateSession(request: NextRequest) {
 
   /**
    * Cryptographic JWT Signature & Claims Verification:
-   * 1. If SUPABASE_JWT_SECRET is configured, performs local in-memory HMAC-SHA256
-   *    signature verification (~0-1ms) via Web Crypto API.
-   * 2. If asymmetric keys are used or SUPABASE_JWT_SECRET is missing, falls back
-   *    to authoritative network verification via `supabase.auth.getUser()`.
-   *    Unverified base64 decoding is never trusted for auth decisions.
+   * Uses Supabase's native `supabase.auth.getClaims(rawToken)`.
+   * - If asymmetric JWKS keys are configured, verifies the signature locally in Web Crypto.
+   * - If symmetric HS256 is used (the Supabase default), delegates authoritative verification
+   *   to GoTrue via network call without requiring SUPABASE_JWT_SECRET in Vercel.
+   * Unverified base64 decoding is never trusted for auth or access control decisions.
    */
-  const getVerifiedJwtClaims = async () => {
+  const getVerifiedJwtClaims = async (): Promise<Record<string, any> | null> => {
     try {
       const authCookies = request.cookies.getAll();
       const tokenCookie = authCookies.find((c) => c.name.includes("-auth-token"));
@@ -135,37 +88,14 @@ export async function updateSession(request: NextRequest) {
         rawToken = parsed[0] || "";
       }
 
-      const jwtSecret = process.env.SUPABASE_JWT_SECRET;
-      if (jwtSecret) {
-        const verifiedClaims = await verifyJwtHmacSha256(rawToken, jwtSecret);
-        if (verifiedClaims) return verifiedClaims;
+      if (!rawToken || typeof rawToken !== "string") return null;
+
+      const { data, error } = await supabase.auth.getClaims(rawToken);
+      if (error || !data?.claims) {
+        return null;
       }
 
-      // Fallback: network roundtrip to GoTrue via supabase.auth.getUser()
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser();
-      if (error || !user) return null;
-
-      // Parse payload to extract custom_access_token_hook claims (such as user_role and aal)
-      let customClaims: Record<string, any> = {};
-      try {
-        const parts = rawToken.split(".");
-        if (parts.length === 3) {
-          const payloadStr = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-          const payloadPad = (4 - (payloadStr.length % 4)) % 4;
-          customClaims = JSON.parse(atob(payloadStr + "=".repeat(payloadPad)));
-        }
-      } catch {}
-
-      return {
-        sub: user.id,
-        email: user.email,
-        user_role: customClaims.user_role || user.app_metadata?.user_role || "employee",
-        aal: customClaims.aal || "aal1",
-        exp: Math.floor(Date.now() / 1000) + 3600,
-      };
+      return data.claims;
     } catch {
       return null;
     }

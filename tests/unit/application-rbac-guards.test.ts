@@ -282,5 +282,107 @@ describe("Phase 1: Application-Level RBAC & Route Guard Suite", () => {
       expect(result.allowed).toBe(true);
     });
   });
+
+  describe("9. Phase 1 JWT Token Verification & Forgery Rejection (supabase.auth.getClaims)", () => {
+    const { createClient } = require("@supabase/supabase-js");
+    const supabase = createClient("http://127.0.0.1:54321", "dummy-anon-key");
+
+    it("rejects malformed JWT structure", async () => {
+      const result = await supabase.auth.getClaims("not.a.valid.jwt");
+      expect(result.data).toBeNull();
+      expect(result.error).not.toBeNull();
+      expect(result.error.message).toMatch(/Invalid JWT structure/i);
+    });
+
+    it("rejects expired JWT token with exp in the past", async () => {
+      const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+      const expiredPayload = Buffer.from(
+        JSON.stringify({
+          sub: "user-123",
+          exp: Math.floor(Date.now() / 1000) - 300, // 5 minutes ago
+        })
+      ).toString("base64url");
+      const expiredJwt = `${header}.${expiredPayload}.invalidsignature`;
+
+      const result = await supabase.auth.getClaims(expiredJwt);
+      expect(result.data).toBeNull();
+      expect(result.error).not.toBeNull();
+      expect(result.error.message).toMatch(/JWT has expired/i);
+    });
+
+    it("rejects token with forged/tampered signature or invalid claims", async () => {
+      const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+      const futurePayload = Buffer.from(
+        JSON.stringify({
+          sub: "00000000-0000-0000-0000-000000000001",
+          user_role: "admin",
+          aal: "aal2",
+          exp: Math.floor(Date.now() / 1000) + 3600,
+        })
+      ).toString("base64url");
+      const forgedJwt = `${header}.${futurePayload}.forgedsignaturexyz123`;
+
+      // getClaims will recognize HS256 and delegate to getUser(forgedJwt) which fails validation
+      const result = await supabase.auth.getClaims(forgedJwt);
+      expect(result.data).toBeNull();
+      expect(result.error).not.toBeNull();
+    });
+  });
+
+  describe("10. Phase 1 Unconditional Production CAPTCHA Requirement", () => {
+    const originalEnv = process.env.NODE_ENV;
+
+    it("rejects login unconditionally in production when captchaToken is missing", async () => {
+      (process.env as any).NODE_ENV = "production";
+      const { checkTurnstileRequirements } = await import("@/lib/auth/turnstile");
+
+      // Even without TURNSTILE_SECRET_KEY, production must fail closed
+      delete process.env.TURNSTILE_SECRET_KEY;
+      const resMissing = checkTurnstileRequirements(undefined);
+      expect(resMissing.valid).toBe(false);
+      expect(resMissing.error).toBe("CAPTCHA challenge token required. Please verify that you are human.");
+
+      const resEmpty = checkTurnstileRequirements("");
+      expect(resEmpty.valid).toBe(false);
+      expect(resEmpty.error).toBe("CAPTCHA challenge token required. Please verify that you are human.");
+
+      (process.env as any).NODE_ENV = originalEnv;
+    });
+
+    it("allows login when captchaToken is provided in production", async () => {
+      (process.env as any).NODE_ENV = "production";
+      const { checkTurnstileRequirements } = await import("@/lib/auth/turnstile");
+
+      const resValid = checkTurnstileRequirements("valid-turnstile-token-abc");
+      expect(resValid.valid).toBe(true);
+      expect(resValid.error).toBeUndefined();
+
+      (process.env as any).NODE_ENV = originalEnv;
+    });
+
+    it("bypasses CAPTCHA check in development and test environments", async () => {
+      (process.env as any).NODE_ENV = "test";
+      const { checkTurnstileRequirements } = await import("@/lib/auth/turnstile");
+
+      const res = checkTurnstileRequirements(undefined);
+      expect(res.valid).toBe(true);
+      expect(res.error).toBeUndefined();
+
+      (process.env as any).NODE_ENV = originalEnv;
+    });
+  });
+
+  describe("11. Phase 1 Dual-Counter Rate Limiter Keys", () => {
+    it("generates separate scoped keys for ip+email and email-only", async () => {
+      const { getRateLimitKey, getEmailRateLimitKey } = await import("@/lib/auth/rate-limiter");
+
+      const ipEmailKey = getRateLimitKey("192.168.1.50", "Alex@RemoteHR.IO");
+      const emailKey = getEmailRateLimitKey("Alex@RemoteHR.IO");
+
+      expect(ipEmailKey).toBe("ip_email::192.168.1.50::alex@remotehr.io");
+      expect(emailKey).toBe("email::alex@remotehr.io");
+      expect(ipEmailKey).not.toBe(emailKey);
+    });
+  });
 });
 

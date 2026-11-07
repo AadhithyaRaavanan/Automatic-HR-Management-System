@@ -317,6 +317,186 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
         expect(err).not.toBeNull();
       });
     });
+
+    // G. employees
+    it("employees: Employee views own record only; Manager views direct reports only; HR/Admin at AAL1 blocked by RESTRICTIVE policy; HR/Admin at AAL2 can view all", async () => {
+      if (!isConnected || !client) return;
+
+      // 1. Employee at AAL1 views own profile, but peer returns 0 rows
+      await runAsAuthenticated(USERS.employee, "employee", "aal1", async (pg) => {
+        const ownRes = await pg.query(`SELECT * FROM public.employees WHERE id = '${USERS.employee}';`);
+        expect(ownRes.rows.length).toBe(1);
+        expect(ownRes.rows[0].email).toBe("employee@remotehr.io");
+
+        const peerRes = await pg.query(`SELECT * FROM public.employees WHERE id = '${USERS.peer}';`);
+        expect(peerRes.rows.length).toBe(0);
+
+        // Employee cannot update status or role
+        const updateRes = await pg.query(`UPDATE public.employees SET status = 'inactive' WHERE id = '${USERS.peer}';`);
+        expect(updateRes.rowCount).toBe(0);
+      });
+
+      // 2. Manager at AAL1 views own profile and direct report (James Sullivan), but non-report (Sarah Connor) returns 0 rows
+      await runAsAuthenticated(USERS.manager, "manager", "aal1", async (pg) => {
+        const ownRes = await pg.query(`SELECT * FROM public.employees WHERE id = '${USERS.manager}';`);
+        expect(ownRes.rows.length).toBe(1);
+
+        const reportRes = await pg.query(`SELECT * FROM public.employees WHERE id = '${USERS.employee}';`);
+        expect(reportRes.rows.length).toBe(1);
+
+        const nonReportRes = await pg.query(`SELECT * FROM public.employees WHERE id = '${USERS.admin}';`);
+        expect(nonReportRes.rows.length).toBe(0);
+      });
+
+      // 3. HR at AAL1: RESTRICTIVE policy enforce_mfa_aal2_employees returns 0 rows
+      await runAsAuthenticated(USERS.hr, "hr", "aal1", async (pg) => {
+        const hrRes = await pg.query("SELECT * FROM public.employees;");
+        expect(hrRes.rows.length).toBe(0);
+
+        const updateRes = await pg.query(`UPDATE public.employees SET status = 'inactive' WHERE id = '${USERS.employee}';`);
+        expect(updateRes.rowCount).toBe(0);
+      });
+
+      // 4. HR at AAL2: RESTRICTIVE policy satisfied, views all 8 employees
+      await runAsAuthenticated(USERS.hr, "hr", "aal2", async (pg) => {
+        const hrRes = await pg.query("SELECT * FROM public.employees;");
+        expect(hrRes.rows.length).toBeGreaterThanOrEqual(8);
+      });
+
+      // 5. Admin at AAL1: RESTRICTIVE policy enforce_mfa_aal2_employees returns 0 rows
+      await runAsAuthenticated(USERS.admin, "admin", "aal1", async (pg) => {
+        const adminRes = await pg.query("SELECT * FROM public.employees;");
+        expect(adminRes.rows.length).toBe(0);
+      });
+
+      // 6. Admin at AAL2: RESTRICTIVE policy satisfied, views all employees and can update
+      await runAsAuthenticated(USERS.admin, "admin", "aal2", async (pg) => {
+        const adminRes = await pg.query("SELECT * FROM public.employees;");
+        expect(adminRes.rows.length).toBeGreaterThanOrEqual(8);
+
+        const updateRes = await pg.query(`UPDATE public.employees SET work_target_minutes = 480 WHERE id = '${USERS.employee}';`);
+        expect(updateRes.rowCount).toBe(1);
+      });
+    });
+
+    // H. regularization_requests
+    it("regularization_requests: Employee reads own and cannot insert for peers; HR/Admin at AAL1 blocked by RESTRICTIVE policy; HR/Admin at AAL2 view all", async () => {
+      if (!isConnected || !client) return;
+
+      // 1. Employee at AAL1 reads own requests only; peer requests return 0 rows
+      await runAsAuthenticated(USERS.employee, "employee", "aal1", async (pg) => {
+        const ownReqs = await pg.query(`SELECT * FROM public.regularization_requests WHERE employee_id = '${USERS.employee}';`);
+        expect(ownReqs.rows.length).toBeGreaterThan(0);
+
+        const peerReqs = await pg.query(`SELECT * FROM public.regularization_requests WHERE employee_id = '${USERS.peer}';`);
+        expect(peerReqs.rows.length).toBe(0);
+
+        // Employee cannot insert regularization request on behalf of peer
+        let insertErr: any = null;
+        try {
+          await pg.query(`
+            INSERT INTO public.regularization_requests (
+              employee_id, work_date, requested_in, requested_out, reason
+            ) VALUES (
+              '${USERS.peer}', '2026-05-15', '2026-05-15 09:00:00+00', '2026-05-15 17:00:00+00', 'Unauthorized peer insert'
+            );
+          `);
+        } catch (e) {
+          insertErr = e;
+        }
+        expect(insertErr).not.toBeNull();
+        expect(insertErr.message).toMatch(/violates row-level security policy/i);
+      });
+
+      // 2. HR at AAL1: RESTRICTIVE policy enforce_mfa_aal2_regularization_requests returns 0 rows
+      await runAsAuthenticated(USERS.hr, "hr", "aal1", async (pg) => {
+        const hrRes = await pg.query("SELECT * FROM public.regularization_requests;");
+        expect(hrRes.rows.length).toBe(0);
+      });
+
+      // 3. HR at AAL2: RESTRICTIVE policy satisfied, views all regularization requests
+      await runAsAuthenticated(USERS.hr, "hr", "aal2", async (pg) => {
+        const hrRes = await pg.query("SELECT * FROM public.regularization_requests;");
+        expect(hrRes.rows.length).toBeGreaterThan(0);
+      });
+
+      // 4. Admin at AAL1: RESTRICTIVE policy returns 0 rows
+      await runAsAuthenticated(USERS.admin, "admin", "aal1", async (pg) => {
+        const adminRes = await pg.query("SELECT * FROM public.regularization_requests;");
+        expect(adminRes.rows.length).toBe(0);
+      });
+
+      // 5. Admin at AAL2: views all requests
+      await runAsAuthenticated(USERS.admin, "admin", "aal2", async (pg) => {
+        const adminRes = await pg.query("SELECT * FROM public.regularization_requests;");
+        expect(adminRes.rows.length).toBeGreaterThan(0);
+      });
+    });
+
+    // I. auth_rate_limits
+    it("auth_rate_limits: direct access denied for all authenticated roles (employee, manager, hr, admin) at both aal1 and aal2", async () => {
+      if (!isConnected || !client) return;
+
+      const roles = ["employee", "manager", "hr", "admin"] as const;
+      const aals = ["aal1", "aal2"] as const;
+
+      for (const testRole of roles) {
+        for (const testAal of aals) {
+          await runAsAuthenticated(USERS[testRole], testRole, testAal, async (pg) => {
+            // SELECT denied
+            let selectErr: any = null;
+            await pg.query("SAVEPOINT sp_sel;");
+            try {
+              await pg.query("SELECT * FROM public.auth_rate_limits;");
+            } catch (e) {
+              selectErr = e;
+              await pg.query("ROLLBACK TO SAVEPOINT sp_sel;");
+            }
+            expect(selectErr).not.toBeNull();
+            expect(selectErr.message).toMatch(/permission denied for table auth_rate_limits/i);
+
+            // INSERT denied
+            let insertErr: any = null;
+            await pg.query("SAVEPOINT sp_ins;");
+            try {
+              await pg.query(`
+                INSERT INTO public.auth_rate_limits (key, attempts)
+                VALUES ('forged_key', 1);
+              `);
+            } catch (e) {
+              insertErr = e;
+              await pg.query("ROLLBACK TO SAVEPOINT sp_ins;");
+            }
+            expect(insertErr).not.toBeNull();
+            expect(insertErr.message).toMatch(/permission denied for table auth_rate_limits/i);
+
+            // UPDATE denied
+            let updateErr: any = null;
+            await pg.query("SAVEPOINT sp_upd;");
+            try {
+              await pg.query("UPDATE public.auth_rate_limits SET attempts = 0;");
+            } catch (e) {
+              updateErr = e;
+              await pg.query("ROLLBACK TO SAVEPOINT sp_upd;");
+            }
+            expect(updateErr).not.toBeNull();
+            expect(updateErr.message).toMatch(/permission denied for table auth_rate_limits/i);
+
+            // DELETE denied
+            let deleteErr: any = null;
+            await pg.query("SAVEPOINT sp_del;");
+            try {
+              await pg.query("DELETE FROM public.auth_rate_limits;");
+            } catch (e) {
+              deleteErr = e;
+              await pg.query("ROLLBACK TO SAVEPOINT sp_del;");
+            }
+            expect(deleteErr).not.toBeNull();
+            expect(deleteErr.message).toMatch(/permission denied for table auth_rate_limits/i);
+          });
+        }
+      }
+    });
   });
 
   // -------------------------------------------------------------

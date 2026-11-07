@@ -10,7 +10,11 @@ const LOCKOUT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const fallbackMemoryMap = new Map<string, { attempts: number; lockedUntil: number | null }>();
 
 export function getRateLimitKey(ip: string, email: string): string {
-  return `${ip}::${email.toLowerCase().trim()}`;
+  return `ip_email::${ip}::${email.toLowerCase().trim()}`;
+}
+
+export function getEmailRateLimitKey(email: string): string {
+  return `email::${email.toLowerCase().trim()}`;
 }
 
 /**

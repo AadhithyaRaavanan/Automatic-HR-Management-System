@@ -3,33 +3,38 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { Database, EmployeeRole } from "@/types/database.types";
 import {
   getRateLimitKey,
+  getEmailRateLimitKey,
   checkRateLimit,
   recordFailure,
   clearRateLimit,
 } from "@/lib/auth/rate-limiter";
+import { checkTurnstileRequirements } from "@/lib/auth/turnstile";
 
 /**
  * Extract platform-trusted client IP.
  * Vercel Documentation Reference: https://vercel.com/docs/edge-network/headers/request-headers
- * - 'x-vercel-ip': Primary client IP address provided by Vercel's Edge Network.
- * - 'x-real-ip': Standard de facto client IP header forwarded by reverse proxies.
- * - 'x-forwarded-for': Comma-separated proxy chain; the leftmost IP is the originating client.
+ * Vercel provides:
+ * - 'x-forwarded-for': Standard comma-separated client IP proxy chain; leftmost is originating client.
+ * - 'x-vercel-forwarded-for': Vercel-specific forwarded header.
+ * - 'x-real-ip': Client IP header forwarded by reverse proxies.
+ * Note: 'x-vercel-ip-*' headers are geographic headers (city, country, etc.); there is no plain 'x-vercel-ip'.
  *
- * Robust fallback strategy:
- * If 'x-vercel-ip' is absent (e.g. running behind a custom CDN, preview domain, or local Docker proxy),
- * resolves through 'x-real-ip' and the first entry of 'x-forwarded-for'.
- * If all IP headers are missing in production, gracefully falls back to an unknown IP token
- * so authentication is never abruptly blocked, while rate limiting remains strictly enforced by email.
+ * Robust resolution strategy:
+ * Checks x-forwarded-for / x-vercel-forwarded-for first, then x-real-ip, then request.ip.
+ * In production, if headers are stripped, logs a warning and uses 'unknown-client-ip'
+ * while rate limiting remains strictly enforced by the email-only rate limiter.
  */
 function getPlatformTrustedClientIp(request: NextRequest): string {
-  const vercelIp = request.headers.get("x-vercel-ip");
-  if (vercelIp && vercelIp.trim()) {
-    return vercelIp.trim();
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  if (forwardedFor && forwardedFor.trim()) {
+    const clientIp = forwardedFor.split(",")[0].trim();
+    if (clientIp) return clientIp;
   }
 
-  const nextIp = (request as any).ip;
-  if (nextIp && typeof nextIp === "string" && nextIp.trim()) {
-    return nextIp.trim();
+  const vercelForwardedFor = request.headers.get("x-vercel-forwarded-for");
+  if (vercelForwardedFor && vercelForwardedFor.trim()) {
+    const clientIp = vercelForwardedFor.split(",")[0].trim();
+    if (clientIp) return clientIp;
   }
 
   const realIp = request.headers.get("x-real-ip");
@@ -37,10 +42,9 @@ function getPlatformTrustedClientIp(request: NextRequest): string {
     return realIp.trim();
   }
 
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  if (forwardedFor && forwardedFor.trim()) {
-    const clientIp = forwardedFor.split(",")[0].trim();
-    if (clientIp) return clientIp;
+  const nextIp = (request as any).ip;
+  if (nextIp && typeof nextIp === "string" && nextIp.trim()) {
+    return nextIp.trim();
   }
 
   // Non-production fallback (local development / testing)
@@ -48,35 +52,8 @@ function getPlatformTrustedClientIp(request: NextRequest): string {
     return "127.0.0.1";
   }
 
-  // In production, log a warning and fall back to a fallback token so login does not hard-fail
   console.warn("[SECURITY] No platform client IP header detected on incoming request; using email-scoped rate limit.");
   return "unknown-client-ip";
-}
-
-/**
- * Validates presence of Cloudflare Turnstile token for Supabase-Native CAPTCHA.
- * Turnstile tokens are strictly SINGLE-USE: verifying once at the route and again in GoTrue
- * burns the token and causes a duplicate-token rejection.
- *
- * Decision: Supabase-Native CAPTCHA is utilized.
- * GoTrue natively verifies the token against Cloudflare when passed via `signInWithPassword({ options: { captchaToken } })`.
- * This protects both the application route and direct API calls to Supabase Auth without duplicate verification.
- */
-function checkTurnstileRequirements(
-  token: string | undefined
-): { valid: boolean; error?: string } {
-  const secret = process.env.TURNSTILE_SECRET_KEY;
-  const isProduction = process.env.NODE_ENV === "production";
-
-  // FAIL CLOSED in production if Turnstile secret is configured but client provided no token
-  if (isProduction && secret && !token) {
-    return {
-      valid: false,
-      error: "CAPTCHA challenge token required. Please verify that you are human.",
-    };
-  }
-
-  return { valid: true };
 }
 
 export async function POST(request: NextRequest) {
@@ -102,21 +79,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const rateKey = getRateLimitKey(clientIp, email);
+    const ipEmailKey = getRateLimitKey(clientIp, email);
+    const emailKey = getEmailRateLimitKey(email);
 
-    // 2. Evaluate Shared Store Rate Limit (Upstash Redis or Supabase Table)
-    const limitCheck = await checkRateLimit(rateKey);
-    if (!limitCheck.allowed) {
+    // 2. Evaluate Dual Rate Limits: IP+Email AND Email-only counters
+    const [ipEmailCheck, emailCheck] = await Promise.all([
+      checkRateLimit(ipEmailKey),
+      checkRateLimit(emailKey),
+    ]);
+
+    if (!ipEmailCheck.allowed || !emailCheck.allowed) {
+      const retryAfter = Math.max(
+        ipEmailCheck.retryAfterSeconds,
+        emailCheck.retryAfterSeconds
+      );
       return NextResponse.json(
         {
           error: `Too many failed login attempts. Account login is temporarily locked for security. Please try again in ${Math.ceil(
-            limitCheck.retryAfterSeconds / 60
+            retryAfter / 60
           )} minutes.`,
         },
         {
           status: 429,
           headers: {
-            "Retry-After": String(limitCheck.retryAfterSeconds),
+            "Retry-After": String(retryAfter),
           },
         }
       );
@@ -161,8 +147,11 @@ export async function POST(request: NextRequest) {
     });
 
     if (authError || !authData.user) {
-      // Record failure in shared rate limit store
-      await recordFailure(rateKey);
+      // Record failure on both IP+Email AND Email-only rate limit stores
+      await Promise.all([
+        recordFailure(ipEmailKey),
+        recordFailure(emailKey),
+      ]);
 
       // Generic authentication error prevents account enumeration
       return NextResponse.json(
@@ -171,8 +160,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // On successful authentication, clear shared rate limit
-    await clearRateLimit(rateKey);
+    // On successful authentication, clear both rate limit counters
+    await Promise.all([
+      clearRateLimit(ipEmailKey),
+      clearRateLimit(emailKey),
+    ]);
 
     // 5. Role & Multi-Factor Authentication (MFA) Status Resolution
     let userRole = (authData.user.app_metadata?.user_role) as EmployeeRole | undefined;
