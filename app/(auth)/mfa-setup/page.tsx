@@ -95,8 +95,7 @@ function MfaSetupForm() {
       }
 
       toast.success("Two-Factor Authentication activated and verified!");
-      router.push(redirectPath);
-      router.refresh();
+      window.location.href = redirectPath;
     } catch {
       toast.error("Verification failed. Please try again.");
     } finally {

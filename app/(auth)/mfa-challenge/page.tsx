@@ -71,8 +71,7 @@ function MfaChallengeForm() {
       }
 
       toast.success("Two-Factor Authentication verified successfully!");
-      router.push(redirectPath);
-      router.refresh();
+      window.location.href = redirectPath;
     } catch {
       toast.error("Verification failed. Please try again.");
     } finally {

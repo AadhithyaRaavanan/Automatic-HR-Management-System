@@ -183,13 +183,23 @@ export async function POST(request: NextRequest) {
 
     // Direct database query fallback to guarantee authoritative role resolution
     if (!userRole) {
-      const { data: roleRow } = await (supabase as any)
-        .from("user_roles")
+      const { data: memberRow } = await (supabase as any)
+        .from("organization_members")
         .select("role")
         .eq("user_id", authData.user.id)
+        .eq("status", "active")
         .maybeSingle();
-      if ((roleRow as any)?.role) {
-        userRole = (roleRow as any).role as EmployeeRole;
+      if ((memberRow as any)?.role) {
+        userRole = (memberRow as any).role as EmployeeRole;
+      } else {
+        const { data: roleRow } = await (supabase as any)
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", authData.user.id)
+          .maybeSingle();
+        if ((roleRow as any)?.role) {
+          userRole = (roleRow as any).role as EmployeeRole;
+        }
       }
     }
 
