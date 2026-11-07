@@ -129,6 +129,24 @@ const EXPECTED_POLICY_INVENTORY: Array<{
     "cmd": "ALL"
   },
   {
+    "tablename": "company_days_off",
+    "policyname": "company_days_off_select_policy",
+    "permissive": "PERMISSIVE",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "company_days_off",
+    "policyname": "enforce_active_org_membership_company_days_off",
+    "permissive": "RESTRICTIVE",
+    "cmd": "ALL"
+  },
+  {
+    "tablename": "company_days_off",
+    "policyname": "enforce_mfa_aal2_company_days_off",
+    "permissive": "RESTRICTIVE",
+    "cmd": "ALL"
+  },
+  {
     "tablename": "departments",
     "policyname": "departments_select_policy",
     "permissive": "PERMISSIVE",
@@ -271,6 +289,96 @@ const EXPECTED_POLICY_INVENTORY: Array<{
     "policyname": "tenant_kiosk_devices_update_policy",
     "permissive": "PERMISSIVE",
     "cmd": "UPDATE"
+  },
+  {
+    "tablename": "leave_balance_adjustments",
+    "policyname": "enforce_active_org_membership_leave_balance_adjustments",
+    "permissive": "RESTRICTIVE",
+    "cmd": "ALL"
+  },
+  {
+    "tablename": "leave_balance_adjustments",
+    "policyname": "enforce_mfa_aal2_leave_balance_adjustments",
+    "permissive": "RESTRICTIVE",
+    "cmd": "ALL"
+  },
+  {
+    "tablename": "leave_balance_adjustments",
+    "policyname": "leave_balance_adjustments_select_policy",
+    "permissive": "PERMISSIVE",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "leave_balances",
+    "policyname": "enforce_active_org_membership_leave_balances",
+    "permissive": "RESTRICTIVE",
+    "cmd": "ALL"
+  },
+  {
+    "tablename": "leave_balances",
+    "policyname": "enforce_mfa_aal2_leave_balances",
+    "permissive": "RESTRICTIVE",
+    "cmd": "ALL"
+  },
+  {
+    "tablename": "leave_balances",
+    "policyname": "leave_balances_select_policy",
+    "permissive": "PERMISSIVE",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "leave_policies",
+    "policyname": "enforce_active_org_membership_leave_policies",
+    "permissive": "RESTRICTIVE",
+    "cmd": "ALL"
+  },
+  {
+    "tablename": "leave_policies",
+    "policyname": "enforce_mfa_aal2_leave_policies",
+    "permissive": "RESTRICTIVE",
+    "cmd": "ALL"
+  },
+  {
+    "tablename": "leave_policies",
+    "policyname": "leave_policies_select_policy",
+    "permissive": "PERMISSIVE",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "leave_requests",
+    "policyname": "enforce_active_org_membership_leave_requests",
+    "permissive": "RESTRICTIVE",
+    "cmd": "ALL"
+  },
+  {
+    "tablename": "leave_requests",
+    "policyname": "enforce_mfa_aal2_leave_requests",
+    "permissive": "RESTRICTIVE",
+    "cmd": "ALL"
+  },
+  {
+    "tablename": "leave_requests",
+    "policyname": "leave_requests_select_policy",
+    "permissive": "PERMISSIVE",
+    "cmd": "SELECT"
+  },
+  {
+    "tablename": "leave_types",
+    "policyname": "enforce_active_org_membership_leave_types",
+    "permissive": "RESTRICTIVE",
+    "cmd": "ALL"
+  },
+  {
+    "tablename": "leave_types",
+    "policyname": "enforce_mfa_aal2_leave_types",
+    "permissive": "RESTRICTIVE",
+    "cmd": "ALL"
+  },
+  {
+    "tablename": "leave_types",
+    "policyname": "leave_types_select_policy",
+    "permissive": "PERMISSIVE",
+    "cmd": "SELECT"
   },
   {
     "tablename": "locations",
