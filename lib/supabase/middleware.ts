@@ -1,4 +1,4 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { Database, EmployeeRole } from "@/types/database.types";
 
@@ -21,47 +21,25 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
+  // Standard @supabase/ssr server client with native chunked cookie assembly
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
     {
       cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value;
+        getAll() {
+          return request.cookies.getAll();
         },
-        set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          });
+        setAll(cookiesToSet: Array<{ name: string; value: string; options?: any }>) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           response = NextResponse.next({
             request: {
               headers: request.headers,
             },
           });
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          });
-        },
-        remove(name: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value: "",
-            ...options,
-          });
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          });
-          response.cookies.set({
-            name,
-            value: "",
-            ...options,
-          });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          );
         },
       },
     }
@@ -69,7 +47,8 @@ export async function updateSession(request: NextRequest) {
 
   /**
    * Cryptographic JWT Signature & Claims Verification:
-   * Uses Supabase's native `supabase.auth.getClaims(rawToken)`.
+   * Uses Supabase's native `supabase.auth.getClaims()`.
+   * Standard @supabase/ssr storage automatically stitches chunked cookies (`.0`, `.1`, etc.).
    * - If asymmetric JWKS keys are configured, verifies the signature locally in Web Crypto.
    * - If symmetric HS256 is used (the Supabase default), delegates authoritative verification
    *   to GoTrue via network call without requiring SUPABASE_JWT_SECRET in Vercel.
@@ -77,25 +56,11 @@ export async function updateSession(request: NextRequest) {
    */
   const getVerifiedJwtClaims = async (): Promise<Record<string, any> | null> => {
     try {
-      const authCookies = request.cookies.getAll();
-      const tokenCookie = authCookies.find((c) => c.name.includes("-auth-token"));
-      if (!tokenCookie) return null;
-
-      // Token can be JSON string array or raw JWT
-      let rawToken = tokenCookie.value;
-      if (rawToken.startsWith("[")) {
-        const parsed = JSON.parse(rawToken);
-        rawToken = parsed[0] || "";
+      const { data, error } = await supabase.auth.getClaims();
+      if (!error && data?.claims) {
+        return data.claims;
       }
-
-      if (!rawToken || typeof rawToken !== "string") return null;
-
-      const { data, error } = await supabase.auth.getClaims(rawToken);
-      if (error || !data?.claims) {
-        return null;
-      }
-
-      return data.claims;
+      return null;
     } catch {
       return null;
     }
