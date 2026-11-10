@@ -26,14 +26,16 @@ function MfaSetupForm() {
 
   const isDemoMode = isDemoModeEnabled();
 
-  const supabase = createClient();
+  const supabase = React.useMemo(() => createClient(), []);
 
   React.useEffect(() => {
+    let active = true;
     async function initEnrollment() {
       setIsLoading(true);
       try {
         // 1. Check if user already has a verified factor, and clean up unverified stale factors
         const { data: factorData, error: listError } = await supabase.auth.mfa.listFactors();
+        if (!active) return;
         if (!listError && factorData) {
           const verified = factorData.totp?.find((f) => f.status === "verified");
           if (verified) {
@@ -52,12 +54,15 @@ function MfaSetupForm() {
           }
         }
 
-        // 2. Initiate TOTP enrollment
+        // 2. Initiate TOTP enrollment with unique friendlyName to avoid parallel session collisions
+        const friendlySuffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
         const { data, error } = await supabase.auth.mfa.enroll({
           factorType: "totp",
           issuer: "RemoteHR",
+          friendlyName: `RemoteHR-${friendlySuffix}`,
         });
 
+        if (!active) return;
         if (error) throw error;
 
         setEnrollData({
@@ -66,13 +71,20 @@ function MfaSetupForm() {
           secret: data.totp.secret,
         });
       } catch (err: any) {
-        toast.error(err.message || "Failed to start two-factor enrollment.");
+        if (active) {
+          toast.error(err.message || "Failed to start two-factor enrollment.");
+        }
       } finally {
-        setIsLoading(false);
+        if (active) {
+          setIsLoading(false);
+        }
       }
     }
 
     initEnrollment();
+    return () => {
+      active = false;
+    };
   }, [supabase, router, redirectPath]);
 
   const handleVerify = async (e: React.FormEvent) => {

@@ -217,48 +217,90 @@ export async function POST(request: NextRequest) {
 
     if (userRole === "hr" || userRole === "admin") {
       const isDemoMode = isDemoModeEnabled();
+      let latestUserFactors: any[] = ((authData.user as any)?.factors as any[]) || [];
+
       if (isDemoMode) {
         try {
-          const { data: factorData } = await supabase.auth.mfa.listFactors();
-          let factorId: string | null = null;
-          let factorSecret: string | null = null;
-
-          const verifiedFactor = factorData?.totp?.find((f) => f.status === "verified");
-          if (verifiedFactor) {
-            factorId = verifiedFactor.id;
-            const dbUrl = process.env.DATABASE_URL || "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
-            const pgClient = new Client({ connectionString: dbUrl });
-            await pgClient.connect();
-            try {
-              const res = await pgClient.query("SELECT secret FROM auth.mfa_factors WHERE id = $1 LIMIT 1", [factorId]);
-              if (res.rows[0]?.secret) factorSecret = res.rows[0].secret;
-            } finally {
-              await pgClient.end().catch(() => {});
+          for (let attempt = 0; attempt < 2; attempt++) {
+            const { data: factorData, error: listError } = await supabase.auth.mfa.listFactors();
+            if (listError) {
+              if (attempt === 0) {
+                const { data: retryAuth } = await supabase.auth.signInWithPassword({
+                  email,
+                  password,
+                });
+                if (retryAuth?.user) {
+                  latestUserFactors = ((retryAuth.user as any).factors as any[]) || latestUserFactors;
+                }
+                continue;
+              }
+              break;
             }
-          } else {
-            const { data: enrollData, error: enrollError } = await supabase.auth.mfa.enroll({
-              factorType: "totp",
-              issuer: "RemoteHR Demo",
-            });
-            if (!enrollError && enrollData) {
-              factorId = enrollData.id;
-              factorSecret = enrollData.totp.secret;
-            }
-          }
 
-          if (factorId && factorSecret) {
-            const code = generateSync({ secret: factorSecret });
-            const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({
-              factorId,
-              code,
-            });
-            if (!verifyError) {
-              return createSuccessResponse({
-                success: true,
-                requireMfa: false,
-                mfaDestination: "/",
-                role: userRole,
+            let factorId: string | null = null;
+            let factorSecret: string | null = null;
+
+            const verifiedFactor = factorData?.totp?.find((f) => f.status === "verified");
+            if (verifiedFactor) {
+              factorId = verifiedFactor.id;
+              const dbUrl =
+                process.env.DATABASE_URL || "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
+              const pgClient = new Client({ connectionString: dbUrl });
+              await pgClient.connect();
+              try {
+                const res = await pgClient.query(
+                  "SELECT secret FROM auth.mfa_factors WHERE id = $1 LIMIT 1",
+                  [factorId]
+                );
+                if (res.rows[0]?.secret) factorSecret = res.rows[0].secret;
+              } finally {
+                await pgClient.end().catch(() => {});
+              }
+            } else {
+              const { data: enrollData, error: enrollError } = await supabase.auth.mfa.enroll({
+                factorType: "totp",
+                issuer: "RemoteHR Demo",
+                friendlyName: `RemoteHR-Demo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
               });
+              if (!enrollError && enrollData) {
+                factorId = enrollData.id;
+                factorSecret = enrollData.totp.secret;
+              } else if (attempt === 0) {
+                const { data: retryAuth } = await supabase.auth.signInWithPassword({
+                  email,
+                  password,
+                });
+                if (retryAuth?.user) {
+                  latestUserFactors = ((retryAuth.user as any).factors as any[]) || latestUserFactors;
+                }
+                continue;
+              }
+            }
+
+            if (factorId && factorSecret) {
+              const code = generateSync({ secret: factorSecret });
+              const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({
+                factorId,
+                code,
+              });
+              if (!verifyError) {
+                return createSuccessResponse({
+                  success: true,
+                  requireMfa: false,
+                  mfaDestination: "/",
+                  role: userRole,
+                });
+              }
+              if (attempt === 0) {
+                const { data: retryAuth } = await supabase.auth.signInWithPassword({
+                  email,
+                  password,
+                });
+                if (retryAuth?.user) {
+                  latestUserFactors = ((retryAuth.user as any).factors as any[]) || latestUserFactors;
+                }
+                continue;
+              }
             }
           }
         } catch {
@@ -268,7 +310,10 @@ export async function POST(request: NextRequest) {
 
       const { data: factorData } = await supabase.auth.mfa.listFactors();
       const hasVerifiedFactor = Boolean(
-        factorData?.totp?.some((factor) => factor.status === "verified")
+        factorData?.totp?.some((factor) => factor.status === "verified") ||
+          latestUserFactors.some(
+            (factor) => factor.factor_type === "totp" && factor.status === "verified"
+          )
       );
 
       if (!hasVerifiedFactor) {
