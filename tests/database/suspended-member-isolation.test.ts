@@ -309,6 +309,12 @@ describe("Section 0b: Suspended Member Behavior Isolation Suite", () => {
       { name: "cancel_task", sql: `SELECT public.cancel_task('${dummyId}', 'Susp');` },
       { name: "add_task_comment", sql: `SELECT public.add_task_comment('${dummyId}', 'Susp');` },
       { name: "log_task_time", sql: `SELECT public.log_task_time('${dummyId}', '2026-11-01', 30);` },
+      { name: "upsert_kpi_definition", sql: `SELECT public.upsert_kpi_definition('Susp KPI', 'tasks_completed', 5, 'higher_is_better', 1.0);` },
+      { name: "delete_kpi_definition", sql: `SELECT public.delete_kpi_definition('${dummyId}');` },
+      { name: "create_kpi_period", sql: `SELECT public.create_kpi_period('Susp Period', 'monthly', '2026-11-01', '2026-11-30');` },
+      { name: "compute_kpi_scores", sql: `SELECT public.compute_kpi_scores('${dummyId}');` },
+      { name: "close_kpi_period", sql: `SELECT public.close_kpi_period('${dummyId}');` },
+      { name: "submit_kpi_review", sql: `SELECT public.submit_kpi_review('${dummyId}', '${TARGET_EMP_ID}', 4.0, 'Susp');` },
     ];
 
     for (const rpc of rpcCalls) {

@@ -22,7 +22,9 @@ export type AttendanceStatusType =
   | "low"
   | "medium"
   | "high"
-  | "urgent";
+  | "urgent"
+  | "open"
+  | "closed";
 
 interface StatusPillProps {
   status: AttendanceStatusType | string;
@@ -174,6 +176,20 @@ const statusConfig: Record<
     text: "text-status-danger-text",
     dot: "bg-status-danger-dot",
     icon: AlertCircle,
+  },
+  open: {
+    label: "Open",
+    bg: "bg-status-success-bg",
+    text: "text-status-success-text",
+    dot: "bg-status-success-dot",
+    icon: Clock,
+  },
+  closed: {
+    label: "Closed",
+    bg: "bg-brand-purple-light",
+    text: "text-brand-purple",
+    dot: "bg-brand-purple",
+    icon: CheckCircle2,
   },
 };
 

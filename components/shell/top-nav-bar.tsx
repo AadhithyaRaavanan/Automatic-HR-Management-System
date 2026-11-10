@@ -51,6 +51,7 @@ export function TopNavBar({
     { label: "Dashboard", href: "/" },
     { label: "Attendance", href: "/attendance" },
     { label: "Tasks", href: "/tasks" },
+    { label: "KPI", href: "/kpi" },
     { label: "Leave", href: "/leave" },
     { label: "Requests", href: "/requests" },
     { label: "Holidays", href: "/holidays" },

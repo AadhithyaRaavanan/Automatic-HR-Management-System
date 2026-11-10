@@ -75,6 +75,8 @@ import { POST as resetMfaRoute } from "@/app/api/admin/users/reset-mfa/route";
 import { POST as forceSignOutRoute } from "@/app/api/admin/users/force-signout/route";
 import { GET as exportAuditsRoute } from "@/app/api/admin/audits/export/route";
 import { GET as exportAttendanceRoute } from "@/app/api/attendance/export/route";
+import { GET as exportKpiRoute } from "@/app/api/kpi/export/route";
+import ExcelJS from "exceljs";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 const ORG_1_ID = "00000000-0000-0000-0000-000000000001";
@@ -303,6 +305,12 @@ describe("Section 0c: Live Local-Stack Admin Routes Integration Suite", () => {
         url: "http://localhost:3000/api/attendance/export?format=csv",
         method: "GET" as const,
       },
+      {
+        name: "kpi/export",
+        fn: exportKpiRoute,
+        url: "http://localhost:3000/api/kpi/export",
+        method: "GET" as const,
+      },
     ];
 
     for (const c of cases) {
@@ -481,6 +489,74 @@ describe("Section 0c: Live Local-Stack Admin Routes Integration Suite", () => {
     );
     expect(bulkAudit.rows).toHaveLength(1);
     expect(bulkAudit.rows[0].new_data.imported_count).toBe(1);
+
+    // KPI Excel export: cross-tenant period denied (403) + CWE-1236 cell sanitizing (200) + audit row
+    const kpiDefRes = await pg.query<{ id: string }>(
+      `INSERT INTO public.kpi_definitions (organization_id, name, source_metric, target_value, direction, weight, created_by)
+       VALUES ($1, '=KPI_FORMULA_INJECT', 'tasks_completed', 2, 'higher_is_better', 1, '00000000-0000-0000-0000-000000000001')
+       RETURNING id;`,
+      [ORG_1_ID]
+    );
+    const kpiPeriodRes = await pg.query<{ id: string }>(
+      `INSERT INTO public.kpi_periods (organization_id, name, period_type, start_date, end_date, status, created_by)
+       VALUES ($1, '+ExportTestPeriod', 'monthly', '2098-01-01', '2098-01-31', 'open', '00000000-0000-0000-0000-000000000001')
+       RETURNING id;`,
+      [ORG_1_ID]
+    );
+    const kpiDefId = kpiDefRes.rows[0].id;
+    const kpiPeriodId = kpiPeriodRes.rows[0].id;
+
+    try {
+      await pg.query(
+        `INSERT INTO public.kpi_scores (organization_id, period_id, employee_id, kpi_definition_id, actual_value, target_value, score)
+         VALUES ($1, $2, $3, $4, 2, 2, 100);`,
+        [ORG_1_ID, kpiPeriodId, ORG_1_EMPLOYEE_ID, kpiDefId]
+      );
+
+      // Org 2 AAL2 admin must be denied targeting Org 1 KPI periodId
+      const crossKpiExp = await exportKpiRoute(
+        makeReq(`http://localhost:3000/api/kpi/export?periodId=${kpiPeriodId}`, "GET", org2AdminAal2Token)
+      );
+      expect(crossKpiExp.status).toBe(403);
+
+      // Org 1 AAL2 admin gets .xlsx with neutralized formula cells
+      const okKpiExp = await exportKpiRoute(
+        makeReq(`http://localhost:3000/api/kpi/export?periodId=${kpiPeriodId}`, "GET", org1AdminAal2Token)
+      );
+      expect(okKpiExp.status).toBe(200);
+      expect(okKpiExp.headers.get("content-type")).toContain("spreadsheetml.sheet");
+
+      const buf = Buffer.from(await okKpiExp.arrayBuffer());
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buf as any);
+      const summarySheet = wb.getWorksheet("Employee Scorecard Summary");
+      const detailSheet = wb.getWorksheet("KPI Metric Details");
+      expect(summarySheet).toBeDefined();
+      expect(detailSheet).toBeDefined();
+
+      let foundSanitizedPeriod = false;
+      let foundSanitizedKpiName = false;
+      summarySheet?.eachRow((row) => {
+        if (row.getCell(1).value === "'+ExportTestPeriod") foundSanitizedPeriod = true;
+      });
+      detailSheet?.eachRow((row) => {
+        if (row.getCell(6).value === "'=KPI_FORMULA_INJECT") foundSanitizedKpiName = true;
+      });
+      expect(foundSanitizedPeriod).toBe(true);
+      expect(foundSanitizedKpiName).toBe(true);
+
+      const kpiExportAudit = await pg.query(
+        `SELECT action FROM public.audit_logs
+         WHERE organization_id = $1 AND record_id = $2 AND action = 'KPI_EXPORTED';`,
+        [ORG_1_ID, kpiPeriodId]
+      );
+      expect(kpiExportAudit.rows).toHaveLength(1);
+    } finally {
+      await pg.query(`DELETE FROM public.audit_logs WHERE record_id = $1;`, [kpiPeriodId]).catch(() => {});
+      await pg.query(`DELETE FROM public.kpi_scores WHERE period_id = $1;`, [kpiPeriodId]).catch(() => {});
+      await pg.query(`DELETE FROM public.kpi_periods WHERE id = $1;`, [kpiPeriodId]).catch(() => {});
+      await pg.query(`DELETE FROM public.kpi_definitions WHERE id = $1;`, [kpiDefId]).catch(() => {});
+    }
   });
 });
 

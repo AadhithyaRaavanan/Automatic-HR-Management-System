@@ -431,6 +431,146 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"kpi_definitions": {
+                  Row: {
+                    "applies_to_department_id": string | null,"applies_to_role": string | null,"created_at": string,"created_by": string,"description": string | null,"direction": string,"id": string,"is_active": boolean,"name": string,"organization_id": string,"source_metric": string,"target_value": number,"updated_at": string,"weight": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "applies_to_department_id"?: string | null,"applies_to_role"?: string | null,"created_at"?: string,"created_by": string,"description"?: string | null,"direction": string,"id"?: string,"is_active"?: boolean,"name": string,"organization_id": string,"source_metric": string,"target_value": number,"updated_at"?: string,"weight"?: number
+                  }
+                  Update: {
+                    "applies_to_department_id"?: string | null,"applies_to_role"?: string | null,"created_at"?: string,"created_by"?: string,"description"?: string | null,"direction"?: string,"id"?: string,"is_active"?: boolean,"name"?: string,"organization_id"?: string,"source_metric"?: string,"target_value"?: number,"updated_at"?: string,"weight"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "kpi_definitions_applies_to_department_id_fkey"
+      columns: ["applies_to_department_id"]
+isOneToOne: false
+      referencedRelation: "departments"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "kpi_definitions_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "kpi_definitions_organization_id_fkey"
+      columns: ["organization_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"kpi_periods": {
+                  Row: {
+                    "closed_at": string | null,"closed_by": string | null,"created_at": string,"created_by": string,"end_date": string,"id": string,"name": string,"organization_id": string,"period_type": string,"start_date": string,"status": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "closed_at"?: string | null,"closed_by"?: string | null,"created_at"?: string,"created_by": string,"end_date": string,"id"?: string,"name": string,"organization_id": string,"period_type": string,"start_date": string,"status"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "closed_at"?: string | null,"closed_by"?: string | null,"created_at"?: string,"created_by"?: string,"end_date"?: string,"id"?: string,"name"?: string,"organization_id"?: string,"period_type"?: string,"start_date"?: string,"status"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "kpi_periods_closed_by_fkey"
+      columns: ["closed_by"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "kpi_periods_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "kpi_periods_organization_id_fkey"
+      columns: ["organization_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"kpi_reviews": {
+                  Row: {
+                    "comment": string,"created_at": string,"employee_id": string,"id": string,"organization_id": string,"period_id": string,"rating": number,"reviewer_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "comment": string,"created_at"?: string,"employee_id": string,"id"?: string,"organization_id": string,"period_id": string,"rating": number,"reviewer_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "comment"?: string,"created_at"?: string,"employee_id"?: string,"id"?: string,"organization_id"?: string,"period_id"?: string,"rating"?: number,"reviewer_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "kpi_reviews_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "kpi_reviews_organization_id_fkey"
+      columns: ["organization_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "kpi_reviews_period_id_fkey"
+      columns: ["period_id"]
+isOneToOne: false
+      referencedRelation: "kpi_periods"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "kpi_reviews_reviewer_id_fkey"
+      columns: ["reviewer_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"kpi_scores": {
+                  Row: {
+                    "actual_value": number,"computed_at": string,"employee_id": string,"id": string,"kpi_definition_id": string,"organization_id": string,"period_id": string,"score": number,"target_value": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "actual_value"?: number,"computed_at"?: string,"employee_id": string,"id"?: string,"kpi_definition_id": string,"organization_id": string,"period_id": string,"score": number,"target_value": number
+                  }
+                  Update: {
+                    "actual_value"?: number,"computed_at"?: string,"employee_id"?: string,"id"?: string,"kpi_definition_id"?: string,"organization_id"?: string,"period_id"?: string,"score"?: number,"target_value"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "kpi_scores_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "kpi_scores_kpi_definition_id_fkey"
+      columns: ["kpi_definition_id"]
+isOneToOne: false
+      referencedRelation: "kpi_definitions"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "kpi_scores_organization_id_fkey"
+      columns: ["organization_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "kpi_scores_period_id_fkey"
+      columns: ["period_id"]
+isOneToOne: false
+      referencedRelation: "kpi_periods"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"leave_balance_adjustments": {
                   Row: {
                     "adjusted_by": string,"amount": number,"created_at": string,"employee_id": string,"id": string,"leave_type_id": string,"organization_id": string,"reason": string
@@ -1068,6 +1208,9 @@ isOneToOne: false
 "assign_task":
 { Args: { "p_assignee_id"?: string,"p_task_id": string }; Returns: Json
                            },
+"calculate_kpi_score":
+{ Args: { "p_actual": number,"p_direction": string,"p_target": number }; Returns: number
+                           },
 "calculate_working_days":
 { Args: { "p_day_part"?: string,"p_employee_id": string,"p_end_date": string,"p_start_date": string }; Returns: number
                            },
@@ -1088,17 +1231,26 @@ isOneToOne: false
 "check_out":
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
+"close_kpi_period":
+{ Args: { "p_period_id": string }; Returns: Json
+                           },
 "complete_onboarding":
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
 "complete_task":
 { Args: { "p_note"?: string,"p_task_id": string }; Returns: Json
                            },
+"compute_kpi_scores":
+{ Args: { "p_period_id": string }; Returns: Json
+                           },
 "create_approval_delegation":
 { Args: { "p_delegate_id": string,"p_ends_on": string,"p_manager_id": string,"p_reason"?: string,"p_starts_on": string }; Returns: Json
                            },
 "create_holiday":
 { Args: { "p_date": string,"p_holiday_type"?: string,"p_local_name"?: string,"p_name": string,"p_region"?: string }; Returns: Json
+                           },
+"create_kpi_period":
+{ Args: { "p_end_date": string,"p_name": string,"p_period_type": string,"p_start_date": string }; Returns: Json
                            },
 "create_project":
 { Args: { "p_code"?: string,"p_department_id"?: string,"p_description"?: string,"p_name": string }; Returns: Json
@@ -1129,6 +1281,9 @@ isOneToOne: false
                            },
 "delete_holiday":
 { Args: { "p_holiday_id": string }; Returns: Json
+                           },
+"delete_kpi_definition":
+{ Args: { "p_definition_id": string }; Returns: Json
                            },
 "dispatch_task_due_notifications":
 { Args: Record<PropertyKey, never>; Returns: number
@@ -1210,6 +1365,9 @@ isOneToOne: false
 "run_retention_cleanup":
 { Args: { "dry_run"?: boolean }; Returns: Json
                            },
+"submit_kpi_review":
+{ Args: { "p_comment": string,"p_employee_id": string,"p_period_id": string,"p_rating": number }; Returns: Json
+                           },
 "unlock_month":
 { Args: { "p_month": number,"p_reason": string,"p_year": number }; Returns: Json
                            },
@@ -1218,6 +1376,9 @@ isOneToOne: false
                            },
 "update_task_status":
 { Args: { "p_new_status": string,"p_note"?: string,"p_task_id": string }; Returns: Json
+                           },
+"upsert_kpi_definition":
+{ Args: { "p_applies_to_department_id"?: string,"p_applies_to_role"?: string,"p_definition_id"?: string,"p_description"?: string,"p_direction": string,"p_is_active"?: boolean,"p_name": string,"p_source_metric": string,"p_target_value": number,"p_weight"?: number }; Returns: Json
                            }
           }
           Enums: {
@@ -1358,6 +1519,18 @@ export type LeaveStatus = "pending" | "approved" | "rejected" | "cancelled";
 export type HolidayType = "public" | "company" | "special";
 export type TaskStatus = "todo" | "in_progress" | "blocked" | "done" | "cancelled";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
+export type KpiSourceMetric =
+  | "attendance_on_time_rate"
+  | "hours_vs_target"
+  | "absence_days"
+  | "leave_days_taken"
+  | "tasks_completed"
+  | "tasks_on_time_rate"
+  | "tasks_overdue"
+  | "avg_task_cycle_days";
+export type KpiDirection = "higher_is_better" | "lower_is_better";
+export type KpiPeriodType = "monthly" | "quarterly";
+export type KpiPeriodStatus = "open" | "closed";
 export type NotificationType =
   | "missed_checkout"
   | "request_status"

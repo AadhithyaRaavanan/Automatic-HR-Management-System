@@ -157,6 +157,14 @@ export default function AuditsAdminPage() {
       "TASK_CANCELLED",
       "TASK_COMMENT_ADDED",
       "TASK_TIME_LOGGED",
+      "KPI_DEFINITION_CREATED",
+      "KPI_DEFINITION_UPDATED",
+      "KPI_DEFINITION_DELETED",
+      "KPI_PERIOD_CREATED",
+      "KPI_SCORES_COMPUTED",
+      "KPI_PERIOD_CLOSED",
+      "KPI_REVIEW_SUBMITTED",
+      "KPI_EXPORTED",
     ]);
     audits.forEach((a) => known.add(a.action));
     return Array.from(known).sort();

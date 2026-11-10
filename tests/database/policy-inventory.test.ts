@@ -43,7 +43,7 @@ function enforceLocalDatabaseHost(url: string | null): string {
 
 const dbUrl = enforceLocalDatabaseHost(getDatabaseUrl());
 
-// Canonical Expected RLS Policy Inventory (91 Policies across 18 public tables)
+// Canonical Expected RLS Policy Inventory (across all public tenant tables)
 const EXPECTED_POLICY_INVENTORY: Array<{
   tablename: string;
   policyname: string;
@@ -104,6 +104,22 @@ const EXPECTED_POLICY_INVENTORY: Array<{
   { tablename: "kiosk_devices", policyname: "tenant_kiosk_devices_insert_policy", permissive: "PERMISSIVE", cmd: "INSERT" },
   { tablename: "kiosk_devices", policyname: "tenant_kiosk_devices_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
   { tablename: "kiosk_devices", policyname: "tenant_kiosk_devices_update_policy", permissive: "PERMISSIVE", cmd: "UPDATE" },
+  // kpi_definitions (3)
+  { tablename: "kpi_definitions", policyname: "enforce_active_org_membership_kpi_definitions", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "kpi_definitions", policyname: "enforce_mfa_aal2_kpi_definitions", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "kpi_definitions", policyname: "kpi_definitions_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  // kpi_periods (3)
+  { tablename: "kpi_periods", policyname: "enforce_active_org_membership_kpi_periods", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "kpi_periods", policyname: "enforce_mfa_aal2_kpi_periods", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "kpi_periods", policyname: "kpi_periods_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  // kpi_reviews (3)
+  { tablename: "kpi_reviews", policyname: "enforce_active_org_membership_kpi_reviews", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "kpi_reviews", policyname: "enforce_mfa_aal2_kpi_reviews", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "kpi_reviews", policyname: "kpi_reviews_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  // kpi_scores (3)
+  { tablename: "kpi_scores", policyname: "enforce_active_org_membership_kpi_scores", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "kpi_scores", policyname: "enforce_mfa_aal2_kpi_scores", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "kpi_scores", policyname: "kpi_scores_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
   // leave_balance_adjustments (3)
   { tablename: "leave_balance_adjustments", policyname: "enforce_active_org_membership_leave_balance_adjustments", permissive: "RESTRICTIVE", cmd: "ALL" },
   { tablename: "leave_balance_adjustments", policyname: "enforce_mfa_aal2_leave_balance_adjustments", permissive: "RESTRICTIVE", cmd: "ALL" },

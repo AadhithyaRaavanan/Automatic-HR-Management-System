@@ -25,6 +25,7 @@ import {
   FileSpreadsheet,
   UserCircle,
   CheckSquare,
+  Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +42,7 @@ const baseNavItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Attendance", href: "/attendance", icon: Clock },
   { label: "Tasks", href: "/tasks", icon: CheckSquare },
+  { label: "KPI", href: "/kpi", icon: Target },
   { label: "Leave", href: "/leave", icon: CalendarDays },
   { label: "Team", href: "/team", icon: Users, badge: "3", badgeColor: "green", roles: ["manager", "hr", "admin"] },
   { label: "Requests", href: "/requests", icon: FileCheck2 },

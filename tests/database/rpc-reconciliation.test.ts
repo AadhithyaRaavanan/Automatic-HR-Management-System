@@ -178,6 +178,10 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
     role: "authenticated",
     tests: ["grants-snapshot.test.ts", "intra-tenant-authorization.test.ts", "suspended-member-isolation.test.ts"],
   },
+  "close_kpi_period(uuid)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section4-kpi.test.ts"],
+  },
   "complete_onboarding()": {
     role: "authenticated",
     tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section1-hr-tools.test.ts"],
@@ -186,6 +190,10 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
     role: "authenticated",
     tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section3-tasks.test.ts"],
   },
+  "compute_kpi_scores(uuid)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section4-kpi.test.ts"],
+  },
   "create_approval_delegation(uuid,uuid,date,date,text)": {
     role: "authenticated",
     tests: ["grants-snapshot.test.ts", "leave-rpcs.test.ts", "suspended-member-isolation.test.ts", "section1-hr-tools.test.ts"],
@@ -193,6 +201,10 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
   "create_holiday(date,text,text,text,text)": {
     role: "authenticated",
     tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section1-hr-tools.test.ts"],
+  },
+  "create_kpi_period(text,text,date,date)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section4-kpi.test.ts"],
   },
   "create_project(text,uuid,text,text)": {
     role: "authenticated",
@@ -205,6 +217,10 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
   "delete_holiday(uuid)": {
     role: "authenticated",
     tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section1-hr-tools.test.ts"],
+  },
+  "delete_kpi_definition(uuid)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section4-kpi.test.ts"],
   },
   "cron_auto_checkout()": {
     role: "service_role",
@@ -338,9 +354,17 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
     role: "service_role",
     tests: ["grants-snapshot.test.ts", "section2-retention.test.ts"],
   },
+  "submit_kpi_review(uuid,uuid,numeric,text)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section4-kpi.test.ts"],
+  },
   "trg_broadcast_notification()": {
     role: "trigger",
     tests: ["grants-snapshot.test.ts", "schema-meta.test.ts", "section1-hr-tools.test.ts"],
+  },
+  "trg_enforce_kpi_closed_immutability()": {
+    role: "trigger",
+    tests: ["grants-snapshot.test.ts", "section4-kpi.test.ts"],
   },
   "trg_init_org_retention_policy()": {
     role: "trigger",
@@ -393,6 +417,10 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
   "update_task_status(uuid,text,text)": {
     role: "authenticated",
     tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section3-tasks.test.ts"],
+  },
+  "upsert_kpi_definition(text,text,numeric,text,numeric,text,text,uuid,boolean,uuid)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section4-kpi.test.ts"],
   },
 };
 
