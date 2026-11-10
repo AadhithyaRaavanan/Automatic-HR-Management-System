@@ -46,6 +46,10 @@ const dbUrl = enforceLocalDatabaseHost(getDatabaseUrl());
  * to the test files that directly verify its security & behavior.
  */
 const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role" | "supabase_auth_admin" | "trigger"; tests: string[] }> = {
+  "add_task_comment(uuid,text)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section3-tasks.test.ts"],
+  },
   "admin_add_org_member(uuid,uuid,text)": {
     role: "authenticated",
     tests: ["intra-tenant-authorization.test.ts", "phase3-rpc-matrix.test.ts", "suspended-member-isolation.test.ts"],
@@ -138,6 +142,10 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
     role: "authenticated",
     tests: ["cross-tenant-isolation.test.ts", "intra-tenant-authorization.test.ts", "leave-rpcs.test.ts", "suspended-member-isolation.test.ts"],
   },
+  "assign_task(uuid,uuid)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section3-tasks.test.ts"],
+  },
   "calculate_working_days(uuid,date,date,text)": {
     role: "authenticated",
     tests: ["leave-rpcs.test.ts", "suspended-member-isolation.test.ts"],
@@ -149,6 +157,10 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
   "cancel_leave(uuid,text)": {
     role: "authenticated",
     tests: ["leave-rpcs.test.ts", "suspended-member-isolation.test.ts"],
+  },
+  "cancel_task(uuid,text)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section3-tasks.test.ts"],
   },
   "check_employee_field_protection()": {
     role: "trigger",
@@ -170,6 +182,10 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
     role: "authenticated",
     tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section1-hr-tools.test.ts"],
   },
+  "complete_task(uuid,text)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section3-tasks.test.ts"],
+  },
   "create_approval_delegation(uuid,uuid,date,date,text)": {
     role: "authenticated",
     tests: ["grants-snapshot.test.ts", "leave-rpcs.test.ts", "suspended-member-isolation.test.ts", "section1-hr-tools.test.ts"],
@@ -177,6 +193,14 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
   "create_holiday(date,text,text,text,text)": {
     role: "authenticated",
     tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section1-hr-tools.test.ts"],
+  },
+  "create_project(text,uuid,text,text)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section3-tasks.test.ts"],
+  },
+  "create_task(text,text,uuid,text,date,integer,uuid,uuid)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section3-tasks.test.ts"],
   },
   "delete_holiday(uuid)": {
     role: "authenticated",
@@ -209,6 +233,10 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
   "declare_company_day_off(date,text,uuid)": {
     role: "authenticated",
     tests: ["leave-rpcs.test.ts", "suspended-member-isolation.test.ts"],
+  },
+  "dispatch_task_due_notifications()": {
+    role: "service_role",
+    tests: ["grants-snapshot.test.ts", "section3-tasks.test.ts"],
   },
   "get_org_retention_preview()": {
     role: "authenticated",
@@ -261,6 +289,10 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
   "lock_month(integer,integer)": {
     role: "authenticated",
     tests: ["cross-tenant-isolation.test.ts", "intra-tenant-authorization.test.ts", "suspended-member-isolation.test.ts"],
+  },
+  "log_task_time(uuid,date,integer,text)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section3-tasks.test.ts"],
   },
   "protect_organization_fields()": {
     role: "trigger",
@@ -357,6 +389,10 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
   "update_holiday(uuid,date,text,text,text,text,boolean)": {
     role: "authenticated",
     tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section1-hr-tools.test.ts"],
+  },
+  "update_task_status(uuid,text,text)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section3-tasks.test.ts"],
   },
 };
 

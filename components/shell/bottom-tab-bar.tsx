@@ -11,12 +11,14 @@ import {
   BarChart3,
   CalendarDays,
   UserCircle,
+  CheckSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const baseMobileTabs = [
   { label: "Home", href: "/", icon: LayoutDashboard },
   { label: "Attendance", href: "/attendance", icon: Clock },
+  { label: "Tasks", href: "/tasks", icon: CheckSquare },
   { label: "Leave", href: "/leave", icon: CalendarDays },
   { label: "Requests", href: "/requests", icon: FileCheck2 },
   { label: "Team", href: "/team", icon: Users, roles: ["manager", "hr", "admin"] },

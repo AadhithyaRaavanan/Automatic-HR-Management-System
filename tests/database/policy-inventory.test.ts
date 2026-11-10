@@ -149,6 +149,10 @@ const EXPECTED_POLICY_INVENTORY: Array<{
   { tablename: "privacy_acknowledgments", policyname: "enforce_mfa_aal2_privacy_acknowledgments", permissive: "RESTRICTIVE", cmd: "ALL" },
   { tablename: "privacy_acknowledgments", policyname: "tenant_privacy_acknowledgments_insert_policy", permissive: "PERMISSIVE", cmd: "INSERT" },
   { tablename: "privacy_acknowledgments", policyname: "tenant_privacy_acknowledgments_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  // projects (3)
+  { tablename: "projects", policyname: "enforce_active_org_membership_projects", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "projects", policyname: "enforce_mfa_aal2_projects", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "projects", policyname: "projects_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
   // regularization_requests (4)
   { tablename: "regularization_requests", policyname: "enforce_active_org_membership_regularization_requests", permissive: "RESTRICTIVE", cmd: "ALL" },
   { tablename: "regularization_requests", policyname: "enforce_mfa_aal2_regularization_requests", permissive: "RESTRICTIVE", cmd: "ALL" },
@@ -169,6 +173,22 @@ const EXPECTED_POLICY_INVENTORY: Array<{
   { tablename: "shift_templates", policyname: "tenant_shift_templates_insert_policy", permissive: "PERMISSIVE", cmd: "INSERT" },
   { tablename: "shift_templates", policyname: "tenant_shift_templates_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
   { tablename: "shift_templates", policyname: "tenant_shift_templates_update_policy", permissive: "PERMISSIVE", cmd: "UPDATE" },
+  // task_comments (3)
+  { tablename: "task_comments", policyname: "enforce_active_org_membership_task_comments", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "task_comments", policyname: "enforce_mfa_aal2_task_comments", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "task_comments", policyname: "task_comments_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  // task_events (3)
+  { tablename: "task_events", policyname: "enforce_active_org_membership_task_events", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "task_events", policyname: "enforce_mfa_aal2_task_events", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "task_events", policyname: "task_events_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  // task_time_logs (3)
+  { tablename: "task_time_logs", policyname: "enforce_active_org_membership_task_time_logs", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "task_time_logs", policyname: "enforce_mfa_aal2_task_time_logs", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "task_time_logs", policyname: "task_time_logs_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  // tasks (3)
+  { tablename: "tasks", policyname: "enforce_active_org_membership_tasks", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "tasks", policyname: "enforce_mfa_aal2_tasks", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "tasks", policyname: "tasks_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
 ];
 
 describe("Policy Inventory Snapshot Test", () => {

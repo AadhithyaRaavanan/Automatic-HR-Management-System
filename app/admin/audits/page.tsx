@@ -149,6 +149,14 @@ export default function AuditsAdminPage() {
       "RETENTION_POLICY_UPDATED",
       "RETENTION_ARCHIVE_CREATED",
       "RETENTION_CLEANUP_EXECUTED",
+      "PROJECT_CREATED",
+      "TASK_CREATED",
+      "TASK_ASSIGNED",
+      "TASK_STATUS_UPDATED",
+      "TASK_COMPLETED",
+      "TASK_CANCELLED",
+      "TASK_COMMENT_ADDED",
+      "TASK_TIME_LOGGED",
     ]);
     audits.forEach((a) => known.add(a.action));
     return Array.from(known).sort();

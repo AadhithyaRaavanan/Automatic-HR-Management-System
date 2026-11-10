@@ -13,7 +13,16 @@ export type AttendanceStatusType =
   | "approved"
   | "rejected"
   | "active"
-  | "on_leave";
+  | "on_leave"
+  | "todo"
+  | "in_progress"
+  | "blocked"
+  | "done"
+  | "cancelled"
+  | "low"
+  | "medium"
+  | "high"
+  | "urgent";
 
 interface StatusPillProps {
   status: AttendanceStatusType | string;
@@ -102,6 +111,69 @@ const statusConfig: Record<
     text: "text-status-info-text",
     dot: "bg-status-info-dot",
     icon: FileText,
+  },
+  todo: {
+    label: "To Do",
+    bg: "bg-card-subtle",
+    text: "text-text-secondary",
+    dot: "bg-text-tertiary",
+    icon: Clock,
+  },
+  in_progress: {
+    label: "In Progress",
+    bg: "bg-brand-purple-light",
+    text: "text-brand-purple",
+    dot: "bg-brand-purple",
+    icon: Clock,
+  },
+  blocked: {
+    label: "Blocked",
+    bg: "bg-status-warning-bg",
+    text: "text-status-warning-text",
+    dot: "bg-status-warning-dot",
+    icon: AlertCircle,
+  },
+  done: {
+    label: "Done",
+    bg: "bg-status-success-bg",
+    text: "text-status-success-text",
+    dot: "bg-status-success-dot",
+    icon: CheckCircle2,
+  },
+  cancelled: {
+    label: "Cancelled",
+    bg: "bg-status-danger-bg",
+    text: "text-status-danger-text",
+    dot: "bg-status-danger-dot",
+    icon: AlertCircle,
+  },
+  low: {
+    label: "Low",
+    bg: "bg-card-subtle",
+    text: "text-text-secondary",
+    dot: "bg-text-tertiary",
+    icon: Clock,
+  },
+  medium: {
+    label: "Medium",
+    bg: "bg-status-info-bg",
+    text: "text-status-info-text",
+    dot: "bg-status-info-dot",
+    icon: Clock,
+  },
+  high: {
+    label: "High",
+    bg: "bg-status-warning-bg",
+    text: "text-status-warning-text",
+    dot: "bg-status-warning-dot",
+    icon: AlertCircle,
+  },
+  urgent: {
+    label: "Urgent",
+    bg: "bg-status-danger-bg",
+    text: "text-status-danger-text",
+    dot: "bg-status-danger-dot",
+    icon: AlertCircle,
   },
 };
 

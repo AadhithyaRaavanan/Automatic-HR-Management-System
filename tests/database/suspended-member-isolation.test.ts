@@ -301,6 +301,14 @@ describe("Section 0b: Suspended Member Behavior Isolation Suite", () => {
       { name: "admin_update_retention_policy", sql: `SELECT public.admin_update_retention_policy(18, 24, 90);` },
       { name: "get_org_system_health", sql: `SELECT public.get_org_system_health();` },
       { name: "get_org_retention_preview", sql: `SELECT public.get_org_retention_preview();` },
+      { name: "create_project", sql: `SELECT public.create_project('Susp Project');` },
+      { name: "create_task", sql: `SELECT public.create_task('Susp Task');` },
+      { name: "assign_task", sql: `SELECT public.assign_task('${dummyId}', '${TARGET_EMP_ID}');` },
+      { name: "update_task_status", sql: `SELECT public.update_task_status('${dummyId}', 'in_progress');` },
+      { name: "complete_task", sql: `SELECT public.complete_task('${dummyId}', 'Susp');` },
+      { name: "cancel_task", sql: `SELECT public.cancel_task('${dummyId}', 'Susp');` },
+      { name: "add_task_comment", sql: `SELECT public.add_task_comment('${dummyId}', 'Susp');` },
+      { name: "log_task_time", sql: `SELECT public.log_task_time('${dummyId}', '2026-11-01', 30);` },
     ];
 
     for (const rpc of rpcCalls) {

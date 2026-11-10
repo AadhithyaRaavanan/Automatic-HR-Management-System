@@ -124,6 +124,7 @@ describe("Database Grants Snapshot Test", () => {
       { table_name: "organizations", privilege_type: "SELECT" },
       { table_name: "privacy_acknowledgments", privilege_type: "INSERT" },
       { table_name: "privacy_acknowledgments", privilege_type: "SELECT" },
+      { table_name: "projects", privilege_type: "SELECT" },
       { table_name: "regularization_requests", privilege_type: "INSERT" },
       { table_name: "regularization_requests", privilege_type: "SELECT" },
       { table_name: "retention_archives", privilege_type: "SELECT" },
@@ -132,6 +133,10 @@ describe("Database Grants Snapshot Test", () => {
       { table_name: "shift_templates", privilege_type: "INSERT" },
       { table_name: "shift_templates", privilege_type: "SELECT" },
       { table_name: "shift_templates", privilege_type: "UPDATE" },
+      { table_name: "task_comments", privilege_type: "SELECT" },
+      { table_name: "task_events", privilege_type: "SELECT" },
+      { table_name: "task_time_logs", privilege_type: "SELECT" },
+      { table_name: "tasks", privilege_type: "SELECT" },
       { table_name: "user_roles", privilege_type: "SELECT" },
     ];
 
@@ -230,6 +235,7 @@ describe("Database Grants Snapshot Test", () => {
 
     const routineNames = Array.from(new Set(res.rows.map((r: any) => r.proname)));
     const expectedRoutines = [
+      "add_task_comment",
       "admin_add_org_member",
       "admin_assign_shift",
       "admin_create_department",
@@ -252,13 +258,18 @@ describe("Database Grants Snapshot Test", () => {
       "allocate_yearly_balances",
       "approve_leave",
       "approve_regularization",
+      "assign_task",
       "calculate_working_days",
       "cancel_leave",
+      "cancel_task",
       "check_in",
       "check_out",
       "complete_onboarding",
+      "complete_task",
       "create_approval_delegation",
       "create_holiday",
+      "create_project",
+      "create_task",
       "current_org_id",
       "current_organization_id",
       "current_user_role",
@@ -277,12 +288,14 @@ describe("Database Grants Snapshot Test", () => {
       "is_active_org_member",
       "leave_slot_range",
       "lock_month",
+      "log_task_time",
       "reject_leave",
       "reject_regularization",
       "request_leave",
       "revoke_approval_delegation",
       "unlock_month",
       "update_holiday",
+      "update_task_status",
     ];
 
     expect(routineNames).toEqual(expectedRoutines);

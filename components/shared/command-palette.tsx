@@ -119,6 +119,17 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
               <Command.Item
                 onSelect={() => {
+                  window.location.href = "/tasks";
+                  onOpenChange(false);
+                }}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-text-primary hover:bg-brand-purple-light/50 hover:text-brand-purple cursor-pointer transition-colors"
+              >
+                <CheckCircle2 className="w-4 h-4 text-brand-purple" />
+                <span>Open Tasks & Projects Board</span>
+              </Command.Item>
+
+              <Command.Item
+                onSelect={() => {
                   window.location.href = "/team";
                   onOpenChange(false);
                 }}

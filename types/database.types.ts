@@ -685,6 +685,38 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"projects": {
+                  Row: {
+                    "code": string | null,"created_at": string,"created_by": string,"department_id": string | null,"description": string | null,"id": string,"name": string,"organization_id": string,"status": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "code"?: string | null,"created_at"?: string,"created_by": string,"department_id"?: string | null,"description"?: string | null,"id"?: string,"name": string,"organization_id": string,"status"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "code"?: string | null,"created_at"?: string,"created_by"?: string,"department_id"?: string | null,"description"?: string | null,"id"?: string,"name"?: string,"organization_id"?: string,"status"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "projects_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "projects_department_id_fkey"
+      columns: ["department_id"]
+isOneToOne: false
+      referencedRelation: "departments"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "projects_organization_id_fkey"
+      columns: ["organization_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"regularization_requests": {
                   Row: {
                     "created_at": string,"employee_id": string,"id": string,"organization_id": string,"reason": string,"requested_in": string,"requested_out": string,"review_note": string | null,"reviewed_at": string | null,"reviewed_by": string | null,"status": string,"work_date": string
@@ -789,6 +821,158 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"task_comments": {
+                  Row: {
+                    "author_id": string,"body": string,"created_at": string,"id": string,"organization_id": string,"task_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "author_id": string,"body": string,"created_at"?: string,"id"?: string,"organization_id": string,"task_id": string
+                  }
+                  Update: {
+                    "author_id"?: string,"body"?: string,"created_at"?: string,"id"?: string,"organization_id"?: string,"task_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "task_comments_author_id_fkey"
+      columns: ["author_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "task_comments_organization_id_fkey"
+      columns: ["organization_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "task_comments_task_id_fkey"
+      columns: ["task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"task_events": {
+                  Row: {
+                    "actor_id": string | null,"created_at": string,"event_type": string,"from_status": string | null,"id": string,"metadata": NonNullable<Json>,"new_assignee_id": string | null,"old_assignee_id": string | null,"organization_id": string,"task_id": string,"to_status": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "actor_id"?: string | null,"created_at"?: string,"event_type": string,"from_status"?: string | null,"id"?: string,"metadata"?: NonNullable<Json>,"new_assignee_id"?: string | null,"old_assignee_id"?: string | null,"organization_id": string,"task_id": string,"to_status"?: string | null
+                  }
+                  Update: {
+                    "actor_id"?: string | null,"created_at"?: string,"event_type"?: string,"from_status"?: string | null,"id"?: string,"metadata"?: NonNullable<Json>,"new_assignee_id"?: string | null,"old_assignee_id"?: string | null,"organization_id"?: string,"task_id"?: string,"to_status"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "task_events_actor_id_fkey"
+      columns: ["actor_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "task_events_new_assignee_id_fkey"
+      columns: ["new_assignee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "task_events_old_assignee_id_fkey"
+      columns: ["old_assignee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "task_events_organization_id_fkey"
+      columns: ["organization_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "task_events_task_id_fkey"
+      columns: ["task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"task_time_logs": {
+                  Row: {
+                    "created_at": string,"employee_id": string,"id": string,"minutes": number,"note": string | null,"organization_id": string,"task_id": string,"work_date": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"employee_id": string,"id"?: string,"minutes": number,"note"?: string | null,"organization_id": string,"task_id": string,"work_date": string
+                  }
+                  Update: {
+                    "created_at"?: string,"employee_id"?: string,"id"?: string,"minutes"?: number,"note"?: string | null,"organization_id"?: string,"task_id"?: string,"work_date"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "task_time_logs_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "task_time_logs_organization_id_fkey"
+      columns: ["organization_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "task_time_logs_task_id_fkey"
+      columns: ["task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"tasks": {
+                  Row: {
+                    "assignee_id": string | null,"cancelled_at": string | null,"completed_at": string | null,"created_at": string,"creator_id": string,"description": string | null,"due_date": string | null,"estimated_minutes": number | null,"id": string,"organization_id": string,"parent_task_id": string | null,"priority": string,"project_id": string | null,"started_at": string | null,"status": string,"title": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "assignee_id"?: string | null,"cancelled_at"?: string | null,"completed_at"?: string | null,"created_at"?: string,"creator_id": string,"description"?: string | null,"due_date"?: string | null,"estimated_minutes"?: number | null,"id"?: string,"organization_id": string,"parent_task_id"?: string | null,"priority"?: string,"project_id"?: string | null,"started_at"?: string | null,"status"?: string,"title": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "assignee_id"?: string | null,"cancelled_at"?: string | null,"completed_at"?: string | null,"created_at"?: string,"creator_id"?: string,"description"?: string | null,"due_date"?: string | null,"estimated_minutes"?: number | null,"id"?: string,"organization_id"?: string,"parent_task_id"?: string | null,"priority"?: string,"project_id"?: string | null,"started_at"?: string | null,"status"?: string,"title"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "tasks_assignee_id_fkey"
+      columns: ["assignee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "tasks_creator_id_fkey"
+      columns: ["creator_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "tasks_organization_id_fkey"
+      columns: ["organization_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "tasks_parent_task_id_fkey"
+      columns: ["parent_task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "tasks_project_id_fkey"
+      columns: ["project_id"]
+isOneToOne: false
+      referencedRelation: "projects"
+      referencedColumns: ["id"]
+    }
+                  ]
                 }
           }
           Views: {
@@ -809,7 +993,10 @@ isOneToOne: false
                 }
           }
           Functions: {
-            "admin_add_org_member":
+            "add_task_comment":
+{ Args: { "p_body": string,"p_task_id": string }; Returns: Json
+                           },
+"admin_add_org_member":
 { Args: { "p_organization_id": string,"p_role": string,"p_user_id": string }; Returns: Json
                            },
 "admin_assign_shift":
@@ -878,6 +1065,9 @@ isOneToOne: false
 "approve_regularization":
 { Args: { "p_request_id": string,"p_review_note"?: string }; Returns: Json
                            },
+"assign_task":
+{ Args: { "p_assignee_id"?: string,"p_task_id": string }; Returns: Json
+                           },
 "calculate_working_days":
 { Args: { "p_day_part"?: string,"p_employee_id": string,"p_end_date": string,"p_start_date": string }; Returns: number
                            },
@@ -886,6 +1076,9 @@ isOneToOne: false
                            },
 "cancel_leave":
 { Args: { "p_reason"?: string,"p_request_id": string }; Returns: Json
+                           },
+"cancel_task":
+{ Args: { "p_reason"?: string,"p_task_id": string }; Returns: Json
                            },
 "check_in":
 { Args: { "p_employee_id": string,"p_note"?: string }; Returns: Json
@@ -898,11 +1091,20 @@ isOneToOne: false
 "complete_onboarding":
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
+"complete_task":
+{ Args: { "p_note"?: string,"p_task_id": string }; Returns: Json
+                           },
 "create_approval_delegation":
 { Args: { "p_delegate_id": string,"p_ends_on": string,"p_manager_id": string,"p_reason"?: string,"p_starts_on": string }; Returns: Json
                            },
 "create_holiday":
 { Args: { "p_date": string,"p_holiday_type"?: string,"p_local_name"?: string,"p_name": string,"p_region"?: string }; Returns: Json
+                           },
+"create_project":
+{ Args: { "p_code"?: string,"p_department_id"?: string,"p_description"?: string,"p_name": string }; Returns: Json
+                           },
+"create_task":
+{ Args: { "p_assignee_id"?: string,"p_description"?: string,"p_due_date"?: string,"p_estimated_minutes"?: number,"p_parent_task_id"?: string,"p_priority"?: string,"p_project_id"?: string,"p_title": string }; Returns: Json
                            },
 "cron_auto_checkout":
 { Args: Record<PropertyKey, never>; Returns: number
@@ -927,6 +1129,9 @@ isOneToOne: false
                            },
 "delete_holiday":
 { Args: { "p_holiday_id": string }; Returns: Json
+                           },
+"dispatch_task_due_notifications":
+{ Args: Record<PropertyKey, never>; Returns: number
                            },
 "get_month_close_checklist":
 { Args: { "p_month": number,"p_year": number }; Returns: Json
@@ -972,6 +1177,9 @@ isOneToOne: false
 "lock_month":
 { Args: { "p_month": number,"p_year": number }; Returns: Json
                            },
+"log_task_time":
+{ Args: { "p_minutes": number,"p_note"?: string,"p_task_id": string,"p_work_date": string }; Returns: Json
+                           },
 "provision_invited_employee":
 { Args: { "p_department_id"?: string,"p_email": string,"p_expected_office_days"?: (number)[],"p_full_name": string,"p_manager_id"?: string,"p_organization_id": string,"p_primary_location_id"?: string,"p_required_office_days_per_week"?: number,"p_role"?: string,"p_timezone"?: string,"p_user_id": string,"p_work_mode"?: string,"p_work_target_minutes"?: number }; Returns: Json
                            },
@@ -1007,6 +1215,9 @@ isOneToOne: false
                            },
 "update_holiday":
 { Args: { "p_date": string,"p_holiday_id": string,"p_holiday_type"?: string,"p_is_active"?: boolean,"p_local_name"?: string,"p_name": string,"p_region"?: string }; Returns: Json
+                           },
+"update_task_status":
+{ Args: { "p_new_status": string,"p_note"?: string,"p_task_id": string }; Returns: Json
                            }
           }
           Enums: {
@@ -1145,6 +1356,8 @@ export type SessionSource = "web" | "auto" | "manual";
 export type LeaveDayPart = "full" | "first_half" | "second_half";
 export type LeaveStatus = "pending" | "approved" | "rejected" | "cancelled";
 export type HolidayType = "public" | "company" | "special";
+export type TaskStatus = "todo" | "in_progress" | "blocked" | "done" | "cancelled";
+export type TaskPriority = "low" | "medium" | "high" | "urgent";
 export type NotificationType =
   | "missed_checkout"
   | "request_status"
@@ -1156,5 +1369,6 @@ export type NotificationType =
   | "delegation"
   | "task_assigned"
   | "task_due_soon"
-  | "task_overdue";
-
+  | "task_overdue"
+  | "task_completed"
+  | "kpi_review";

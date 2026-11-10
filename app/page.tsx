@@ -28,6 +28,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { formatDurationMinutes, formatTimeInTimezone } from "@/lib/date/timezone";
 import { getTamilMonthInfo } from "@/lib/date/holidays-tn";
+import { getTaskDueState, TaskRecord } from "@/features/tasks/hooks/use-tasks";
 import {
   Clock,
   Calendar,
@@ -37,6 +38,8 @@ import {
   Bell,
   FileCheck2,
   ArrowRight,
+  CheckSquare,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -55,7 +58,7 @@ function DashboardContent({
   onTogglePunch: () => void;
 }) {
   const router = useRouter();
-  const { fullName, timezone } = useAppSession();
+  const { userId, fullName, timezone } = useAppSession();
   const { data, isLoading, refetch } = useAttendanceToday();
   const checkInMutation = useCheckIn();
   const checkOutMutation = useCheckOut();
@@ -65,11 +68,12 @@ function DashboardContent({
 
   const [requestModalOpen, setRequestModalOpen] = React.useState(false);
   const [nextHoliday, setNextHoliday] = React.useState<UpcomingHolidayRow | null>(null);
+  const [myTasks, setMyTasks] = React.useState<TaskRecord[]>([]);
   const supabase = React.useMemo(() => createClient(), []);
 
   React.useEffect(() => {
     let active = true;
-    async function loadUpcomingHoliday() {
+    async function loadDashboardExtras() {
       const todayIso = new Date().toISOString().slice(0, 10);
       const { data: hols } = await (supabase as any)
         .from("holidays")
@@ -81,12 +85,27 @@ function DashboardContent({
       if (active && hols && hols.length > 0) {
         setNextHoliday(hols[0] as UpcomingHolidayRow);
       }
+
+      if (userId) {
+        const { data: assignedTasks } = await supabase
+          .from("tasks")
+          .select(
+            "id, organization_id, project_id, parent_task_id, title, description, creator_id, assignee_id, status, priority, due_date, estimated_minutes, started_at, completed_at, cancelled_at, created_at, updated_at"
+          )
+          .eq("assignee_id", userId)
+          .in("status", ["todo", "in_progress", "blocked"])
+          .order("due_date", { ascending: true, nullsFirst: false })
+          .limit(4);
+        if (active && assignedTasks) {
+          setMyTasks(assignedTasks as TaskRecord[]);
+        }
+      }
     }
-    loadUpcomingHoliday();
+    loadDashboardExtras();
     return () => {
       active = false;
     };
-  }, [supabase]);
+  }, [supabase, userId]);
 
   const isCheckedIn = Boolean(data?.activeSession);
   const timer = useAttendanceTimer(data?.activeSession?.check_in_at);
@@ -420,6 +439,76 @@ function DashboardContent({
               <span>View Holiday Calendar</span>
             </Link>
           </div>
+        </BentoCard>
+      </BentoGrid>
+
+      {/* Row 4: My Tasks Widget */}
+      <BentoGrid>
+        <BentoCard
+          title="My Tasks"
+          subtitle="Open assignments and upcoming deadlines"
+          action={
+            <Link
+              href="/tasks"
+              className="text-brand-purple hover:underline text-xs font-bold flex items-center gap-1"
+            >
+              <span>Open Tasks Board</span>
+              <ArrowRight className="w-3 h-3" />
+            </Link>
+          }
+          className="lg:col-span-12"
+        >
+          {myTasks.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+              {myTasks.map((task) => {
+                const dueState = getTaskDueState(task.due_date, task.status);
+                return (
+                  <Link
+                    key={task.id}
+                    href={`/tasks?task=${task.id}`}
+                    className="p-3.5 rounded-2xl bg-card-subtle hover:bg-card border border-border-light hover:border-brand-purple/40 transition-all space-y-2 block"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <StatusPill status={task.status} />
+                      <StatusPill status={task.priority} showIcon={false} />
+                    </div>
+                    <h3 className="text-xs font-bold text-text-primary line-clamp-1">
+                      {task.title}
+                    </h3>
+                    <div className="flex items-center justify-between text-[11px]">
+                      {dueState === "overdue" ? (
+                        <span className="inline-flex items-center gap-1 font-extrabold text-status-danger-text">
+                          <AlertTriangle className="w-3 h-3" />
+                          Overdue ({task.due_date})
+                        </span>
+                      ) : task.due_date ? (
+                        <span className="text-text-secondary font-mono">
+                          Due {task.due_date}
+                        </span>
+                      ) : (
+                        <span className="text-text-tertiary">No due date</span>
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState
+              className="py-6 border-dashed shadow-none bg-card-subtle/40"
+              icon={<CheckSquare className="w-5 h-5" />}
+              title="No open tasks assigned"
+              description="Visit the Tasks board to track assignments or create a new deliverable."
+              action={
+                <Link
+                  href="/tasks"
+                  className="px-4 py-1.5 rounded-full bg-brand-purple text-white text-xs font-bold"
+                >
+                  Go to Tasks
+                </Link>
+              }
+            />
+          )}
         </BentoCard>
       </BentoGrid>
 
