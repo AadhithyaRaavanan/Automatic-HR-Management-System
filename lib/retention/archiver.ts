@@ -16,6 +16,7 @@ export interface ExportBatch {
 }
 
 export interface CreatedRetentionArchive {
+  organizationId: string;
   archiveId: string;
   archiveMonth: string;
   storagePath: string;
@@ -29,15 +30,25 @@ export interface ArchiveAndCleanupResult {
   cleanup: Record<string, unknown>;
 }
 
-/**
- * Exports eligible locked old attendance_sessions as monthly compressed `.json.gz` bundles
- * into the private `retention-archives` Storage bucket BEFORE deleting any rows via
- * `run_org_retention_cleanup(orgId, false)`.
- */
-export async function archiveAndRunRetentionCleanup(
+export interface OrgAutomatedRetentionResult {
+  organizationId: string;
+  success: boolean;
+  archivesCreated: CreatedRetentionArchive[];
+  cleanup?: Record<string, unknown>;
+  error?: string;
+}
+
+export interface AllOrgsRetentionResult {
+  organizationsProcessed: number;
+  totalArchivesCreated: number;
+  failures: number;
+  results: OrgAutomatedRetentionResult[];
+}
+
+async function exportOrganizationSessionBatches(
   organizationId: string,
   actorId?: string | null
-): Promise<ArchiveAndCleanupResult> {
+): Promise<CreatedRetentionArchive[]> {
   const archivesCreated: CreatedRetentionArchive[] = [];
   const maxPasses = 50;
 
@@ -112,6 +123,7 @@ export async function archiveAndRunRetentionCleanup(
       }
 
       archivesCreated.push({
+        organizationId,
         archiveId: String(recordResult.archive_id),
         archiveMonth: batch.archive_month,
         storagePath,
@@ -121,6 +133,20 @@ export async function archiveAndRunRetentionCleanup(
       });
     }
   }
+
+  return archivesCreated;
+}
+
+/**
+ * Exports eligible locked old attendance_sessions as monthly compressed `.json.gz` bundles
+ * into the private `retention-archives` Storage bucket BEFORE deleting any rows via
+ * `run_org_retention_cleanup(orgId, false)`.
+ */
+export async function archiveAndRunRetentionCleanup(
+  organizationId: string,
+  actorId?: string | null
+): Promise<ArchiveAndCleanupResult> {
+  const archivesCreated = await exportOrganizationSessionBatches(organizationId, actorId);
 
   const { data: cleanup, error: cleanupError } = await (supabaseAdmin.rpc as any)(
     "run_org_retention_cleanup",
@@ -138,6 +164,57 @@ export async function archiveAndRunRetentionCleanup(
   return {
     archivesCreated,
     cleanup: (cleanup as Record<string, unknown>) ?? {},
+  };
+}
+
+/**
+ * Scheduled multi-organization retention orchestrator (no manual admin interaction).
+ * Iterates across all organizations with per-organization error isolation,
+ * exporting monthly `.json.gz` Storage archives BEFORE purging expired data.
+ */
+export async function archiveAllOrgsAndRunRetentionCleanup(
+  actorId?: string | null
+): Promise<AllOrgsRetentionResult> {
+  const { data: orgs, error: orgError } = await (supabaseAdmin as any)
+    .from("organizations")
+    .select("id")
+    .order("created_at", { ascending: true });
+
+  if (orgError) {
+    throw new Error(`Failed to list organizations for scheduled retention: ${orgError.message}`);
+  }
+
+  const orgRows = (Array.isArray(orgs) ? orgs : []) as Array<{ id: string }>;
+  const results: OrgAutomatedRetentionResult[] = [];
+  let totalArchivesCreated = 0;
+  let failures = 0;
+
+  for (const org of orgRows) {
+    try {
+      const outcome = await archiveAndRunRetentionCleanup(org.id, actorId ?? null);
+      totalArchivesCreated += outcome.archivesCreated.length;
+      results.push({
+        organizationId: org.id,
+        success: true,
+        archivesCreated: outcome.archivesCreated,
+        cleanup: outcome.cleanup,
+      });
+    } catch (err: unknown) {
+      failures += 1;
+      results.push({
+        organizationId: org.id,
+        success: false,
+        archivesCreated: [],
+        error: err instanceof Error ? err.message : "Unknown retention failure",
+      });
+    }
+  }
+
+  return {
+    organizationsProcessed: orgRows.length,
+    totalArchivesCreated,
+    failures,
+    results,
   };
 }
 
@@ -166,4 +243,3 @@ export async function createRetentionArchiveSignedUrl(organizationId: string, ar
     archive,
   };
 }
-

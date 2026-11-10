@@ -231,14 +231,14 @@ isOneToOne: false
                   ]
                 },"cron_run_state": {
                   Row: {
-                    "error_message": string | null,"executed_at": string,"id": string,"job_name": string,"location_id": string,"organization_id": string,"status": string,"target_date": string
+                    "error_message": string | null,"executed_at": string,"id": string,"job_name": string,"location_id": string,"organization_id": string,"processed_count": number,"status": string,"target_date": string,"timezone_key": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "error_message"?: string | null,"executed_at"?: string,"id"?: string,"job_name": string,"location_id"?: string,"organization_id": string,"status": string,"target_date": string
+                    "error_message"?: string | null,"executed_at"?: string,"id"?: string,"job_name": string,"location_id"?: string,"organization_id": string,"processed_count"?: number,"status": string,"target_date": string,"timezone_key"?: string
                   }
                   Update: {
-                    "error_message"?: string | null,"executed_at"?: string,"id"?: string,"job_name"?: string,"location_id"?: string,"organization_id"?: string,"status"?: string,"target_date"?: string
+                    "error_message"?: string | null,"executed_at"?: string,"id"?: string,"job_name"?: string,"location_id"?: string,"organization_id"?: string,"processed_count"?: number,"status"?: string,"target_date"?: string,"timezone_key"?: string
                   }
                   Relationships: [
                     {
@@ -1259,10 +1259,13 @@ isOneToOne: false
 { Args: { "p_assignee_id"?: string,"p_description"?: string,"p_due_date"?: string,"p_estimated_minutes"?: number,"p_parent_task_id"?: string,"p_priority"?: string,"p_project_id"?: string,"p_title": string }; Returns: Json
                            },
 "cron_auto_checkout":
-{ Args: Record<PropertyKey, never>; Returns: number
+{ Args: { "p_now"?: string }; Returns: number
                            },
 "cron_nightly_finalize":
-{ Args: Record<PropertyKey, never>; Returns: number
+{ Args: { "p_now"?: string }; Returns: number
+                           },
+"cron_trigger_retention_archive":
+{ Args: Record<PropertyKey, never>; Returns: Json
                            },
 "current_org_id":
 { Args: Record<PropertyKey, never>; Returns: string

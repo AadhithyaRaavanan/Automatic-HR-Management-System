@@ -728,5 +728,105 @@ describe("Section 4: KPI System", () => {
       await client.query(`DELETE FROM public.kpi_definitions WHERE id = $1;`, [defId]).catch(() => {});
     }
   });
+
+  it("5. Computes zero-data employees, zero targets, and due-date boundaries accurately inside compute_kpi_scores", async () => {
+    const seededDefIds: string[] = [];
+    const seededTaskIds: string[] = [];
+    let periodId: string | null = null;
+
+    try {
+      // Task assigned to nonReportEmp with due_date strictly AFTER the period end (must NOT count as overdue)
+      const futureTask = await client.query<{ id: string }>(
+        `INSERT INTO public.tasks (organization_id, title, creator_id, assignee_id, status, priority, due_date)
+         VALUES ($1, 'Sec4 Future Non-Overdue', $2, $3, 'in_progress', 'low', '2100-06-01')
+         RETURNING id;`,
+        [ORG_1_ID, ORG_1.otherManager, ORG_1.nonReportEmp]
+      );
+      seededTaskIds.push(futureTask.rows[0].id);
+
+      // 1 completed task in-period for otherManager (used with target_value = 0, higher_is_better -> score 100)
+      const mgrTask = await client.query<{ id: string }>(
+        `INSERT INTO public.tasks (organization_id, title, creator_id, assignee_id, status, priority, due_date, started_at, completed_at)
+         VALUES ($1, 'Sec4 ZeroTarget Beat', $2, $2, 'done', 'medium', '2099-12-15', '2099-12-10T00:00:00Z', '2099-12-12T00:00:00Z')
+         RETURNING id;`,
+        [ORG_1_ID, ORG_1.otherManager]
+      );
+      seededTaskIds.push(mgrTask.rows[0].id);
+
+      await asRole(
+        ORG_1.admin,
+        ORG_1_ID,
+        "admin",
+        "aal2",
+        async () => {
+          const defs: Array<[string, string, number, string]> = [
+            ["Sec4 Edge Att OnTime", "attendance_on_time_rate", 95, "higher_is_better"],
+            ["Sec4 Edge Hours Target", "hours_vs_target", 100, "higher_is_better"],
+            ["Sec4 Edge Absences", "absence_days", 2, "lower_is_better"],
+            ["Sec4 Edge Leave Taken", "leave_days_taken", 3, "lower_is_better"],
+            ["Sec4 Edge Zero Target TasksDone", "tasks_completed", 0, "higher_is_better"],
+            ["Sec4 Edge OnTimeTasks", "tasks_on_time_rate", 90, "higher_is_better"],
+            ["Sec4 Edge Zero Target Overdue", "tasks_overdue", 0, "lower_is_better"],
+            ["Sec4 Edge CycleDays", "avg_task_cycle_days", 3, "lower_is_better"],
+          ];
+          for (const [name, metric, target, dir] of defs) {
+            const dRes = await client.query(
+              `SELECT public.upsert_kpi_definition($1, $2, $3, $4, 1.0, NULL, NULL, NULL, TRUE, NULL) AS res;`,
+              [name, metric, target, dir]
+            );
+            seededDefIds.push(dRes.rows[0].res.definition.id);
+          }
+
+          const pRes = await client.query(
+            `SELECT public.create_kpi_period('Sec4 Dec 2099 Edge', 'monthly', '2099-12-01', '2099-12-31') AS res;`
+          );
+          periodId = pRes.rows[0].res.period.id;
+          await client.query(`SELECT public.compute_kpi_scores($1);`, [periodId]);
+        },
+        { commit: true }
+      );
+
+      // Zero-data employee (nonReportEmp) scores safely without NULL/division-by-zero failures
+      const nrRes = await client.query<{ source_metric: string; actual_value: string; score: string }>(
+        `SELECT d.source_metric, s.actual_value::text, s.score::text
+         FROM public.kpi_scores s
+         JOIN public.kpi_definitions d ON d.id = s.kpi_definition_id
+         WHERE s.period_id = $1 AND s.employee_id = $2;`,
+        [periodId, ORG_1.nonReportEmp]
+      );
+      const nrMap = new Map(nrRes.rows.map((r) => [r.source_metric, { actual: Number(r.actual_value), score: Number(r.score) }]));
+      expect(nrMap.get("attendance_on_time_rate")).toEqual({ actual: 0, score: 0 });
+      expect(nrMap.get("hours_vs_target")).toEqual({ actual: 0, score: 0 });
+      expect(nrMap.get("absence_days")).toEqual({ actual: 0, score: 100 });
+      expect(nrMap.get("leave_days_taken")).toEqual({ actual: 0, score: 100 });
+      expect(nrMap.get("tasks_completed")).toEqual({ actual: 0, score: 0 }); // 0 vs target 0 higher_is_better -> 0
+      expect(nrMap.get("tasks_on_time_rate")).toEqual({ actual: 0, score: 0 });
+      expect(nrMap.get("tasks_overdue")).toEqual({ actual: 0, score: 100 }); // future due_date excluded; 0 vs target 0 lower_is_better -> 100
+      expect(nrMap.get("avg_task_cycle_days")).toEqual({ actual: 0, score: 100 });
+
+      // Zero-target > 0 actual under higher_is_better scores 100 inside compute_kpi_scores
+      const omRes = await client.query<{ actual_value: string; score: string }>(
+        `SELECT s.actual_value::text, s.score::text
+         FROM public.kpi_scores s
+         JOIN public.kpi_definitions d ON d.id = s.kpi_definition_id
+         WHERE s.period_id = $1 AND s.employee_id = $2 AND d.source_metric = 'tasks_completed' AND d.id = ANY($3::uuid[]);`,
+        [periodId, ORG_1.otherManager, seededDefIds]
+      );
+      expect(Number(omRes.rows[0].actual_value)).toBe(1);
+      expect(Number(omRes.rows[0].score)).toBe(100);
+    } finally {
+      if (periodId) {
+        await client.query(`DELETE FROM public.audit_logs WHERE record_id = $1 OR new_data->>'period_id' = $1::text;`, [periodId]).catch(() => {});
+        await client.query(`DELETE FROM public.kpi_scores WHERE period_id = $1;`, [periodId]).catch(() => {});
+        await client.query(`DELETE FROM public.kpi_periods WHERE id = $1;`, [periodId]).catch(() => {});
+      }
+      if (seededDefIds.length > 0) {
+        await client.query(`DELETE FROM public.kpi_definitions WHERE id = ANY($1::uuid[]);`, [seededDefIds]).catch(() => {});
+      }
+      if (seededTaskIds.length > 0) {
+        await client.query(`DELETE FROM public.tasks WHERE id = ANY($1::uuid[]);`, [seededTaskIds]).catch(() => {});
+      }
+    }
+  });
 });
 
