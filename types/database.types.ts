@@ -22,7 +22,51 @@ export type Database = {
           }
         },"public": {
           Tables: {
-            "attendance_days": {
+            "approval_delegations": {
+                  Row: {
+                    "created_at": string,"created_by": string,"delegate_id": string,"delegator_id": string,"ends_on": string,"id": string,"is_active": boolean,"organization_id": string,"reason": string | null,"revoked_at": string | null,"revoked_by": string | null,"starts_on": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by": string,"delegate_id": string,"delegator_id": string,"ends_on": string,"id"?: string,"is_active"?: boolean,"organization_id": string,"reason"?: string | null,"revoked_at"?: string | null,"revoked_by"?: string | null,"starts_on": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string,"delegate_id"?: string,"delegator_id"?: string,"ends_on"?: string,"id"?: string,"is_active"?: boolean,"organization_id"?: string,"reason"?: string | null,"revoked_at"?: string | null,"revoked_by"?: string | null,"starts_on"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "approval_delegations_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "approval_delegations_delegate_id_fkey"
+      columns: ["delegate_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "approval_delegations_delegator_id_fkey"
+      columns: ["delegator_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "approval_delegations_organization_id_fkey"
+      columns: ["organization_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "approval_delegations_revoked_by_fkey"
+      columns: ["revoked_by"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"attendance_days": {
                   Row: {
                     "created_at": string,"employee_id": string,"is_late": boolean,"location_id": string | null,"locked": boolean,"organization_id": string,"overtime_minutes": number,"shift_id": string | null,"status": string,"total_minutes": number,"updated_at": string,"work_date": string,"work_location": string | null
                   }
@@ -264,14 +308,14 @@ isOneToOne: false
                   ]
                 },"employees": {
                   Row: {
-                    "avatar_url": string | null,"created_at": string,"department_id": string | null,"email": string,"expected_office_days": (number)[] | null,"full_name": string,"id": string,"joined_on": string,"manager_id": string | null,"organization_id": string,"primary_location_id": string | null,"required_office_days_per_week": number | null,"status": string,"timezone": string,"updated_at": string,"work_mode": string | null,"work_target_minutes": number
+                    "avatar_url": string | null,"created_at": string,"department_id": string | null,"email": string,"emergency_contact": string | null,"expected_office_days": (number)[] | null,"full_name": string,"id": string,"joined_on": string,"manager_id": string | null,"onboarding_completed_at": string | null,"organization_id": string,"phone": string | null,"primary_location_id": string | null,"required_office_days_per_week": number | null,"status": string,"timezone": string,"updated_at": string,"work_mode": string | null,"work_target_minutes": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "avatar_url"?: string | null,"created_at"?: string,"department_id"?: string | null,"email": string,"expected_office_days"?: (number)[] | null,"full_name": string,"id": string,"joined_on"?: string,"manager_id"?: string | null,"organization_id"?: string,"primary_location_id"?: string | null,"required_office_days_per_week"?: number | null,"status"?: string,"timezone"?: string,"updated_at"?: string,"work_mode"?: string | null,"work_target_minutes"?: number
+                    "avatar_url"?: string | null,"created_at"?: string,"department_id"?: string | null,"email": string,"emergency_contact"?: string | null,"expected_office_days"?: (number)[] | null,"full_name": string,"id": string,"joined_on"?: string,"manager_id"?: string | null,"onboarding_completed_at"?: string | null,"organization_id"?: string,"phone"?: string | null,"primary_location_id"?: string | null,"required_office_days_per_week"?: number | null,"status"?: string,"timezone"?: string,"updated_at"?: string,"work_mode"?: string | null,"work_target_minutes"?: number
                   }
                   Update: {
-                    "avatar_url"?: string | null,"created_at"?: string,"department_id"?: string | null,"email"?: string,"expected_office_days"?: (number)[] | null,"full_name"?: string,"id"?: string,"joined_on"?: string,"manager_id"?: string | null,"organization_id"?: string,"primary_location_id"?: string | null,"required_office_days_per_week"?: number | null,"status"?: string,"timezone"?: string,"updated_at"?: string,"work_mode"?: string | null,"work_target_minutes"?: number
+                    "avatar_url"?: string | null,"created_at"?: string,"department_id"?: string | null,"email"?: string,"emergency_contact"?: string | null,"expected_office_days"?: (number)[] | null,"full_name"?: string,"id"?: string,"joined_on"?: string,"manager_id"?: string | null,"onboarding_completed_at"?: string | null,"organization_id"?: string,"phone"?: string | null,"primary_location_id"?: string | null,"required_office_days_per_week"?: number | null,"status"?: string,"timezone"?: string,"updated_at"?: string,"work_mode"?: string | null,"work_target_minutes"?: number
                   }
                   Relationships: [
                     {
@@ -300,16 +344,30 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"holidays": {
+                },"holiday_templates": {
                   Row: {
-                    "created_at": string,"date": string,"id": string,"name": string,"organization_id": string,"region": string
+                    "created_at": string,"day_num": number,"holiday_type": string,"id": string,"local_name": string | null,"month_num": number,"name": string,"region_code": string,"template_code": string,"template_name": string,"template_year": number | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"date": string,"id"?: string,"name": string,"organization_id"?: string,"region"?: string
+                    "created_at"?: string,"day_num": number,"holiday_type"?: string,"id"?: string,"local_name"?: string | null,"month_num": number,"name": string,"region_code": string,"template_code": string,"template_name": string,"template_year"?: number | null
                   }
                   Update: {
-                    "created_at"?: string,"date"?: string,"id"?: string,"name"?: string,"organization_id"?: string,"region"?: string
+                    "created_at"?: string,"day_num"?: number,"holiday_type"?: string,"id"?: string,"local_name"?: string | null,"month_num"?: number,"name"?: string,"region_code"?: string,"template_code"?: string,"template_name"?: string,"template_year"?: number | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"holidays": {
+                  Row: {
+                    "created_at": string,"date": string,"holiday_type": string,"id": string,"is_active": boolean,"local_name": string | null,"name": string,"organization_id": string,"region": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"date": string,"holiday_type"?: string,"id"?: string,"is_active"?: boolean,"local_name"?: string | null,"name": string,"organization_id"?: string,"region"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"date"?: string,"holiday_type"?: string,"id"?: string,"is_active"?: boolean,"local_name"?: string | null,"name"?: string,"organization_id"?: string,"region"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -774,8 +832,15 @@ isOneToOne: false
                            },
 "check_out":
 { Args: Record<PropertyKey, never>; Returns: Json
-                           } |
-{ Args: { "p_employee_id": string,"p_session_id"?: string }; Returns: Json
+                           },
+"complete_onboarding":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"create_approval_delegation":
+{ Args: { "p_delegate_id": string,"p_ends_on": string,"p_manager_id": string,"p_reason"?: string,"p_starts_on": string }; Returns: Json
+                           },
+"create_holiday":
+{ Args: { "p_date": string,"p_holiday_type"?: string,"p_local_name"?: string,"p_name": string,"p_region"?: string }; Returns: Json
                            },
 "cron_auto_checkout":
 { Args: Record<PropertyKey, never>; Returns: number
@@ -798,6 +863,12 @@ isOneToOne: false
 "declare_company_day_off":
 { Args: { "p_date": string,"p_department_id"?: string,"p_title": string }; Returns: Json
                            },
+"delete_holiday":
+{ Args: { "p_holiday_id": string }; Returns: Json
+                           },
+"get_month_close_checklist":
+{ Args: { "p_month": number,"p_year": number }; Returns: Json
+                           },
 "get_organization_leave_period":
 { Args: { "p_date"?: string,"p_organization_id": string }; Returns: {
               "period_end": string,"period_start": string
@@ -812,8 +883,20 @@ isOneToOne: false
 "hr_assign_leave":
 { Args: { "p_day_part"?: string,"p_employee_ids": (string)[],"p_end_date": string,"p_leave_type_id": string,"p_override_balance"?: boolean,"p_reason"?: string,"p_start_date": string }; Returns: Json
                            },
+"hr_correct_attendance":
+{ Args: { "p_employee_id": string,"p_reason": string,"p_sessions": Json,"p_work_date": string }; Returns: Json
+                           },
+"import_holiday_template":
+{ Args: { "p_template_code": string,"p_year": number }; Returns: Json
+                           },
+"is_active_delegated_approver":
+{ Args: { "p_delegator_id": string }; Returns: boolean
+                           },
 "is_active_org_member":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"leave_slot_range":
+{ Args: { "p_day_part": string,"p_end": string,"p_start": string }; Returns: unknown
                            },
 "lock_month":
 { Args: { "p_month": number,"p_year": number }; Returns: Json
@@ -836,8 +919,14 @@ isOneToOne: false
 "request_leave":
 { Args: { "p_day_part"?: string,"p_end_date": string,"p_leave_type_id": string,"p_reason"?: string,"p_start_date": string }; Returns: Json
                            },
+"revoke_approval_delegation":
+{ Args: { "p_delegation_id": string }; Returns: Json
+                           },
 "unlock_month":
-{ Args: { "p_month": number,"p_year": number }; Returns: Json
+{ Args: { "p_month": number,"p_reason": string,"p_year": number }; Returns: Json
+                           },
+"update_holiday":
+{ Args: { "p_date": string,"p_holiday_id": string,"p_holiday_type"?: string,"p_is_active"?: boolean,"p_local_name"?: string,"p_name": string,"p_region"?: string }; Returns: Json
                            }
           }
           Enums: {
@@ -975,4 +1064,17 @@ export type RegularizationStatus = "pending" | "approved" | "rejected";
 export type SessionSource = "web" | "auto" | "manual";
 export type LeaveDayPart = "full" | "first_half" | "second_half";
 export type LeaveStatus = "pending" | "approved" | "rejected" | "cancelled";
+export type HolidayType = "public" | "company" | "special";
+export type NotificationType =
+  | "missed_checkout"
+  | "request_status"
+  | "policy_update"
+  | "reminder"
+  | "leave_requested"
+  | "leave_status"
+  | "attendance_corrected"
+  | "delegation"
+  | "task_assigned"
+  | "task_due_soon"
+  | "task_overdue";
 

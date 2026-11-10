@@ -134,3 +134,26 @@ body {
   }
 }
 
+/* Native <dialog> top-layer scroll & backdrop hygiene */
+dialog {
+  margin: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  max-width: min(92vw, 42rem);
+  max-height: 90dvh;
+  overflow: visible;
+  color: var(--text-primary);
+}
+
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog::backdrop {
+  background-color: rgba(11, 11, 20, 0.55);
+  backdrop-filter: blur(4px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+

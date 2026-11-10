@@ -609,7 +609,7 @@ describe("Phase 3 RPC Security & Privilege Matrix Suite", () => {
 
       await expect(
         asUser(ORG_1_USERS.hr, ORG_1_ID, "hr", "aal2", async (c) => {
-          await c.query(`SELECT public.unlock_month(2026, 12);`);
+          await c.query(`SELECT public.unlock_month(2026, 12, 'HR matrix test reason');`);
         })
       ).rejects.toThrow();
     });

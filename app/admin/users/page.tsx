@@ -1,27 +1,27 @@
 "use client";
 
 import * as React from "react";
-import { AppShell } from "@/components/shell/app-shell";
-import { BentoGrid } from "@/components/bento/bento-grid";
-import { BentoCard } from "@/components/bento/bento-card";
+import { AppShell, useAppSession } from "@/components/shell/app-shell";
 import { StatusPill } from "@/components/shared/status-pill";
+import { Modal } from "@/components/ui/modal";
+import { EmptyState } from "@/components/shared/empty-state";
 import { createClient } from "@/lib/supabase/client";
 import {
   UserPlus,
-  Shield,
   KeyRound,
   LogOut,
   UserX,
   Edit,
   Mail,
-  Building,
-  MapPin,
-  Clock,
-  Sparkles,
-  RefreshCw,
+  Upload,
+  FileSpreadsheet,
+  CheckCircle2,
+  XCircle,
+  Download,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
-import { isDemoModeEnabled } from "@/lib/config/demo";
+import { cn } from "@/lib/utils";
 
 interface EmployeeUser {
   id: string;
@@ -35,65 +35,52 @@ interface EmployeeUser {
   timezone: string;
 }
 
-const mockEmployees: EmployeeUser[] = [
-  {
-    id: "00000000-0000-0000-0000-000000000001",
-    name: "System Administrator",
-    email: "admin@remotehr.local",
-    role: "admin",
-    workMode: "remote",
-    department: "Executive",
-    location: "Global HQ",
-    status: "active",
-    timezone: "UTC",
-  },
-  {
-    id: "00000000-0000-0000-0000-000000000002",
-    name: "Sarah Jenkins",
-    email: "hr@remotehr.local",
-    role: "hr",
-    workMode: "hybrid",
-    department: "People Operations",
-    location: "New York Office",
-    status: "active",
-    timezone: "America/New_York",
-  },
-  {
-    id: "00000000-0000-0000-0000-000000000003",
-    name: "Marcus Vance",
-    email: "manager@remotehr.local",
-    role: "manager",
-    workMode: "office",
-    department: "Engineering",
-    location: "London Hub",
-    status: "active",
-    timezone: "Europe/London",
-  },
-  {
-    id: "00000000-0000-0000-0000-000000000004",
-    name: "Alex Rivera",
-    email: "employee@remotehr.local",
-    role: "employee",
-    workMode: "remote",
-    department: "Engineering",
-    location: "Bangalore HQ",
-    status: "active",
-    timezone: "Asia/Kolkata",
-  },
-];
+interface BulkPreviewRow {
+  rowNumber: number;
+  email: string;
+  fullName: string;
+  role: string;
+  workMode: string;
+  timezone: string;
+  valid: boolean;
+  errors: string[];
+}
 
-export default function UsersDirectoryAdminPage() {
-  const [users, setUsers] = React.useState<EmployeeUser[]>(isDemoModeEnabled() ? mockEmployees : []);
+interface BulkImportPreviewResult {
+  dryRun: boolean;
+  totalRows: number;
+  validCount?: number;
+  invalidCount?: number;
+  importedCount?: number;
+  failedCount?: number;
+  rows: BulkPreviewRow[];
+  errorCsv: string | null;
+}
+
+const SAMPLE_BULK_CSV = `email,full_name,role,work_mode,timezone,work_target_minutes
+newhire1@company.test,Aarav Patel,employee,remote,Asia/Kolkata,480
+newhire2@company.test,Meera Krishnan,manager,hybrid,Asia/Kolkata,480`;
+
+function UsersDirectoryContent() {
+  const { userRole, organizationId, userId } = useAppSession();
+  const isAdmin = userRole === "admin";
+  const supabase = React.useMemo(() => createClient(), []);
+
+  const [users, setUsers] = React.useState<EmployeeUser[]>([]);
+  const [loading, setLoading] = React.useState(true);
   const [inviteModalOpen, setInviteModalOpen] = React.useState(false);
   const [governanceModalOpen, setGovernanceModalOpen] = React.useState(false);
+  const [bulkModalOpen, setBulkModalOpen] = React.useState(false);
   const [selectedUser, setSelectedUser] = React.useState<EmployeeUser | null>(null);
 
   // Invite Form State
   const [inviteEmail, setInviteEmail] = React.useState("");
   const [inviteName, setInviteName] = React.useState("");
-  const [inviteRole, setInviteRole] = React.useState<"employee" | "manager" | "hr" | "admin">("employee");
+  const [inviteRole, setInviteRole] = React.useState<"employee" | "manager" | "hr" | "admin">(
+    "employee"
+  );
   const [inviteWorkMode, setInviteWorkMode] = React.useState("remote");
-  const [inviteTimezone, setInviteTimezone] = React.useState("UTC");
+  const [inviteTimezone, setInviteTimezone] = React.useState("Asia/Kolkata");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   // Governance Edit Form State
@@ -101,14 +88,70 @@ export default function UsersDirectoryAdminPage() {
   const [govTimezone, setGovTimezone] = React.useState("UTC");
   const [govStatus, setGovStatus] = React.useState("active");
 
-  const supabase = createClient();
+  // Bulk CSV Import State
+  const [csvText, setCsvText] = React.useState(SAMPLE_BULK_CSV);
+  const [bulkPreview, setBulkPreview] = React.useState<BulkImportPreviewResult | null>(null);
+  const [bulkLoading, setBulkLoading] = React.useState(false);
+
+  const loadDirectory = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const [{ data: emps }, { data: members }] = await Promise.all([
+        (supabase as any)
+          .from("employees")
+          .select(
+            "id, full_name, email, work_mode, status, timezone, departments:department_id(name), locations:primary_location_id(name)"
+          )
+          .order("full_name"),
+        (supabase as any).from("organization_members").select("user_id, role, status"),
+      ]);
+
+      const memberMap = new Map<string, { role: string; status: string }>();
+      for (const m of members || []) {
+        memberMap.set(m.user_id, { role: m.role, status: m.status });
+      }
+
+      if (emps) {
+        setUsers(
+          emps.map((e: any) => {
+            const mem = memberMap.get(e.id);
+            const effectiveStatus =
+              mem?.status === "suspended"
+                ? "suspended"
+                : e.status === "inactive"
+                ? "inactive"
+                : "active";
+            return {
+              id: e.id,
+              name: e.full_name,
+              email: e.email,
+              role: (mem?.role || "employee") as EmployeeUser["role"],
+              workMode: e.work_mode || "remote",
+              department: e.departments?.name || "Unassigned",
+              location: e.locations?.name || "Remote",
+              status: effectiveStatus,
+              timezone: e.timezone || "UTC",
+            };
+          })
+        );
+      }
+    } catch {
+      // Keep UI clean
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase]);
+
+  React.useEffect(() => {
+    loadDirectory();
+  }, [loadDirectory]);
 
   const handleOpenInvite = () => {
     setInviteEmail("");
     setInviteName("");
     setInviteRole("employee");
     setInviteWorkMode("remote");
-    setInviteTimezone("UTC");
+    setInviteTimezone("Asia/Kolkata");
     setInviteModalOpen(true);
   };
 
@@ -134,22 +177,9 @@ export default function UsersDirectoryAdminPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to invite employee");
 
-      toast.success(`Invite sent successfully to ${inviteEmail}!`);
-      setUsers((prev) => [
-        ...prev,
-        {
-          id: data.userId || `mock-${Date.now()}`,
-          name: inviteName,
-          email: inviteEmail,
-          role: inviteRole,
-          workMode: inviteWorkMode,
-          department: "General",
-          location: "Global",
-          status: "active",
-          timezone: inviteTimezone,
-        },
-      ]);
+      toast.success(`Invite sent to ${inviteEmail}.`);
       setInviteModalOpen(false);
+      await loadDirectory();
     } catch (err: any) {
       toast.error(err.message || "Failed to invite user");
     } finally {
@@ -161,7 +191,7 @@ export default function UsersDirectoryAdminPage() {
     setSelectedUser(user);
     setGovWorkMode(user.workMode);
     setGovTimezone(user.timezone);
-    setGovStatus(user.status);
+    setGovStatus(user.status === "active" ? "active" : "inactive");
     setGovernanceModalOpen(true);
   };
 
@@ -178,90 +208,80 @@ export default function UsersDirectoryAdminPage() {
       });
       if (error) throw error;
 
-      toast.success("Governance fields updated successfully!");
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === selectedUser.id
-            ? {
-                ...u,
-                workMode: govWorkMode,
-                timezone: govTimezone,
-                status: govStatus as any,
-              }
-            : u
-        )
-      );
+      toast.success("Governance fields updated.");
       setGovernanceModalOpen(false);
+      await loadDirectory();
     } catch (err: any) {
-      // In local dev/mock without active session, update locally
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === selectedUser.id
-            ? {
-                ...u,
-                workMode: govWorkMode,
-                timezone: govTimezone,
-                status: govStatus as any,
-              }
-            : u
-        )
-      );
-      toast.success("Governance updated (local mode).");
-      setGovernanceModalOpen(false);
+      toast.error(err?.message || "Failed to update governance.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleChangeRole = async (userId: string, newRole: "employee" | "manager" | "hr" | "admin") => {
+  const handleChangeRole = async (
+    targetUserId: string,
+    newRole: "employee" | "manager" | "hr" | "admin"
+  ) => {
+    if (!organizationId) {
+      toast.error("Organization context unavailable.");
+      return;
+    }
     try {
       const { error } = await (supabase.rpc as any)("admin_update_org_member_role", {
-        p_user_id: userId,
+        p_user_id: targetUserId,
         p_new_role: newRole,
+        p_organization_id: organizationId,
       });
       if (error) throw error;
-      toast.success(`Role updated to ${newRole}`);
-      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u)));
+      toast.success(`Role updated to ${newRole}.`);
+      await loadDirectory();
     } catch (err: any) {
-      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u)));
-      toast.success(`Role updated to ${newRole} (local mode).`);
+      toast.error(err?.message || "Failed to update role.");
     }
   };
 
   const handleDeactivate = async (user: EmployeeUser) => {
-    if (!confirm(`Are you sure you want to deactivate ${user.name}? This will revoke active sessions and ban authentication access.`)) {
+    if (
+      !confirm(
+        `Are you sure you want to deactivate ${user.name}? This will revoke active sessions and block authentication access.`
+      )
+    ) {
       return;
     }
     try {
       const res = await fetch("/api/admin/users/deactivate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id }),
+        body: JSON.stringify({ targetUserId: user.id }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to deactivate member");
 
       toast.success(`${user.name} has been deactivated.`);
-      setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, status: "suspended" } : u)));
+      await loadDirectory();
     } catch (err: any) {
       toast.error(err.message || "Failed to deactivate");
     }
   };
 
   const handleResetMFA = async (user: EmployeeUser) => {
-    if (!confirm(`Reset TOTP MFA factors for ${user.name}? The user must re-enroll upon next privileged login.`)) {
+    if (
+      !confirm(
+        `Reset TOTP MFA factors for ${user.name}? The user must re-enroll upon next privileged login.`
+      )
+    ) {
       return;
     }
     try {
       const res = await fetch("/api/admin/users/reset-mfa", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id }),
+        body: JSON.stringify({ targetUserId: user.id }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to reset MFA");
 
-      toast.success(`MFA factors reset successfully for ${user.name}.`);
+      toast.success(`MFA factors reset for ${user.name}.`);
     } catch (err: any) {
       toast.error(err.message || "Failed to reset MFA");
     }
@@ -272,7 +292,7 @@ export default function UsersDirectoryAdminPage() {
       const res = await fetch("/api/admin/users/force-signout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id }),
+        body: JSON.stringify({ targetUserId: user.id }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to force sign-out");
@@ -283,312 +303,579 @@ export default function UsersDirectoryAdminPage() {
     }
   };
 
+  const handleBulkPreviewOrCommit = async (dryRun: boolean) => {
+    if (!csvText.trim()) {
+      toast.error("Provide CSV rows first.");
+      return;
+    }
+    setBulkLoading(true);
+    try {
+      const res = await fetch("/api/admin/users/bulk-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ csvText, dryRun }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Bulk import request failed");
+
+      setBulkPreview(data as BulkImportPreviewResult);
+      if (dryRun) {
+        toast.info(
+          `Preview ready: ${data.validCount ?? 0} valid, ${data.invalidCount ?? 0} with errors.`
+        );
+      } else {
+        toast.success(
+          `Imported ${data.importedCount ?? 0} employee(s)${
+            data.failedCount ? ` (${data.failedCount} failed)` : ""
+          }.`
+        );
+        await loadDirectory();
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Bulk CSV import failed");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleDownloadErrorCsv = () => {
+    if (!bulkPreview?.errorCsv) return;
+    const blob = new Blob([bulkPreview.errorCsv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `bulk-import-errors-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCsvFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    setCsvText(text);
+    setBulkPreview(null);
+  };
+
   return (
-    <AppShell primaryActionLabel="Invite Member" onPrimaryAction={handleOpenInvite} userRole="admin">
-      <div className="space-y-6">
-        {/* Header */}
-        <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-3">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary dark:text-white tracking-tight flex items-center gap-2">
-              Workforce Directory & Governance
-            </h1>
-            <p className="text-xs sm:text-sm text-text-secondary dark:text-slate-400 mt-1">
-              Manage organization memberships, invite new hires, assign authoritative roles, and enforce security policies.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
+    <div className="space-y-6">
+      {/* Header */}
+      <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-3">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight">
+            Workforce Directory & Governance
+          </h1>
+          <p className="text-xs sm:text-sm text-text-secondary mt-1">
+            View tenant workforce roster{isAdmin ? ", invite new hires individually or via CSV, assign roles, and enforce security governance" : ""}.
+          </p>
+        </div>
+
+        {isAdmin && (
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
+              type="button"
+              onClick={() => {
+                setBulkPreview(null);
+                setBulkModalOpen(true);
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-card border border-border-light hover:bg-card-subtle text-text-primary text-xs font-bold shadow-sm transition-all cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-brand-purple" />
+              <span>Bulk CSV Import</span>
+            </button>
+
+            <button
+              type="button"
               onClick={handleOpenInvite}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-brand-purple hover:bg-brand-purple-hover text-white text-sm font-semibold shadow-sm transition-all"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
             >
               <UserPlus className="w-4 h-4" />
-              Invite Member
+              <span>Invite Member</span>
             </button>
           </div>
-        </section>
+        )}
+      </section>
 
-        {/* Directory Table */}
-        <div className="bg-white dark:bg-slate-900 rounded-[28px] border border-border-light dark:border-slate-800 shadow-card overflow-hidden">
+      {/* Directory Table */}
+      <div className="bg-card rounded-[28px] border border-border-light shadow-card overflow-hidden">
+        {loading ? (
+          <div className="p-6 space-y-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-14 rounded-2xl bg-card-subtle animate-pulse" />
+            ))}
+          </div>
+        ) : users.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-card-subtle dark:bg-slate-800/50 text-text-secondary dark:text-slate-400 font-semibold border-b border-border-light dark:border-slate-800">
+              <thead className="bg-card-subtle text-text-secondary font-semibold border-b border-border-light">
                 <tr>
                   <th className="py-3.5 px-5">Member</th>
                   <th className="py-3.5 px-4">Role</th>
                   <th className="py-3.5 px-4">Department</th>
                   <th className="py-3.5 px-4">Location</th>
-                  <th className="py-3.5 px-4">Work Mode</th>
+                  <th className="py-3.5 px-4">Timezone</th>
                   <th className="py-3.5 px-4">Status</th>
-                  <th className="py-3.5 px-5 text-right">Actions</th>
+                  {isAdmin && <th className="py-3.5 px-5 text-right">Actions</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border-light dark:divide-slate-800">
-                {users.map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                    <td className="py-4 px-5">
-                      <div>
-                        <span className="font-bold text-text-primary dark:text-white block">{u.name}</span>
-                        <span className="text-xs text-text-secondary dark:text-slate-400 flex items-center gap-1 mt-0.5">
-                          <Mail className="w-3 h-3 text-text-tertiary" />
-                          {u.email}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <select
-                        value={u.role}
-                        onChange={(e) => handleChangeRole(u.id, e.target.value as any)}
-                        className="text-xs font-semibold px-2.5 py-1 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-text-primary dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-purple"
-                      >
-                        <option value="employee">Employee</option>
-                        <option value="manager">Manager</option>
-                        <option value="hr">HR</option>
-                        <option value="admin">Admin</option>
-                      </select>
-                    </td>
-                    <td className="py-4 px-4 text-xs text-text-secondary dark:text-slate-300 font-medium">
-                      {u.department}
-                    </td>
-                    <td className="py-4 px-4 text-xs text-text-secondary dark:text-slate-300 font-medium">
-                      {u.location}
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="capitalize text-xs px-2.5 py-1 rounded-full bg-status-info-bg text-status-info-text font-semibold">
-                        {u.workMode}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <StatusPill status={u.status} />
-                    </td>
-                    <td className="py-4 px-5 text-right space-x-1 whitespace-nowrap">
-                      <button
-                        onClick={() => handleOpenGovernance(u)}
-                        title="Edit Governance"
-                        className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-text-secondary hover:text-brand-purple transition-colors"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleResetMFA(u)}
-                        title="Reset MFA"
-                        className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-text-secondary hover:text-status-warning-dot transition-colors"
-                      >
-                        <KeyRound className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleForceSignOut(u)}
-                        title="Force Sign Out"
-                        className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-text-secondary hover:text-brand-navy transition-colors"
-                      >
-                        <LogOut className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeactivate(u)}
-                        title="Deactivate Member"
-                        className="p-1.5 rounded-xl hover:bg-status-danger-bg text-text-secondary hover:text-status-danger-text transition-colors"
-                      >
-                        <UserX className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+              <tbody className="divide-y divide-border-light">
+                {users.map((u) => {
+                  const isSelf = u.id === userId;
+                  return (
+                    <tr key={u.id} className="hover:bg-card-subtle/50 transition-colors">
+                      <td className="py-4 px-5">
+                        <div>
+                          <span className="font-bold text-text-primary block">{u.name}</span>
+                          <span className="text-xs text-text-secondary flex items-center gap-1 mt-0.5">
+                            <Mail className="w-3 h-3 text-text-tertiary" />
+                            {u.email}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">
+                        {isAdmin && !isSelf ? (
+                          <select
+                            aria-label={`Role for ${u.name}`}
+                            value={u.role}
+                            onChange={(e) => handleChangeRole(u.id, e.target.value as any)}
+                            className="text-xs font-semibold px-2.5 py-1 rounded-xl bg-card-subtle border border-border-light text-text-primary focus:outline-none focus:ring-1 focus:ring-brand-purple"
+                          >
+                            <option value="employee">Employee</option>
+                            <option value="manager">Manager</option>
+                            <option value="hr">HR</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                        ) : (
+                          <span className="uppercase text-[11px] font-bold px-2.5 py-1 rounded-full bg-brand-purple-light/40 text-brand-purple">
+                            {u.role}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-4 px-4 text-xs text-text-secondary font-medium">
+                        {u.department}
+                      </td>
+                      <td className="py-4 px-4 text-xs text-text-secondary font-medium">
+                        {u.location} ({u.workMode})
+                      </td>
+                      <td className="py-4 px-4 text-xs font-mono text-text-tertiary">
+                        {u.timezone}
+                      </td>
+                      <td className="py-4 px-4">
+                        <StatusPill status={u.status} />
+                      </td>
+                      {isAdmin && (
+                        <td className="py-4 px-5 text-right space-x-1 whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenGovernance(u)}
+                            title={`Edit governance for ${u.name}`}
+                            aria-label={`Edit governance for ${u.name}`}
+                            className="p-1.5 rounded-xl hover:bg-card-subtle text-text-secondary hover:text-brand-purple transition-colors cursor-pointer"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleResetMFA(u)}
+                            title={`Reset MFA for ${u.name}`}
+                            aria-label={`Reset MFA for ${u.name}`}
+                            className="p-1.5 rounded-xl hover:bg-card-subtle text-text-secondary hover:text-status-warning-dot transition-colors cursor-pointer"
+                          >
+                            <KeyRound className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleForceSignOut(u)}
+                            title={`Force sign out ${u.name}`}
+                            aria-label={`Force sign out ${u.name}`}
+                            className="p-1.5 rounded-xl hover:bg-card-subtle text-text-secondary hover:text-brand-navy transition-colors cursor-pointer"
+                          >
+                            <LogOut className="w-4 h-4" />
+                          </button>
+                          {!isSelf && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeactivate(u)}
+                              title={`Deactivate ${u.name}`}
+                              aria-label={`Deactivate ${u.name}`}
+                              className="p-1.5 rounded-xl hover:bg-status-danger-bg text-text-secondary hover:text-status-danger-text transition-colors cursor-pointer"
+                            >
+                              <UserX className="w-4 h-4" />
+                            </button>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        </div>
-
-        {/* Invite Modal */}
-        {inviteModalOpen && (
-          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-[28px] max-w-md w-full p-6 shadow-shell border border-border-light dark:border-slate-800 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-extrabold text-text-primary dark:text-white flex items-center gap-2">
-                  <UserPlus className="w-5 h-5 text-brand-purple" />
-                  Invite New Employee
-                </h3>
-                <button
-                  onClick={() => setInviteModalOpen(false)}
-                  className="text-text-tertiary hover:text-text-primary text-sm font-bold"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <form onSubmit={handleSendInvite} className="space-y-3.5">
-                <div>
-                  <label className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1">
-                    Full Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={inviteName}
-                    onChange={(e) => setInviteName(e.target.value)}
-                    placeholder="Jane Doe"
-                    className="w-full px-3.5 py-2 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm text-text-primary dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-purple"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1">
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="jane@company.com"
-                    className="w-full px-3.5 py-2 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm text-text-primary dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-purple"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1">
-                      Role
-                    </label>
-                    <select
-                      value={inviteRole}
-                      onChange={(e) => setInviteRole(e.target.value as any)}
-                      className="w-full px-3 py-2 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm text-text-primary dark:text-white"
-                    >
-                      <option value="employee">Employee</option>
-                      <option value="manager">Manager</option>
-                      <option value="hr">HR</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1">
-                      Work Mode
-                    </label>
-                    <select
-                      value={inviteWorkMode}
-                      onChange={(e) => setInviteWorkMode(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm text-text-primary dark:text-white"
-                    >
-                      <option value="remote">Remote</option>
-                      <option value="office">Office</option>
-                      <option value="hybrid">Hybrid</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1">
-                    Timezone
-                  </label>
-                  <input
-                    type="text"
-                    value={inviteTimezone}
-                    onChange={(e) => setInviteTimezone(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm text-text-primary dark:text-white"
-                  />
-                </div>
-
-                <div className="pt-2 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setInviteModalOpen(false)}
-                    className="px-4 py-2 rounded-xl bg-card-subtle text-text-secondary text-sm font-semibold hover:bg-slate-200"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="px-4 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-sm font-semibold shadow-sm transition-all disabled:opacity-50"
-                  >
-                    {isSubmitting ? "Inviting..." : "Send Invitation"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Governance Modal */}
-        {governanceModalOpen && selectedUser && (
-          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-[28px] max-w-md w-full p-6 shadow-shell border border-border-light dark:border-slate-800 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-extrabold text-text-primary dark:text-white flex items-center gap-2">
-                  <Edit className="w-5 h-5 text-brand-purple" />
-                  Edit Governance: {selectedUser.name}
-                </h3>
-                <button
-                  onClick={() => setGovernanceModalOpen(false)}
-                  className="text-text-tertiary hover:text-text-primary text-sm font-bold"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <form onSubmit={handleSaveGovernance} className="space-y-3.5">
-                <div>
-                  <label className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1">
-                    Work Mode
-                  </label>
-                  <select
-                    value={govWorkMode}
-                    onChange={(e) => setGovWorkMode(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm text-text-primary dark:text-white"
-                  >
-                    <option value="remote">Remote</option>
-                    <option value="office">Office</option>
-                    <option value="hybrid">Hybrid</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1">
-                    Timezone
-                  </label>
-                  <input
-                    type="text"
-                    value={govTimezone}
-                    onChange={(e) => setGovTimezone(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm text-text-primary dark:text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1">
-                    Status
-                  </label>
-                  <select
-                    value={govStatus}
-                    onChange={(e) => setGovStatus(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm text-text-primary dark:text-white"
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </div>
-
-                <div className="pt-2 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setGovernanceModalOpen(false)}
-                    className="px-4 py-2 rounded-xl bg-card-subtle text-text-secondary text-sm font-semibold hover:bg-slate-200"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="px-4 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-sm font-semibold shadow-sm transition-all disabled:opacity-50"
-                  >
-                    {isSubmitting ? "Saving..." : "Save Governance"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
+        ) : (
+          <EmptyState
+            className="border-none shadow-none"
+            icon={<Users className="w-6 h-6" />}
+            title="No workforce members found"
+            description="Invite an employee or bulk import a team roster via CSV."
+          />
         )}
       </div>
+
+      {/* Invite Modal */}
+      <Modal
+        open={inviteModalOpen}
+        onOpenChange={setInviteModalOpen}
+        title="Invite New Employee"
+        description="Creates an Auth account and provisions organization membership in a single transaction"
+      >
+        <form onSubmit={handleSendInvite} className="space-y-3.5">
+          <div>
+            <label
+              htmlFor="invite-full-name"
+              className="text-xs font-bold text-text-secondary block mb-1"
+            >
+              Full Name
+            </label>
+            <input
+              id="invite-full-name"
+              type="text"
+              required
+              value={inviteName}
+              onChange={(e) => setInviteName(e.target.value)}
+              placeholder="Jane Doe"
+              className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="invite-email"
+              className="text-xs font-bold text-text-secondary block mb-1"
+            >
+              Email Address
+            </label>
+            <input
+              id="invite-email"
+              type="email"
+              required
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="jane@company.com"
+              className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor="invite-role"
+                className="text-xs font-bold text-text-secondary block mb-1"
+              >
+                Role
+              </label>
+              <select
+                id="invite-role"
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value as any)}
+                className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+              >
+                <option value="employee">Employee</option>
+                <option value="manager">Manager</option>
+                <option value="hr">HR</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="invite-work-mode"
+                className="text-xs font-bold text-text-secondary block mb-1"
+              >
+                Work Mode
+              </label>
+              <select
+                id="invite-work-mode"
+                value={inviteWorkMode}
+                onChange={(e) => setInviteWorkMode(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+              >
+                <option value="remote">Remote</option>
+                <option value="office">Office</option>
+                <option value="hybrid">Hybrid</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label
+              htmlFor="invite-timezone"
+              className="text-xs font-bold text-text-secondary block mb-1"
+            >
+              IANA Timezone
+            </label>
+            <input
+              id="invite-timezone"
+              type="text"
+              required
+              value={inviteTimezone}
+              onChange={(e) => setInviteTimezone(e.target.value)}
+              className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+            />
+          </div>
+
+          <div className="pt-2 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setInviteModalOpen(false)}
+              className="px-4 py-2 rounded-xl bg-card-subtle text-text-secondary text-xs font-bold cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-4 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+            >
+              {isSubmitting ? "Inviting..." : "Send Invitation"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Governance Modal */}
+      <Modal
+        open={governanceModalOpen && Boolean(selectedUser)}
+        onOpenChange={setGovernanceModalOpen}
+        title={selectedUser ? `Edit Governance: ${selectedUser.name}` : "Edit Governance"}
+        description="Modifies HR/Admin-controlled schedule and work mode attributes"
+      >
+        <form onSubmit={handleSaveGovernance} className="space-y-3.5">
+          <div>
+            <label
+              htmlFor="gov-work-mode"
+              className="text-xs font-bold text-text-secondary block mb-1"
+            >
+              Work Mode
+            </label>
+            <select
+              id="gov-work-mode"
+              value={govWorkMode}
+              onChange={(e) => setGovWorkMode(e.target.value)}
+              className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+            >
+              <option value="remote">Remote</option>
+              <option value="office">Office</option>
+              <option value="hybrid">Hybrid</option>
+            </select>
+          </div>
+
+          <div>
+            <label
+              htmlFor="gov-timezone"
+              className="text-xs font-bold text-text-secondary block mb-1"
+            >
+              IANA Timezone
+            </label>
+            <input
+              id="gov-timezone"
+              type="text"
+              value={govTimezone}
+              onChange={(e) => setGovTimezone(e.target.value)}
+              className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="gov-status"
+              className="text-xs font-bold text-text-secondary block mb-1"
+            >
+              Employee Status
+            </label>
+            <select
+              id="gov-status"
+              value={govStatus}
+              onChange={(e) => setGovStatus(e.target.value)}
+              className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+
+          <div className="pt-2 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setGovernanceModalOpen(false)}
+              className="px-4 py-2 rounded-xl bg-card-subtle text-text-secondary text-xs font-bold cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-4 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+            >
+              {isSubmitting ? "Saving..." : "Save Governance"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Bulk CSV Import Modal */}
+      <Modal
+        open={bulkModalOpen}
+        onOpenChange={setBulkModalOpen}
+        title="Bulk CSV Employee Import"
+        description="Validate rows in dry-run preview, download formula-sanitized error reports, and commit valid invites"
+        className="max-w-2xl"
+      >
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label
+              htmlFor="bulk-csv-file"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card-subtle hover:bg-card border border-border-light text-xs font-bold text-text-primary cursor-pointer"
+            >
+              <Upload className="w-3.5 h-3.5 text-brand-purple" />
+              <span>Upload .CSV File</span>
+              <input
+                id="bulk-csv-file"
+                type="file"
+                accept=".csv,text/csv"
+                onChange={handleCsvFileUpload}
+                className="hidden"
+              />
+            </label>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCsvText(SAMPLE_BULK_CSV);
+                setBulkPreview(null);
+              }}
+              className="text-xs font-bold text-brand-purple hover:underline cursor-pointer"
+            >
+              Load Sample CSV
+            </button>
+          </div>
+
+          <div>
+            <label
+              htmlFor="bulk-csv-textarea"
+              className="block text-xs font-bold text-text-primary mb-1"
+            >
+              CSV Data
+            </label>
+            <textarea
+              id="bulk-csv-textarea"
+              rows={5}
+              value={csvText}
+              onChange={(e) => {
+                setCsvText(e.target.value);
+                setBulkPreview(null);
+              }}
+              className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs font-mono text-text-primary"
+            />
+          </div>
+
+          {/* Preview Results Table */}
+          {bulkPreview && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-2xl bg-card-subtle border border-border-light text-xs">
+                <span className="font-bold text-text-primary">
+                  {bulkPreview.dryRun ? "Validation Preview:" : "Import Summary:"}{" "}
+                  {bulkPreview.dryRun
+                    ? `${bulkPreview.validCount ?? 0} valid, ${bulkPreview.invalidCount ?? 0} error(s)`
+                    : `${bulkPreview.importedCount ?? 0} imported, ${bulkPreview.failedCount ?? 0} failed`}
+                </span>
+                {bulkPreview.errorCsv && (
+                  <button
+                    type="button"
+                    onClick={handleDownloadErrorCsv}
+                    className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold cursor-pointer"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span>Download Error CSV</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="max-h-48 overflow-y-auto border border-border-light rounded-2xl">
+                <table className="w-full text-left text-[11px]">
+                  <thead className="bg-card-subtle border-b border-border-light text-text-tertiary uppercase font-bold">
+                    <tr>
+                      <th className="py-2 px-3">Row</th>
+                      <th className="py-2 px-3">Email</th>
+                      <th className="py-2 px-3">Name</th>
+                      <th className="py-2 px-3">Role</th>
+                      <th className="py-2 px-3">Validation</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border-light">
+                    {bulkPreview.rows.map((r) => (
+                      <tr key={r.rowNumber}>
+                        <td className="py-2 px-3 font-mono">{r.rowNumber}</td>
+                        <td className="py-2 px-3 font-medium">{r.email || "--"}</td>
+                        <td className="py-2 px-3">{r.fullName || "--"}</td>
+                        <td className="py-2 px-3 uppercase">{r.role}</td>
+                        <td className="py-2 px-3">
+                          {r.valid ? (
+                            <span className="inline-flex items-center gap-1 text-emerald-600 font-bold">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Ready
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-rose-600 font-bold">
+                              <XCircle className="w-3 h-3 shrink-0" />
+                              {r.errors.join("; ")}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setBulkModalOpen(false)}
+              className="px-4 py-2 rounded-xl bg-card-subtle text-text-secondary text-xs font-bold cursor-pointer"
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              disabled={bulkLoading}
+              onClick={() => handleBulkPreviewOrCommit(true)}
+              className="px-4 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold cursor-pointer disabled:opacity-50"
+            >
+              {bulkLoading ? "Validating..." : "Validate Preview"}
+            </button>
+            {bulkPreview?.dryRun && (bulkPreview.validCount ?? 0) > 0 && (
+              <button
+                type="button"
+                disabled={bulkLoading}
+                onClick={() => handleBulkPreviewOrCommit(false)}
+                className="px-4 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold cursor-pointer disabled:opacity-50"
+              >
+                Import {bulkPreview.validCount} Employee(s)
+              </button>
+            )}
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+export default function UsersDirectoryAdminPage() {
+  return (
+    <AppShell>
+      <UsersDirectoryContent />
     </AppShell>
   );
 }

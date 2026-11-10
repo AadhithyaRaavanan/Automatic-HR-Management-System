@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import { EmptyState } from "@/components/shared/empty-state";
 
 interface AuditEntry {
   id: string;
@@ -79,17 +80,27 @@ export default function AuditsAdminPage() {
   const [searchTerm, setSearchTerm] = React.useState("");
   const [actionFilter, setActionFilter] = React.useState("ALL");
 
-  const supabase = createClient();
+  const supabase = React.useMemo(() => createClient(), []);
+  const [isLoading, setIsLoading] = React.useState(true);
 
   React.useEffect(() => {
+    let active = true;
     async function loadAudits() {
+      setIsLoading(true);
       try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.user) {
+          if (active && isDemoModeEnabled()) setAudits(mockAudits);
+          return;
+        }
         const { data, error } = await supabase
           .from("audit_logs")
           .select("id, created_at, actor_id, action, table_name, record_id, old_data, new_data")
           .order("created_at", { ascending: false })
-          .limit(50);
-        if (!error && data) {
+          .limit(100);
+        if (!error && data && active) {
           setAudits(
             data.map((r: any) => ({
               id: r.id,
@@ -104,13 +115,41 @@ export default function AuditsAdminPage() {
           );
         }
       } catch {
-        if (isDemoModeEnabled()) {
+        if (active && isDemoModeEnabled()) {
           setAudits(mockAudits);
         }
+      } finally {
+        if (active) setIsLoading(false);
       }
     }
     loadAudits();
+    return () => {
+      active = false;
+    };
   }, [supabase]);
+
+  const availableActions = React.useMemo(() => {
+    const known = new Set<string>([
+      "POLICY_UPDATED",
+      "EMPLOYEE_UPDATED",
+      "LOCATION_CREATED",
+      "MEMBER_DEACTIVATED",
+      "SHIFT_CREATED",
+      "ATTENDANCE_CORRECTED",
+      "MONTH_LOCKED",
+      "MONTH_UNLOCKED",
+      "REGULARIZATION_APPROVED",
+      "REGULARIZATION_REJECTED",
+      "ATTENDANCE_EXPORTED",
+      "LEAVE_APPROVED",
+      "HOLIDAY_CREATED",
+      "HOLIDAY_IMPORTED",
+      "DELEGATION_CREATED",
+      "DELEGATION_REVOKED",
+    ]);
+    audits.forEach((a) => known.add(a.action));
+    return Array.from(known).sort();
+  }, [audits]);
 
   const filteredAudits = audits.filter((a) => {
     const matchesAction = actionFilter === "ALL" || a.action === actionFilter;
@@ -184,36 +223,42 @@ export default function AuditsAdminPage() {
               className="w-full sm:w-auto px-3 py-2 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-xs font-semibold text-text-primary dark:text-white"
             >
               <option value="ALL">All Actions</option>
-              <option value="POLICY_UPDATED">POLICY_UPDATED</option>
-              <option value="EMPLOYEE_UPDATED">EMPLOYEE_UPDATED</option>
-              <option value="LOCATION_CREATED">LOCATION_CREATED</option>
-              <option value="MEMBER_DEACTIVATED">MEMBER_DEACTIVATED</option>
-              <option value="SHIFT_CREATED">SHIFT_CREATED</option>
-              <option value="MONTH_LOCKED">MONTH_LOCKED</option>
-              <option value="MONTH_UNLOCKED">MONTH_UNLOCKED</option>
-              <option value="REGULARIZATION_APPROVED">REGULARIZATION_APPROVED</option>
-              <option value="REGULARIZATION_REJECTED">REGULARIZATION_REJECTED</option>
-              <option value="ATTENDANCE_EXPORTED">ATTENDANCE_EXPORTED</option>
-              <option value="LEAVE_APPROVED">LEAVE_APPROVED</option>
+              {availableActions.map((act) => (
+                <option key={act} value={act}>
+                  {act}
+                </option>
+              ))}
             </select>
           </div>
         </div>
 
         {/* Audits Table */}
         <div className="bg-white dark:bg-slate-900 rounded-[28px] border border-border-light dark:border-slate-800 shadow-card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-card-subtle dark:bg-slate-800/50 text-text-secondary dark:text-slate-400 font-semibold border-b border-border-light dark:border-slate-800">
-                <tr>
-                  <th className="py-3.5 px-5">Timestamp</th>
-                  <th className="py-3.5 px-4">Action</th>
-                  <th className="py-3.5 px-4">Target Table</th>
-                  <th className="py-3.5 px-4">Record ID</th>
-                  <th className="py-3.5 px-5 text-right">State Diff</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border-light dark:divide-slate-800">
-                {filteredAudits.map((a) => (
+          {filteredAudits.length === 0 ? (
+            <EmptyState
+              icon={<ScrollText className="w-6 h-6" />}
+              title={isLoading ? "Loading audit logs..." : "No matching audit records"}
+              description={
+                isLoading
+                  ? "Fetching tamper-evident system activity from the database..."
+                  : "Adjust your search or action filter, or wait for new privileged events to be recorded."
+              }
+              className="border-none rounded-none shadow-none"
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-card-subtle dark:bg-slate-800/50 text-text-secondary dark:text-slate-400 font-semibold border-b border-border-light dark:border-slate-800">
+                  <tr>
+                    <th className="py-3.5 px-5">Timestamp</th>
+                    <th className="py-3.5 px-4">Action</th>
+                    <th className="py-3.5 px-4">Target Table</th>
+                    <th className="py-3.5 px-4">Record ID</th>
+                    <th className="py-3.5 px-5 text-right">State Diff</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-light dark:divide-slate-800">
+                  {filteredAudits.map((a) => (
                   <React.Fragment key={a.id}>
                     <tr
                       onClick={() => toggleExpand(a.id)}
@@ -284,9 +329,10 @@ export default function AuditsAdminPage() {
                     )}
                   </React.Fragment>
                 ))}
-              </tbody>
-            </table>
-          </div>
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </AppShell>

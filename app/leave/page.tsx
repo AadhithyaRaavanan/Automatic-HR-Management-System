@@ -5,8 +5,9 @@ import { AppShell } from "@/components/shell/app-shell";
 import { LeaveBalanceCard } from "@/features/leave/components/leave-balance-card";
 import { LeaveHistoryTable } from "@/features/leave/components/leave-history-table";
 import { ApplyLeaveModal } from "@/features/leave/components/apply-leave-modal";
+import { EmptyState } from "@/components/shared/empty-state";
 import { useLeaveBalances, useLeaveRequests } from "@/features/leave/hooks/use-leave";
-import { Plus, RefreshCw, Calendar, Filter } from "lucide-react";
+import { Plus, RefreshCw, Calendar, Filter, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function LeavePage() {
@@ -46,6 +47,7 @@ export default function LeavePage() {
               onClick={handleRefresh}
               className="p-2 rounded-full bg-card border border-border-light text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors shadow-sm cursor-pointer"
               title="Refresh balances"
+              aria-label="Refresh leave balances"
             >
               <RefreshCw className="w-4 h-4 text-brand-purple" />
             </button>
@@ -75,12 +77,18 @@ export default function LeavePage() {
                 <div key={i} className="h-40 rounded-2xl bg-card-subtle animate-pulse border border-border-light" />
               ))}
             </div>
-          ) : (
+          ) : balances.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {balances.map((b) => (
                 <LeaveBalanceCard key={b.id} balance={b} />
               ))}
             </div>
+          ) : (
+            <EmptyState
+              icon={<CalendarDays className="w-6 h-6" />}
+              title="No leave balances allocated yet"
+              description="Ask your HR administrator to allocate leave quotas for the current leave year."
+            />
           )}
         </section>
 
@@ -130,4 +138,3 @@ export default function LeavePage() {
     </AppShell>
   );
 }
-

@@ -1,98 +1,110 @@
 "use client";
 
 import * as React from "react";
-import { Bell, Check, Trash2, X, Clock, AlertCircle } from "lucide-react";
-import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import {
+  Bell,
+  CheckCheck,
+  X,
+  Clock,
+  AlertCircle,
+  ExternalLink,
+  Calendar,
+  UserCheck,
+  ShieldAlert,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-
-export interface NotificationRecord {
-  id: string;
-  type: "missed_checkout" | "request_status" | "policy_update" | "reminder";
-  title: string;
-  body: string;
-  read_at: string | null;
-  created_at: string;
-}
+import { useNotifications, NotificationItemRecord } from "@/features/notifications/hooks/use-notifications";
+import { EmptyState } from "@/components/shared/empty-state";
 
 interface NotificationCenterProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
+function getNotificationIcon(type: NotificationItemRecord["type"]) {
+  switch (type) {
+    case "missed_checkout":
+    case "task_overdue":
+      return <AlertCircle className="w-3.5 h-3.5 text-status-warning-dot shrink-0" />;
+    case "leave_requested":
+    case "leave_status":
+      return <Calendar className="w-3.5 h-3.5 text-brand-purple shrink-0" />;
+    case "attendance_corrected":
+    case "delegation":
+      return <UserCheck className="w-3.5 h-3.5 text-brand-purple shrink-0" />;
+    case "policy_update":
+      return <ShieldAlert className="w-3.5 h-3.5 text-brand-purple shrink-0" />;
+    default:
+      return <Clock className="w-3.5 h-3.5 text-brand-purple shrink-0" />;
+  }
+}
+
 export function NotificationCenter({
   open,
   onOpenChange,
 }: NotificationCenterProps) {
-  const [notifications, setNotifications] = React.useState<
-    NotificationRecord[]
-  >([
-    {
-      id: "n-1",
-      type: "missed_checkout",
-      title: "Auto-Checkout Warning",
-      body: "Your session on Nov 6 was automatically closed past midnight.",
-      read_at: null,
-      created_at: new Date(Date.now() - 3600 * 1000 * 4).toISOString(),
-    },
-    {
-      id: "n-2",
-      type: "request_status",
-      title: "Regularization Approved",
-      body: "Manager approved punch correction for 2026-11-05.",
-      read_at: null,
-      created_at: new Date(Date.now() - 3600 * 1000 * 24).toISOString(),
-    },
-    {
-      id: "n-3",
-      type: "policy_update",
-      title: "Quarterly Holiday Schedule",
-      body: "Thanksgiving holiday schedule is now updated.",
-      read_at: new Date().toISOString(),
-      created_at: new Date(Date.now() - 3600 * 1000 * 48).toISOString(),
-    },
-  ]);
+  const router = useRouter();
+  const {
+    notifications,
+    unreadCount,
+    isLoading,
+    markSingleRead,
+    markAllRead,
+    isMarkingAll,
+  } = useNotifications();
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onOpenChange(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onOpenChange]);
 
   if (!open) return null;
 
-  const markAllRead = () => {
-    setNotifications((prev) =>
-      prev.map((n) => ({ ...n, read_at: new Date().toISOString() }))
-    );
-    toast.success("All notifications marked as read");
+  const handleNotificationClick = async (item: NotificationItemRecord) => {
+    if (!item.read_at) {
+      await markSingleRead(item.id).catch(() => {});
+    }
+    if (item.link) {
+      onOpenChange(false);
+      router.push(item.link);
+    }
   };
-
-  const clearAll = () => {
-    setNotifications([]);
-    toast.info("Notifications cleared");
-  };
-
-  const markSingleRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) =>
-        n.id === id ? { ...n, read_at: new Date().toISOString() } : n
-      )
-    );
-  };
-
-  const unreadCount = notifications.filter((n) => !n.read_at).length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-end p-4 sm:p-6 bg-black/20 backdrop-blur-xs animate-in fade-in-0">
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-end p-4 sm:p-6 bg-black/25 backdrop-blur-xs animate-in fade-in-0"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onOpenChange(false);
+      }}
+    >
       <div
         className="w-full max-w-sm bg-card rounded-[28px] shadow-shell border border-border-light p-5 relative overflow-hidden mt-12"
         role="dialog"
         aria-modal="true"
-        aria-label="Notifications"
+        aria-labelledby="notifications-dialog-title"
       >
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-border-light/60 mb-3">
           <div className="flex items-center gap-2">
             <Bell className="w-4 h-4 text-brand-purple" />
-            <h4 className="text-sm font-extrabold text-text-primary">
+            <h2
+              id="notifications-dialog-title"
+              className="text-sm font-extrabold text-text-primary"
+            >
               Notifications
-            </h4>
+            </h2>
+            <span className="sr-only" aria-live="polite">
+              {unreadCount} unread notifications
+            </span>
             {unreadCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-brand-purple text-white">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-purple text-white">
                 {unreadCount}
               </span>
             )}
@@ -102,25 +114,21 @@ export function NotificationCenter({
             {unreadCount > 0 && (
               <button
                 type="button"
-                onClick={markAllRead}
+                disabled={isMarkingAll}
+                onClick={() => markAllRead().catch(() => {})}
                 title="Mark all as read"
-                className="p-1 rounded text-text-tertiary hover:text-text-primary text-xs font-semibold cursor-pointer"
+                aria-label="Mark all notifications as read"
+                className="px-2 py-1 rounded-lg text-text-secondary hover:text-brand-purple hover:bg-card-subtle text-[11px] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
               >
-                <Check className="w-3.5 h-3.5" />
+                <CheckCheck className="w-3.5 h-3.5" />
+                <span>Mark all read</span>
               </button>
             )}
             <button
               type="button"
-              onClick={clearAll}
-              title="Clear all"
-              className="p-1 rounded text-text-tertiary hover:text-status-danger-text text-xs font-semibold cursor-pointer"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
               onClick={() => onOpenChange(false)}
-              className="p-1 rounded text-text-tertiary hover:text-text-primary cursor-pointer"
+              aria-label="Close notifications"
+              className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-card-subtle cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -128,49 +136,74 @@ export function NotificationCenter({
         </div>
 
         {/* Notifications List */}
-        <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
-          {notifications.length > 0 ? (
+        <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
+          {isLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="h-16 rounded-2xl bg-card-subtle animate-pulse border border-border-light/50"
+                />
+              ))}
+            </div>
+          ) : notifications.length > 0 ? (
             notifications.map((n) => {
               const isUnread = !n.read_at;
+              const relDate = new Date(n.created_at).toLocaleString(undefined, {
+                month: "short",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              });
 
               return (
-                <div
+                <button
                   key={n.id}
-                  onClick={() => markSingleRead(n.id)}
+                  type="button"
+                  onClick={() => handleNotificationClick(n)}
                   className={cn(
-                    "p-3 rounded-2xl border transition-all cursor-pointer relative",
+                    "w-full text-left p-3 rounded-2xl border transition-all cursor-pointer relative block",
                     isUnread
-                      ? "bg-brand-purple-light/20 border-brand-purple/30"
-                      : "bg-card-subtle/70 border-border-light/60 opacity-80 hover:opacity-100"
+                      ? "bg-brand-purple-light/25 border-brand-purple/30"
+                      : "bg-card-subtle/70 border-border-light/60 opacity-85 hover:opacity-100"
                   )}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <h5 className="text-xs font-bold text-text-primary flex items-center gap-1.5">
-                      {n.type === "missed_checkout" ? (
-                        <AlertCircle className="w-3.5 h-3.5 text-status-warning-dot shrink-0" />
-                      ) : (
-                        <Clock className="w-3.5 h-3.5 text-brand-purple shrink-0" />
-                      )}
+                    <span className="text-xs font-bold text-text-primary flex items-center gap-1.5">
+                      {getNotificationIcon(n.type)}
                       <span>{n.title}</span>
-                    </h5>
-                    {isUnread && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-brand-purple shrink-0 mt-1" />
-                    )}
+                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {n.link && (
+                        <ExternalLink className="w-3 h-3 text-text-tertiary" />
+                      )}
+                      {isUnread && (
+                        <span
+                          className="w-2 h-2 rounded-full bg-brand-purple shrink-0"
+                          aria-label="Unread"
+                        />
+                      )}
+                    </div>
                   </div>
                   <p className="text-[11px] text-text-secondary mt-1 leading-snug">
                     {n.body}
                   </p>
-                </div>
+                  <span className="text-[10px] text-text-tertiary mt-1.5 block font-mono">
+                    {relDate}
+                  </span>
+                </button>
               );
             })
           ) : (
-            <div className="py-8 text-center text-xs text-text-tertiary">
-              You are all caught up! No notifications.
-            </div>
+            <EmptyState
+              className="py-8 border-dashed shadow-none bg-card-subtle/40"
+              icon={<Bell className="w-5 h-5" />}
+              title="You're all caught up"
+              description="Attendance alerts, leave decisions, and approvals will appear here."
+            />
           )}
         </div>
       </div>
     </div>
   );
 }
-

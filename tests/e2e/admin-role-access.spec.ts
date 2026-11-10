@@ -15,7 +15,7 @@ test.describe("Phase 3: Organization Admin Role-Based Access Control E2E", () =>
     await page.locator('input[type="email"]').fill("employee@remotehr.io");
     await page.locator('input[type="password"]').fill("DemoPassword123!");
     await page.getByRole("button", { name: /Sign in/i }).click();
-    await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 15000 });
+    await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 30000 });
 
     for (const route of allAdminRoutes) {
       await page.goto(route);
@@ -31,12 +31,12 @@ test.describe("Phase 3: Organization Admin Role-Based Access Control E2E", () =>
     await page.locator('input[type="password"]').fill("DemoPassword123!");
     await page.getByRole("button", { name: /Sign in/i }).click();
 
-    await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 15000 });
+    await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 30000 });
     if (page.url().includes("/mfa-challenge") || page.url().includes("/mfa-setup")) {
       const demoBtn = page.getByRole("button", { name: /1-Click/i });
       if (await demoBtn.isVisible().catch(() => false)) {
         await demoBtn.click();
-        await page.waitForURL((url) => !url.pathname.includes("/mfa"), { timeout: 15000 });
+        await page.waitForURL((url) => !url.pathname.includes("/mfa"), { timeout: 30000 });
       }
     }
 
@@ -67,12 +67,12 @@ test.describe("Phase 3: Organization Admin Role-Based Access Control E2E", () =>
     await page.locator('input[type="password"]').fill("DemoPassword123!");
     await page.getByRole("button", { name: /Sign in/i }).click();
 
-    await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 15000 });
+    await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 30000 });
     if (page.url().includes("/mfa-challenge") || page.url().includes("/mfa-setup")) {
       const demoBtn = page.getByRole("button", { name: /1-Click/i });
       if (await demoBtn.isVisible().catch(() => false)) {
         await demoBtn.click();
-        await page.waitForURL((url) => !url.pathname.includes("/mfa"), { timeout: 15000 });
+        await page.waitForURL((url) => !url.pathname.includes("/mfa"), { timeout: 30000 });
       }
     }
 

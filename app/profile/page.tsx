@@ -1,0 +1,476 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import { AppShell, useAppSession } from "@/components/shell/app-shell";
+import { BentoGrid } from "@/components/bento/bento-grid";
+import { BentoCard } from "@/components/bento/bento-card";
+import { createClient } from "@/lib/supabase/client";
+import { compressAvatarImage } from "@/lib/media/avatar-compress";
+import {
+  UserCircle,
+  Camera,
+  Phone,
+  ShieldAlert,
+  Globe,
+  Clock,
+  Lock,
+  Save,
+  CheckCircle2,
+  Building2,
+} from "lucide-react";
+import { toast } from "sonner";
+
+function ProfilePageContent() {
+  const { userId, userRole } = useAppSession();
+  const supabase = React.useMemo(() => createClient(), []);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = React.useState(false);
+
+  const [fullName, setFullName] = React.useState("");
+  const [email, setEmail] = React.useState("");
+  const [phone, setPhone] = React.useState("");
+  const [emergencyContact, setEmergencyContact] = React.useState("");
+  const [avatarPath, setAvatarPath] = React.useState<string | null>(null);
+  const [avatarSignedUrl, setAvatarSignedUrl] = React.useState<string | null>(null);
+
+  // Governed read-only fields
+  const [timezone, setTimezone] = React.useState("UTC");
+  const [workMode, setWorkMode] = React.useState("remote");
+  const [workTargetMinutes, setWorkTargetMinutes] = React.useState(480);
+  const [departmentName, setDepartmentName] = React.useState<string | null>(null);
+
+  const resolveAvatarSignedUrl = React.useCallback(
+    async (storagePath: string | null) => {
+      if (!storagePath) {
+        setAvatarSignedUrl(null);
+        return;
+      }
+      if (storagePath.startsWith("http://") || storagePath.startsWith("https://")) {
+        setAvatarSignedUrl(storagePath);
+        return;
+      }
+      const { data } = await supabase.storage
+        .from("avatars")
+        .createSignedUrl(storagePath, 3600);
+      if (data?.signedUrl) {
+        setAvatarSignedUrl(data.signedUrl);
+      }
+    },
+    [supabase]
+  );
+
+  React.useEffect(() => {
+    let active = true;
+    async function loadProfile() {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const uid = userId || session?.user?.id || (await supabase.auth.getUser()).data.user?.id;
+        if (!uid) {
+          if (active) setLoading(false);
+          return;
+        }
+
+        const { data, error } = await (supabase as any)
+          .from("employees")
+          .select(
+            "full_name, email, phone, emergency_contact, avatar_url, timezone, work_mode, work_target_minutes, departments:department_id(name)"
+          )
+          .eq("id", uid)
+          .maybeSingle();
+
+        if (!active) return;
+        if (!error && data) {
+          setFullName(data.full_name || "");
+          setEmail(data.email || "");
+          setPhone(data.phone || "");
+          setEmergencyContact(data.emergency_contact || "");
+          setAvatarPath(data.avatar_url || null);
+          setTimezone(data.timezone || "UTC");
+          setWorkMode(data.work_mode || "remote");
+          setWorkTargetMinutes(data.work_target_minutes || 480);
+          setDepartmentName(data.departments?.name || null);
+          if (data.avatar_url) {
+            await resolveAvatarSignedUrl(data.avatar_url);
+          }
+        }
+      } catch {
+        // Ignore transient fetch errors
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    loadProfile();
+    return () => {
+      active = false;
+    };
+  }, [userId, supabase, resolveAvatarSignedUrl]);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fullName.trim()) {
+      toast.error("Full name is required.");
+      return;
+    }
+
+    const uid =
+      userId ||
+      (await supabase.auth.getSession()).data.session?.user?.id ||
+      (await supabase.auth.getUser()).data.user?.id;
+
+    if (!uid) {
+      toast.error("Sign in required to update your profile.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { error } = await (supabase.from("employees") as any)
+        .update({
+          full_name: fullName.trim(),
+          phone: phone.trim() || null,
+          emergency_contact: emergencyContact.trim() || null,
+        })
+        .eq("id", uid);
+
+      if (error) throw error;
+      toast.success("Profile updated successfully.");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update profile.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAvatarSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const uid =
+      userId ||
+      (await supabase.auth.getSession()).data.session?.user?.id ||
+      (await supabase.auth.getUser()).data.user?.id;
+
+    if (!uid) {
+      toast.error("Sign in required to upload an avatar.");
+      return;
+    }
+
+    setUploadingAvatar(true);
+    try {
+      const { blob, mimeType } = await compressAvatarImage(file);
+      const ext = mimeType === "image/webp" ? "webp" : mimeType === "image/png" ? "png" : "jpg";
+      const storagePath = `${uid}/avatar.${ext}`;
+
+      const { error: uploadErr } = await supabase.storage
+        .from("avatars")
+        .upload(storagePath, blob, {
+          contentType: mimeType,
+          upsert: true,
+        });
+      if (uploadErr) throw uploadErr;
+
+      const { error: dbErr } = await (supabase.from("employees") as any)
+        .update({ avatar_url: storagePath })
+        .eq("id", uid);
+      if (dbErr) throw dbErr;
+
+      setAvatarPath(storagePath);
+      await resolveAvatarSignedUrl(storagePath);
+      toast.success(
+        `Avatar compressed (${Math.max(1, Math.round(blob.size / 1024))} KB) and saved securely.`
+      );
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to upload avatar.");
+    } finally {
+      setUploadingAvatar(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const initials = (fullName || email || "U")
+    .split(/\s+/)
+    .map((p) => p[0] || "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  return (
+    <div className="space-y-6">
+      <section className="pt-1 pb-2 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight">
+            My Profile
+          </h1>
+          <p className="text-xs sm:text-sm text-text-secondary mt-1">
+            Update your personal contact details and private avatar photo. Work governance settings remain HR/Admin managed.
+          </p>
+        </div>
+
+        <Link
+          href="/settings"
+          className="px-4 py-2 rounded-full bg-card border border-border-light text-xs font-bold text-text-primary hover:bg-card-subtle transition-colors w-fit shadow-sm"
+        >
+          Security & Preferences →
+        </Link>
+      </section>
+
+      <BentoGrid>
+        {/* Avatar & Identity Card */}
+        <BentoCard
+          title={
+            <div className="flex items-center gap-2">
+              <UserCircle className="w-4 h-4 text-brand-purple" />
+              <span>Identity & Avatar</span>
+            </div>
+          }
+          subtitle="Private tenant-isolated storage (compressed <= 200 KB JPEG/PNG/WebP)"
+          className="lg:col-span-4 p-6 flex flex-col justify-between space-y-5"
+        >
+          <div className="flex flex-col items-center text-center space-y-4 py-2">
+            <div className="relative">
+              {avatarSignedUrl ? (
+                <img
+                  src={avatarSignedUrl}
+                  alt={fullName || "User avatar"}
+                  className="w-28 h-28 rounded-full object-cover border-4 border-brand-purple/25 shadow-float"
+                />
+              ) : (
+                <div className="w-28 h-28 rounded-full bg-brand-purple-light text-brand-purple font-extrabold text-2xl flex items-center justify-center border-4 border-brand-purple/20 shadow-float">
+                  {initials}
+                </div>
+              )}
+
+              <button
+                type="button"
+                disabled={uploadingAvatar || loading}
+                onClick={() => fileInputRef.current?.click()}
+                aria-label="Upload avatar photo"
+                className="absolute bottom-0 right-0 w-9 h-9 rounded-full bg-brand-purple hover:bg-brand-purple-hover text-white flex items-center justify-center shadow-md cursor-pointer transition-all disabled:opacity-50"
+              >
+                <Camera className="w-4 h-4" />
+              </button>
+            </div>
+
+            <input
+              ref={fileInputRef}
+              id="profile-avatar-input"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleAvatarSelected}
+              className="hidden"
+            />
+
+            <div>
+              <h2 className="text-base font-extrabold text-text-primary">
+                {fullName || "Employee"}
+              </h2>
+              <p className="text-xs text-text-tertiary font-mono mt-0.5">{email}</p>
+              <div className="flex items-center justify-center gap-2 mt-2">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-brand-purple-light text-brand-purple">
+                  {userRole}
+                </span>
+                {departmentName && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-card-subtle border border-border-light text-text-secondary flex items-center gap-1">
+                    <Building2 className="w-3 h-3" />
+                    {departmentName}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              disabled={uploadingAvatar || loading}
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full py-2.5 px-4 rounded-xl bg-card-subtle hover:bg-card border border-border-light text-xs font-bold text-text-primary cursor-pointer transition-colors disabled:opacity-50"
+            >
+              {uploadingAvatar ? "Compressing & Uploading..." : "Change Profile Photo"}
+            </button>
+
+            {avatarPath && (
+              <p className="text-[11px] text-status-success-text flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Stored privately in encrypted avatars bucket
+              </p>
+            )}
+          </div>
+        </BentoCard>
+
+        {/* Editable Personal Info Form */}
+        <BentoCard
+          title={
+            <div className="flex items-center gap-2">
+              <Phone className="w-4 h-4 text-brand-purple" />
+              <span>Personal Contact Details</span>
+            </div>
+          }
+          subtitle="Changes apply immediately to your directory profile"
+          className="lg:col-span-8 p-6"
+        >
+          <form onSubmit={handleSaveProfile} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label
+                  htmlFor="profile-full-name"
+                  className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1.5"
+                >
+                  Full Name
+                </label>
+                <input
+                  id="profile-full-name"
+                  type="text"
+                  required
+                  disabled={loading}
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Your full name"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary focus:outline-none focus:border-brand-purple"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="profile-phone"
+                  className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1.5"
+                >
+                  Phone Number
+                </label>
+                <input
+                  id="profile-phone"
+                  type="tel"
+                  autoComplete="tel"
+                  disabled={loading}
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+91 98765 43210"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary focus:outline-none focus:border-brand-purple"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="profile-emergency-contact"
+                className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1.5"
+              >
+                Emergency Contact (Name, Relationship & Phone)
+              </label>
+              <div className="relative">
+                <ShieldAlert className="w-4 h-4 text-text-tertiary absolute left-3 top-3" />
+                <input
+                  id="profile-emergency-contact"
+                  type="text"
+                  disabled={loading}
+                  value={emergencyContact}
+                  onChange={(e) => setEmergencyContact(e.target.value)}
+                  placeholder="e.g. Dana Sullivan (Spouse) • +1 555-0199"
+                  className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary focus:outline-none focus:border-brand-purple"
+                />
+              </div>
+            </div>
+
+            {/* Read-only HR/Admin Governed Section */}
+            <div className="pt-4 mt-4 border-t border-border-light space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-extrabold text-text-primary uppercase tracking-wider flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-brand-purple" />
+                  Work Schedule Governance
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-card-subtle border border-border-light text-text-tertiary">
+                  HR / Admin Only
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label
+                    htmlFor="profile-timezone-readonly"
+                    className="block text-[11px] font-bold text-text-secondary mb-1 flex items-center gap-1"
+                  >
+                    <Globe className="w-3 h-3" />
+                    Timezone
+                  </label>
+                  <input
+                    id="profile-timezone-readonly"
+                    type="text"
+                    readOnly
+                    disabled
+                    value={timezone}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle/60 border border-border-light text-xs font-bold text-text-secondary cursor-not-allowed"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="profile-work-mode-readonly"
+                    className="block text-[11px] font-bold text-text-secondary mb-1"
+                  >
+                    Work Mode
+                  </label>
+                  <input
+                    id="profile-work-mode-readonly"
+                    type="text"
+                    readOnly
+                    disabled
+                    value={workMode.toUpperCase()}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle/60 border border-border-light text-xs font-bold text-text-secondary cursor-not-allowed"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="profile-target-readonly"
+                    className="block text-[11px] font-bold text-text-secondary mb-1 flex items-center gap-1"
+                  >
+                    <Clock className="w-3 h-3" />
+                    Daily Target
+                  </label>
+                  <input
+                    id="profile-target-readonly"
+                    type="text"
+                    readOnly
+                    disabled
+                    value={`${workTargetMinutes} mins (${Math.round(workTargetMinutes / 60)}h)`}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle/60 border border-border-light text-xs font-bold text-text-secondary cursor-not-allowed"
+                  />
+                </div>
+              </div>
+
+              <p className="text-[11px] text-text-tertiary">
+                Timezone changes are restricted to HR and Administrators to prevent punch boundary spoofing.
+              </p>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="submit"
+                disabled={saving || loading}
+                className="px-5 py-2.5 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{saving ? "Saving..." : "Save Profile"}</span>
+              </button>
+            </div>
+          </form>
+        </BentoCard>
+      </BentoGrid>
+    </div>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <AppShell>
+      <ProfilePageContent />
+    </AppShell>
+  );
+}
+

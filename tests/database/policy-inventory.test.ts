@@ -43,523 +43,124 @@ function enforceLocalDatabaseHost(url: string | null): string {
 
 const dbUrl = enforceLocalDatabaseHost(getDatabaseUrl());
 
-// Canonical Expected RLS Policy Inventory (65 Policies across 13 public tables)
+// Canonical Expected RLS Policy Inventory (91 Policies across 18 public tables)
 const EXPECTED_POLICY_INVENTORY: Array<{
   tablename: string;
   policyname: string;
   permissive: "PERMISSIVE" | "RESTRICTIVE";
   cmd: "SELECT" | "INSERT" | "UPDATE" | "DELETE" | "ALL";
 }> = [
-  {
-    "tablename": "attendance_days",
-    "policyname": "attendance_days_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "attendance_days",
-    "policyname": "enforce_active_org_membership_attendance_days",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "attendance_days",
-    "policyname": "enforce_mfa_aal2_attendance_days",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "attendance_policies",
-    "policyname": "attendance_policies_admin_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "UPDATE"
-  },
-  {
-    "tablename": "attendance_policies",
-    "policyname": "attendance_policies_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "attendance_policies",
-    "policyname": "enforce_active_org_membership_attendance_policies",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "attendance_policies",
-    "policyname": "enforce_mfa_aal2_attendance_policies",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "attendance_sessions",
-    "policyname": "attendance_sessions_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "attendance_sessions",
-    "policyname": "enforce_active_org_membership_attendance_sessions",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "attendance_sessions",
-    "policyname": "enforce_mfa_aal2_attendance_sessions",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "audit_logs",
-    "policyname": "audit_logs_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "audit_logs",
-    "policyname": "enforce_active_org_membership_audit_logs",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "audit_logs",
-    "policyname": "enforce_mfa_aal2_audit_logs",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "company_days_off",
-    "policyname": "company_days_off_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "company_days_off",
-    "policyname": "enforce_active_org_membership_company_days_off",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "company_days_off",
-    "policyname": "enforce_mfa_aal2_company_days_off",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "departments",
-    "policyname": "departments_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "departments",
-    "policyname": "enforce_active_org_membership_departments",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "employee_shift_assignments",
-    "policyname": "enforce_active_org_membership_shift_assignments",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "employee_shift_assignments",
-    "policyname": "enforce_mfa_aal2_shift_assignments",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "employee_shift_assignments",
-    "policyname": "tenant_shift_assignments_delete_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "DELETE"
-  },
-  {
-    "tablename": "employee_shift_assignments",
-    "policyname": "tenant_shift_assignments_insert_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "INSERT"
-  },
-  {
-    "tablename": "employee_shift_assignments",
-    "policyname": "tenant_shift_assignments_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "employee_shift_assignments",
-    "policyname": "tenant_shift_assignments_update_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "UPDATE"
-  },
-  {
-    "tablename": "employees",
-    "policyname": "employees_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "employees",
-    "policyname": "employees_update_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "UPDATE"
-  },
-  {
-    "tablename": "employees",
-    "policyname": "enforce_active_org_membership_employees",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "employees",
-    "policyname": "enforce_mfa_aal2_employees",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "holidays",
-    "policyname": "enforce_active_org_membership_holidays",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "holidays",
-    "policyname": "enforce_mfa_aal2_holidays",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "holidays",
-    "policyname": "holidays_delete_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "DELETE"
-  },
-  {
-    "tablename": "holidays",
-    "policyname": "holidays_insert_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "INSERT"
-  },
-  {
-    "tablename": "holidays",
-    "policyname": "holidays_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "holidays",
-    "policyname": "holidays_update_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "UPDATE"
-  },
-  {
-    "tablename": "kiosk_devices",
-    "policyname": "enforce_active_org_membership_kiosk_devices",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "kiosk_devices",
-    "policyname": "enforce_mfa_aal2_kiosk_devices",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "kiosk_devices",
-    "policyname": "tenant_kiosk_devices_delete_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "DELETE"
-  },
-  {
-    "tablename": "kiosk_devices",
-    "policyname": "tenant_kiosk_devices_insert_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "INSERT"
-  },
-  {
-    "tablename": "kiosk_devices",
-    "policyname": "tenant_kiosk_devices_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "kiosk_devices",
-    "policyname": "tenant_kiosk_devices_update_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "UPDATE"
-  },
-  {
-    "tablename": "leave_balance_adjustments",
-    "policyname": "enforce_active_org_membership_leave_balance_adjustments",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "leave_balance_adjustments",
-    "policyname": "enforce_mfa_aal2_leave_balance_adjustments",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "leave_balance_adjustments",
-    "policyname": "leave_balance_adjustments_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "leave_balances",
-    "policyname": "enforce_active_org_membership_leave_balances",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "leave_balances",
-    "policyname": "enforce_mfa_aal2_leave_balances",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "leave_balances",
-    "policyname": "leave_balances_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "leave_policies",
-    "policyname": "enforce_active_org_membership_leave_policies",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "leave_policies",
-    "policyname": "enforce_mfa_aal2_leave_policies",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "leave_policies",
-    "policyname": "leave_policies_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "leave_requests",
-    "policyname": "enforce_active_org_membership_leave_requests",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "leave_requests",
-    "policyname": "enforce_mfa_aal2_leave_requests",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "leave_requests",
-    "policyname": "leave_requests_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "leave_types",
-    "policyname": "enforce_active_org_membership_leave_types",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "leave_types",
-    "policyname": "enforce_mfa_aal2_leave_types",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "leave_types",
-    "policyname": "leave_types_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "locations",
-    "policyname": "enforce_active_org_membership_locations",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "locations",
-    "policyname": "enforce_mfa_aal2_locations",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "locations",
-    "policyname": "tenant_locations_delete_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "DELETE"
-  },
-  {
-    "tablename": "locations",
-    "policyname": "tenant_locations_insert_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "INSERT"
-  },
-  {
-    "tablename": "locations",
-    "policyname": "tenant_locations_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "locations",
-    "policyname": "tenant_locations_update_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "UPDATE"
-  },
-  {
-    "tablename": "notifications",
-    "policyname": "enforce_active_org_membership_notifications",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "notifications",
-    "policyname": "notifications_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "notifications",
-    "policyname": "notifications_update_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "UPDATE"
-  },
-  {
-    "tablename": "organization_members",
-    "policyname": "enforce_active_org_membership_members",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "organization_members",
-    "policyname": "enforce_mfa_aal2_organization_members",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "organization_members",
-    "policyname": "tenant_members_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "organizations",
-    "policyname": "enforce_active_org_membership_organizations",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "organizations",
-    "policyname": "enforce_mfa_aal2_organizations",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "organizations",
-    "policyname": "tenant_organizations_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "organizations",
-    "policyname": "tenant_organizations_update_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "UPDATE"
-  },
-  {
-    "tablename": "privacy_acknowledgments",
-    "policyname": "enforce_active_org_membership_privacy_acknowledgments",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "privacy_acknowledgments",
-    "policyname": "enforce_mfa_aal2_privacy_acknowledgments",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "privacy_acknowledgments",
-    "policyname": "tenant_privacy_acknowledgments_insert_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "INSERT"
-  },
-  {
-    "tablename": "privacy_acknowledgments",
-    "policyname": "tenant_privacy_acknowledgments_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "regularization_requests",
-    "policyname": "enforce_active_org_membership_regularization_requests",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "regularization_requests",
-    "policyname": "enforce_mfa_aal2_regularization_requests",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "regularization_requests",
-    "policyname": "regularization_requests_insert_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "INSERT"
-  },
-  {
-    "tablename": "regularization_requests",
-    "policyname": "regularization_requests_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "shift_templates",
-    "policyname": "enforce_active_org_membership_shift_templates",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "shift_templates",
-    "policyname": "enforce_mfa_aal2_shift_templates",
-    "permissive": "RESTRICTIVE",
-    "cmd": "ALL"
-  },
-  {
-    "tablename": "shift_templates",
-    "policyname": "tenant_shift_templates_delete_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "DELETE"
-  },
-  {
-    "tablename": "shift_templates",
-    "policyname": "tenant_shift_templates_insert_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "INSERT"
-  },
-  {
-    "tablename": "shift_templates",
-    "policyname": "tenant_shift_templates_select_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "SELECT"
-  },
-  {
-    "tablename": "shift_templates",
-    "policyname": "tenant_shift_templates_update_policy",
-    "permissive": "PERMISSIVE",
-    "cmd": "UPDATE"
-  }
+  // approval_delegations (3)
+  { tablename: "approval_delegations", policyname: "approval_delegations_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  { tablename: "approval_delegations", policyname: "enforce_active_org_membership_approval_delegations", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "approval_delegations", policyname: "enforce_mfa_aal2_approval_delegations", permissive: "RESTRICTIVE", cmd: "ALL" },
+  // attendance_days (3)
+  { tablename: "attendance_days", policyname: "attendance_days_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  { tablename: "attendance_days", policyname: "enforce_active_org_membership_attendance_days", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "attendance_days", policyname: "enforce_mfa_aal2_attendance_days", permissive: "RESTRICTIVE", cmd: "ALL" },
+  // attendance_policies (4)
+  { tablename: "attendance_policies", policyname: "attendance_policies_admin_policy", permissive: "PERMISSIVE", cmd: "UPDATE" },
+  { tablename: "attendance_policies", policyname: "attendance_policies_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  { tablename: "attendance_policies", policyname: "enforce_active_org_membership_attendance_policies", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "attendance_policies", policyname: "enforce_mfa_aal2_attendance_policies", permissive: "RESTRICTIVE", cmd: "ALL" },
+  // attendance_sessions (3)
+  { tablename: "attendance_sessions", policyname: "attendance_sessions_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  { tablename: "attendance_sessions", policyname: "enforce_active_org_membership_attendance_sessions", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "attendance_sessions", policyname: "enforce_mfa_aal2_attendance_sessions", permissive: "RESTRICTIVE", cmd: "ALL" },
+  // audit_logs (3)
+  { tablename: "audit_logs", policyname: "audit_logs_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  { tablename: "audit_logs", policyname: "enforce_active_org_membership_audit_logs", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "audit_logs", policyname: "enforce_mfa_aal2_audit_logs", permissive: "RESTRICTIVE", cmd: "ALL" },
+  // company_days_off (3)
+  { tablename: "company_days_off", policyname: "company_days_off_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  { tablename: "company_days_off", policyname: "enforce_active_org_membership_company_days_off", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "company_days_off", policyname: "enforce_mfa_aal2_company_days_off", permissive: "RESTRICTIVE", cmd: "ALL" },
+  // departments (2)
+  { tablename: "departments", policyname: "departments_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  { tablename: "departments", policyname: "enforce_active_org_membership_departments", permissive: "RESTRICTIVE", cmd: "ALL" },
+  // employee_shift_assignments (6)
+  { tablename: "employee_shift_assignments", policyname: "enforce_active_org_membership_shift_assignments", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "employee_shift_assignments", policyname: "enforce_mfa_aal2_shift_assignments", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "employee_shift_assignments", policyname: "tenant_shift_assignments_delete_policy", permissive: "PERMISSIVE", cmd: "DELETE" },
+  { tablename: "employee_shift_assignments", policyname: "tenant_shift_assignments_insert_policy", permissive: "PERMISSIVE", cmd: "INSERT" },
+  { tablename: "employee_shift_assignments", policyname: "tenant_shift_assignments_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  { tablename: "employee_shift_assignments", policyname: "tenant_shift_assignments_update_policy", permissive: "PERMISSIVE", cmd: "UPDATE" },
+  // employees (4)
+  { tablename: "employees", policyname: "employees_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  { tablename: "employees", policyname: "employees_update_policy", permissive: "PERMISSIVE", cmd: "UPDATE" },
+  { tablename: "employees", policyname: "enforce_active_org_membership_employees", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "employees", policyname: "enforce_mfa_aal2_employees", permissive: "RESTRICTIVE", cmd: "ALL" },
+  // holiday_templates (2)
+  { tablename: "holiday_templates", policyname: "enforce_active_org_membership_holiday_templates", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "holiday_templates", policyname: "holiday_templates_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  // holidays (3) — DML now RPC-only; only SELECT policy remains permissive
+  { tablename: "holidays", policyname: "enforce_active_org_membership_holidays", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "holidays", policyname: "enforce_mfa_aal2_holidays", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "holidays", policyname: "holidays_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  // kiosk_devices (6)
+  { tablename: "kiosk_devices", policyname: "enforce_active_org_membership_kiosk_devices", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "kiosk_devices", policyname: "enforce_mfa_aal2_kiosk_devices", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "kiosk_devices", policyname: "tenant_kiosk_devices_delete_policy", permissive: "PERMISSIVE", cmd: "DELETE" },
+  { tablename: "kiosk_devices", policyname: "tenant_kiosk_devices_insert_policy", permissive: "PERMISSIVE", cmd: "INSERT" },
+  { tablename: "kiosk_devices", policyname: "tenant_kiosk_devices_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  { tablename: "kiosk_devices", policyname: "tenant_kiosk_devices_update_policy", permissive: "PERMISSIVE", cmd: "UPDATE" },
+  // leave_balance_adjustments (3)
+  { tablename: "leave_balance_adjustments", policyname: "enforce_active_org_membership_leave_balance_adjustments", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "leave_balance_adjustments", policyname: "enforce_mfa_aal2_leave_balance_adjustments", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "leave_balance_adjustments", policyname: "leave_balance_adjustments_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  // leave_balances (3)
+  { tablename: "leave_balances", policyname: "enforce_active_org_membership_leave_balances", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "leave_balances", policyname: "enforce_mfa_aal2_leave_balances", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "leave_balances", policyname: "leave_balances_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  // leave_policies (3)
+  { tablename: "leave_policies", policyname: "enforce_active_org_membership_leave_policies", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "leave_policies", policyname: "enforce_mfa_aal2_leave_policies", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "leave_policies", policyname: "leave_policies_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  // leave_requests (3)
+  { tablename: "leave_requests", policyname: "enforce_active_org_membership_leave_requests", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "leave_requests", policyname: "enforce_mfa_aal2_leave_requests", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "leave_requests", policyname: "leave_requests_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  // leave_types (3)
+  { tablename: "leave_types", policyname: "enforce_active_org_membership_leave_types", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "leave_types", policyname: "enforce_mfa_aal2_leave_types", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "leave_types", policyname: "leave_types_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  // locations (6)
+  { tablename: "locations", policyname: "enforce_active_org_membership_locations", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "locations", policyname: "enforce_mfa_aal2_locations", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "locations", policyname: "tenant_locations_delete_policy", permissive: "PERMISSIVE", cmd: "DELETE" },
+  { tablename: "locations", policyname: "tenant_locations_insert_policy", permissive: "PERMISSIVE", cmd: "INSERT" },
+  { tablename: "locations", policyname: "tenant_locations_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  { tablename: "locations", policyname: "tenant_locations_update_policy", permissive: "PERMISSIVE", cmd: "UPDATE" },
+  // notifications (3)
+  { tablename: "notifications", policyname: "enforce_active_org_membership_notifications", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "notifications", policyname: "notifications_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  { tablename: "notifications", policyname: "notifications_update_policy", permissive: "PERMISSIVE", cmd: "UPDATE" },
+  // organization_members (3)
+  { tablename: "organization_members", policyname: "enforce_active_org_membership_members", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "organization_members", policyname: "enforce_mfa_aal2_organization_members", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "organization_members", policyname: "tenant_members_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  // organizations (4)
+  { tablename: "organizations", policyname: "enforce_active_org_membership_organizations", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "organizations", policyname: "enforce_mfa_aal2_organizations", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "organizations", policyname: "tenant_organizations_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  { tablename: "organizations", policyname: "tenant_organizations_update_policy", permissive: "PERMISSIVE", cmd: "UPDATE" },
+  // privacy_acknowledgments (4)
+  { tablename: "privacy_acknowledgments", policyname: "enforce_active_org_membership_privacy_acknowledgments", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "privacy_acknowledgments", policyname: "enforce_mfa_aal2_privacy_acknowledgments", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "privacy_acknowledgments", policyname: "tenant_privacy_acknowledgments_insert_policy", permissive: "PERMISSIVE", cmd: "INSERT" },
+  { tablename: "privacy_acknowledgments", policyname: "tenant_privacy_acknowledgments_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  // regularization_requests (4)
+  { tablename: "regularization_requests", policyname: "enforce_active_org_membership_regularization_requests", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "regularization_requests", policyname: "enforce_mfa_aal2_regularization_requests", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "regularization_requests", policyname: "regularization_requests_insert_policy", permissive: "PERMISSIVE", cmd: "INSERT" },
+  { tablename: "regularization_requests", policyname: "regularization_requests_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  // shift_templates (6)
+  { tablename: "shift_templates", policyname: "enforce_active_org_membership_shift_templates", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "shift_templates", policyname: "enforce_mfa_aal2_shift_templates", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "shift_templates", policyname: "tenant_shift_templates_delete_policy", permissive: "PERMISSIVE", cmd: "DELETE" },
+  { tablename: "shift_templates", policyname: "tenant_shift_templates_insert_policy", permissive: "PERMISSIVE", cmd: "INSERT" },
+  { tablename: "shift_templates", policyname: "tenant_shift_templates_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  { tablename: "shift_templates", policyname: "tenant_shift_templates_update_policy", permissive: "PERMISSIVE", cmd: "UPDATE" },
 ];
 
 describe("Policy Inventory Snapshot Test", () => {

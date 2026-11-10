@@ -21,34 +21,89 @@ export function Modal({
   children,
   className,
 }: ModalProps) {
-  if (!open) return null;
+  const dialogRef = React.useRef<HTMLDialogElement | null>(null);
+  const titleId = React.useId();
+  const descId = React.useId();
+
+  React.useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    if (open) {
+      if (!dialog.open) {
+        try {
+          dialog.showModal();
+        } catch {
+          dialog.setAttribute("open", "true");
+        }
+      }
+    } else if (dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  React.useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    const handleClose = () => {
+      onOpenChange(false);
+    };
+
+    const handleBackdropFallbackClick = (event: MouseEvent) => {
+      if ("closedBy" in HTMLDialogElement.prototype) return;
+      if (event.target !== dialog) return;
+      const rect = dialog.getBoundingClientRect();
+      const inside =
+        rect.top <= event.clientY &&
+        event.clientY <= rect.top + rect.height &&
+        rect.left <= event.clientX &&
+        event.clientX <= rect.left + rect.width;
+      if (!inside) {
+        dialog.close();
+      }
+    };
+
+    dialog.addEventListener("close", handleClose);
+    dialog.addEventListener("click", handleBackdropFallbackClick);
+    return () => {
+      dialog.removeEventListener("close", handleClose);
+      dialog.removeEventListener("click", handleBackdropFallbackClick);
+    };
+  }, [onOpenChange]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-      <div
-        className={cn(
-          "bg-card border border-border-light rounded-3xl w-full max-w-lg shadow-float overflow-hidden animate-in zoom-in-95 duration-200",
-          className
-        )}
-      >
-        <div className="flex items-start justify-between p-5 border-b border-border-light/60">
-          <div>
-            <h3 className="text-base font-extrabold text-text-primary">{title}</h3>
-            {description && (
-              <p className="text-xs text-text-secondary mt-0.5">{description}</p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            className="p-1.5 rounded-full text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
+    <dialog
+      ref={dialogRef}
+      closedby="any"
+      aria-labelledby={titleId}
+      aria-describedby={description ? descId : undefined}
+      className={cn(
+        "m-auto bg-card border border-border-light rounded-3xl w-full max-w-lg shadow-float overflow-hidden",
+        className
+      )}
+    >
+      <div className="flex items-start justify-between p-5 border-b border-border-light/60">
+        <div>
+          <h2 id={titleId} className="text-base font-extrabold text-text-primary">
+            {title}
+          </h2>
+          {description && (
+            <p id={descId} className="text-xs text-text-secondary mt-0.5">
+              {description}
+            </p>
+          )}
         </div>
-        <div className="p-5">{children}</div>
+        <button
+          type="button"
+          onClick={() => onOpenChange(false)}
+          aria-label={`Close ${title}`}
+          className="p-1.5 rounded-full text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors cursor-pointer"
+        >
+          <X className="w-4 h-4" />
+        </button>
       </div>
-    </div>
+      <div className="p-5 max-h-[75dvh] overflow-y-auto">{children}</div>
+    </dialog>
   );
 }
-

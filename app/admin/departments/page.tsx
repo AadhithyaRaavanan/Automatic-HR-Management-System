@@ -3,9 +3,10 @@
 import * as React from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { createClient } from "@/lib/supabase/client";
-import { Building, Plus, Edit, Trash2, GitFork, User, ShieldAlert } from "lucide-react";
+import { Building, Plus, Edit, Trash2, GitFork, User } from "lucide-react";
 import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import { EmptyState } from "@/components/shared/empty-state";
 
 interface DepartmentItem {
   id: string;
@@ -56,8 +57,67 @@ export default function DepartmentsAdminPage() {
   const [code, setCode] = React.useState("");
   const [parentId, setParentId] = React.useState("");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(true);
 
-  const supabase = createClient();
+  const supabase = React.useMemo(() => createClient(), []);
+
+  const loadDepartments = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user) {
+        if (isDemoModeEnabled()) setDepartments(mockDepartments);
+        return;
+      }
+
+      const [{ data: depts, error }, { data: emps }] = await Promise.all([
+        (supabase as any)
+          .from("departments")
+          .select("id, name, code, parent_department_id, department_head_id")
+          .order("name"),
+        (supabase as any)
+          .from("employees")
+          .select("id, full_name, department_id")
+          .eq("status", "active"),
+      ]);
+
+      if (!error && depts) {
+        const empMap = new Map<string, string>();
+        const counts = new Map<string, number>();
+        (emps || []).forEach((e: any) => {
+          empMap.set(e.id, e.full_name);
+          if (e.department_id) {
+            counts.set(e.department_id, (counts.get(e.department_id) || 0) + 1);
+          }
+        });
+        const deptNameMap = new Map<string, string>(
+          depts.map((d: any) => [d.id, d.name])
+        );
+        setDepartments(
+          depts.map((d: any) => ({
+            id: d.id,
+            name: d.name,
+            code: d.code,
+            headId: d.department_head_id || undefined,
+            headName: d.department_head_id ? empMap.get(d.department_head_id) : undefined,
+            parentId: d.parent_department_id || undefined,
+            parentName: d.parent_department_id ? deptNameMap.get(d.parent_department_id) : undefined,
+            memberCount: counts.get(d.id) || 0,
+          }))
+        );
+      }
+    } catch {
+      if (isDemoModeEnabled()) setDepartments(mockDepartments);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [supabase]);
+
+  React.useEffect(() => {
+    loadDepartments();
+  }, [loadDepartments]);
 
   const handleOpenAdd = () => {
     setEditingDept(null);
@@ -135,37 +195,43 @@ export default function DepartmentsAdminPage() {
       if (err.message && err.message.includes("circular department hierarchy")) {
         toast.error("Hierarchical cycle detected! A department cannot report to its own child.");
       } else {
-        // Fallback for local mock dev
-        if (editingDept) {
-          setDepartments((prev) =>
-            prev.map((d) =>
-              d.id === editingDept.id
-                ? {
-                    ...d,
-                    name,
-                    code,
-                    parentId: parentId || undefined,
-                    parentName: departments.find((p) => p.id === parentId)?.name,
-                  }
-                : d
-            )
-          );
-          toast.success(`Department "${name}" updated (local mode).`);
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.user && isDemoModeEnabled()) {
+          if (editingDept) {
+            setDepartments((prev) =>
+              prev.map((d) =>
+                d.id === editingDept.id
+                  ? {
+                      ...d,
+                      name,
+                      code,
+                      parentId: parentId || undefined,
+                      parentName: departments.find((p) => p.id === parentId)?.name,
+                    }
+                  : d
+              )
+            );
+            toast.success(`Department "${name}" updated (demo mode).`);
+          } else {
+            setDepartments((prev) => [
+              ...prev,
+              {
+                id: `dept-${Date.now()}`,
+                name,
+                code,
+                parentId: parentId || undefined,
+                parentName: departments.find((p) => p.id === parentId)?.name,
+                memberCount: 0,
+              },
+            ]);
+            toast.success(`Department "${name}" created (demo mode).`);
+          }
+          setModalOpen(false);
         } else {
-          setDepartments((prev) => [
-            ...prev,
-            {
-              id: `dept-${Date.now()}`,
-              name,
-              code,
-              parentId: parentId || undefined,
-              parentName: departments.find((p) => p.id === parentId)?.name,
-              memberCount: 0,
-            },
-          ]);
-          toast.success(`Department "${name}" created (local mode).`);
+          toast.error(err?.message || "Failed to save department");
         }
-        setModalOpen(false);
       }
     } finally {
       setIsSubmitting(false);
@@ -184,8 +250,15 @@ export default function DepartmentsAdminPage() {
       toast.success(`Department ${dept.name} deleted.`);
       setDepartments((prev) => prev.filter((d) => d.id !== dept.id));
     } catch (err: any) {
-      setDepartments((prev) => prev.filter((d) => d.id !== dept.id));
-      toast.success(`Department ${dept.name} deleted (local mode).`);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user && isDemoModeEnabled()) {
+        setDepartments((prev) => prev.filter((d) => d.id !== dept.id));
+        toast.success(`Department ${dept.name} deleted (demo mode).`);
+      } else {
+        toast.error(err?.message || "Failed to delete department");
+      }
     }
   };
 
@@ -213,20 +286,43 @@ export default function DepartmentsAdminPage() {
 
         {/* Departments Table */}
         <div className="bg-white dark:bg-slate-900 rounded-[28px] border border-border-light dark:border-slate-800 shadow-card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-card-subtle dark:bg-slate-800/50 text-text-secondary dark:text-slate-400 font-semibold border-b border-border-light dark:border-slate-800">
-                <tr>
-                  <th className="py-3.5 px-5">Department Name</th>
-                  <th className="py-3.5 px-4">Code</th>
-                  <th className="py-3.5 px-4">Parent Department</th>
-                  <th className="py-3.5 px-4">Department Head</th>
-                  <th className="py-3.5 px-4">Headcount</th>
-                  <th className="py-3.5 px-5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border-light dark:divide-slate-800">
-                {departments.map((d) => (
+          {departments.length === 0 ? (
+            <EmptyState
+              icon={<Building className="w-6 h-6" />}
+              title={isLoading ? "Loading departments..." : "No departments configured"}
+              description={
+                isLoading
+                  ? "Retrieving organizational hierarchy..."
+                  : "Create your first department to group employees and assign reporting heads."
+              }
+              action={
+                !isLoading && (
+                  <button
+                    onClick={handleOpenAdd}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-purple text-white text-xs font-semibold"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add Department
+                  </button>
+                )
+              }
+              className="border-none rounded-none shadow-none"
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-card-subtle dark:bg-slate-800/50 text-text-secondary dark:text-slate-400 font-semibold border-b border-border-light dark:border-slate-800">
+                  <tr>
+                    <th className="py-3.5 px-5">Department Name</th>
+                    <th className="py-3.5 px-4">Code</th>
+                    <th className="py-3.5 px-4">Parent Department</th>
+                    <th className="py-3.5 px-4">Department Head</th>
+                    <th className="py-3.5 px-4">Headcount</th>
+                    <th className="py-3.5 px-5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-light dark:divide-slate-800">
+                  {departments.map((d) => (
                   <tr key={d.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                     <td className="py-4 px-5">
                       <div className="flex items-center gap-2">
@@ -279,10 +375,11 @@ export default function DepartmentsAdminPage() {
                       </button>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Create/Edit Modal */}

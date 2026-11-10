@@ -245,9 +245,10 @@ describe("Section 0b: Suspended Member Behavior Isolation Suite", () => {
 
     // Context helpers still safe & non-elevated
     await withStaleAal2AdminJwt(async (c) => {
-      const active = await c.query(`SELECT public.is_active_org_member() AS ok, public.current_user_role() AS role;`);
+      const active = await c.query(`SELECT public.is_active_org_member() AS ok, public.current_user_role() AS role, public.is_active_delegated_approver('${TARGET_EMP_ID}') AS delegated;`);
       expect(active.rows[0].ok).toBe(false);
       expect(active.rows[0].role).toBeNull();
+      expect(active.rows[0].delegated).toBe(false);
     });
 
     const dummyId = "00000000-0000-0000-0000-000000000001";
@@ -256,7 +257,7 @@ describe("Section 0b: Suspended Member Behavior Isolation Suite", () => {
       { name: "check_in(uuid,text)", sql: `SELECT public.check_in('${TARGET_EMP_ID}', 'Susp override');` },
       { name: "check_out()", sql: `SELECT public.check_out();` },
       { name: "lock_month(int,int)", sql: `SELECT public.lock_month(2026, 10);` },
-      { name: "unlock_month(int,int)", sql: `SELECT public.unlock_month(2026, 10);` },
+      { name: "unlock_month(int,int,text)", sql: `SELECT public.unlock_month(2026, 10, 'Suspended probe reason');` },
       { name: "approve_regularization(uuid,text)", sql: `SELECT public.approve_regularization('${regReqId}', 'Susp');` },
       { name: "reject_regularization(uuid,text)", sql: `SELECT public.reject_regularization('${regReqId}', 'Susp');` },
       { name: "get_user_role(uuid)", sql: `SELECT public.get_user_role('${TARGET_EMP_ID}');` },
@@ -288,6 +289,15 @@ describe("Section 0b: Suspended Member Behavior Isolation Suite", () => {
       { name: "admin_add_org_member", sql: `SELECT public.admin_add_org_member('${ORG_1_ID}', '${TARGET_EMP_ID}', 'manager');` },
       { name: "admin_update_org_member_role", sql: `SELECT public.admin_update_org_member_role('${ORG_1_ID}', '${TARGET_EMP_ID}', 'hr');` },
       { name: "admin_remove_org_member", sql: `SELECT public.admin_remove_org_member('${ORG_1_ID}', '${TARGET_EMP_ID}');` },
+      { name: "complete_onboarding()", sql: `SELECT public.complete_onboarding();` },
+      { name: "create_holiday", sql: `SELECT public.create_holiday('2026-12-30', 'Susp Holiday', 'சோதனை', 'IN_TN', 'public');` },
+      { name: "update_holiday", sql: `SELECT public.update_holiday('${dummyId}', '2026-12-30', 'Susp Holiday', 'சோதனை', 'IN_TN', 'public', true);` },
+      { name: "delete_holiday", sql: `SELECT public.delete_holiday('${dummyId}');` },
+      { name: "import_holiday_template", sql: `SELECT public.import_holiday_template('IN_TN', 2026);` },
+      { name: "get_month_close_checklist", sql: `SELECT public.get_month_close_checklist(2026, 10);` },
+      { name: "hr_correct_attendance", sql: `SELECT public.hr_correct_attendance('${TARGET_EMP_ID}', '2026-10-01', '[]'::jsonb, 'Susp test');` },
+      { name: "create_approval_delegation", sql: `SELECT public.create_approval_delegation('${TARGET_EMP_ID}', '${MANAGER_ID}', '2026-11-01', '2026-11-30', 'Susp test');` },
+      { name: "revoke_approval_delegation", sql: `SELECT public.revoke_approval_delegation('${dummyId}');` },
     ];
 
     for (const rpc of rpcCalls) {

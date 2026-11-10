@@ -69,6 +69,7 @@ const envConfig = vi.hoisted(() => {
 vi.mock("server-only", () => ({}));
 
 import { POST as inviteRoute } from "@/app/api/admin/users/invite/route";
+import { POST as bulkImportRoute } from "@/app/api/admin/users/bulk-import/route";
 import { POST as deactivateRoute } from "@/app/api/admin/users/deactivate/route";
 import { POST as resetMfaRoute } from "@/app/api/admin/users/reset-mfa/route";
 import { POST as forceSignOutRoute } from "@/app/api/admin/users/force-signout/route";
@@ -89,6 +90,7 @@ describe("Section 0c: Live Local-Stack Admin Routes Integration Suite", () => {
   let org2AdminAal2Token: string;
   let org1DisposableUserId: string;
   let invitedUserId: string | null = null;
+  let bulkImportedUserIds: string[] = [];
   let enrolledFactorIds: Array<{ userId: string; factorId: string }> = [];
 
   async function enrollAndElevateAal2(email: string, password: string): Promise<{
@@ -228,7 +230,7 @@ describe("Section 0c: Live Local-Stack Admin Routes Integration Suite", () => {
       await supabaseAdmin.auth.admin.mfa.deleteFactor({ userId: item.userId, id: item.factorId }).catch(() => {});
     }
     if (pg) {
-      const cleanupIds = [org2AdminId, org1DisposableUserId, invitedUserId].filter(Boolean) as string[];
+      const cleanupIds = [org2AdminId, org1DisposableUserId, invitedUserId, ...bulkImportedUserIds].filter(Boolean) as string[];
       for (const uid of cleanupIds) {
         await pg.query(`DELETE FROM public.audit_logs WHERE actor_id = '${uid}' OR record_id = '${uid}';`).catch(() => {});
         await pg.query(`DELETE FROM public.organization_members WHERE user_id = '${uid}';`).catch(() => {});
@@ -260,6 +262,13 @@ describe("Section 0c: Live Local-Stack Admin Routes Integration Suite", () => {
         url: "http://localhost:3000/api/admin/users/invite",
         method: "POST" as const,
         body: { email: `blocked-${Date.now()}@remotehr.io`, fullName: "Blocked User" },
+      },
+      {
+        name: "bulk-import",
+        fn: bulkImportRoute,
+        url: "http://localhost:3000/api/admin/users/bulk-import",
+        method: "POST" as const,
+        body: { csvText: `email,full_name\nblocked-${Date.now()}@remotehr.io,Blocked Bulk`, dryRun: true },
       },
       {
         name: "deactivate",
@@ -345,6 +354,19 @@ describe("Section 0c: Live Local-Stack Admin Routes Integration Suite", () => {
     );
     expect(org2AttExport.status).toBe(200);
     expect(await org2AttExport.text()).not.toContain("employee@remotehr.io");
+
+    // Org 2 bulk import preview referencing an Org 1 email must mark that row invalid without revealing tenant internals
+    const org2BulkHijack = await bulkImportRoute(
+      makeReq("http://localhost:3000/api/admin/users/bulk-import", "POST", org2AdminAal2Token, {
+        dryRun: true,
+        csvText: "email,full_name,role\nemployee@remotehr.io,Cross Tenant Target,employee",
+      })
+    );
+    expect(org2BulkHijack.status).toBe(200);
+    const bulkHijackJson = await org2BulkHijack.json();
+    expect(bulkHijackJson.validCount).toBe(0);
+    expect(bulkHijackJson.invalidCount).toBe(1);
+    expect(bulkHijackJson.rows[0].errors).toContain("Email already belongs to another organization");
   });
 
   it("Executes live same-tenant AAL2 Admin invite, reset-mfa, force-signout, deactivate, and audits export with audit trails", async () => {
@@ -414,6 +436,51 @@ describe("Section 0c: Live Local-Stack Admin Routes Integration Suite", () => {
     expect(expRes.headers.get("content-type")).toContain("text/csv");
     const csvText = await expRes.text();
     expect(csvText).toContain("MEMBER_DEACTIVATED");
+
+    // Live bulk import preview + commit for Org 1 AAL2 admin
+    const bulkEmail = `live-bulk-${Date.now()}@remotehr.io`;
+    const bulkCsv = [
+      "email,full_name,role,work_mode,timezone",
+      `${bulkEmail},Live Bulk Employee,employee,remote,Asia/Kolkata`,
+      `employee@remotehr.io,=FORMULA_INJECTION,employee,remote,Asia/Kolkata`,
+    ].join("\n");
+
+    const previewRes = await bulkImportRoute(
+      makeReq("http://localhost:3000/api/admin/users/bulk-import", "POST", org1AdminAal2Token, {
+        dryRun: true,
+        csvText: bulkCsv,
+      })
+    );
+    expect(previewRes.status).toBe(200);
+    const previewJson = await previewRes.json();
+    expect(previewJson.validCount).toBe(1);
+    expect(previewJson.invalidCount).toBe(1);
+    expect(previewJson.errorCsv).toContain("'=FORMULA_INJECTION");
+
+    const importRes = await bulkImportRoute(
+      makeReq("http://localhost:3000/api/admin/users/bulk-import", "POST", org1AdminAal2Token, {
+        dryRun: false,
+        csvText: `${bulkCsv.split("\n").slice(0, 2).join("\n")}`,
+      })
+    );
+    expect(importRes.status).toBe(200);
+    const importJson = await importRes.json();
+    expect(importJson.importedCount).toBe(1);
+
+    const bulkEmpRow = await pg.query(`SELECT id FROM public.employees WHERE email = $1;`, [bulkEmail]);
+    if (bulkEmpRow.rows[0]?.id) {
+      bulkImportedUserIds.push(bulkEmpRow.rows[0].id);
+    }
+    expect(bulkEmpRow.rows).toHaveLength(1);
+
+    const bulkAudit = await pg.query(
+      `SELECT action, new_data FROM public.audit_logs
+       WHERE organization_id = $1 AND action = 'BULK_EMPLOYEES_IMPORTED'
+       ORDER BY created_at DESC LIMIT 1;`,
+      [ORG_1_ID]
+    );
+    expect(bulkAudit.rows).toHaveLength(1);
+    expect(bulkAudit.rows[0].new_data.imported_count).toBe(1);
   });
 });
 

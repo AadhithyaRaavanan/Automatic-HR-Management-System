@@ -33,6 +33,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { EmptyState } from "@/components/shared/empty-state";
 import { toast } from "sonner";
 
 export default function HRLeavePage() {
@@ -80,10 +81,17 @@ export default function HRLeavePage() {
     return map;
   }, [allBalances]);
 
-  // Employee summary list
+  // Employee summary list & current user (for separation of duties UI state)
   const [employees, setEmployees] = React.useState<Array<{ id: string; full_name: string; email: string }>>([]);
+  const [currentUserId, setCurrentUserId] = React.useState<string | null>(null);
   React.useEffect(() => {
     async function loadEmps() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.user) {
+        setCurrentUserId(session.user.id);
+      }
       const { data } = await supabase
         .from("employees")
         .select("id, full_name, email")
@@ -92,7 +100,17 @@ export default function HRLeavePage() {
       if (data) setEmployees(data);
     }
     loadEmps();
-  }, []);
+  }, [supabase]);
+
+  const filteredEmployees = React.useMemo(
+    () =>
+      employees.filter(
+        (e) =>
+          e.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          e.email.toLowerCase().includes(searchQuery.toLowerCase())
+      ),
+    [employees, searchQuery]
+  );
 
   const handleReviewSubmit = async () => {
     if (!reviewTarget) return;
@@ -220,16 +238,15 @@ export default function HRLeavePage() {
         {activeTab === "queue" && (
           <div className="space-y-3">
             {pendingRequests.length === 0 ? (
-              <div className="bg-card border border-border-light rounded-2xl p-8 text-center text-text-tertiary">
-                <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-emerald-500" />
-                <h4 className="text-base font-bold text-text-primary">Approval queue is clear</h4>
-                <p className="text-xs text-text-secondary mt-1">
-                  There are no pending leave requests awaiting HR or administrative review.
-                </p>
-              </div>
+              <EmptyState
+                icon={<CheckCircle2 className="w-6 h-6 text-emerald-500" />}
+                title="Approval queue is clear"
+                description="There are no pending leave requests awaiting HR or administrative review."
+              />
             ) : (
               <div className="grid grid-cols-1 gap-3">
                 {pendingRequests.map((req) => {
+                  const isSelfRequest = Boolean(currentUserId && req.employee_id === currentUserId);
                   const empBal = balancesByEmp.get(req.employee_id) || {
                     casualLeft: 0,
                     casualUsed: 0,
@@ -287,6 +304,8 @@ export default function HRLeavePage() {
                       <div className="flex items-center gap-2 shrink-0">
                         <button
                           type="button"
+                          disabled={isSelfRequest}
+                          title={isSelfRequest ? "Separation of duties: cannot approve your own leave" : "Approve leave"}
                           onClick={() =>
                             setReviewTarget({
                               id: req.id,
@@ -294,7 +313,7 @@ export default function HRLeavePage() {
                               empName: req.employees?.full_name || "Employee",
                             })
                           }
-                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 shadow-sm transition-all cursor-pointer"
+                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold flex items-center gap-1 shadow-sm transition-all cursor-pointer"
                         >
                           <Check className="w-3.5 h-3.5" />
                           <span>Approve</span>
@@ -302,6 +321,8 @@ export default function HRLeavePage() {
 
                         <button
                           type="button"
+                          disabled={isSelfRequest}
+                          title={isSelfRequest ? "Separation of duties: cannot reject your own leave" : "Reject leave"}
                           onClick={() =>
                             setReviewTarget({
                               id: req.id,
@@ -309,7 +330,7 @@ export default function HRLeavePage() {
                               empName: req.employees?.full_name || "Employee",
                             })
                           }
-                          className="px-3 py-1.5 rounded-xl bg-card border border-rose-200 dark:border-rose-900 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                          className="px-3 py-1.5 rounded-xl bg-card border border-rose-200 dark:border-rose-900 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
                         >
                           <X className="w-3.5 h-3.5" />
                           <span>Reject</span>
@@ -355,12 +376,23 @@ export default function HRLeavePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-light/40">
-                  {employees
-                    .filter((e) =>
-                      e.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      e.email.toLowerCase().includes(searchQuery.toLowerCase())
-                    )
-                    .map((emp) => {
+                  {filteredEmployees.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-4">
+                        <EmptyState
+                          icon={<Users className="w-6 h-6" />}
+                          title="No matching employees"
+                          description={
+                            employees.length === 0
+                              ? "No active employee leave balances found in this organization."
+                              : "Try clearing or adjusting your employee search query."
+                          }
+                          className="border-none shadow-none"
+                        />
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredEmployees.map((emp) => {
                       const bal = balancesByEmp.get(emp.id) || {
                         casualLeft: 0,
                         casualUsed: 0,
@@ -389,7 +421,8 @@ export default function HRLeavePage() {
                           </td>
                         </tr>
                       );
-                    })}
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
@@ -412,34 +445,47 @@ export default function HRLeavePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-light/40">
-                  {requests.map((r) => (
-                    <tr key={r.id} className="hover:bg-card-subtle/50 transition-colors">
-                      <td className="py-3 px-4 font-bold text-text-primary">
-                        {r.employees?.full_name || "Employee"}
-                      </td>
-                      <td className="py-3 px-4 font-bold text-brand-purple">
-                        {r.leave_types?.name}
-                      </td>
-                      <td className="py-3 px-4 text-text-secondary">
-                        {r.start_date} to {r.end_date}
-                      </td>
-                      <td className="py-3 px-4 font-bold text-text-primary">{r.total_days}d</td>
-                      <td className="py-3 px-4 text-text-secondary max-w-xs truncate">{r.reason}</td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={cn(
-                            "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase",
-                            r.status === "approved" && "bg-emerald-50 text-emerald-600 border border-emerald-200",
-                            r.status === "pending" && "bg-amber-50 text-amber-600 border border-amber-200",
-                            r.status === "rejected" && "bg-rose-50 text-rose-600 border border-rose-200",
-                            r.status === "cancelled" && "bg-slate-100 text-slate-500 border border-slate-200"
-                          )}
-                        >
-                          {r.status}
-                        </span>
+                  {requests.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-4">
+                        <EmptyState
+                          icon={<CalendarDays className="w-6 h-6" />}
+                          title="No leave history recorded"
+                          description="Submitted, approved, rejected, and cancelled leave records will appear here."
+                          className="border-none shadow-none"
+                        />
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    requests.map((r) => (
+                      <tr key={r.id} className="hover:bg-card-subtle/50 transition-colors">
+                        <td className="py-3 px-4 font-bold text-text-primary">
+                          {r.employees?.full_name || "Employee"}
+                        </td>
+                        <td className="py-3 px-4 font-bold text-brand-purple">
+                          {r.leave_types?.name}
+                        </td>
+                        <td className="py-3 px-4 text-text-secondary">
+                          {r.start_date} to {r.end_date}
+                        </td>
+                        <td className="py-3 px-4 font-bold text-text-primary">{r.total_days}d</td>
+                        <td className="py-3 px-4 text-text-secondary max-w-xs truncate">{r.reason}</td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={cn(
+                              "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase",
+                              r.status === "approved" && "bg-emerald-50 text-emerald-600 border border-emerald-200",
+                              r.status === "pending" && "bg-amber-50 text-amber-600 border border-amber-200",
+                              r.status === "rejected" && "bg-rose-50 text-rose-600 border border-rose-200",
+                              r.status === "cancelled" && "bg-slate-100 text-slate-500 border border-slate-200"
+                            )}
+                          >
+                            {r.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

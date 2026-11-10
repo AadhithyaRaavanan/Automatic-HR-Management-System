@@ -3,9 +3,10 @@
 import * as React from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { createClient } from "@/lib/supabase/client";
-import { CalendarClock, Plus, Edit, Trash2, Clock, UserCheck, Calendar } from "lucide-react";
+import { CalendarClock, Plus, Edit, Trash2, Clock, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import { EmptyState } from "@/components/shared/empty-state";
 
 interface ShiftTemplateItem {
   id: string;
@@ -63,11 +64,73 @@ export default function ShiftsAdminPage() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   // Assignment Form State
+  const [employees, setEmployees] = React.useState<Array<{ id: string; full_name: string; email: string }>>([]);
   const [assignEmployeeId, setAssignEmployeeId] = React.useState("");
   const [assignShiftId, setAssignShiftId] = React.useState("");
   const [effectiveFrom, setEffectiveFrom] = React.useState(new Date().toISOString().slice(0, 10));
+  const [isLoading, setIsLoading] = React.useState(true);
 
-  const supabase = createClient();
+  const supabase = React.useMemo(() => createClient(), []);
+
+  const loadShiftsAndEmployees = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user) {
+        if (isDemoModeEnabled()) {
+          setShifts(mockShifts);
+          setEmployees([
+            { id: "00000000-0000-0000-0000-000000000004", full_name: "Alex Rivera", email: "employee@remotehr.local" },
+            { id: "00000000-0000-0000-0000-000000000003", full_name: "Marcus Vance", email: "manager@remotehr.local" },
+          ]);
+          setAssignEmployeeId("00000000-0000-0000-0000-000000000004");
+        }
+        return;
+      }
+
+      const [{ data: shiftData, error }, { data: empData }] = await Promise.all([
+        (supabase as any)
+          .from("shift_templates")
+          .select("id, name, code, start_time, end_time, break_minutes, grace_minutes")
+          .order("name"),
+        (supabase as any)
+          .from("employees")
+          .select("id, full_name, email")
+          .eq("status", "active")
+          .order("full_name"),
+      ]);
+
+      if (!error && shiftData) {
+        setShifts(
+          shiftData.map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            code: s.code,
+            startTime: s.start_time,
+            endTime: s.end_time,
+            breakMinutes: Number(s.break_minutes || 0),
+            graceMinutes: Number(s.grace_minutes || 15),
+          }))
+        );
+      }
+      if (empData) {
+        setEmployees(empData);
+        if (empData.length > 0 && !assignEmployeeId) {
+          setAssignEmployeeId(empData[0].id);
+        }
+      }
+    } catch {
+      if (isDemoModeEnabled()) setShifts(mockShifts);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [supabase, assignEmployeeId]);
+
+  React.useEffect(() => {
+    loadShiftsAndEmployees();
+  }, [loadShiftsAndEmployees]);
 
   const handleOpenAdd = () => {
     setEditingShift(null);
@@ -154,32 +217,38 @@ export default function ShiftsAdminPage() {
       }
       setShiftModalOpen(false);
     } catch (err: any) {
-      // Local mode fallback
-      if (editingShift) {
-        setShifts((prev) =>
-          prev.map((s) =>
-            s.id === editingShift.id
-              ? { ...s, name, code, startTime: fmtStart, endTime: fmtEnd, breakMinutes, graceMinutes }
-              : s
-          )
-        );
-        toast.success(`Shift template "${name}" updated (local mode).`);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user && isDemoModeEnabled()) {
+        if (editingShift) {
+          setShifts((prev) =>
+            prev.map((s) =>
+              s.id === editingShift.id
+                ? { ...s, name, code, startTime: fmtStart, endTime: fmtEnd, breakMinutes, graceMinutes }
+                : s
+            )
+          );
+          toast.success(`Shift template "${name}" updated (demo mode).`);
+        } else {
+          setShifts((prev) => [
+            ...prev,
+            {
+              id: `shift-${Date.now()}`,
+              name,
+              code,
+              startTime: fmtStart,
+              endTime: fmtEnd,
+              breakMinutes,
+              graceMinutes,
+            },
+          ]);
+          toast.success(`Shift template "${name}" created (demo mode).`);
+        }
+        setShiftModalOpen(false);
       } else {
-        setShifts((prev) => [
-          ...prev,
-          {
-            id: `shift-${Date.now()}`,
-            name,
-            code,
-            startTime: fmtStart,
-            endTime: fmtEnd,
-            breakMinutes,
-            graceMinutes,
-          },
-        ]);
-        toast.success(`Shift template "${name}" created (local mode).`);
+        toast.error(err?.message || "Failed to save shift template");
       }
-      setShiftModalOpen(false);
     } finally {
       setIsSubmitting(false);
     }
@@ -197,21 +266,28 @@ export default function ShiftsAdminPage() {
       toast.success(`Shift ${shift.name} deleted.`);
       setShifts((prev) => prev.filter((s) => s.id !== shift.id));
     } catch (err: any) {
-      setShifts((prev) => prev.filter((s) => s.id !== shift.id));
-      toast.success(`Shift ${shift.name} deleted (local mode).`);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user && isDemoModeEnabled()) {
+        setShifts((prev) => prev.filter((s) => s.id !== shift.id));
+        toast.success(`Shift ${shift.name} deleted (demo mode).`);
+      } else {
+        toast.error(err?.message || "Failed to delete shift template");
+      }
     }
   };
 
   const handleAssignSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!assignShiftId) {
-      toast.error("Please select a shift.");
+    if (!assignShiftId || !assignEmployeeId) {
+      toast.error("Please select an employee and shift template.");
       return;
     }
     setIsSubmitting(true);
     try {
       const { error } = await (supabase.rpc as any)("admin_assign_shift", {
-        p_employee_id: assignEmployeeId || "00000000-0000-0000-0000-000000000004",
+        p_employee_id: assignEmployeeId,
         p_shift_template_id: assignShiftId,
         p_effective_from: effectiveFrom,
         p_effective_to: null,
@@ -220,8 +296,15 @@ export default function ShiftsAdminPage() {
       toast.success("Shift assigned successfully!");
       setAssignModalOpen(false);
     } catch (err: any) {
-      toast.success("Shift assigned successfully (local mode)!");
-      setAssignModalOpen(false);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user && isDemoModeEnabled()) {
+        toast.success("Shift assigned successfully (demo mode)!");
+        setAssignModalOpen(false);
+      } else {
+        toast.error(err?.message || "Failed to assign shift");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -260,20 +343,43 @@ export default function ShiftsAdminPage() {
 
         {/* Shift Templates Table */}
         <div className="bg-white dark:bg-slate-900 rounded-[28px] border border-border-light dark:border-slate-800 shadow-card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-card-subtle dark:bg-slate-800/50 text-text-secondary dark:text-slate-400 font-semibold border-b border-border-light dark:border-slate-800">
-                <tr>
-                  <th className="py-3.5 px-5">Shift Name</th>
-                  <th className="py-3.5 px-4">Code</th>
-                  <th className="py-3.5 px-4">Working Window</th>
-                  <th className="py-3.5 px-4">Break Allowance</th>
-                  <th className="py-3.5 px-4">Grace Window</th>
-                  <th className="py-3.5 px-5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border-light dark:divide-slate-800">
-                {shifts.map((s) => (
+          {shifts.length === 0 ? (
+            <EmptyState
+              icon={<CalendarClock className="w-6 h-6" />}
+              title={isLoading ? "Loading shift templates..." : "No shift templates configured"}
+              description={
+                isLoading
+                  ? "Retrieving shift schedules..."
+                  : "Create shift windows with break and grace allowances before assigning them to employees."
+              }
+              action={
+                !isLoading && (
+                  <button
+                    onClick={handleOpenAdd}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-purple text-white text-xs font-semibold"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    New Shift Template
+                  </button>
+                )
+              }
+              className="border-none rounded-none shadow-none"
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-card-subtle dark:bg-slate-800/50 text-text-secondary dark:text-slate-400 font-semibold border-b border-border-light dark:border-slate-800">
+                  <tr>
+                    <th className="py-3.5 px-5">Shift Name</th>
+                    <th className="py-3.5 px-4">Code</th>
+                    <th className="py-3.5 px-4">Working Window</th>
+                    <th className="py-3.5 px-4">Break Allowance</th>
+                    <th className="py-3.5 px-4">Grace Window</th>
+                    <th className="py-3.5 px-5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-light dark:divide-slate-800">
+                  {shifts.map((s) => (
                   <tr key={s.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                     <td className="py-4 px-5">
                       <div className="flex items-center gap-2.5">
@@ -319,10 +425,11 @@ export default function ShiftsAdminPage() {
                       </button>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Create/Edit Template Modal */}
@@ -475,9 +582,15 @@ export default function ShiftsAdminPage() {
                     onChange={(e) => setAssignEmployeeId(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm text-text-primary dark:text-white"
                   >
-                    <option value="00000000-0000-0000-0000-000000000004">Alex Rivera (employee@remotehr.local)</option>
-                    <option value="00000000-0000-0000-0000-000000000003">Marcus Vance (manager@remotehr.local)</option>
-                    <option value="00000000-0000-0000-0000-000000000002">Sarah Jenkins (hr@remotehr.local)</option>
+                    {employees.length === 0 ? (
+                      <option value="">No active employees loaded</option>
+                    ) : (
+                      employees.map((emp) => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.full_name} ({emp.email})
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
 

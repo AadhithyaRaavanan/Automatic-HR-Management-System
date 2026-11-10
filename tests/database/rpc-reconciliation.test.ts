@@ -162,6 +162,22 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
     role: "authenticated",
     tests: ["grants-snapshot.test.ts", "intra-tenant-authorization.test.ts", "suspended-member-isolation.test.ts"],
   },
+  "complete_onboarding()": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section1-hr-tools.test.ts"],
+  },
+  "create_approval_delegation(uuid,uuid,date,date,text)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "leave-rpcs.test.ts", "suspended-member-isolation.test.ts", "section1-hr-tools.test.ts"],
+  },
+  "create_holiday(date,text,text,text,text)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section1-hr-tools.test.ts"],
+  },
+  "delete_holiday(uuid)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section1-hr-tools.test.ts"],
+  },
   "cron_auto_checkout()": {
     role: "service_role",
     tests: ["grants-snapshot.test.ts", "schema-meta.test.ts"],
@@ -206,9 +222,25 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
     role: "authenticated",
     tests: ["leave-rpcs.test.ts", "suspended-member-isolation.test.ts"],
   },
+  "hr_correct_attendance(uuid,date,jsonb,text)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section1-hr-tools.test.ts"],
+  },
+  "import_holiday_template(text,integer)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section1-hr-tools.test.ts"],
+  },
+  "is_active_delegated_approver(uuid)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "policy-inventory.test.ts", "suspended-member-isolation.test.ts", "section1-hr-tools.test.ts"],
+  },
   "is_active_org_member()": {
     role: "authenticated",
     tests: ["policy-inventory.test.ts", "suspended-member-isolation.test.ts"],
+  },
+  "get_month_close_checklist(integer,integer)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section1-hr-tools.test.ts"],
   },
   "lock_month(integer,integer)": {
     role: "authenticated",
@@ -242,6 +274,14 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
     role: "authenticated",
     tests: ["leave-rpcs.test.ts", "suspended-member-isolation.test.ts"],
   },
+  "revoke_approval_delegation(uuid)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "leave-rpcs.test.ts", "suspended-member-isolation.test.ts", "section1-hr-tools.test.ts"],
+  },
+  "trg_broadcast_notification()": {
+    role: "trigger",
+    tests: ["grants-snapshot.test.ts", "schema-meta.test.ts", "section1-hr-tools.test.ts"],
+  },
   "trg_derive_audit_log_org_id()": {
     role: "trigger",
     tests: ["grants-snapshot.test.ts", "cross-tenant-isolation.test.ts"],
@@ -262,6 +302,10 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
     role: "trigger",
     tests: ["grants-snapshot.test.ts", "cross-tenant-isolation.test.ts"],
   },
+  "trg_notify_regularization_submitted()": {
+    role: "trigger",
+    tests: ["grants-snapshot.test.ts", "schema-meta.test.ts", "section1-hr-tools.test.ts"],
+  },
   "trg_protect_employee_fields()": {
     role: "trigger",
     tests: ["grants-snapshot.test.ts", "intra-tenant-authorization.test.ts"],
@@ -274,9 +318,13 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
     role: "trigger",
     tests: ["grants-snapshot.test.ts"],
   },
-  "unlock_month(integer,integer)": {
+  "unlock_month(integer,integer,text)": {
     role: "authenticated",
-    tests: ["intra-tenant-authorization.test.ts", "phase3-rpc-matrix.test.ts", "suspended-member-isolation.test.ts"],
+    tests: ["intra-tenant-authorization.test.ts", "phase3-rpc-matrix.test.ts", "suspended-member-isolation.test.ts", "section1-hr-tools.test.ts"],
+  },
+  "update_holiday(uuid,date,text,text,text,text,boolean)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section1-hr-tools.test.ts"],
   },
 };
 

@@ -51,6 +51,7 @@ const ORG_ID_EXEMPTIONS = new Set([
   "organizations",
   "auth_rate_limits",
   "kiosk_credentials",
+  "holiday_templates", // Global shared holiday template catalog (copied per org via import_holiday_template; no tenant data)
 ]);
 
 describe("PostgreSQL Schema Meta-Test Suite", () => {
@@ -211,56 +212,73 @@ describe("PostgreSQL Schema Meta-Test Suite", () => {
 
   it("verifies organization_id derivation triggers automatically derive org in system context with null auth.uid()", async () => {
 
-    const empRes = await client.query(`SELECT id, organization_id FROM public.employees LIMIT 1;`);
+    const empRes = await client.query(`
+      SELECT id, organization_id
+      FROM public.employees
+      ORDER BY created_at ASC, id ASC
+      LIMIT 1;
+    `);
     expect(empRes.rows.length).toBeGreaterThan(0);
     const emp = empRes.rows[0];
 
-    // 1. attendance_sessions derivation
-    const sessionRes = await client.query(`
-      INSERT INTO public.attendance_sessions (employee_id, work_date, check_in_at, source)
-      VALUES ($1, '2026-11-20', '2026-11-20 09:00:00+00', 'manual')
-      RETURNING id, organization_id;
-    `, [emp.id]);
-    expect(sessionRes.rows[0].organization_id).toBe(emp.organization_id);
+    let auditId: string | null = null;
+    let notifId: string | null = null;
+    let reqId: string | null = null;
+    let sessionId: string | null = null;
 
-    // 2. attendance_days derivation
-    const dayRes = await client.query(`
-      INSERT INTO public.attendance_days (employee_id, work_date, total_minutes, status)
-      VALUES ($1, '2026-11-20', 480, 'present')
-      RETURNING employee_id, work_date, organization_id;
-    `, [emp.id]);
-    expect(dayRes.rows[0].organization_id).toBe(emp.organization_id);
+    try {
+      // 1. attendance_sessions derivation (closed session avoids idx_single_open_session conflicts)
+      const sessionRes = await client.query(`
+        INSERT INTO public.attendance_sessions (employee_id, work_date, check_in_at, check_out_at, source)
+        VALUES ($1, '2026-11-20', '2026-11-20 09:00:00+00', '2026-11-20 17:00:00+00', 'manual')
+        RETURNING id, organization_id;
+      `, [emp.id]);
+      sessionId = sessionRes.rows[0].id;
+      expect(sessionRes.rows[0].organization_id).toBe(emp.organization_id);
 
-    // 3. regularization_requests derivation
-    const reqRes = await client.query(`
-      INSERT INTO public.regularization_requests (employee_id, work_date, requested_in, requested_out, reason)
-      VALUES ($1, '2026-11-20', '2026-11-20 09:00:00+00', '2026-11-20 17:00:00+00', 'Trigger test')
-      RETURNING id, organization_id;
-    `, [emp.id]);
-    expect(reqRes.rows[0].organization_id).toBe(emp.organization_id);
+      // 2. attendance_days derivation
+      const dayRes = await client.query(`
+        INSERT INTO public.attendance_days (employee_id, work_date, total_minutes, status)
+        VALUES ($1, '2026-11-20', 480, 'present')
+        ON CONFLICT (employee_id, work_date) DO UPDATE SET total_minutes = EXCLUDED.total_minutes
+        RETURNING employee_id, work_date, organization_id;
+      `, [emp.id]);
+      expect(dayRes.rows[0].organization_id).toBe(emp.organization_id);
 
-    // 4. notifications derivation
-    const notifRes = await client.query(`
-      INSERT INTO public.notifications (user_id, title, body, type)
-      VALUES ($1, 'Test Notif', 'Test Body', 'reminder')
-      RETURNING id, organization_id;
-    `, [emp.id]);
-    expect(notifRes.rows[0].organization_id).toBe(emp.organization_id);
+      // 3. regularization_requests derivation
+      const reqRes = await client.query(`
+        INSERT INTO public.regularization_requests (employee_id, work_date, requested_in, requested_out, reason)
+        VALUES ($1, '2026-11-20', '2026-11-20 09:00:00+00', '2026-11-20 17:00:00+00', 'Trigger test')
+        RETURNING id, organization_id;
+      `, [emp.id]);
+      reqId = reqRes.rows[0].id;
+      expect(reqRes.rows[0].organization_id).toBe(emp.organization_id);
 
-    // 5. audit_logs derivation
-    const auditRes = await client.query(`
-      INSERT INTO public.audit_logs (actor_id, action, table_name, record_id)
-      VALUES ($1, 'TEST_TRIGGER', 'test', gen_random_uuid())
-      RETURNING id, organization_id;
-    `, [emp.id]);
-    expect(auditRes.rows[0].organization_id).toBe(emp.organization_id);
+      // 4. notifications derivation
+      const notifRes = await client.query(`
+        INSERT INTO public.notifications (user_id, title, body, type)
+        VALUES ($1, 'Test Notif', 'Test Body', 'reminder')
+        RETURNING id, organization_id;
+      `, [emp.id]);
+      notifId = notifRes.rows[0].id;
+      expect(notifRes.rows[0].organization_id).toBe(emp.organization_id);
 
-    // Cleanup test rows
-    await client.query(`DELETE FROM public.audit_logs WHERE id = $1`, [auditRes.rows[0].id]);
-    await client.query(`DELETE FROM public.notifications WHERE id = $1`, [notifRes.rows[0].id]);
-    await client.query(`DELETE FROM public.regularization_requests WHERE id = $1`, [reqRes.rows[0].id]);
-    await client.query(`DELETE FROM public.attendance_sessions WHERE id = $1`, [sessionRes.rows[0].id]);
-    await client.query(`DELETE FROM public.attendance_days WHERE employee_id = $1 AND work_date = '2026-11-20'`, [emp.id]);
+      // 5. audit_logs derivation
+      const auditRes = await client.query(`
+        INSERT INTO public.audit_logs (actor_id, action, table_name, record_id)
+        VALUES ($1, 'TEST_TRIGGER', 'test', gen_random_uuid())
+        RETURNING id, organization_id;
+      `, [emp.id]);
+      auditId = auditRes.rows[0].id;
+      expect(auditRes.rows[0].organization_id).toBe(emp.organization_id);
+    } finally {
+      // Cleanup test rows
+      if (auditId) await client.query(`DELETE FROM public.audit_logs WHERE id = $1`, [auditId]);
+      if (notifId) await client.query(`DELETE FROM public.notifications WHERE id = $1`, [notifId]);
+      if (reqId) await client.query(`DELETE FROM public.regularization_requests WHERE id = $1`, [reqId]);
+      if (sessionId) await client.query(`DELETE FROM public.attendance_sessions WHERE id = $1`, [sessionId]);
+      await client.query(`DELETE FROM public.attendance_days WHERE employee_id = $1 AND work_date = '2026-11-20'`, [emp.id]);
+    }
   });
 
   it("verifies admin_create_organization access control: service_role succeeds; authenticated/anon are denied", async () => {

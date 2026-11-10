@@ -286,6 +286,19 @@ VALUES
 )
 ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name;
 
+UPDATE public.employees
+SET onboarding_completed_at = COALESCE(onboarding_completed_at, NOW())
+WHERE id IN (
+    '00000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0000-000000000003',
+    '00000000-0000-0000-0000-000000000004',
+    '00000000-0000-0000-0000-000000000005',
+    '00000000-0000-0000-0000-000000000006',
+    '00000000-0000-0000-0000-000000000007',
+    '00000000-0000-0000-0000-000000000008'
+);
+
 -- ============================================================================
 -- 4. ATTENDANCE POLICY
 -- ============================================================================
@@ -305,31 +318,36 @@ INSERT INTO public.attendance_policies (
 -- 5. TAMIL NADU & INDIAN GOVERNMENT GAZETTED PUBLIC HOLIDAYS (2026)
 -- ============================================================================
 
-INSERT INTO public.holidays (organization_id, date, name, region)
+INSERT INTO public.holidays (organization_id, date, name, local_name, region, holiday_type, is_active)
 VALUES 
-    ('00000000-0000-0000-0000-000000000001', '2026-01-01', 'New Year''s Day (ஆங்கிலப் புத்தாண்டு)', 'GLOBAL'),
-    ('00000000-0000-0000-0000-000000000001', '2026-01-14', 'Bhogi Festival (போகிப் பண்டிகை)', 'TN'),
-    ('00000000-0000-0000-0000-000000000001', '2026-01-15', 'Thai Pongal (தைப்பொங்கல்)', 'TN'),
-    ('00000000-0000-0000-0000-000000000001', '2026-01-16', 'Thiruvalluvar Day / Mattu Pongal (திருவள்ளுவர் தினம் / மாட்டுப் பொங்கல்)', 'TN'),
-    ('00000000-0000-0000-0000-000000000001', '2026-01-17', 'Uzhavar Thirunal (உழவர் திருநாள்)', 'TN'),
-    ('00000000-0000-0000-0000-000000000001', '2026-01-26', 'Republic Day (குடியரசு தினம்)', 'IN'),
-    ('00000000-0000-0000-0000-000000000001', '2026-02-01', 'Thaipusam (தைப்பூசம்)', 'TN'),
-    ('00000000-0000-0000-0000-000000000001', '2026-03-20', 'Ramzan / Eid-ul-Fitr (ரம்ஜான் பண்டிகை)', 'IN'),
-    ('00000000-0000-0000-0000-000000000001', '2026-04-03', 'Good Friday (புனித வெள்ளி)', 'GLOBAL'),
-    ('00000000-0000-0000-0000-000000000001', '2026-04-14', 'Tamil New Year & Dr. Ambedkar Jayanti (தமிழ்ப் புத்தாண்டு / அம்பேத்கர் ஜெயந்தி)', 'TN'),
-    ('00000000-0000-0000-0000-000000000001', '2026-05-01', 'May Day / Labour Day (உழைப்பாளர் தினம் - மே தினம்)', 'IN'),
-    ('00000000-0000-0000-0000-000000000001', '2026-05-27', 'Bakrid / Eid-al-Adha (பக்ரீத் பண்டிகை)', 'IN'),
-    ('00000000-0000-0000-0000-000000000001', '2026-06-26', 'Muharram (மொஹரம் பண்டிகை)', 'IN'),
-    ('00000000-0000-0000-0000-000000000001', '2026-08-15', 'Independence Day (சுதந்திர தினம்)', 'IN'),
-    ('00000000-0000-0000-0000-000000000001', '2026-09-04', 'Krishna Jayanthi / Gokulashtami (கிருஷ்ண ஜெயந்தி)', 'TN'),
-    ('00000000-0000-0000-0000-000000000001', '2026-09-14', 'Vinayakar Chathurthi (விநாயகர் சதுர்த்தி)', 'TN'),
-    ('00000000-0000-0000-0000-000000000001', '2026-09-25', 'Milad-un-Nabi (நபிகள் நாயகம் பிறந்த நாள்)', 'IN'),
-    ('00000000-0000-0000-0000-000000000001', '2026-10-02', 'Gandhi Jayanti (காந்தி ஜெயந்தி)', 'IN'),
-    ('00000000-0000-0000-0000-000000000001', '2026-10-19', 'Ayutha Pooja / Saraswathi Pooja (ஆயுத பூஜை)', 'TN'),
-    ('00000000-0000-0000-0000-000000000001', '2026-10-20', 'Vijaya Dasami (விஜயதசமி)', 'TN'),
-    ('00000000-0000-0000-0000-000000000001', '2026-11-08', 'Deepavali (தீபாவளி பண்டிகை)', 'TN'),
-    ('00000000-0000-0000-0000-000000000001', '2026-12-25', 'Christmas Day (கிறிஸ்துமஸ் பண்டிகை)', 'GLOBAL')
-ON CONFLICT (organization_id, date) DO UPDATE SET name = EXCLUDED.name, region = EXCLUDED.region;
+    ('00000000-0000-0000-0000-000000000001', '2026-01-01', 'New Year''s Day', 'ஆங்கிலப் புத்தாண்டு', 'GLOBAL', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-01-14', 'Bhogi Festival', 'போகிப் பண்டிகை', 'TN', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-01-15', 'Thai Pongal', 'தைப்பொங்கல்', 'TN', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-01-16', 'Thiruvalluvar Day / Mattu Pongal', 'திருவள்ளுவர் தினம் / மாட்டுப் பொங்கல்', 'TN', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-01-17', 'Uzhavar Thirunal', 'உழவர் திருநாள்', 'TN', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-01-26', 'Republic Day', 'குடியரசு தினம்', 'IN', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-02-01', 'Thaipusam', 'தைப்பூசம்', 'TN', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-03-20', 'Ramzan / Eid-ul-Fitr', 'ரம்ஜான் பண்டிகை', 'IN', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-04-03', 'Good Friday', 'புனித வெள்ளி', 'GLOBAL', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-04-14', 'Tamil New Year & Dr. Ambedkar Jayanti', 'தமிழ்ப் புத்தாண்டு / அம்பேத்கர் ஜெயந்தி', 'TN', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-05-01', 'May Day / Labour Day', 'உழைப்பாளர் தினம் - மே தினம்', 'IN', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-05-27', 'Bakrid / Eid-al-Adha', 'பக்ரீத் பண்டிகை', 'IN', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-06-26', 'Muharram', 'மொஹரம் பண்டிகை', 'IN', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-08-15', 'Independence Day', 'சுதந்திர தினம்', 'IN', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-09-04', 'Krishna Jayanthi / Gokulashtami', 'கிருஷ்ண ஜெயந்தி', 'TN', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-09-14', 'Vinayakar Chathurthi', 'விநாயகர் சதுர்த்தி', 'TN', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-09-25', 'Milad-un-Nabi', 'நபிகள் நாயகம் பிறந்த நாள்', 'IN', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-10-02', 'Gandhi Jayanti', 'காந்தி ஜெயந்தி', 'IN', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-10-19', 'Ayutha Pooja / Saraswathi Pooja', 'ஆயுத பூஜை', 'TN', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-10-20', 'Vijaya Dasami', 'விஜயதசமி', 'TN', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-11-08', 'Deepavali', 'தீபாவளி பண்டிகை', 'TN', 'public', TRUE),
+    ('00000000-0000-0000-0000-000000000001', '2026-12-25', 'Christmas Day', 'கிறிஸ்துமஸ் பண்டிகை', 'GLOBAL', 'public', TRUE)
+ON CONFLICT (organization_id, date) DO UPDATE SET
+    name = EXCLUDED.name,
+    local_name = EXCLUDED.local_name,
+    region = EXCLUDED.region,
+    holiday_type = EXCLUDED.holiday_type,
+    is_active = EXCLUDED.is_active;
 
 -- ============================================================================
 -- 6. HISTORICAL ATTENDANCE SESSIONS & ATTENDANCE DAYS (Past 30 Days)
@@ -500,13 +518,14 @@ INSERT INTO public.regularization_requests (
 -- 8. NOTIFICATIONS
 -- ============================================================================
 
-INSERT INTO public.notifications (user_id, type, title, body, read_at, created_at)
+INSERT INTO public.notifications (user_id, type, title, body, link, read_at, created_at)
 VALUES 
 (
     '00000000-0000-0000-0000-000000000004',
     'request_status',
     'Regularization Approved',
     'Alex Morgan approved your attendance correction for Brooklyn storm day.',
+    '/attendance',
     NOW() - INTERVAL '2 days',
     NOW() - INTERVAL '3 days'
 ),
@@ -515,6 +534,7 @@ VALUES
     'policy_update',
     'Holiday Calendar Published',
     'The 2026 Q4 holiday schedule has been finalized. Check the Holidays tab.',
+    '/holidays',
     NULL,
     NOW() - INTERVAL '1 day'
 ),
@@ -523,6 +543,7 @@ VALUES
     'reminder',
     'Pending Regularization Queue',
     'You have 1 pending regularization request awaiting review from Eleanor Pena.',
+    '/requests',
     NULL,
     NOW() - INTERVAL '4 hours'
 );

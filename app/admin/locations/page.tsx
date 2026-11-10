@@ -3,9 +3,10 @@
 import * as React from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { createClient } from "@/lib/supabase/client";
-import { MapPin, Plus, Edit, Trash2, Globe, Clock, Building } from "lucide-react";
+import { MapPin, Plus, Edit, Trash2, Globe, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import { EmptyState } from "@/components/shared/empty-state";
 
 interface LocationItem {
   id: string;
@@ -58,8 +59,49 @@ export default function LocationsAdminPage() {
   const [timezone, setTimezone] = React.useState("Asia/Kolkata");
   const [workingHours, setWorkingHours] = React.useState(480);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(true);
 
-  const supabase = createClient();
+  const supabase = React.useMemo(() => createClient(), []);
+
+  const loadLocations = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user) {
+        if (isDemoModeEnabled()) setLocations(mockLocations);
+        return;
+      }
+
+      const { data, error } = await (supabase as any)
+        .from("locations")
+        .select("id, name, code, address, timezone, working_hours, weekly_off_days")
+        .order("name");
+
+      if (!error && data) {
+        setLocations(
+          data.map((l: any) => ({
+            id: l.id,
+            name: l.name,
+            code: l.code,
+            address: l.address || "",
+            timezone: l.timezone || "UTC",
+            workingHours: Number(l.working_hours || 480),
+            weeklyOffDays: Array.isArray(l.weekly_off_days) ? l.weekly_off_days : [0, 6],
+          }))
+        );
+      }
+    } catch {
+      if (isDemoModeEnabled()) setLocations(mockLocations);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [supabase]);
+
+  React.useEffect(() => {
+    loadLocations();
+  }, [loadLocations]);
 
   const handleOpenAdd = () => {
     setEditingLoc(null);
@@ -136,32 +178,38 @@ export default function LocationsAdminPage() {
       }
       setModalOpen(false);
     } catch (err: any) {
-      // Local mode fallback
-      if (editingLoc) {
-        setLocations((prev) =>
-          prev.map((l) =>
-            l.id === editingLoc.id
-              ? { ...l, name, code, address, timezone, workingHours }
-              : l
-          )
-        );
-        toast.success(`Location "${name}" updated (local mode).`);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user && isDemoModeEnabled()) {
+        if (editingLoc) {
+          setLocations((prev) =>
+            prev.map((l) =>
+              l.id === editingLoc.id
+                ? { ...l, name, code, address, timezone, workingHours }
+                : l
+            )
+          );
+          toast.success(`Location "${name}" updated (demo mode).`);
+        } else {
+          setLocations((prev) => [
+            ...prev,
+            {
+              id: `loc-${Date.now()}`,
+              name,
+              code,
+              address,
+              timezone,
+              workingHours,
+              weeklyOffDays: [0, 6],
+            },
+          ]);
+          toast.success(`Location "${name}" created (demo mode).`);
+        }
+        setModalOpen(false);
       } else {
-        setLocations((prev) => [
-          ...prev,
-          {
-            id: `loc-${Date.now()}`,
-            name,
-            code,
-            address,
-            timezone,
-            workingHours,
-            weeklyOffDays: [0, 6],
-          },
-        ]);
-        toast.success(`Location "${name}" created (local mode).`);
+        toast.error(err?.message || "Failed to save location");
       }
-      setModalOpen(false);
     } finally {
       setIsSubmitting(false);
     }
@@ -179,8 +227,15 @@ export default function LocationsAdminPage() {
       toast.success(`Location ${loc.name} deleted.`);
       setLocations((prev) => prev.filter((l) => l.id !== loc.id));
     } catch (err: any) {
-      setLocations((prev) => prev.filter((l) => l.id !== loc.id));
-      toast.success(`Location ${loc.name} deleted (local mode).`);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user && isDemoModeEnabled()) {
+        setLocations((prev) => prev.filter((l) => l.id !== loc.id));
+        toast.success(`Location ${loc.name} deleted (demo mode).`);
+      } else {
+        toast.error(err?.message || "Failed to delete location");
+      }
     }
   };
 
@@ -207,8 +262,30 @@ export default function LocationsAdminPage() {
         </section>
 
         {/* Locations Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {locations.map((loc) => (
+        {locations.length === 0 ? (
+          <EmptyState
+            icon={<MapPin className="w-6 h-6" />}
+            title={isLoading ? "Loading locations..." : "No locations added yet"}
+            description={
+              isLoading
+                ? "Fetching office hubs and timezones..."
+                : "Add your physical offices or regional hubs with default working hours and timezones."
+            }
+            action={
+              !isLoading && (
+                <button
+                  onClick={handleOpenAdd}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-purple text-white text-xs font-semibold"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Location
+                </button>
+              )
+            }
+          />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {locations.map((loc) => (
             <div
               key={loc.id}
               className="bg-white dark:bg-slate-900 rounded-[28px] p-6 border border-border-light dark:border-slate-800 shadow-card flex flex-col justify-between space-y-4 hover:shadow-shell transition-all"
@@ -267,8 +344,9 @@ export default function LocationsAdminPage() {
                 </button>
               </div>
             </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Add/Edit Modal */}
         {modalOpen && (

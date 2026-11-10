@@ -700,7 +700,7 @@ describe("Intra-Tenant Authorization & Privilege Boundary Suite", () => {
         expect(fulfilled.length).toBe(1);
         expect(rejected.length).toBe(1);
         expect((rejected[0] as PromiseRejectedResult).reason.message).toMatch(
-          /(Last admin protection|Caller is no longer an active administrator)/i
+          /(Last admin protection|Caller is no longer an active administrator|Only active administrators can update member roles)/i
         );
 
         // Assert at least one active admin remains in the organization
@@ -1220,7 +1220,7 @@ describe("Intra-Tenant Authorization & Privilege Boundary Suite", () => {
         "admin",
         "aal2",
         async (c) => {
-          return c.query(`SELECT public.unlock_month(2026, 12);`);
+          return c.query(`SELECT public.unlock_month(2026, 12, 'Test unlock reason');`);
         },
         { commit: true }
       );

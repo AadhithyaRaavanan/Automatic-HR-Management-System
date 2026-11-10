@@ -3,11 +3,12 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Search, Bell, Settings, Download, Plus, LogOut } from "lucide-react";
+import { Search, Bell, Settings, Download, Plus, LogOut, UserCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { CommandPalette } from "@/components/shared/command-palette";
 import { NotificationCenter } from "@/components/shared/notification-center";
+import { useNotifications } from "@/features/notifications/hooks/use-notifications";
 import { cn } from "@/lib/utils";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import { toast } from "sonner";
@@ -30,6 +31,7 @@ export function TopNavBar({
   const supabase = createClient();
   const [commandOpen, setCommandOpen] = React.useState(false);
   const [notificationsOpen, setNotificationsOpen] = React.useState(false);
+  const { unreadCount } = useNotifications();
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -50,6 +52,8 @@ export function TopNavBar({
     { label: "Attendance", href: "/attendance" },
     { label: "Leave", href: "/leave" },
     { label: "Requests", href: "/requests" },
+    { label: "Holidays", href: "/holidays" },
+    { label: "Profile", href: "/profile" },
     { label: "Leave Hub", href: "/hr/leave", requiresHR: true },
     { label: "Team", href: "/team", requiresManager: true },
     { label: "Reports", href: "/reports", requiresHR: true },
@@ -132,18 +136,48 @@ export function TopNavBar({
           <button
             type="button"
             title="Notifications"
+            aria-label={
+              unreadCount > 0
+                ? `Notifications (${unreadCount} unread)`
+                : "Notifications"
+            }
             onClick={() => setNotificationsOpen(true)}
             className="relative p-2 rounded-full bg-card-subtle hover:bg-card border border-border-light text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
           >
             <Bell className="w-4 h-4" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-brand-purple ring-2 ring-card" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-brand-purple text-white text-[9px] font-extrabold flex items-center justify-center ring-2 ring-card">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
+
+          {/* My Profile Shortcut */}
+          <Link
+            href="/profile"
+            title="My Profile"
+            aria-label="My Profile"
+            className={cn(
+              "p-2 rounded-full border transition-colors cursor-pointer",
+              pathname.startsWith("/profile")
+                ? "bg-brand-purple-light text-brand-purple border-brand-purple/30"
+                : "bg-card-subtle hover:bg-card border-border-light text-text-secondary hover:text-text-primary"
+            )}
+          >
+            <UserCircle className="w-4 h-4" />
+          </Link>
 
           {/* Settings Icon */}
           <Link
             href="/settings"
             title="Settings"
-            className="p-2 rounded-full bg-card-subtle hover:bg-card border border-border-light text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
+            aria-label="Settings"
+            className={cn(
+              "p-2 rounded-full border transition-colors cursor-pointer",
+              pathname.startsWith("/settings")
+                ? "bg-brand-purple-light text-brand-purple border-brand-purple/30"
+                : "bg-card-subtle hover:bg-card border-border-light text-text-secondary hover:text-text-primary"
+            )}
           >
             <Settings className="w-4 h-4" />
           </Link>
@@ -152,6 +186,7 @@ export function TopNavBar({
           <button
             type="button"
             title="Sign Out"
+            aria-label="Sign Out"
             onClick={handleSignOut}
             className="p-2 rounded-full bg-card-subtle hover:bg-red-500/10 hover:text-red-500 border border-border-light text-text-secondary transition-colors cursor-pointer"
           >
@@ -172,14 +207,16 @@ export function TopNavBar({
           </button>
 
           {/* Primary Dark Navy Action Button */}
-          <button
-            type="button"
-            onClick={onPrimaryAction}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer border border-border-light/30"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>{primaryActionLabel}</span>
-          </button>
+          {onPrimaryAction && (
+            <button
+              type="button"
+              onClick={onPrimaryAction}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer border border-border-light/30"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>{primaryActionLabel}</span>
+            </button>
+          )}
         </div>
       </header>
 

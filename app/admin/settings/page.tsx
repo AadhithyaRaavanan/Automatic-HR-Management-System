@@ -3,7 +3,7 @@
 import * as React from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { createClient } from "@/lib/supabase/client";
-import { Settings, ShieldCheck, Globe, Clock, Building2, Save } from "lucide-react";
+import { ShieldCheck, Building2, Save } from "lucide-react";
 import { toast } from "sonner";
 
 export default function OrganizationSettingsAdminPage() {
@@ -21,7 +21,46 @@ export default function OrganizationSettingsAdminPage() {
   const [autoCheckoutTime, setAutoCheckoutTime] = React.useState("20:00");
   const [isSavingPolicy, setIsSavingPolicy] = React.useState(false);
 
-  const supabase = createClient();
+  const supabase = React.useMemo(() => createClient(), []);
+
+  React.useEffect(() => {
+    let active = true;
+    async function loadSettings() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user) return;
+
+      const [{ data: org }, { data: policy }] = await Promise.all([
+        (supabase as any)
+          .from("organizations")
+          .select("name, timezone, work_mode")
+          .limit(1)
+          .maybeSingle(),
+        (supabase as any)
+          .from("attendance_policies")
+          .select("grace_minutes, half_day_minutes, auto_checkout_time")
+          .limit(1)
+          .maybeSingle(),
+      ]);
+
+      if (!active) return;
+      if (org) {
+        if (org.name) setOrgName(org.name);
+        if (org.timezone) setOrgTimezone(org.timezone);
+        if (org.work_mode) setOrgWorkMode(org.work_mode);
+      }
+      if (policy) {
+        if (policy.grace_minutes !== undefined) setGraceMinutes(Number(policy.grace_minutes));
+        if (policy.half_day_minutes !== undefined) setHalfDayMinutes(Number(policy.half_day_minutes));
+        if (policy.auto_checkout_time) setAutoCheckoutTime(String(policy.auto_checkout_time).slice(0, 5));
+      }
+    }
+    loadSettings();
+    return () => {
+      active = false;
+    };
+  }, [supabase]);
 
   const handleSaveOrgSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +74,7 @@ export default function OrganizationSettingsAdminPage() {
       if (error) throw error;
       toast.success("Organization profile updated with full audit diff!");
     } catch (err: any) {
-      toast.success("Organization profile updated (local mode)!");
+      toast.error(err?.message || "Failed to update organization settings");
     } finally {
       setIsSavingOrg(false);
     }
@@ -53,7 +92,7 @@ export default function OrganizationSettingsAdminPage() {
       if (error) throw error;
       toast.success("Attendance policy updated with full audit diff!");
     } catch (err: any) {
-      toast.success("Attendance policy updated (local mode)!");
+      toast.error(err?.message || "Failed to update attendance policy");
     } finally {
       setIsSavingPolicy(false);
     }

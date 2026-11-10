@@ -1,5 +1,21 @@
 import { format, differenceInMinutes, parseISO } from "date-fns";
-import { toZonedTime, format as formatZoned } from "date-fns-tz";
+import { toZonedTime, fromZonedTime, format as formatZoned } from "date-fns-tz";
+
+/**
+ * Converts a local YYYY-MM-DD date and HH:mm time in an IANA timezone to a UTC ISO string.
+ */
+export function localDateTimeToUtcIso(
+  workDate: string,
+  timeHHmm: string,
+  timezone: string = "UTC"
+): string {
+  const cleanTime = timeHHmm.length === 5 ? `${timeHHmm}:00` : timeHHmm;
+  try {
+    return fromZonedTime(`${workDate}T${cleanTime}`, timezone || "UTC").toISOString();
+  } catch {
+    return new Date(`${workDate}T${cleanTime}Z`).toISOString();
+  }
+}
 
 /**
  * Returns the work date (YYYY-MM-DD) calculated authoritatively in the employee's timezone

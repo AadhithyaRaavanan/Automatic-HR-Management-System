@@ -718,7 +718,7 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
       await runAsAuthenticated(USERS.employee, "employee", "aal1", async (pg) => {
         let err: any = null;
         try {
-          await pg.query("SELECT public.unlock_month(2026, 1);");
+          await pg.query("SELECT public.unlock_month(2026, 1, 'Test unlock');");
         } catch (e) {
           err = e;
         }
@@ -730,7 +730,7 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
       await runAsAuthenticated(USERS.hr, "hr", "aal2", async (pg) => {
         let err: any = null;
         try {
-          await pg.query("SELECT public.unlock_month(2026, 1);");
+          await pg.query("SELECT public.unlock_month(2026, 1, 'Test unlock');");
         } catch (e) {
           err = e;
         }
@@ -742,7 +742,7 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
       await runAsAuthenticated(USERS.admin, "admin", "aal1", async (pg) => {
         let err: any = null;
         try {
-          await pg.query("SELECT public.unlock_month(2026, 1);");
+          await pg.query("SELECT public.unlock_month(2026, 1, 'Test unlock');");
         } catch (e) {
           err = e;
         }
@@ -752,7 +752,7 @@ describe("Live PostgreSQL Authenticated RLS & Function Matrix", () => {
 
       // Admin at AAL2 permitted
       await runAsAuthenticated(USERS.admin, "admin", "aal2", async (pg) => {
-        const res = await pg.query("SELECT public.unlock_month(2026, 1) as result;");
+        const res = await pg.query("SELECT public.unlock_month(2026, 1, 'Test unlock') as result;");
         expect(res.rows[0].result.success).toBe(true);
       });
     });

@@ -23,6 +23,7 @@ import {
   UserCheck,
   LogOut,
   FileSpreadsheet,
+  UserCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -149,12 +150,24 @@ export function CurvedSidebar({
       {/* Bottom Profile / Quick Action */}
       <div className="shrink-0 pt-2 border-t border-white/15 flex flex-col items-center gap-2">
         <Link
+          href="/profile"
+          className={cn(
+            "w-9 h-9 lg:w-10 lg:h-10 rounded-2xl flex items-center justify-center text-white transition-colors",
+            pathname.startsWith("/profile") ? "bg-white text-brand-purple shadow-sm" : "bg-white/10 hover:bg-white/20"
+          )}
+          title="My Profile"
+          aria-label="My Profile"
+        >
+          <UserCircle className="w-4 h-4 lg:w-5 lg:h-5" />
+        </Link>
+        <Link
           href="/settings"
           className={cn(
             "w-9 h-9 lg:w-10 lg:h-10 rounded-2xl flex items-center justify-center text-white transition-colors",
             pathname.startsWith("/settings") ? "bg-white text-brand-purple shadow-sm" : "bg-white/10 hover:bg-white/20"
           )}
           title="Account Settings"
+          aria-label="Account Settings"
         >
           <Settings className="w-4 h-4 lg:w-5 lg:h-5" />
         </Link>
@@ -163,6 +176,7 @@ export function CurvedSidebar({
           onClick={handleSignOut}
           className="w-9 h-9 lg:w-10 lg:h-10 rounded-2xl bg-white/10 hover:bg-red-500/80 flex items-center justify-center text-white transition-colors cursor-pointer"
           title="Sign Out"
+          aria-label="Sign Out"
         >
           <LogOut className="w-4 h-4 lg:w-5 lg:h-5" />
         </button>

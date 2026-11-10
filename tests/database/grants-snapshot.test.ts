@@ -92,6 +92,7 @@ describe("Database Grants Snapshot Test", () => {
 
     // Canonical table grant whitelist
     const expectedTableGrants = [
+      { table_name: "approval_delegations", privilege_type: "SELECT" },
       { table_name: "attendance_days", privilege_type: "SELECT" },
       { table_name: "attendance_policies", privilege_type: "SELECT" },
       { table_name: "attendance_policies", privilege_type: "UPDATE" },
@@ -104,10 +105,8 @@ describe("Database Grants Snapshot Test", () => {
       { table_name: "employee_shift_assignments", privilege_type: "SELECT" },
       { table_name: "employee_shift_assignments", privilege_type: "UPDATE" },
       { table_name: "employees", privilege_type: "SELECT" },
-      { table_name: "holidays", privilege_type: "DELETE" },
-      { table_name: "holidays", privilege_type: "INSERT" },
+      { table_name: "holiday_templates", privilege_type: "SELECT" },
       { table_name: "holidays", privilege_type: "SELECT" },
-      { table_name: "holidays", privilege_type: "UPDATE" },
       { table_name: "kiosk_devices", privilege_type: "DELETE" },
       { table_name: "kiosk_devices", privilege_type: "INSERT" },
       { table_name: "kiosk_devices", privilege_type: "UPDATE" },
@@ -197,7 +196,7 @@ describe("Database Grants Snapshot Test", () => {
     `);
 
     const allowedUpdateColumns = updateColumns.rows.map((r: any) => r.column_name);
-    expect(allowedUpdateColumns).toEqual(["avatar_url", "full_name"]);
+    expect(allowedUpdateColumns).toEqual(["avatar_url", "emergency_contact", "full_name", "phone"]);
 
     // Sensitive governance and timezone attributes must NOT have direct UPDATE privilege
     const sensitiveColumns = [
@@ -254,21 +253,31 @@ describe("Database Grants Snapshot Test", () => {
       "cancel_leave",
       "check_in",
       "check_out",
+      "complete_onboarding",
+      "create_approval_delegation",
+      "create_holiday",
       "current_org_id",
       "current_organization_id",
       "current_user_role",
       "declare_company_day_off",
+      "delete_holiday",
+      "get_month_close_checklist",
       "get_organization_leave_period",
       "get_user_role",
       "hr_adjust_balance",
       "hr_assign_leave",
+      "hr_correct_attendance",
+      "import_holiday_template",
+      "is_active_delegated_approver",
       "is_active_org_member",
       "leave_slot_range",
       "lock_month",
       "reject_leave",
       "reject_regularization",
       "request_leave",
+      "revoke_approval_delegation",
       "unlock_month",
+      "update_holiday",
     ];
 
     expect(routineNames).toEqual(expectedRoutines);
