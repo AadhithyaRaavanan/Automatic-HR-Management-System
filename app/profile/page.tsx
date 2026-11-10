@@ -22,9 +22,10 @@ import {
 import { toast } from "sonner";
 
 function ProfilePageContent() {
-  const { userId, userRole } = useAppSession();
+  const { userId, userRole, isLoaded } = useAppSession();
   const supabase = React.useMemo(() => createClient(), []);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const loadedUserIdRef = React.useRef<string | null>(null);
 
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -64,14 +65,22 @@ function ProfilePageContent() {
   );
 
   React.useEffect(() => {
+    if (!isLoaded) return;
     let active = true;
     async function loadProfile() {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const uid = userId || session?.user?.id || (await supabase.auth.getUser()).data.user?.id;
+        let uid = userId;
         if (!uid) {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          uid = session?.user?.id || (await supabase.auth.getUser()).data.user?.id || null;
+        }
+        if (!uid) {
+          if (active) setLoading(false);
+          return;
+        }
+        if (loadedUserIdRef.current === uid) {
           if (active) setLoading(false);
           return;
         }
@@ -86,6 +95,7 @@ function ProfilePageContent() {
 
         if (!active) return;
         if (!error && data) {
+          loadedUserIdRef.current = uid;
           setFullName(data.full_name || "");
           setEmail(data.email || "");
           setPhone(data.phone || "");
@@ -109,7 +119,7 @@ function ProfilePageContent() {
     return () => {
       active = false;
     };
-  }, [userId, supabase, resolveAvatarSignedUrl]);
+  }, [isLoaded, userId, supabase, resolveAvatarSignedUrl]);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();

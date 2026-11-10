@@ -138,9 +138,11 @@ test.describe("Section 1: HR Attendance Tools & Employee Experience", () => {
 
       // Restore original values cleanly
       await page.goto("/profile");
+      await expect(page.locator("#profile-phone")).toBeEnabled();
       await page.locator("#profile-phone").fill(origPhone);
       await page.locator("#profile-emergency-contact").fill(origEmergency);
       await page.getByRole("button", { name: /Save Profile/i }).click();
+      await expect(page.getByText(/Profile updated successfully/i)).toBeVisible();
     } finally {
       await context.close();
     }
