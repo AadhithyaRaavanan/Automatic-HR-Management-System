@@ -118,6 +118,10 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
     role: "authenticated",
     tests: ["phase3-rpc-matrix.test.ts", "intra-tenant-authorization.test.ts", "suspended-member-isolation.test.ts"],
   },
+  "admin_update_retention_policy(integer,integer,integer)": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section2-retention.test.ts"],
+  },
   "admin_update_shift_template(uuid,text,time without time zone,time without time zone,integer,integer)": {
     role: "authenticated",
     tests: ["phase3-rpc-matrix.test.ts", "suspended-member-isolation.test.ts"],
@@ -206,9 +210,21 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
     role: "authenticated",
     tests: ["leave-rpcs.test.ts", "suspended-member-isolation.test.ts"],
   },
+  "get_org_retention_preview()": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section2-retention.test.ts"],
+  },
+  "get_org_system_health()": {
+    role: "authenticated",
+    tests: ["grants-snapshot.test.ts", "suspended-member-isolation.test.ts", "section2-retention.test.ts"],
+  },
   "get_organization_leave_period(uuid,date)": {
     role: "authenticated",
     tests: ["leave-rpcs.test.ts", "suspended-member-isolation.test.ts"],
+  },
+  "get_retention_export_batches(uuid,integer)": {
+    role: "service_role",
+    tests: ["grants-snapshot.test.ts", "section2-retention.test.ts"],
   },
   "get_user_role(uuid)": {
     role: "authenticated",
@@ -262,6 +278,10 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
     role: "service_role",
     tests: ["schema-meta.test.ts", "leave-rpcs.test.ts"],
   },
+  "record_retention_archive(uuid,text,date,date,timestamp with time zone,text,bigint,text,uuid[],uuid)": {
+    role: "service_role",
+    tests: ["grants-snapshot.test.ts", "section2-retention.test.ts"],
+  },
   "reject_leave(uuid,text)": {
     role: "authenticated",
     tests: ["leave-rpcs.test.ts", "suspended-member-isolation.test.ts"],
@@ -278,9 +298,21 @@ const FUNCTION_TEST_MAP: Record<string, { role: "authenticated" | "service_role"
     role: "authenticated",
     tests: ["grants-snapshot.test.ts", "leave-rpcs.test.ts", "suspended-member-isolation.test.ts", "section1-hr-tools.test.ts"],
   },
+  "run_org_retention_cleanup(uuid,boolean,uuid)": {
+    role: "service_role",
+    tests: ["grants-snapshot.test.ts", "section2-retention.test.ts"],
+  },
+  "run_retention_cleanup(boolean)": {
+    role: "service_role",
+    tests: ["grants-snapshot.test.ts", "section2-retention.test.ts"],
+  },
   "trg_broadcast_notification()": {
     role: "trigger",
     tests: ["grants-snapshot.test.ts", "schema-meta.test.ts", "section1-hr-tools.test.ts"],
+  },
+  "trg_init_org_retention_policy()": {
+    role: "trigger",
+    tests: ["grants-snapshot.test.ts", "schema-meta.test.ts", "section2-retention.test.ts"],
   },
   "trg_derive_audit_log_org_id()": {
     role: "trigger",

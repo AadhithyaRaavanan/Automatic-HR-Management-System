@@ -154,6 +154,14 @@ const EXPECTED_POLICY_INVENTORY: Array<{
   { tablename: "regularization_requests", policyname: "enforce_mfa_aal2_regularization_requests", permissive: "RESTRICTIVE", cmd: "ALL" },
   { tablename: "regularization_requests", policyname: "regularization_requests_insert_policy", permissive: "PERMISSIVE", cmd: "INSERT" },
   { tablename: "regularization_requests", policyname: "regularization_requests_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  // retention_archives (3)
+  { tablename: "retention_archives", policyname: "enforce_active_org_membership_retention_archives", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "retention_archives", policyname: "enforce_mfa_aal2_retention_archives", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "retention_archives", policyname: "retention_archives_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  // retention_policies (3)
+  { tablename: "retention_policies", policyname: "enforce_active_org_membership_retention_policies", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "retention_policies", policyname: "enforce_mfa_aal2_retention_policies", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "retention_policies", policyname: "retention_policies_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
   // shift_templates (6)
   { tablename: "shift_templates", policyname: "enforce_active_org_membership_shift_templates", permissive: "RESTRICTIVE", cmd: "ALL" },
   { tablename: "shift_templates", policyname: "enforce_mfa_aal2_shift_templates", permissive: "RESTRICTIVE", cmd: "ALL" },

@@ -1,3 +1,4 @@
+
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {
@@ -126,17 +127,23 @@ isOneToOne: false
                   ]
                 },"attendance_sessions": {
                   Row: {
-                    "check_in_at": string,"check_out_at": string | null,"created_at": string,"employee_id": string,"id": string,"location_id": string | null,"note": string | null,"organization_id": string,"source": string,"work_date": string
+                    "archive_id": string | null,"check_in_at": string,"check_out_at": string | null,"created_at": string,"employee_id": string,"id": string,"location_id": string | null,"note": string | null,"organization_id": string,"source": string,"work_date": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "check_in_at": string,"check_out_at"?: string | null,"created_at"?: string,"employee_id": string,"id"?: string,"location_id"?: string | null,"note"?: string | null,"organization_id"?: string,"source"?: string,"work_date": string
+                    "archive_id"?: string | null,"check_in_at": string,"check_out_at"?: string | null,"created_at"?: string,"employee_id": string,"id"?: string,"location_id"?: string | null,"note"?: string | null,"organization_id"?: string,"source"?: string,"work_date": string
                   }
                   Update: {
-                    "check_in_at"?: string,"check_out_at"?: string | null,"created_at"?: string,"employee_id"?: string,"id"?: string,"location_id"?: string | null,"note"?: string | null,"organization_id"?: string,"source"?: string,"work_date"?: string
+                    "archive_id"?: string | null,"check_in_at"?: string,"check_out_at"?: string | null,"created_at"?: string,"employee_id"?: string,"id"?: string,"location_id"?: string | null,"note"?: string | null,"organization_id"?: string,"source"?: string,"work_date"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "attendance_sessions_archive_id_fkey"
+      columns: ["archive_id"]
+isOneToOne: false
+      referencedRelation: "retention_archives"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "attendance_sessions_employee_id_fkey"
       columns: ["employee_id"]
 isOneToOne: false
@@ -710,6 +717,58 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"retention_archives": {
+                  Row: {
+                    "archive_month": string,"byte_size": number,"checksum_sha256": string,"created_at": string,"created_by": string | null,"cutoff_at": string,"id": string,"organization_id": string,"period_end": string,"period_start": string,"row_count": number,"storage_bucket": string,"storage_path": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "archive_month": string,"byte_size": number,"checksum_sha256": string,"created_at"?: string,"created_by"?: string | null,"cutoff_at": string,"id"?: string,"organization_id": string,"period_end": string,"period_start": string,"row_count": number,"storage_bucket"?: string,"storage_path": string
+                  }
+                  Update: {
+                    "archive_month"?: string,"byte_size"?: number,"checksum_sha256"?: string,"created_at"?: string,"created_by"?: string | null,"cutoff_at"?: string,"id"?: string,"organization_id"?: string,"period_end"?: string,"period_start"?: string,"row_count"?: number,"storage_bucket"?: string,"storage_path"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "retention_archives_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "retention_archives_organization_id_fkey"
+      columns: ["organization_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"retention_policies": {
+                  Row: {
+                    "audit_logs_delete_after_months": number,"created_at": string,"organization_id": string,"read_notifications_delete_after_days": number,"sessions_archive_after_months": number,"updated_at": string,"updated_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "audit_logs_delete_after_months"?: number,"created_at"?: string,"organization_id": string,"read_notifications_delete_after_days"?: number,"sessions_archive_after_months"?: number,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Update: {
+                    "audit_logs_delete_after_months"?: number,"created_at"?: string,"organization_id"?: string,"read_notifications_delete_after_days"?: number,"sessions_archive_after_months"?: number,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "retention_policies_organization_id_fkey"
+      columns: ["organization_id"]
+isOneToOne: true
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "retention_policies_updated_by_fkey"
+      columns: ["updated_by"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"shift_templates": {
                   Row: {
                     "break_duration_minutes": number,"code": string,"created_at": string,"crosses_midnight": boolean,"end_time": string,"full_day_minutes": number,"grace_minutes": number,"half_day_minutes": number,"id": string,"is_active": boolean,"is_night_shift": boolean,"name": string,"organization_id": string,"start_time": string
@@ -804,6 +863,9 @@ isOneToOne: false
 "admin_update_organization_settings":
 { Args: { "p_name": string,"p_timezone": string,"p_work_mode": string }; Returns: Json
                            },
+"admin_update_retention_policy":
+{ Args: { "p_audit_logs_months": number,"p_notifications_days": number,"p_sessions_months": number }; Returns: Json
+                           },
 "admin_update_shift_template":
 { Args: { "p_break_minutes"?: number,"p_end_time": string,"p_grace_minutes"?: number,"p_name": string,"p_shift_id": string,"p_start_time": string }; Returns: Json
                            },
@@ -869,10 +931,19 @@ isOneToOne: false
 "get_month_close_checklist":
 { Args: { "p_month": number,"p_year": number }; Returns: Json
                            },
+"get_org_retention_preview":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"get_org_system_health":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
 "get_organization_leave_period":
 { Args: { "p_date"?: string,"p_organization_id": string }; Returns: {
               "period_end": string,"period_start": string
             }[]
+                           },
+"get_retention_export_batches":
+{ Args: { "p_batch_limit"?: number,"p_organization_id"?: string }; Returns: Json
                            },
 "get_user_role":
 { Args: { "p_user_id": string }; Returns: string
@@ -910,6 +981,9 @@ isOneToOne: false
 "recalculate_day":
 { Args: { "p_employee_id": string,"p_work_date": string }; Returns: undefined
                            },
+"record_retention_archive":
+{ Args: { "p_archive_month": string,"p_byte_size": number,"p_checksum_sha256": string,"p_created_by"?: string,"p_cutoff_at": string,"p_organization_id": string,"p_period_end": string,"p_period_start": string,"p_session_ids": (string)[],"p_storage_path": string }; Returns: Json
+                           },
 "reject_leave":
 { Args: { "p_request_id": string,"p_review_note": string }; Returns: Json
                            },
@@ -921,6 +995,12 @@ isOneToOne: false
                            },
 "revoke_approval_delegation":
 { Args: { "p_delegation_id": string }; Returns: Json
+                           },
+"run_org_retention_cleanup":
+{ Args: { "dry_run"?: boolean,"p_actor_id"?: string,"p_organization_id": string }; Returns: Json
+                           },
+"run_retention_cleanup":
+{ Args: { "dry_run"?: boolean }; Returns: Json
                            },
 "unlock_month":
 { Args: { "p_month": number,"p_reason": string,"p_year": number }; Returns: Json
@@ -1053,7 +1133,7 @@ export const Constants = {
             
           }
         }
-} as const;
+} as const
 
 // ============================================================================
 // Application Domain Helper Types

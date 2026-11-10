@@ -298,6 +298,9 @@ describe("Section 0b: Suspended Member Behavior Isolation Suite", () => {
       { name: "hr_correct_attendance", sql: `SELECT public.hr_correct_attendance('${TARGET_EMP_ID}', '2026-10-01', '[]'::jsonb, 'Susp test');` },
       { name: "create_approval_delegation", sql: `SELECT public.create_approval_delegation('${TARGET_EMP_ID}', '${MANAGER_ID}', '2026-11-01', '2026-11-30', 'Susp test');` },
       { name: "revoke_approval_delegation", sql: `SELECT public.revoke_approval_delegation('${dummyId}');` },
+      { name: "admin_update_retention_policy", sql: `SELECT public.admin_update_retention_policy(18, 24, 90);` },
+      { name: "get_org_system_health", sql: `SELECT public.get_org_system_health();` },
+      { name: "get_org_retention_preview", sql: `SELECT public.get_org_retention_preview();` },
     ];
 
     for (const rpc of rpcCalls) {

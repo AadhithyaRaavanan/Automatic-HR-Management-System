@@ -146,6 +146,9 @@ export default function AuditsAdminPage() {
       "HOLIDAY_IMPORTED",
       "DELEGATION_CREATED",
       "DELEGATION_REVOKED",
+      "RETENTION_POLICY_UPDATED",
+      "RETENTION_ARCHIVE_CREATED",
+      "RETENTION_CLEANUP_EXECUTED",
     ]);
     audits.forEach((a) => known.add(a.action));
     return Array.from(known).sort();
