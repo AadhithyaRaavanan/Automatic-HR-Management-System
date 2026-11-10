@@ -4,6 +4,7 @@ import * as React from "react";
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { KeyRound, ShieldCheck, Copy, Check, ArrowRight, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
@@ -23,7 +24,7 @@ function MfaSetupForm() {
   const [isVerifying, setIsVerifying] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
 
-  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+  const isDemoMode = isDemoModeEnabled();
 
   const supabase = createClient();
 

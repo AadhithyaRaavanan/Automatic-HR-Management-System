@@ -34,18 +34,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify user does not already belong to another organization or this organization
-    const { data: existingMember } = await supabaseAdmin
-      .from("organization_members")
-      .select("organization_id, role, status")
-      .eq("user_id", context.userId)
-      .eq("organization_id", context.organizationId)
+    const normalizedEmail = String(email).trim().toLowerCase();
+
+    // 0. Check existing employee record by email BEFORE inviting (prevents cross-tenant hijack even if Auth listUsers fails)
+    const { data: preExistingEmployee } = await supabaseAdmin
+      .from("employees")
+      .select("id, organization_id")
+      .ilike("email", normalizedEmail)
       .maybeSingle();
+
+    if (preExistingEmployee && preExistingEmployee.organization_id !== context.organizationId) {
+      return NextResponse.json(
+        { error: "Conflict: Employee email already belongs to another organization." },
+        { status: 409 }
+      );
+    }
 
     // 1. Invite user via Supabase Auth Admin API
     let invitedUserId: string;
     const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-      email,
+      normalizedEmail,
       {
         data: {
           full_name: fullName,
@@ -55,19 +63,67 @@ export async function POST(request: NextRequest) {
     );
 
     if (inviteError) {
-      // If user already exists in auth.users, retrieve their ID
-      if (inviteError.message?.toLowerCase().includes("already registered") || inviteError.status === 422) {
-        const { data: listData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 100 });
-        const existing = listData?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
-        if (!existing) {
-          return NextResponse.json({ error: `Invite failed: ${inviteError.message}` }, { status: 400 });
+      const errMsg = inviteError.message?.toLowerCase() || "";
+      const errCode = (inviteError as any).code || "";
+      // If user already exists in auth.users, resolve via pre-existing employee or paginate listUsers
+      if (errMsg.includes("already registered") || errCode === "email_exists" || inviteError.status === 422) {
+        if (preExistingEmployee?.id) {
+          invitedUserId = preExistingEmployee.id;
+        } else {
+          let foundUser: any = null;
+          let page = 1;
+          const perPage = 100;
+          while (!foundUser) {
+            const { data: listData, error: listErr } = await supabaseAdmin.auth.admin.listUsers({
+              page,
+              perPage,
+            });
+            if (listErr || !listData?.users || listData.users.length === 0) {
+              break;
+            }
+            foundUser = listData.users.find((u) => u.email?.toLowerCase() === normalizedEmail) || null;
+            if (listData.users.length < perPage) {
+              break;
+            }
+            page += 1;
+          }
+          if (!foundUser) {
+            return NextResponse.json({ error: `Invite failed: ${inviteError.message}` }, { status: 400 });
+          }
+          invitedUserId = foundUser.id;
         }
-        invitedUserId = existing.id;
       } else {
         return NextResponse.json({ error: `Invite failed: ${inviteError.message}` }, { status: 400 });
       }
     } else {
       invitedUserId = inviteData.user.id;
+    }
+
+    // Check cross-tenant uniqueness: refuse if user already belongs to another organization
+    const { data: existingMember } = await supabaseAdmin
+      .from("organization_members")
+      .select("organization_id, role, status")
+      .eq("user_id", invitedUserId)
+      .maybeSingle();
+
+    if (existingMember && existingMember.organization_id !== context.organizationId) {
+      return NextResponse.json(
+        { error: "Conflict: User already belongs to another organization." },
+        { status: 409 }
+      );
+    }
+
+    const { data: existingEmployee } = await supabaseAdmin
+      .from("employees")
+      .select("organization_id")
+      .eq("id", invitedUserId)
+      .maybeSingle();
+
+    if (existingEmployee && existingEmployee.organization_id !== context.organizationId) {
+      return NextResponse.json(
+        { error: "Conflict: Employee record already belongs to another organization." },
+        { status: 409 }
+      );
     }
 
     // 2. Provision invited employee in database via service_role-only function
@@ -116,7 +172,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `User ${email} invited and provisioned successfully.`,
+      userId: invitedUserId,
+      message: `User ${normalizedEmail} invited and provisioned successfully.`,
       data: provisionData,
     });
   } catch (err: any) {

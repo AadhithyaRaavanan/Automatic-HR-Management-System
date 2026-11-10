@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateSync } from "otplib";
 import { Client } from "pg";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
-  if (process.env.NEXT_PUBLIC_DEMO_MODE !== "true") {
-    return NextResponse.json({ error: "Demo mode is disabled" }, { status: 403 });
+  if (!isDemoModeEnabled()) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   try {

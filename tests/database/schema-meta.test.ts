@@ -426,11 +426,11 @@ describe("PostgreSQL Schema Meta-Test Suite", () => {
       VALUES ($1, $2, 'hybrid@test.com', 'Hybrid User', 'hybrid', 'Asia/Tokyo', $3);
     `, [empId, orgId, locId]);
 
-    // Recalculate day for empty day (no sessions): should use employee's personal timezone (Asia/Tokyo)
-    await client.query(`SELECT public.recalculate_day($1, '2026-11-25'::date);`, [empId]);
+    // Recalculate day for empty past day (no sessions): should use employee's personal timezone (Asia/Tokyo)
+    await client.query(`SELECT public.recalculate_day($1, '2026-11-04'::date);`, [empId]);
 
     const dayRes = await client.query(`
-      SELECT * FROM public.attendance_days WHERE employee_id = $1 AND work_date = '2026-11-25';
+      SELECT * FROM public.attendance_days WHERE employee_id = $1 AND work_date = '2026-11-04';
     `, [empId]);
 
     expect(dayRes.rows.length).toBe(1);

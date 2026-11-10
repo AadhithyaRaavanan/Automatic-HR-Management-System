@@ -205,6 +205,11 @@ export function ApplyLeaveModal({ open, onOpenChange }: ApplyLeaveModalProps) {
           </span>
         </div>
 
+        {/* Half-day overlap policy documentation */}
+        <p className="text-[11px] text-text-tertiary leading-relaxed px-1">
+          Overlap rule: First-half and second-half requests on the same date are permitted as separate half-day slots, whereas duplicate half-days or overlapping full-day requests on the same date are rejected.
+        </p>
+
         {/* Validation Errors */}
         {isDateInvalid && (
           <div className="flex items-center gap-1.5 text-xs text-rose-500 font-medium">

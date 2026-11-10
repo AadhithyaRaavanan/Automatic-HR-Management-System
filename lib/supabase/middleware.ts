@@ -1,15 +1,23 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { Database, EmployeeRole } from "@/types/database.types";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+
+  // Demo gallery is strictly restricted to demo mode (non-production + opt-in flag)
+  if (pathname === "/gallery" || pathname.startsWith("/gallery/")) {
+    if (!isDemoModeEnabled()) {
+      return new NextResponse(null, { status: 404 });
+    }
+    return NextResponse.next();
+  }
 
   // 1. Instant Fast-Path for static assets and public routes that don't need auth checks
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api") ||
-    pathname.startsWith("/gallery") ||
     pathname === "/favicon.ico"
   ) {
     return NextResponse.next();

@@ -11,6 +11,7 @@ import {
   clearRateLimit,
 } from "@/lib/auth/rate-limiter";
 import { checkTurnstileRequirements } from "@/lib/auth/turnstile";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 /**
  * Extract platform-trusted client IP.
@@ -215,7 +216,7 @@ export async function POST(request: NextRequest) {
     };
 
     if (userRole === "hr" || userRole === "admin") {
-      const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+      const isDemoMode = isDemoModeEnabled();
       if (isDemoMode) {
         try {
           const { data: factorData } = await supabase.auth.mfa.listFactors();

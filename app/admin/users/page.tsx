@@ -21,6 +21,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 interface EmployeeUser {
   id: string;
@@ -82,7 +83,7 @@ const mockEmployees: EmployeeUser[] = [
 ];
 
 export default function UsersDirectoryAdminPage() {
-  const [users, setUsers] = React.useState<EmployeeUser[]>(mockEmployees);
+  const [users, setUsers] = React.useState<EmployeeUser[]>(isDemoModeEnabled() ? mockEmployees : []);
   const [inviteModalOpen, setInviteModalOpen] = React.useState(false);
   const [governanceModalOpen, setGovernanceModalOpen] = React.useState(false);
   const [selectedUser, setSelectedUser] = React.useState<EmployeeUser | null>(null);

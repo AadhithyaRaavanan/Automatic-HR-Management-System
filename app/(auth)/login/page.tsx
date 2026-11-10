@@ -4,6 +4,7 @@ import * as React from "react";
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { TurnstileCaptcha } from "@/components/shared/turnstile-captcha";
 import {
@@ -32,8 +33,8 @@ function LoginForm() {
   const [captchaToken, setCaptchaToken] = React.useState<string | null>(null);
   const [lockoutMessage, setLockoutMessage] = React.useState<string | null>(null);
 
-  // Security: Demo role switcher is only accessible when explicitly enabled via environment variable
-  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+  // Security: Demo role switcher is only accessible in non-production demo mode
+  const isDemoMode = isDemoModeEnabled();
 
   const supabase = createClient();
 

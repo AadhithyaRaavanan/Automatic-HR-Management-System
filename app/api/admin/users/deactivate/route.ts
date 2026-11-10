@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
   if ("response" in authResult) {
     return authResult.response;
   }
-  const { context } = authResult;
+  const { context, supabase } = authResult;
 
   try {
     const { targetUserId } = await request.json();
@@ -43,8 +43,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Deactivate member in database via admin_deactivate_member RPC
-    const { data: rpcData, error: rpcError } = await (supabaseAdmin.rpc as any)(
+    // 2. Deactivate member in database via caller-authenticated admin_deactivate_member RPC
+    const { data: rpcData, error: rpcError } = await (supabase.rpc as any)(
       "admin_deactivate_member",
       {
         p_user_id: targetUserId,
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Ban user in Supabase Auth (100 years ban)
+    // 3. Ban user in Supabase Auth (100 years ban)
     try {
       await supabaseAdmin.auth.admin.updateUserById(targetUserId, {
         ban_duration: "876000h",
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       console.warn("Auth ban warning:", authBanErr.message);
     }
 
-    // 3. Force sign out and revoke sessions
+    // 4. Force sign out and revoke sessions
     try {
       if (typeof (supabaseAdmin.auth.admin as any).signOut === "function") {
         await (supabaseAdmin.auth.admin as any).signOut(targetUserId, "global");
@@ -75,17 +75,6 @@ export async function POST(request: NextRequest) {
     } catch (signOutErr: any) {
       console.warn("Sign out revoke warning:", signOutErr.message);
     }
-
-    // 4. Write audit row
-    await supabaseAdmin.from("audit_logs").insert({
-      organization_id: context.organizationId,
-      actor_id: context.userId,
-      action: "MEMBER_DEACTIVATED",
-      table_name: "organization_members",
-      record_id: targetUserId,
-      old_data: { role: targetMember.role, status: targetMember.status },
-      new_data: { status: "inactive", deactivated_at: new Date().toISOString() },
-    });
 
     return NextResponse.json({
       success: true,

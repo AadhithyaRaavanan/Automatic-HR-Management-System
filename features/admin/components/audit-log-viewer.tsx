@@ -5,6 +5,7 @@ import { BentoCard } from "@/components/bento/bento-card";
 import { Shield, ChevronDown, ChevronUp, FileCode } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 export interface AuditLogItem {
   id: string;
@@ -34,7 +35,7 @@ const mockAuditLogs: AuditLogItem[] = [
     id: "log-2",
     actor_id: "adm-1",
     actor_name: "Alex Vance (HR Admin)",
-    action: "LOCK_MONTH",
+    action: "MONTH_LOCKED",
     table_name: "attendance_days",
     record_id: "month-2026-10",
     old_data: { locked: false },
@@ -44,12 +45,13 @@ const mockAuditLogs: AuditLogItem[] = [
 ];
 
 export function AuditLogViewer({
-  logs = mockAuditLogs,
+  logs,
   className,
 }: {
   logs?: AuditLogItem[];
   className?: string;
 }) {
+  const effectiveLogs = logs ?? (isDemoModeEnabled() ? mockAuditLogs : []);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
 
   const toggleExpand = (id: string) => {
@@ -68,7 +70,7 @@ export function AuditLogViewer({
       className={cn("p-6", className)}
     >
       <div className="space-y-3">
-        {logs.map((log) => {
+        {effectiveLogs.map((log) => {
           const isExpanded = expandedId === log.id;
 
           return (

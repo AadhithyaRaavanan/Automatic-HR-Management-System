@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -127,16 +128,18 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 <span>Manager View: Who's Online Now</span>
               </Command.Item>
 
-              <Command.Item
-                onSelect={() => {
-                  window.location.href = "/gallery";
-                  onOpenChange(false);
-                }}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-text-primary hover:bg-brand-purple-light/50 hover:text-brand-purple cursor-pointer transition-colors"
-              >
-                <Shield className="w-4 h-4 text-brand-purple" />
-                <span>Component Design Gallery</span>
-              </Command.Item>
+              {isDemoModeEnabled() && (
+                <Command.Item
+                  onSelect={() => {
+                    window.location.href = "/gallery";
+                    onOpenChange(false);
+                  }}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-text-primary hover:bg-brand-purple-light/50 hover:text-brand-purple cursor-pointer transition-colors"
+                >
+                  <Shield className="w-4 h-4 text-brand-purple" />
+                  <span>Component Design Gallery</span>
+                </Command.Item>
+              )}
             </Command.Group>
 
             <Command.Group heading="Preferences & Tools" className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-text-tertiary mt-2">

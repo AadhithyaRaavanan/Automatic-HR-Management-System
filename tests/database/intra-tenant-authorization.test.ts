@@ -1195,7 +1195,7 @@ describe("Intra-Tenant Authorization & Privilege Boundary Suite", () => {
       expect(audit.rows[0].table_name).toBe("employees");
     });
 
-    it("lock_month: records audit log with action 'LOCK_MONTH'", async () => {
+    it("lock_month: records audit log with action 'MONTH_LOCKED'", async () => {
       await asRole(
         USERS.hr,
         "hr",
@@ -1208,13 +1208,13 @@ describe("Intra-Tenant Authorization & Privilege Boundary Suite", () => {
 
       const audit = await client.query(`
         SELECT action, table_name FROM public.audit_logs
-        WHERE action = 'LOCK_MONTH' AND table_name = 'attendance_days'
+        WHERE action = 'MONTH_LOCKED' AND table_name = 'attendance_days'
         ORDER BY created_at DESC LIMIT 1;
       `);
       expect(audit.rowCount).toBeGreaterThan(0);
     });
 
-    it("unlock_month: records audit log with action 'UNLOCK_MONTH'", async () => {
+    it("unlock_month: records audit log with action 'MONTH_UNLOCKED'", async () => {
       await asRole(
         USERS.admin,
         "admin",
@@ -1227,13 +1227,13 @@ describe("Intra-Tenant Authorization & Privilege Boundary Suite", () => {
 
       const audit = await client.query(`
         SELECT action, table_name FROM public.audit_logs
-        WHERE action = 'UNLOCK_MONTH' AND table_name = 'attendance_days'
+        WHERE action = 'MONTH_UNLOCKED' AND table_name = 'attendance_days'
         ORDER BY created_at DESC LIMIT 1;
       `);
       expect(audit.rowCount).toBeGreaterThan(0);
     });
 
-    it("approve_regularization: records audit log with action 'APPROVE_REGULARIZATION'", async () => {
+    it("approve_regularization: records audit log with action 'REGULARIZATION_APPROVED'", async () => {
       const reqRes = await client.query(`
         INSERT INTO public.regularization_requests (
           organization_id, employee_id, work_date, requested_in, requested_out, reason, status
@@ -1255,13 +1255,13 @@ describe("Intra-Tenant Authorization & Privilege Boundary Suite", () => {
 
       const audit = await client.query(`
         SELECT action, table_name, record_id FROM public.audit_logs
-        WHERE action = 'APPROVE_REGULARIZATION' AND record_id = '${reqId}';
+        WHERE action = 'REGULARIZATION_APPROVED' AND record_id = '${reqId}';
       `);
       expect(audit.rowCount).toBeGreaterThan(0);
       expect(audit.rows[0].table_name).toBe("regularization_requests");
     });
 
-    it("reject_regularization: records audit log with action 'REJECT_REGULARIZATION'", async () => {
+    it("reject_regularization: records audit log with action 'REGULARIZATION_REJECTED'", async () => {
       const reqRes = await client.query(`
         INSERT INTO public.regularization_requests (
           organization_id, employee_id, work_date, requested_in, requested_out, reason, status
@@ -1283,13 +1283,13 @@ describe("Intra-Tenant Authorization & Privilege Boundary Suite", () => {
 
       const audit = await client.query(`
         SELECT action, table_name, record_id FROM public.audit_logs
-        WHERE action = 'REJECT_REGULARIZATION' AND record_id = '${reqId}';
+        WHERE action = 'REGULARIZATION_REJECTED' AND record_id = '${reqId}';
       `);
       expect(audit.rowCount).toBeGreaterThan(0);
       expect(audit.rows[0].table_name).toBe("regularization_requests");
     });
 
-    it("punch_verified: records audit log with action 'VERIFIED_PUNCH'", async () => {
+    it("punch_verified: records audit log with action 'ATTENDANCE_PUNCH_VERIFIED'", async () => {
       await client.query(`UPDATE public.attendance_sessions SET check_out_at = now() WHERE employee_id = '${USERS.employee}' AND check_out_at IS NULL;`);
       await client.query("BEGIN;");
       await client.query("SET LOCAL ROLE service_role;");
@@ -1303,7 +1303,7 @@ describe("Intra-Tenant Authorization & Privilege Boundary Suite", () => {
       const sessionId = resObj.session_id;
       const audit = await client.query(`
         SELECT action, table_name, record_id FROM public.audit_logs
-        WHERE action = 'VERIFIED_PUNCH' AND record_id = '${sessionId}';
+        WHERE action = 'ATTENDANCE_PUNCH_VERIFIED' AND record_id = '${sessionId}';
       `);
       expect(audit.rowCount).toBeGreaterThan(0);
       expect(audit.rows[0].table_name).toBe("attendance_sessions");

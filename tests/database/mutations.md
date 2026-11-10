@@ -76,11 +76,29 @@ DROP POLICY "enforce_active_org_membership_attendance_sessions" ON public.attend
 ```
 
 ### Affected Test Suites
+- **`tests/database/suspended-member-isolation.test.ts`** (Section 0b Behavior Test): Fails immediately on `attendance_sessions` self-access isolation when a suspended member holds a stale valid `aal2` JWT (`current_org_id()` resolves org membership without filtering `status = 'active'`, so without `enforce_active_org_membership_attendance_sessions`, `employee_id = auth.uid()` exposes the suspended user's session rows).
 - **`tests/database/policy-inventory.test.ts`**: Fails exact policy inventory snapshot.
 - **`tests/database/intra-tenant-authorization.test.ts`** (Suite 11: `Real-Time Role Freshness Verification`): Fails instantaneous demotion revocation test.
 
+### Observed Behavior Test Failure (`suspended-member-isolation.test.ts`)
+```text
+ FAIL  tests/database/suspended-member-isolation.test.ts > Section 0b: Suspended Member Behavior Isolation Suite > Denies SELECT and mutations on EVERY tenant table when suspended despite valid aal2 admin JWT
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ tests/database/suspended-member-isolation.test.ts:170:35
+    168|       // Explicit Mutation 4 load-bearing check on attendance_sessions:
+    169|       const sessRes = await c.query(`SELECT id FROM public.attendance_…
+    170|       expect(sessRes.rows.length).toBe(0);
+```
+
 ### Expected vs Observed Failure
-- **Expected**: `policy-inventory.test.ts` enforces that every tenant table has both PERMISSIVE role-based policies and a RESTRICTIVE active-membership policy.
+- **Expected**: `policy-inventory.test.ts` enforces that every tenant table has both PERMISSIVE role-based policies and a RESTRICTIVE active-membership policy, and `suspended-member-isolation.test.ts` proves suspended members cannot read `attendance_sessions` even with valid JWT claims.
   ```
   AssertionError: expected policy 'enforce_active_org_membership_attendance_sessions' (RESTRICTIVE) to exist on public.attendance_sessions
   ```

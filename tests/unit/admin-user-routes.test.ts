@@ -46,6 +46,7 @@ describe("Phase 3 Admin User & Audit API Route Guards", () => {
     authenticated: boolean;
     role?: "employee" | "manager" | "hr" | "admin";
     aal?: "aal1" | "aal2";
+    appMetadataAal?: "aal1" | "aal2";
     orgId?: string;
   }) {
     if (!options.authenticated) {
@@ -65,7 +66,15 @@ describe("Phase 3 Admin User & Audit API Route Guards", () => {
             user: {
               id: callerId,
               email: "caller@remotehr.io",
-              app_metadata: { aal: options.aal || "aal2" },
+              app_metadata: { aal: options.appMetadataAal ?? options.aal ?? "aal2" },
+            },
+          },
+          error: null,
+        }),
+        getClaims: vi.fn().mockResolvedValue({
+          data: {
+            claims: {
+              aal: options.aal || "aal2",
             },
           },
           error: null,
@@ -157,6 +166,7 @@ describe("Phase 3 Admin User & Audit API Route Guards", () => {
         select: vi.fn().mockReturnThis(),
         insert: vi.fn().mockResolvedValue({ data: null, error: null }),
         eq: vi.fn().mockReturnThis(),
+        ilike: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
       };
     });
@@ -219,6 +229,22 @@ describe("Phase 3 Admin User & Audit API Route Guards", () => {
 
       it("denies an aal1 admin with HTTP 403", async () => {
         setupAuthCaller({ authenticated: true, role: "admin", aal: "aal1" });
+        const req = new NextRequest(route.url, {
+          method: route.method,
+          headers: { "content-type": "application/json" },
+          body: route.body ? JSON.stringify(route.body) : undefined,
+        });
+        const res = await route.handler(req);
+        expect(res.status).toBe(403);
+      });
+
+      it("denies admin when user.app_metadata.aal is spoofed to aal2 but verified claims/assurance is aal1", async () => {
+        setupAuthCaller({
+          authenticated: true,
+          role: "admin",
+          aal: "aal1",
+          appMetadataAal: "aal2",
+        });
         const req = new NextRequest(route.url, {
           method: route.method,
           headers: { "content-type": "application/json" },

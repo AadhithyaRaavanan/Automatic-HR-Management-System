@@ -5,6 +5,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { createClient } from "@/lib/supabase/client";
 import { Building, Plus, Edit, Trash2, GitFork, User, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 interface DepartmentItem {
   id: string;
@@ -47,7 +48,7 @@ const mockDepartments: DepartmentItem[] = [
 ];
 
 export default function DepartmentsAdminPage() {
-  const [departments, setDepartments] = React.useState<DepartmentItem[]>(mockDepartments);
+  const [departments, setDepartments] = React.useState<DepartmentItem[]>(isDemoModeEnabled() ? mockDepartments : []);
   const [modalOpen, setModalOpen] = React.useState(false);
   const [editingDept, setEditingDept] = React.useState<DepartmentItem | null>(null);
 

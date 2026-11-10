@@ -1,21 +1,45 @@
 import { test, expect } from "@playwright/test";
+import * as fs from "node:fs";
+import * as path from "node:path";
+
+function resolveDemoModeFlag(): string | undefined {
+  if (process.env.NEXT_PUBLIC_DEMO_MODE !== undefined) {
+    return process.env.NEXT_PUBLIC_DEMO_MODE;
+  }
+  const envLocalPath = path.resolve(process.cwd(), ".env.local");
+  if (fs.existsSync(envLocalPath)) {
+    const content = fs.readFileSync(envLocalPath, "utf-8");
+    const match = content
+      .split(/\r?\n/)
+      .find((line) => line.trim().startsWith("NEXT_PUBLIC_DEMO_MODE="));
+    if (match) {
+      return match.split("=").slice(1).join("=").trim().replace(/^["']|["']$/g, "");
+    }
+  }
+  return undefined;
+}
 
 test.describe("Attendance Management System - E2E Flows", () => {
-  test("Design System Gallery loads correctly with tokens and shell", async ({
+  test("Design System Gallery respects NEXT_PUBLIC_DEMO_MODE gating", async ({
     page,
   }) => {
-    await page.goto("/gallery");
+    const response = await page.goto("/gallery");
+    const demoModeEnabled =
+      resolveDemoModeFlag() === "true" && process.env.NODE_ENV !== "production";
+    if (demoModeEnabled) {
+      // Check title and shell container
+      await expect(page.locator("h1")).toContainText("Design System");
 
-    // Check title and shell container
-    await expect(page.locator("h1")).toContainText("Design System");
+      // Verify bento cards and progress rings render
+      const progressRings = page.locator("svg circle");
+      await expect(progressRings.first()).toBeAttached();
 
-    // Verify bento cards and progress rings render
-    const progressRings = page.locator("svg circle");
-    await expect(progressRings.first()).toBeAttached();
-
-    // Verify theme toggle button
-    const themeSelector = page.getByLabel("Theme selector");
-    await expect(themeSelector.first()).toBeVisible();
+      // Verify theme toggle button
+      const themeSelector = page.getByLabel("Theme selector");
+      await expect(themeSelector.first()).toBeVisible();
+    } else {
+      expect(response?.status()).toBe(404);
+    }
   });
 
   test("Authentication page displays role presets and password toggle", async ({
@@ -71,26 +95,14 @@ test.describe("Attendance Management System - E2E Flows", () => {
     }
   });
 
-  test("Attendance export route handler returns valid CSV and XLSX headers", async ({
+  test("Attendance export route rejects unauthenticated requests with 401", async ({
     request,
   }) => {
-    // 1. Test CSV Export
     const csvResponse = await request.get("/api/attendance/export?format=csv");
-    expect(csvResponse.ok()).toBeTruthy();
-    expect(csvResponse.headers()["content-type"]).toContain("text/csv");
-    expect(csvResponse.headers()["content-disposition"]).toContain(
-      "attendance-"
-    );
-    const csvBody = await csvResponse.text();
-    expect(csvBody).toContain("Employee Name,Work Email,Work Date,Status,Total Minutes");
+    expect(csvResponse.status()).toBe(401);
 
-    // 2. Test Excel (.xlsx) Export
     const xlsxResponse = await request.get("/api/attendance/export?format=xlsx");
-    expect(xlsxResponse.ok()).toBeTruthy();
-    expect(xlsxResponse.headers()["content-type"]).toContain(
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
-    expect(xlsxResponse.headers()["content-disposition"]).toContain(".xlsx");
+    expect(xlsxResponse.status()).toBe(401);
   });
 });
 

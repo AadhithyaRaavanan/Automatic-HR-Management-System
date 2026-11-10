@@ -215,19 +215,19 @@ describe("Database Grants Snapshot Test", () => {
     }
   });
 
-  it("ensures authenticated has execute privileges on exactly the 16 authorized RPCs", async () => {
+  it("ensures authenticated has execute privileges on exactly the authorized RPCs", async () => {
     const res = await client.query(`
-      SELECT DISTINCT p.proname
+      SELECT DISTINCT p.proname, p.oid::regprocedure::text AS signature
       FROM information_schema.role_routine_grants r
       JOIN pg_proc p ON p.proname = r.routine_name
       JOIN pg_namespace n ON p.pronamespace = n.oid AND n.nspname = 'public'
       LEFT JOIN pg_depend d ON d.objid = p.oid AND d.deptype = 'e'
       WHERE r.grantee = 'authenticated'
         AND d.objid IS NULL
-      ORDER BY p.proname;
+      ORDER BY p.proname, signature;
     `);
 
-    const routineNames = res.rows.map((r: any) => r.proname);
+    const routineNames = Array.from(new Set(res.rows.map((r: any) => r.proname)));
     const expectedRoutines = [
       "admin_add_org_member",
       "admin_assign_shift",
@@ -263,6 +263,7 @@ describe("Database Grants Snapshot Test", () => {
       "hr_adjust_balance",
       "hr_assign_leave",
       "is_active_org_member",
+      "leave_slot_range",
       "lock_month",
       "reject_leave",
       "reject_regularization",
@@ -271,5 +272,12 @@ describe("Database Grants Snapshot Test", () => {
     ];
 
     expect(routineNames).toEqual(expectedRoutines);
+
+    // Ensure no legacy duplicate check_out(uuid, uuid) overload remains granted
+    const signatures = res.rows.map((r: any) => r.signature);
+    expect(signatures).not.toContain("check_out(uuid,uuid)");
+    expect(signatures).toContain("check_out()");
+    expect(signatures).toContain("check_in(text)");
+    expect(signatures).toContain("check_in(uuid,text)");
   });
 });

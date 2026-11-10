@@ -705,4 +705,234 @@ describe("Leave Module Database & RPC Test Suite", () => {
       ).rejects.toThrow(/Insufficient leave balance to approve request/i);
     });
   });
+
+  // --------------------------------------------------------------------------
+  // 11. Section 0e Hardening: recalculate_day, Locks, Half-Day Slot, Sole Admin
+  // --------------------------------------------------------------------------
+  describe("11. Section 0e Leave & Attendance Hardening", () => {
+    it("cancel_leave restores 'present' for past day with sessions and removes future 'absent' rows", async () => {
+      const curYear = new Date().getUTCFullYear();
+      const pStart = `${curYear}-01-01`;
+      const pEnd = `${curYear}-12-31`;
+      const pastWorkDate = "2026-10-05"; // Past Monday
+      const futureWorkDate = "2026-12-21"; // Future Monday
+
+      await client.query(`DELETE FROM public.leave_requests WHERE organization_id = '${ORG_1_ID}';`);
+      await client.query(`DELETE FROM public.attendance_sessions WHERE employee_id = '${ORG_1_USERS.employee}' AND work_date IN ('${pastWorkDate}', '${futureWorkDate}');`);
+      await client.query(`DELETE FROM public.attendance_days WHERE employee_id = '${ORG_1_USERS.employee}' AND work_date IN ('${pastWorkDate}', '${futureWorkDate}');`);
+
+      await client.query(`
+        UPDATE public.leave_balances
+        SET allocated = 10, used = 0, carried_forward = 0, adjusted = 0
+        WHERE organization_id = '${ORG_1_ID}' AND employee_id = '${ORG_1_USERS.employee}'
+          AND leave_type_id = '${sickTypeId}' AND period_start = '${pStart}' AND period_end = '${pEnd}';
+      `);
+
+      // Past half-day session (4h) + afternoon sick leave -> cancel must recalculate to half_day, never 'regular' or 'absent'
+      await client.query(`
+        INSERT INTO public.attendance_sessions (organization_id, employee_id, work_date, check_in_at, check_out_at, source)
+        VALUES ('${ORG_1_ID}', '${ORG_1_USERS.employee}', '${pastWorkDate}', '${pastWorkDate}T09:00:00-05:00', '${pastWorkDate}T13:00:00-05:00', 'web');
+      `);
+
+      const pastReq = await client.query(`
+        INSERT INTO public.leave_requests (organization_id, employee_id, leave_type_id, start_date, end_date, day_part, total_days, reason, status)
+        VALUES ('${ORG_1_ID}', '${ORG_1_USERS.employee}', '${sickTypeId}', '${pastWorkDate}', '${pastWorkDate}', 'second_half', 0.5, 'Clinic afternoon', 'pending')
+        RETURNING id;
+      `);
+      await asUser(ORG_1_USERS.manager, ORG_1_ID, "manager", "aal1", async (c) => {
+        await c.query(`SELECT public.approve_leave('${pastReq.rows[0].id}', 'Approved');`);
+      }, true);
+      await asUser(ORG_1_USERS.employee, ORG_1_ID, "employee", "aal1", async (c) => {
+        await c.query(`SELECT public.cancel_leave('${pastReq.rows[0].id}', 'Cancelled');`);
+      }, true);
+
+      const pastDay = await client.query(`
+        SELECT status, total_minutes FROM public.attendance_days
+        WHERE employee_id = '${ORG_1_USERS.employee}' AND work_date = '${pastWorkDate}';
+      `);
+      expect(pastDay.rows.length).toBe(1);
+      expect(pastDay.rows[0].status).toBe("half_day");
+      expect(Number(pastDay.rows[0].total_minutes)).toBe(240);
+
+      // Future leave -> cancel -> NO 'absent' row left behind
+      const futReq = await client.query(`
+        INSERT INTO public.leave_requests (organization_id, employee_id, leave_type_id, start_date, end_date, day_part, total_days, reason, status)
+        VALUES ('${ORG_1_ID}', '${ORG_1_USERS.employee}', '${sickTypeId}', '${futureWorkDate}', '${futureWorkDate}', 'full', 1.0, 'Future trip', 'pending')
+        RETURNING id;
+      `);
+      await asUser(ORG_1_USERS.manager, ORG_1_ID, "manager", "aal1", async (c) => {
+        await c.query(`SELECT public.approve_leave('${futReq.rows[0].id}', 'Approved');`);
+      }, true);
+      await asUser(ORG_1_USERS.employee, ORG_1_ID, "employee", "aal1", async (c) => {
+        await c.query(`SELECT public.cancel_leave('${futReq.rows[0].id}', 'Cancelled future');`);
+      }, true);
+
+      const futDay = await client.query(`
+        SELECT status FROM public.attendance_days
+        WHERE employee_id = '${ORG_1_USERS.employee}' AND work_date = '${futureWorkDate}';
+      `);
+      expect(futDay.rows.length).toBe(0);
+
+      await client.query(`DELETE FROM public.attendance_sessions WHERE employee_id = '${ORG_1_USERS.employee}' AND work_date = '${pastWorkDate}';`);
+      await client.query(`DELETE FROM public.attendance_days WHERE employee_id = '${ORG_1_USERS.employee}' AND work_date = '${pastWorkDate}';`);
+    });
+
+    it("allows first_half + second_half on same date while rejecting conflicting half/full overlaps", async () => {
+      const slotDate = "2026-12-22"; // Future Tuesday
+      await client.query(`DELETE FROM public.leave_requests WHERE organization_id = '${ORG_1_ID}' AND start_date = '${slotDate}';`);
+
+      const curYear = new Date().getUTCFullYear();
+      await client.query(`
+        UPDATE public.leave_balances
+        SET allocated = 10, used = 0
+        WHERE organization_id = '${ORG_1_ID}' AND employee_id = '${ORG_1_USERS.employee}'
+          AND leave_type_id = '${casualTypeId}' AND period_start = '${curYear}-01-01';
+      `);
+
+      // First half succeeds
+      await asUser(ORG_1_USERS.employee, ORG_1_ID, "employee", "aal1", async (c) => {
+        const r = await c.query(`SELECT public.request_leave('${casualTypeId}', '${slotDate}', '${slotDate}', 'first_half', 'Morning errand');`);
+        expect(r.rows[0].request_leave.success).toBe(true);
+      }, true);
+
+      // Duplicate first_half fails exclusion/overlap
+      await expect(
+        asUser(ORG_1_USERS.employee, ORG_1_ID, "employee", "aal1", async (c) => {
+          await c.query(`SELECT public.request_leave('${casualTypeId}', '${slotDate}', '${slotDate}', 'first_half', 'Duplicate AM');`);
+        })
+      ).rejects.toThrow(/overlaps|exclusion/i);
+
+      // Full day on same date fails exclusion/overlap
+      await expect(
+        asUser(ORG_1_USERS.employee, ORG_1_ID, "employee", "aal1", async (c) => {
+          await c.query(`SELECT public.request_leave('${casualTypeId}', '${slotDate}', '${slotDate}', 'full', 'Full day conflict');`);
+        })
+      ).rejects.toThrow(/overlaps|exclusion/i);
+
+      // Second half on same date succeeds cleanly!
+      await asUser(ORG_1_USERS.employee, ORG_1_ID, "employee", "aal1", async (c) => {
+        const r = await c.query(`SELECT public.request_leave('${casualTypeId}', '${slotDate}', '${slotDate}', 'second_half', 'Afternoon errand');`);
+        expect(r.rows[0].request_leave.success).toBe(true);
+      }, true);
+
+      await client.query(`DELETE FROM public.leave_requests WHERE organization_id = '${ORG_1_ID}' AND start_date = '${slotDate}';`);
+    });
+
+    it("refuses hr_assign_leave and approve_regularization when target date is locked", async () => {
+      const lockedDate = "2026-02-11";
+      await client.query(`
+        INSERT INTO public.attendance_days (organization_id, employee_id, work_date, total_minutes, status, locked)
+        VALUES ('${ORG_1_ID}', '${ORG_1_USERS.employee}', '${lockedDate}', 480, 'present', true)
+        ON CONFLICT (employee_id, work_date) DO UPDATE SET locked = true;
+      `);
+
+      await expect(
+        asUser(ORG_1_USERS.hr, ORG_1_ID, "hr", "aal2", async (c) => {
+          await c.query(`SELECT public.hr_assign_leave(ARRAY['${ORG_1_USERS.employee}']::uuid[], '${casualTypeId}', '${lockedDate}', '${lockedDate}', 'full', 'Locked leave test', true);`);
+        })
+      ).rejects.toThrow(/locked/i);
+
+      const regRes = await client.query(`
+        INSERT INTO public.regularization_requests (organization_id, employee_id, work_date, requested_in, requested_out, reason, status)
+        VALUES ('${ORG_1_ID}', '${ORG_1_USERS.employee}', '${lockedDate}', '${lockedDate} 09:00:00+00', '${lockedDate} 17:00:00+00', 'Locked reg test', 'pending')
+        RETURNING id;
+      `);
+      await expect(
+        asUser(ORG_1_USERS.hr, ORG_1_ID, "hr", "aal2", async (c) => {
+          await c.query(`SELECT public.approve_regularization('${regRes.rows[0].id}', 'Should block');`);
+        })
+      ).rejects.toThrow(/locked/i);
+
+      await client.query(`DELETE FROM public.regularization_requests WHERE id = '${regRes.rows[0].id}';`);
+      await client.query(`DELETE FROM public.attendance_days WHERE employee_id = '${ORG_1_USERS.employee}' AND work_date = '${lockedDate}';`);
+    });
+
+    it("allows sole-admin fallback self-approval ONLY when org has one admin and zero HR/manager approvers", async () => {
+      const soloOrgId = "00000000-0000-0000-0000-000000000099";
+      const soloAdminId = "00000000-0000-0000-0000-000000000991";
+
+      await client.query(`
+        INSERT INTO public.organizations (id, name, slug, work_mode, status, timezone, leave_year_start_month)
+        VALUES ('${soloOrgId}', 'Solo Founder Org', 'solo-founder', 'remote', 'active', 'UTC', 1)
+        ON CONFLICT (id) DO NOTHING;
+      `);
+      await client.query(`
+        INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+        VALUES ('${soloAdminId}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'solo@founder.test', 'fake', now(), '{}', '{}', now(), now())
+        ON CONFLICT (id) DO NOTHING;
+      `);
+      await client.query(`
+        INSERT INTO public.organization_members (organization_id, user_id, role, status)
+        VALUES ('${soloOrgId}', '${soloAdminId}', 'admin', 'active')
+        ON CONFLICT (user_id) DO UPDATE SET organization_id = '${soloOrgId}', role = 'admin', status = 'active';
+      `);
+      await client.query(`
+        INSERT INTO public.employees (id, organization_id, email, full_name, status)
+        VALUES ('${soloAdminId}', '${soloOrgId}', 'solo@founder.test', 'Solo Founder', 'active')
+        ON CONFLICT (id) DO UPDATE SET organization_id = '${soloOrgId}', manager_id = NULL, status = 'active';
+      `);
+
+      const ltRes = await client.query(`
+        INSERT INTO public.leave_types (organization_id, name, code, is_paid)
+        VALUES ('${soloOrgId}', 'Annual', 'ANN', true)
+        RETURNING id;
+      `);
+      const soloTypeId = ltRes.rows[0].id;
+
+      const curYear = new Date().getUTCFullYear();
+      await client.query(`
+        INSERT INTO public.leave_balances (organization_id, employee_id, leave_type_id, period_start, period_end, allocated, used)
+        VALUES ('${soloOrgId}', '${soloAdminId}', '${soloTypeId}', '${curYear}-01-01', '${curYear}-12-31', 15, 0);
+      `);
+
+      const soloReq = await client.query(`
+        INSERT INTO public.leave_requests (organization_id, employee_id, leave_type_id, start_date, end_date, day_part, total_days, reason, status)
+        VALUES ('${soloOrgId}', '${soloAdminId}', '${soloTypeId}', '${curYear}-12-23', '${curYear}-12-23', 'full', 1.0, 'Founder leave', 'pending')
+        RETURNING id;
+      `);
+
+      // Must fail at aal1
+      await expect(
+        asUser(soloAdminId, soloOrgId, "admin", "aal1", async (c) => {
+          await c.query(`SELECT public.approve_leave('${soloReq.rows[0].id}', 'Need AAL2');`);
+        })
+      ).rejects.toThrow();
+
+      // Succeeds at aal2 with sole_admin_fallback audit marker
+      await asUser(soloAdminId, soloOrgId, "admin", "aal2", async (c) => {
+        const res = await c.query(`SELECT public.approve_leave('${soloReq.rows[0].id}', 'Founder fallback');`);
+        expect(res.rows[0].approve_leave.success).toBe(true);
+      }, true);
+
+      const auditCheck = await client.query(`
+        SELECT new_data FROM public.audit_logs
+        WHERE record_id = '${soloReq.rows[0].id}' AND action = 'LEAVE_APPROVED';
+      `);
+      expect(auditCheck.rows[0]?.new_data?.sole_admin_fallback).toBe(true);
+
+      // Multi-admin/HR org (Org 1): admin self-approval MUST still fail!
+      const org1AdminReq = await client.query(`
+        INSERT INTO public.leave_requests (organization_id, employee_id, leave_type_id, start_date, end_date, day_part, total_days, reason, status)
+        VALUES ('${ORG_1_ID}', '${ORG_1_USERS.admin}', '${casualTypeId}', '${curYear}-12-24', '${curYear}-12-24', 'full', 1.0, 'Org1 Admin self', 'pending')
+        RETURNING id;
+      `);
+      await expect(
+        asUser(ORG_1_USERS.admin, ORG_1_ID, "admin", "aal2", async (c) => {
+          await c.query(`SELECT public.approve_leave('${org1AdminReq.rows[0].id}', 'Self bypass attempt');`);
+        })
+      ).rejects.toThrow(/cannot approve your own leave/i);
+
+      // Cleanup solo org fixtures
+      await client.query(`DELETE FROM public.leave_requests WHERE id = '${org1AdminReq.rows[0].id}';`);
+      await client.query(`DELETE FROM public.audit_logs WHERE organization_id = '${soloOrgId}';`);
+      await client.query(`DELETE FROM public.attendance_days WHERE organization_id = '${soloOrgId}';`);
+      await client.query(`DELETE FROM public.leave_requests WHERE organization_id = '${soloOrgId}';`);
+      await client.query(`DELETE FROM public.leave_balances WHERE organization_id = '${soloOrgId}';`);
+      await client.query(`DELETE FROM public.leave_types WHERE organization_id = '${soloOrgId}';`);
+      await client.query(`DELETE FROM public.organization_members WHERE organization_id = '${soloOrgId}';`);
+      await client.query(`DELETE FROM public.employees WHERE organization_id = '${soloOrgId}';`);
+      await client.query(`DELETE FROM public.organizations WHERE id = '${soloOrgId}';`);
+      await client.query(`DELETE FROM auth.users WHERE id = '${soloAdminId}';`);
+    });
+  });
 });

@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     await supabaseAdmin.from("audit_logs").insert({
       organization_id: context.organizationId,
       actor_id: context.userId,
-      action: "FORCE_SIGNOUT",
+      action: "USER_FORCE_SIGNED_OUT",
       table_name: "auth.sessions",
       record_id: targetUserId,
       old_data: null,

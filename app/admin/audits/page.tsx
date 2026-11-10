@@ -17,6 +17,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 interface AuditEntry {
   id: string;
@@ -73,7 +74,7 @@ const mockAudits: AuditEntry[] = [
 ];
 
 export default function AuditsAdminPage() {
-  const [audits, setAudits] = React.useState<AuditEntry[]>(mockAudits);
+  const [audits, setAudits] = React.useState<AuditEntry[]>(isDemoModeEnabled() ? mockAudits : []);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [searchTerm, setSearchTerm] = React.useState("");
   const [actionFilter, setActionFilter] = React.useState("ALL");
@@ -85,15 +86,15 @@ export default function AuditsAdminPage() {
       try {
         const { data, error } = await supabase
           .from("audit_logs")
-          .select("id, created_at, action, table_name, record_id, old_data, new_data")
+          .select("id, created_at, actor_id, action, table_name, record_id, old_data, new_data")
           .order("created_at", { ascending: false })
           .limit(50);
-        if (data && data.length > 0) {
+        if (!error && data) {
           setAudits(
             data.map((r: any) => ({
               id: r.id,
               created_at: r.created_at,
-              actor_name: "Admin User",
+              actor_name: r.actor_id || "System",
               action: r.action,
               table_name: r.table_name,
               record_id: r.record_id,
@@ -103,7 +104,9 @@ export default function AuditsAdminPage() {
           );
         }
       } catch {
-        // Fall back to mock audits
+        if (isDemoModeEnabled()) {
+          setAudits(mockAudits);
+        }
       }
     }
     loadAudits();
@@ -186,6 +189,12 @@ export default function AuditsAdminPage() {
               <option value="LOCATION_CREATED">LOCATION_CREATED</option>
               <option value="MEMBER_DEACTIVATED">MEMBER_DEACTIVATED</option>
               <option value="SHIFT_CREATED">SHIFT_CREATED</option>
+              <option value="MONTH_LOCKED">MONTH_LOCKED</option>
+              <option value="MONTH_UNLOCKED">MONTH_UNLOCKED</option>
+              <option value="REGULARIZATION_APPROVED">REGULARIZATION_APPROVED</option>
+              <option value="REGULARIZATION_REJECTED">REGULARIZATION_REJECTED</option>
+              <option value="ATTENDANCE_EXPORTED">ATTENDANCE_EXPORTED</option>
+              <option value="LEAVE_APPROVED">LEAVE_APPROVED</option>
             </select>
           </div>
         </div>

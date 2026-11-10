@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { getEmployeeWorkDate } from "@/lib/date/timezone";
 import { AttendanceDayStatus, SessionSource } from "@/types/database.types";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 export interface AttendanceSessionItem {
   id: string;
@@ -51,8 +52,20 @@ export function useAttendanceToday() {
         (user?.user_metadata?.timezone as string) || "UTC";
       const todayDate = getEmployeeWorkDate(userTimezone);
 
-      // If no authenticated user session (e.g. previewing locally)
+      // If no authenticated user session, only allow mock preview in non-production demo mode
       if (!user) {
+        if (!isDemoModeEnabled()) {
+          return {
+            workDate: todayDate,
+            timezone: userTimezone,
+            targetMinutes: 480,
+            activeSession: null,
+            sessions: [],
+            daySummary: null,
+            weekTotalMinutes: 0,
+            streakDays: 0,
+          };
+        }
         return {
           workDate: todayDate,
           timezone: userTimezone,
@@ -113,19 +126,26 @@ export function useAttendanceToday() {
 
       const daySummary = summaryData as DaySummaryRow | null;
 
-      // 3. Fetch past 7 days for week total
-      const { data: weekDays } = await supabase
+      // 3. Fetch recent days for week total & attendance streak
+      const { data: recentDays } = await supabase
         .from("attendance_days")
-        .select("total_minutes")
+        .select("total_minutes, status")
         .eq("employee_id", user.id)
         .order("work_date", { ascending: false })
-        .limit(7);
+        .limit(30);
 
-      const weekRows = (weekDays || []) as { total_minutes: number }[];
-      const weekTotal = weekRows.reduce(
-        (acc, curr) => acc + (curr.total_minutes || 0),
-        0
-      );
+      const recentRows = (recentDays || []) as { total_minutes: number; status: AttendanceDayStatus }[];
+      const weekTotal = recentRows
+        .slice(0, 7)
+        .reduce((acc, curr) => acc + (curr.total_minutes || 0), 0);
+
+      let streakDays = 0;
+      for (const row of recentRows) {
+        if (row.status === "absent") break;
+        if (row.status === "present" || row.status === "half_day") {
+          streakDays += 1;
+        }
+      }
 
       return {
         workDate: effectiveWorkDate,
@@ -135,7 +155,7 @@ export function useAttendanceToday() {
         sessions: sessionList,
         daySummary: daySummary || null,
         weekTotalMinutes: weekTotal || (daySummary?.total_minutes || 0),
-        streakDays: 14,
+        streakDays,
       };
     },
   });

@@ -9,6 +9,7 @@ import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { CommandPalette } from "@/components/shared/command-palette";
 import { NotificationCenter } from "@/components/shared/notification-center";
 import { cn } from "@/lib/utils";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 import { toast } from "sonner";
 
 interface TopNavBarProps {
@@ -36,7 +37,15 @@ export function TopNavBar({
     router.refresh();
   };
 
-  const navTabs = [
+  const showDemoGallery = isDemoModeEnabled();
+
+  const navTabs: Array<{
+    label: string;
+    href: string;
+    requiresManager?: boolean;
+    requiresHR?: boolean;
+    requiresAdmin?: boolean;
+  }> = [
     { label: "Dashboard", href: "/" },
     { label: "Attendance", href: "/attendance" },
     { label: "Leave", href: "/leave" },
@@ -50,7 +59,7 @@ export function TopNavBar({
     { label: "Shifts", href: "/admin/shifts", requiresAdmin: true },
     { label: "Admin Settings", href: "/admin/settings", requiresAdmin: true },
     { label: "Audits", href: "/admin/audits", requiresAdmin: true },
-    { label: "Gallery", href: "/gallery" },
+    ...(showDemoGallery ? [{ label: "Gallery", href: "/gallery" }] : []),
   ].filter((tab) => {
     if (tab.requiresManager && userRole === "employee") return false;
     if (tab.requiresHR && (userRole === "employee" || userRole === "manager"))

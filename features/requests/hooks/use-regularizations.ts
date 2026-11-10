@@ -7,6 +7,7 @@ import {
   RegularizationFormData,
 } from "@/features/requests/types";
 import { toast } from "sonner";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 export function useRegularizations() {
   const supabase = createClient();
@@ -18,7 +19,10 @@ export function useRegularizations() {
       const user = session?.user ?? (await supabase.auth.getUser()).data.user;
 
       if (!user) {
-        // Fallback demo requests
+        if (!isDemoModeEnabled()) {
+          return [];
+        }
+        // Fallback demo requests (only in non-production demo mode)
         return [
           {
             id: "demo-req-1",
@@ -92,8 +96,10 @@ export function useSubmitRegularization() {
       const requestedOutIso = `${formData.workDate}T${formData.requestedOutTime}:00Z`;
 
       if (!user) {
-        // Optimistic demo support
-        return { success: true };
+        if (isDemoModeEnabled()) {
+          return { success: true };
+        }
+        throw new Error("Authentication required.");
       }
 
       const { data, error } = await (supabase.from("regularization_requests") as any)

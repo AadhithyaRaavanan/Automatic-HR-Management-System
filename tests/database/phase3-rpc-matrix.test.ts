@@ -222,6 +222,14 @@ describe("Phase 3 RPC Security & Privilege Matrix Suite", () => {
       ).rejects.toThrow();
     });
 
+    it("denies hr at aal2 (admin-only)", async () => {
+      await expect(
+        asUser(ORG_1_USERS.hr, ORG_1_ID, "hr", "aal2", async (c) => {
+          await c.query(`SELECT public.admin_deactivate_member('${ORG_1_USERS.employee}');`);
+        })
+      ).rejects.toThrow();
+    });
+
     it("denies admin at aal1", async () => {
       await expect(
         asUser(ORG_1_USERS.admin, ORG_1_ID, "admin", "aal1", async (c) => {
@@ -318,6 +326,24 @@ describe("Phase 3 RPC Security & Privilege Matrix Suite", () => {
       ).rejects.toThrow();
     });
 
+    it("denies hr at aal2 (admin-only) creating, updating, or deleting location", async () => {
+      await expect(
+        asUser(ORG_1_USERS.hr, ORG_1_ID, "hr", "aal2", async (c) => {
+          await c.query(`SELECT public.admin_create_location('HR Loc', 'HRL');`);
+        })
+      ).rejects.toThrow();
+      await expect(
+        asUser(ORG_1_USERS.hr, ORG_1_ID, "hr", "aal2", async (c) => {
+          await c.query(`SELECT public.admin_update_location('${org1LocId}', 'HR Loc', 'Address');`);
+        })
+      ).rejects.toThrow();
+      await expect(
+        asUser(ORG_1_USERS.hr, ORG_1_ID, "hr", "aal2", async (c) => {
+          await c.query(`SELECT public.admin_delete_location('${org1LocId}');`);
+        })
+      ).rejects.toThrow();
+    });
+
     it("denies admin at aal1 creating location", async () => {
       await expect(
         asUser(ORG_1_USERS.admin, ORG_1_ID, "admin", "aal1", async (c) => {
@@ -369,6 +395,24 @@ describe("Phase 3 RPC Security & Privilege Matrix Suite", () => {
       await expect(
         asUser(ORG_1_USERS.employee, ORG_1_ID, "employee", "aal1", async (c) => {
           await c.query(`SELECT public.admin_create_shift_template('Emp Shift', 'ES', '09:00:00', '17:00:00');`);
+        })
+      ).rejects.toThrow();
+    });
+
+    it("denies hr at aal2 (admin-only) creating, updating, or deleting shift template", async () => {
+      await expect(
+        asUser(ORG_1_USERS.hr, ORG_1_ID, "hr", "aal2", async (c) => {
+          await c.query(`SELECT public.admin_create_shift_template('HR Shift', 'HS', '09:00:00', '17:00:00');`);
+        })
+      ).rejects.toThrow();
+      await expect(
+        asUser(ORG_1_USERS.hr, ORG_1_ID, "hr", "aal2", async (c) => {
+          await c.query(`SELECT public.admin_update_shift_template('${org1ShiftId}', 'HR Shift', '10:00:00', '18:00:00');`);
+        })
+      ).rejects.toThrow();
+      await expect(
+        asUser(ORG_1_USERS.hr, ORG_1_ID, "hr", "aal2", async (c) => {
+          await c.query(`SELECT public.admin_delete_shift_template('${org1ShiftId}');`);
         })
       ).rejects.toThrow();
     });
@@ -428,6 +472,14 @@ describe("Phase 3 RPC Security & Privilege Matrix Suite", () => {
       ).rejects.toThrow();
     });
 
+    it("denies hr at aal2 (admin-only)", async () => {
+      await expect(
+        asUser(ORG_1_USERS.hr, ORG_1_ID, "hr", "aal2", async (c) => {
+          await c.query(`SELECT public.admin_assign_shift('${ORG_1_USERS.employee}', '${org1ShiftId}', '2026-11-01');`);
+        })
+      ).rejects.toThrow();
+    });
+
     it("denies admin at aal1", async () => {
       await expect(
         asUser(ORG_1_USERS.admin, ORG_1_ID, "admin", "aal1", async (c) => {
@@ -458,6 +510,14 @@ describe("Phase 3 RPC Security & Privilege Matrix Suite", () => {
       await expect(
         asUser(ORG_1_USERS.employee, ORG_1_ID, "employee", "aal1", async (c) => {
           await c.query(`SELECT public.admin_update_organization_settings('Hacked Org', 'UTC', 'remote');`);
+        })
+      ).rejects.toThrow();
+    });
+
+    it("denies hr at aal2 (admin-only)", async () => {
+      await expect(
+        asUser(ORG_1_USERS.hr, ORG_1_ID, "hr", "aal2", async (c) => {
+          await c.query(`SELECT public.admin_update_organization_settings('HR Org', 'UTC', 'remote');`);
         })
       ).rejects.toThrow();
     });
@@ -495,6 +555,14 @@ describe("Phase 3 RPC Security & Privilege Matrix Suite", () => {
       ).rejects.toThrow();
     });
 
+    it("denies hr at aal2 (admin-only)", async () => {
+      await expect(
+        asUser(ORG_1_USERS.hr, ORG_1_ID, "hr", "aal2", async (c) => {
+          await c.query(`SELECT public.admin_update_attendance_policy(30, 300, '19:00:00');`);
+        })
+      ).rejects.toThrow();
+    });
+
     it("denies admin at aal1", async () => {
       await expect(
         asUser(ORG_1_USERS.admin, ORG_1_ID, "admin", "aal1", async (c) => {
@@ -515,6 +583,35 @@ describe("Phase 3 RPC Security & Privilege Matrix Suite", () => {
         `);
         expect(audit.rows.length).toBe(1);
       });
+    });
+  });
+
+  // 15. Admin-Only Membership & Month Unlock RPCs (HR denial)
+  describe("15. Admin-Only Org Member & Unlock RPCs (HR aal2 denial)", () => {
+    it("denies hr at aal2 on admin_add_org_member, admin_update_org_member_role, admin_remove_org_member, and unlock_month", async () => {
+      await expect(
+        asUser(ORG_1_USERS.hr, ORG_1_ID, "hr", "aal2", async (c) => {
+          await c.query(`SELECT public.admin_add_org_member('${ORG_1_ID}', '${ORG_1_USERS.employee}', 'manager');`);
+        })
+      ).rejects.toThrow();
+
+      await expect(
+        asUser(ORG_1_USERS.hr, ORG_1_ID, "hr", "aal2", async (c) => {
+          await c.query(`SELECT public.admin_update_org_member_role('${ORG_1_ID}', '${ORG_1_USERS.employee}', 'hr');`);
+        })
+      ).rejects.toThrow();
+
+      await expect(
+        asUser(ORG_1_USERS.hr, ORG_1_ID, "hr", "aal2", async (c) => {
+          await c.query(`SELECT public.admin_remove_org_member('${ORG_1_ID}', '${ORG_1_USERS.employee}');`);
+        })
+      ).rejects.toThrow();
+
+      await expect(
+        asUser(ORG_1_USERS.hr, ORG_1_ID, "hr", "aal2", async (c) => {
+          await c.query(`SELECT public.unlock_month(2026, 12);`);
+        })
+      ).rejects.toThrow();
     });
   });
 });

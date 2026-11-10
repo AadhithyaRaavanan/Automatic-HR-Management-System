@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test.describe("Leave Management Module - E2E Flows", () => {
   test("Employee views leave balances and submits leave request with live validation", async ({
     page,
-  }) => {
+  }, testInfo) => {
     // 1. Employee Login
     await page.goto("/login");
     await page.locator('input[type="email"]').fill("employee@remotehr.io");
@@ -24,17 +24,31 @@ test.describe("Leave Management Module - E2E Flows", () => {
     await page.getByRole("button", { name: /Apply for Leave/i }).first().click();
     await expect(page.getByText(/Submit a planned or emergency absence/i)).toBeVisible();
 
-    // 4. Fill Reason
-    await page.locator('textarea[placeholder*="reason for leave"]').fill("E2E Test Annual Vacation");
+    // 4. Use non-overlapping future weekday dates per browser project and unique reason
+    const targetDate =
+      testInfo.project.name === "mobile-chrome" ? "2026-12-16" : "2026-12-15";
+    const dateInputs = page.locator('input[type="date"]');
+    await dateInputs.nth(0).fill(targetDate);
+    await dateInputs.nth(1).fill(targetDate);
+
+    const uniqueReason = `E2E Test Annual Vacation ${testInfo.project.name} ${Date.now()}`;
+    await page.locator('textarea[placeholder*="reason for leave"]').fill(uniqueReason);
 
     // 5. Submit Leave Request
     const submitBtn = page.getByRole("button", { name: /Submit Leave Request/i });
-    if (await submitBtn.isEnabled()) {
-      await submitBtn.click();
-      // Dialog closes and request appears in history table
-      await expect(page.getByText(/E2E Test Annual Vacation/i)).toBeVisible({ timeout: 10000 });
-      await expect(page.getByText(/pending/i).first()).toBeVisible();
-    }
+    await expect(submitBtn).toBeEnabled();
+    await submitBtn.click();
+
+    // Dialog closes and request appears in history table
+    const createdCell = page.getByRole("cell", { name: uniqueReason });
+    await expect(createdCell).toBeVisible({ timeout: 10000 });
+    const createdRow = page.locator("tr", { has: createdCell });
+    await expect(createdRow.getByText(/pending/i)).toBeVisible();
+
+    // 6. Clean up by cancelling the created leave request so re-runs stay idempotent
+    await createdRow.getByRole("button", { name: "Cancel" }).click();
+    await page.getByRole("button", { name: /Confirm Cancel/i }).click();
+    await expect(createdRow.getByText(/cancelled/i)).toBeVisible({ timeout: 10000 });
   });
 
   test("Manager reviews unified inbox and approves team leave request", async ({

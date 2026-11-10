@@ -1,119 +1,101 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { verifyAdminRouteCaller } from "@/lib/auth/admin-guard";
+import { supabaseAdmin } from "@/lib/supabase/admin";
+import { sanitizeCsvCell, sanitizeSpreadsheetCell } from "@/lib/utils";
 import ExcelJS from "exceljs";
-import { format } from "date-fns";
-import { Database, EmployeeRole } from "@/types/database.types";
+import { format, startOfMonth, endOfMonth, parseISO, isValid } from "date-fns";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  // Sensitive Action: Perform full cryptographic validation via getUser() on Supabase server
-  let response = NextResponse.next();
-  const supabase = createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
-    {
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value;
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          response.cookies.set({ name, value, ...options });
-        },
-        remove(name: string, options: CookieOptions) {
-          response.cookies.set({ name, value: "", ...options });
-        },
-      },
-    }
-  );
+  const authResult = await verifyAdminRouteCaller(request, ["hr", "admin"]);
+  if ("response" in authResult) {
+    return authResult.response;
+  }
+  const { context } = authResult;
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+  const { searchParams } = new URL(request.url);
+  const formatType = (searchParams.get("format") || "xlsx").toLowerCase();
+  const rawMonth = searchParams.get("month");
 
-  // In production/staging, sensitive export requires authenticated HR or Admin
-  if (user) {
-    const role = (user.app_metadata?.user_role || "employee") as EmployeeRole;
-    if (role !== "hr" && role !== "admin") {
-      return NextResponse.json(
-        { error: "Forbidden: Exporting workforce attendance reports requires HR or Admin role." },
-        { status: 403 }
-      );
+  let monthParam = format(new Date(), "yyyy-MM");
+  let monthStart = format(startOfMonth(new Date()), "yyyy-MM-dd");
+  let monthEnd = format(endOfMonth(new Date()), "yyyy-MM-dd");
+
+  if (rawMonth && /^\d{4}-\d{2}$/.test(rawMonth)) {
+    const parsed = parseISO(`${rawMonth}-01`);
+    if (isValid(parsed)) {
+      monthParam = rawMonth;
+      monthStart = format(startOfMonth(parsed), "yyyy-MM-dd");
+      monthEnd = format(endOfMonth(parsed), "yyyy-MM-dd");
     }
   }
 
-  const { searchParams } = new URL(request.url);
-  const formatType = searchParams.get("format") || "xlsx";
-  const monthParam = searchParams.get("month") || format(new Date(), "yyyy-MM");
+  // Query real tenant-scoped attendance_days records for the selected month
+  const { data: days, error: queryError } = await supabaseAdmin
+    .from("attendance_days")
+    .select(`
+      employee_id,
+      work_date,
+      status,
+      total_minutes,
+      is_late,
+      locked,
+      employees!attendance_days_employee_id_fkey(full_name, email)
+    `)
+    .eq("organization_id", context.organizationId)
+    .gte("work_date", monthStart)
+    .lte("work_date", monthEnd)
+    .order("work_date", { ascending: true });
 
-  // Mock attendance records for export generation
-  const records = [
-    {
-      name: "James Aathithyan",
-      email: "james@remotehr.io",
-      date: "2026-11-01",
-      status: "Present",
-      totalMinutes: 495,
-      isLate: "No",
-      locked: "Yes",
+  if (queryError) {
+    return NextResponse.json(
+      { error: `Failed to export attendance records: ${queryError.message}` },
+      { status: 500 }
+    );
+  }
+
+  const records = (days || []).map((row: any) => ({
+    name: row.employees?.full_name || "Unknown Employee",
+    email: row.employees?.email || "",
+    date: row.work_date,
+    status: row.status,
+    totalMinutes: Number(row.total_minutes || 0),
+    isLate: row.is_late ? "Yes" : "No",
+    locked: row.locked ? "Yes" : "No",
+  }));
+
+  // Record audit trail entry
+  await supabaseAdmin.from("audit_logs").insert({
+    organization_id: context.organizationId,
+    actor_id: context.userId,
+    action: "ATTENDANCE_EXPORTED",
+    table_name: "attendance_days",
+    record_id: context.userId,
+    old_data: null,
+    new_data: {
+      format: formatType,
+      month: monthParam,
+      record_count: records.length,
+      exported_at: new Date().toISOString(),
     },
-    {
-      name: "Rachel Lee",
-      email: "rachel@remotehr.io",
-      date: "2026-11-01",
-      status: "Present",
-      totalMinutes: 480,
-      isLate: "No",
-      locked: "Yes",
-    },
-    {
-      name: "Ken Smith",
-      email: "ken@remotehr.io",
-      date: "2026-11-01",
-      status: "Half Day",
-      totalMinutes: 240,
-      isLate: "Yes",
-      locked: "Yes",
-    },
-    {
-      name: "Eleanor Pena",
-      email: "eleanor@remotehr.io",
-      date: "2026-11-01",
-      status: "Present",
-      totalMinutes: 510,
-      isLate: "No",
-      locked: "Yes",
-    },
-    {
-      name: "James Aathithyan",
-      email: "james@remotehr.io",
-      date: "2026-11-02",
-      status: "Present",
-      totalMinutes: 480,
-      isLate: "No",
-      locked: "No",
-    },
-    {
-      name: "Rachel Lee",
-      email: "rachel@remotehr.io",
-      date: "2026-11-02",
-      status: "On Leave",
-      totalMinutes: 0,
-      isLate: "No",
-      locked: "No",
-    },
-  ];
+  });
 
   // 1. CSV Stream Format
   if (formatType === "csv") {
     const csvHeader = "Employee Name,Work Email,Work Date,Status,Total Minutes,Total Hours,Is Late,Locked\n";
     const csvRows = records
-      .map(
-        (r) =>
-          `"${r.name}","${r.email}","${r.date}","${r.status}",${r.totalMinutes},${(
-            r.totalMinutes / 60
-          ).toFixed(1)},"${r.isLate}","${r.locked}"`
+      .map((r) =>
+        [
+          sanitizeCsvCell(r.name),
+          sanitizeCsvCell(r.email),
+          sanitizeCsvCell(r.date),
+          sanitizeCsvCell(r.status),
+          String(r.totalMinutes),
+          (r.totalMinutes / 60).toFixed(1),
+          sanitizeCsvCell(r.isLate),
+          sanitizeCsvCell(r.locked),
+        ].join(",")
       )
       .join("\n");
 
@@ -135,10 +117,9 @@ export async function GET(request: NextRequest) {
     views: [{ showGridLines: true }],
   });
 
-  // Define Columns
   worksheet.columns = [
-    { header: "Employee Name", key: "name", width: 22 },
-    { header: "Work Email", key: "email", width: 26 },
+    { header: "Employee Name", key: "name", width: 24 },
+    { header: "Work Email", key: "email", width: 28 },
     { header: "Date", key: "date", width: 14 },
     { header: "Day Status", key: "status", width: 16 },
     { header: "Total Minutes", key: "totalMinutes", width: 16 },
@@ -147,7 +128,6 @@ export async function GET(request: NextRequest) {
     { header: "Payroll Locked", key: "locked", width: 16 },
   ];
 
-  // Header Row Styling (Brand Deep Navy #14123A with White Bold Text)
   const headerRow = worksheet.getRow(1);
   headerRow.height = 28;
   headerRow.eachCell((cell) => {
@@ -168,13 +148,12 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  // Populate data rows
   records.forEach((rec, idx) => {
     const row = worksheet.addRow({
-      name: rec.name,
-      email: rec.email,
+      name: sanitizeSpreadsheetCell(rec.name),
+      email: sanitizeSpreadsheetCell(rec.email),
       date: rec.date,
-      status: rec.status,
+      status: sanitizeSpreadsheetCell(rec.status),
       totalMinutes: rec.totalMinutes,
       hours: Number((rec.totalMinutes / 60).toFixed(1)),
       isLate: rec.isLate,
@@ -183,7 +162,6 @@ export async function GET(request: NextRequest) {
 
     row.height = 20;
 
-    // Zebra striping for readability
     if (idx % 2 === 1) {
       row.eachCell((cell) => {
         cell.fill = {
@@ -203,7 +181,6 @@ export async function GET(request: NextRequest) {
     });
   });
 
-  // Generate buffer
   const buffer = await workbook.xlsx.writeBuffer();
 
   return new NextResponse(buffer, {

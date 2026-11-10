@@ -5,6 +5,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { createClient } from "@/lib/supabase/client";
 import { CalendarClock, Plus, Edit, Trash2, Clock, UserCheck, Calendar } from "lucide-react";
 import { toast } from "sonner";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 interface ShiftTemplateItem {
   id: string;
@@ -47,7 +48,7 @@ const mockShifts: ShiftTemplateItem[] = [
 ];
 
 export default function ShiftsAdminPage() {
-  const [shifts, setShifts] = React.useState<ShiftTemplateItem[]>(mockShifts);
+  const [shifts, setShifts] = React.useState<ShiftTemplateItem[]>(isDemoModeEnabled() ? mockShifts : []);
   const [shiftModalOpen, setShiftModalOpen] = React.useState(false);
   const [assignModalOpen, setAssignModalOpen] = React.useState(false);
   const [editingShift, setEditingShift] = React.useState<ShiftTemplateItem | null>(null);

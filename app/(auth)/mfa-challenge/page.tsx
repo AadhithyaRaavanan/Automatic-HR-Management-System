@@ -4,6 +4,7 @@ import * as React from "react";
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { ShieldCheck, KeyRound, ArrowRight, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
@@ -17,7 +18,7 @@ function MfaChallengeForm() {
   const [isLoading, setIsLoading] = React.useState(false);
   const [factorId, setFactorId] = React.useState<string | null>(null);
 
-  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+  const isDemoMode = isDemoModeEnabled();
 
   const supabase = createClient();
 

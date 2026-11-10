@@ -5,6 +5,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { createClient } from "@/lib/supabase/client";
 import { MapPin, Plus, Edit, Trash2, Globe, Clock, Building } from "lucide-react";
 import { toast } from "sonner";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 interface LocationItem {
   id: string;
@@ -47,7 +48,7 @@ const mockLocations: LocationItem[] = [
 ];
 
 export default function LocationsAdminPage() {
-  const [locations, setLocations] = React.useState<LocationItem[]>(mockLocations);
+  const [locations, setLocations] = React.useState<LocationItem[]>(isDemoModeEnabled() ? mockLocations : []);
   const [modalOpen, setModalOpen] = React.useState(false);
   const [editingLoc, setEditingLoc] = React.useState<LocationItem | null>(null);
 
