@@ -1,6 +1,6 @@
 # RemoteHR — Automated Test Traceability Matrix
 
-**Generated**: 2026-11-14T16:26:18.741Z  
+**Generated**: 2026-11-14T16:29:31.522Z  
 **Branch**: `phase-2-multitenancy`  
 **Target Specification**: `FEATURES.md` (Sections 1 through 12)  
 
@@ -15,7 +15,7 @@ This matrix maps every documented feature, security control, and capability from
 | 1 | Core Architecture & Multi-Tenancy | 9 | 9 | 0 | 0 | 0 |
 | 2 | Authentication, MFA & Security Infrastructure | 9 | 9 | 0 | 0 | 0 |
 | 3 | Attendance Tracking & Live Time Clock | 16 | 12 | 0 | 4 | 0 |
-| 4 | Shift Management & Night Shift Engine | 7 | 0 | 0 | 7 | 0 |
+| 4 | Shift Management & Night Shift Engine | 7 | 7 | 0 | 0 | 0 |
 | 5 | Leave Management & Balance Engine | 9 | 0 | 0 | 9 | 0 |
 | 6 | Task Management & Work Logging | 7 | 0 | 0 | 6 | 1 |
 | 7 | Performance & KPI Engine | 7 | 0 | 0 | 6 | 1 |
@@ -24,7 +24,7 @@ This matrix maps every documented feature, security control, and capability from
 | 10 | Analytics, Reporting & Data Portability | 5 | 0 | 0 | 5 | 0 |
 | 11 | Design System & Frontend UX | 4 | 0 | 0 | 4 | 0 |
 | 12 | Persona Capability Matrix | 30 | 0 | 0 | 30 | 0 |
-| **TOTAL** | **All Sections (1-12)** | **119** | **30** | **0** | **85** | **4** |
+| **TOTAL** | **All Sections (1-12)** | **119** | **37** | **0** | **78** | **4** |
 
 ---
 
@@ -81,13 +81,13 @@ This matrix maps every documented feature, security control, and capability from
 
 | Feature ID | Feature Name | Status | Test File(s) | Test Assertion Count |
 | :--- | :--- | :---: | :--- | :---: |
-| [F4.1.1] | Custom Shift Times (shift_start_time, shift_end_time) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F4.1.2] | Admin Shift Customization via /admin/users | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F4.1.3] | Directory Shift Visualizer (Day vs Night badges) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F4.1.4] | Shift Templates (create, update, assign) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F4.2.1] | Cross-Midnight Detection (shift_end_time < shift_start_time) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F4.2.2] | UTC TIMESTAMPTZ Precision & DST Transitions | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F4.2.3] | Auto-Checkout Exemption for Night Shifts | ❌ `NOT IMPLEMENTED` | — | 0 |
+| [F4.1.1] | Custom Shift Times (shift_start_time, shift_end_time) | ✅ `COVERED` | `tests/database/f4-shifts.test.ts` | 1 |
+| [F4.1.2] | Admin Shift Customization via /admin/users | ✅ `COVERED` | `tests/database/f4-shifts.test.ts` | 1 |
+| [F4.1.3] | Directory Shift Visualizer (Day vs Night badges) | ✅ `COVERED` | `tests/database/f4-shifts.test.ts` | 1 |
+| [F4.1.4] | Shift Templates (create, update, assign) | ✅ `COVERED` | `tests/database/f4-shifts.test.ts` | 1 |
+| [F4.2.1] | Cross-Midnight Detection (shift_end_time < shift_start_time) | ✅ `COVERED` | `tests/database/f4-shifts.test.ts` | 1 |
+| [F4.2.2] | UTC TIMESTAMPTZ Precision & DST Transitions | ✅ `COVERED` | `tests/database/f4-shifts.test.ts` | 1 |
+| [F4.2.3] | Auto-Checkout Exemption for Night Shifts | ✅ `COVERED` | `tests/database/f4-shifts.test.ts` | 1 |
 
 ## Section 5: Leave Management & Balance Engine
 
