@@ -121,7 +121,7 @@ test.describe("Section 3: Task Management E2E Flow", () => {
       await drawer.getByLabel("Time log minutes").fill("45");
       await drawer.getByLabel("Time log note").fill("Implemented validation");
       await drawer.getByRole("button", { name: /^Log$/i }).click();
-      await expect(empPage.getByText(/Time logged/i)).toBeVisible({ timeout: 10000 });
+      await expect(empPage.getByText("Time logged", { exact: true }).first()).toBeVisible({ timeout: 10000 });
       await expect(drawer.getByText("45m logged / 90m est")).toBeVisible({
         timeout: 10000,
       });
