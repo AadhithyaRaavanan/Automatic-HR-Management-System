@@ -177,7 +177,7 @@ Expected:
 
 ## 5. Deploy Automated Retention Archiver & Verify `pg_cron` Schedules
 
-A **single automated trigger path** inside Supabase (`pg_cron` -> `pg_net` + Vault -> `retention-archiver` Edge Function at `02:00 UTC Sunday`) handles monthly `.json.gz` compression and Storage upload BEFORE the Postgres purge job (`weekly-retention-cleanup` at `03:00 UTC Sunday`):
+A **single automated trigger path** inside Supabase (`pg_cron` -> `pg_net` + Vault -> `retention-archiver` Edge Function at `02:00 UTC Sunday`) handles monthly `.json.gz` compression, Storage upload, and batched purge:
 
 1. **Deploy the Supabase Edge Function (`retention-archiver`) & set secrets:**
    ```bash
@@ -187,7 +187,7 @@ A **single automated trigger path** inside Supabase (`pg_cron` -> `pg_net` + Vau
      RETENTION_CRON_SECRET="$CRON_SECRET" \
      CRON_SECRET="$CRON_SECRET"
    ```
-   *(Auth is enforced inside `supabase/functions/retention-archiver/index.ts` via constant-time bearer comparison against `RETENTION_CRON_SECRET` / `CRON_SECRET`.)*
+   *(Authentication is strictly enforced inside `supabase/functions/retention-archiver/index.ts` via constant-time bearer token comparison against `RETENTION_CRON_SECRET` / `CRON_SECRET`.)*
 
 2. **Store Vault secrets so Postgres `pg_cron` + `pg_net` can invoke the archiver automatically at `02:00 UTC` every Sunday:**
    ```bash
@@ -200,7 +200,7 @@ A **single automated trigger path** inside Supabase (`pg_cron` -> `pg_net` + Vau
    ```
    *(If updating an existing secret, delete/update via `vault.secrets` first rather than inserting duplicates.)*
 
-3. **Verify all 5 `pg_cron` jobs are active with exact schedules:**
+3. **Verify all 4 active `pg_cron` jobs and confirm `weekly-retention-cleanup` is unscheduled:**
    ```bash
    psql "$SUPABASE_DB_URL" -c "SELECT jobid, jobname, schedule, command, active FROM cron.job ORDER BY jobname;"
    ```
@@ -210,8 +210,30 @@ A **single automated trigger path** inside Supabase (`pg_cron` -> `pg_net` + Vau
    | `daily-task-due-notifications` | `0 8 * * *` | Daily task due-soon & overdue alerts |
    | `nightly-auto-checkout` | `*/15 * * * *` | Every 15m per-org/location timezone-aware auto-checkout |
    | `nightly-finalize-attendance` | `*/15 * * * *` | Every 15m per-org/location timezone-aware `01:00` local finalize |
-   | `weekly-retention-archive` | `0 2 * * 0` | Single trigger path: `pg_cron` + `pg_net` + Vault invokes `retention-archiver` Edge Function |
-   | `weekly-retention-cleanup` | `0 3 * * 0` | Batched purge (`<=500` rows/batch) only after verified archive exists |
+   | `weekly-retention-archive` | `0 2 * * 0` | Single trigger path: `pg_cron` + `pg_net` + Vault invokes `retention-archiver` Edge Function (archives to storage then runs cleanup) |
+
+   Confirm legacy standalone cleanup job was unscheduled by Migration 17:
+   ```bash
+   psql "$SUPABASE_DB_URL" -c "SELECT count(*) FROM cron.job WHERE jobname = 'weekly-retention-cleanup';"
+   # Expected: 0
+   ```
+
+4. **Testing & Verification of the Retention Archiver:**
+   - **Automated Test Suite (`tests/database/section2-retention.test.ts`)**:
+     - *In unit/integration tests*, Docker containers stop the Supabase Edge Runtime container during database resets. Therefore, test 5 verifies the end-to-end `pg_cron` + `pg_net` + Vault path by testing `cron_trigger_retention_archive()` against an in-test HTTP mock server, verifying the bearer token exchange and Vault secret resolution.
+     - Test 5 also directly invokes `archiveAndRunRetentionCleanup(orgId)` from `lib/retention/archiver.ts` to test gzip file compression, upload to `retention-archives` bucket, and manifest registration in `public.retention_archives`.
+   - **Manual Live Production Verification**:
+     Trigger the deployed Edge Function directly with a test payload:
+     ```bash
+     curl -i -X POST "${SUPABASE_URL}/functions/v1/retention-archiver" \
+       -H "Authorization: Bearer $CRON_SECRET" \
+       -H "Content-Type: application/json" \
+       -d '{"dryRun": true}'
+     ```
+     Inspect recent archive manifests and audit logs:
+     ```bash
+     psql "$SUPABASE_DB_URL" -c "SELECT id, organization_id, storage_path, archive_month, row_count, byte_size, created_at FROM public.retention_archives ORDER BY created_at DESC LIMIT 5;"
+     ```
 
 ---
 

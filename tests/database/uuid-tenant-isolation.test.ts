@@ -353,20 +353,8 @@ describe("Item 1: UUID Argument Tenant-Isolation Suite", () => {
   });
 
   it("explicitly validates the 5 core review RPCs plus newly hardened compound-UUID edge cases", async () => {
-    // 1. get_user_role(uuid): restricted to self, active HR (AAL2), or active admin (AAL2) in caller org
-    await expect(
-      asOrg2("employee", (c) => c.query(`SELECT public.get_user_role($1) AS r;`, [ORG_1.admin]), "aal1")
-    ).rejects.toThrow(/Forbidden/i);
-
-    await expect(
-      asOrg2("hr", (c) => c.query(`SELECT public.get_user_role($1) AS r;`, [ORG_1.admin]), "aal1")
-    ).rejects.toThrow(/MFA AAL2 required/i);
-
-    const roleLookup = await asOrg2("admin", (c) =>
-      c.query<{ r: string | null }>(`SELECT public.get_user_role($1) AS r;`, [ORG_1.admin])
-    );
-    expect(roleLookup.rows[0].r).toBeNull();
-
+    // 1. get_user_role(uuid): 4 required explicit scenarios:
+    // (a) get_user_role: self inspection permitted at AAL1
     const selfRole = await asOrg2(
       "employee",
       (c) => c.query<{ r: string | null }>(`SELECT public.get_user_role($1) AS r;`, [ORG_2.employee]),
@@ -374,10 +362,31 @@ describe("Item 1: UUID Argument Tenant-Isolation Suite", () => {
     );
     expect(selfRole.rows[0].r).toBe("employee");
 
-    const hrSameOrgRole = await asOrg2("hr", (c) =>
-      c.query<{ r: string | null }>(`SELECT public.get_user_role($1) AS r;`, [ORG_2.employee])
+    // (b) get_user_role: hr in same org permitted at AAL2
+    const hrSameOrgRole = await asOrg2(
+      "hr",
+      (c) => c.query<{ r: string | null }>(`SELECT public.get_user_role($1) AS r;`, [ORG_2.employee]),
+      "aal2"
     );
     expect(hrSameOrgRole.rows[0].r).toBe("employee");
+
+    // (c) get_user_role: employee for a colleague in same org denied with 42501
+    await expect(
+      asOrg2("employee", (c) => c.query(`SELECT public.get_user_role($1) AS r;`, [ORG_2.manager]), "aal1")
+    ).rejects.toThrow(/Forbidden: You may only query your own role/i);
+
+    // (d) get_user_role: org 2 for org 1 user returns NULL (cross-tenant denial / no leakage)
+    const crossOrgAdminRole = await asOrg2(
+      "admin",
+      (c) => c.query<{ r: string | null }>(`SELECT public.get_user_role($1) AS r;`, [ORG_1.admin]),
+      "aal2"
+    );
+    expect(crossOrgAdminRole.rows[0].r).toBeNull();
+
+    // Additional AAL1 HR check: HR querying others without AAL2 is denied
+    await expect(
+      asOrg2("hr", (c) => c.query(`SELECT public.get_user_role($1) AS r;`, [ORG_2.employee]), "aal1")
+    ).rejects.toThrow(/MFA AAL2 required/i);
 
     // 2. calculate_working_days(uuid,...): denies Org 1 employee even when start_date > end_date (M16 fix)
     await expect(

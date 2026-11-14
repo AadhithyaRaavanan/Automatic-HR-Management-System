@@ -389,12 +389,19 @@ describe("Section 2: Retention, Archival & Admin System Health", () => {
   });
 
   it("3. Verifies pg_cron weekly retention schedule and blocks run_retention_cleanup execution from authenticated/anon", async () => {
-    const cronJob = await pg.query(
+    // Migration 17 unscheduled the old standalone weekly-retention-cleanup job in favor of
+    // the single unified weekly-retention-archive trigger path.
+    const oldJob = await pg.query(
       `SELECT jobname, schedule, command FROM cron.job WHERE jobname = 'weekly-retention-cleanup';`
     );
-    expect(cronJob.rows.length).toBe(1);
-    expect(cronJob.rows[0].schedule).toBe("0 3 * * 0");
-    expect(cronJob.rows[0].command).toContain("run_retention_cleanup(false)");
+    expect(oldJob.rows.length).toBe(0);
+
+    const archiveJob = await pg.query(
+      `SELECT jobname, schedule, command FROM cron.job WHERE jobname = 'weekly-retention-archive';`
+    );
+    expect(archiveJob.rows.length).toBe(1);
+    expect(archiveJob.rows[0].schedule).toBe("0 2 * * 0");
+    expect(archiveJob.rows[0].command).toContain("cron_trigger_retention_archive()");
 
     await expect(
       asAuthenticated({ userId: ORG_1.admin, orgId: ORG_1_ID, role: "admin", aal: "aal2" }, (c) =>
@@ -666,21 +673,21 @@ describe("Section 2: Retention, Archival & Admin System Health", () => {
     expect(fs.existsSync(path.resolve(process.cwd(), "app/api/cron/retention/route.ts"))).toBe(false);
     expect(fs.existsSync(path.resolve(process.cwd(), "supabase/functions/retention-archiver/index.ts"))).toBe(true);
 
-    // 5b. Verify pg_cron schedules: weekly-retention-archive runs at 02:00 UTC Sunday before cleanup at 03:00 UTC
+    // 5b. Verify pg_cron schedules: weekly-retention-archive runs at 02:00 UTC Sunday; old cleanup is unscheduled
     const archiveCron = await pg.query<{ jobname: string; schedule: string; command: string; active: boolean }>(
       `SELECT jobname, schedule, command, active
        FROM cron.job
        WHERE jobname IN ('weekly-retention-archive', 'weekly-retention-cleanup')
        ORDER BY jobname;`
     );
-    expect(archiveCron.rows.length).toBe(2);
+    expect(archiveCron.rows.length).toBe(1);
     expect(archiveCron.rows[0].jobname).toBe("weekly-retention-archive");
     expect(archiveCron.rows[0].schedule).toBe("0 2 * * 0");
     expect(archiveCron.rows[0].command).toContain("cron_trigger_retention_archive()");
     expect(archiveCron.rows[0].active).toBe(true);
-    expect(archiveCron.rows[1].jobname).toBe("weekly-retention-cleanup");
-    expect(archiveCron.rows[1].schedule).toBe("0 3 * * 0");
-    expect(archiveCron.rows[1].active).toBe(true);
+
+    const oldCleanupCheck = await pg.query(`SELECT 1 FROM cron.job WHERE jobname = 'weekly-retention-cleanup';`);
+    expect(oldCleanupCheck.rows.length).toBe(0);
 
     // 5c. cron_trigger_retention_archive() must deny authenticated callers and return structured skip when Vault unconfigured
     await expect(

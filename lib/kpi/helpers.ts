@@ -130,13 +130,14 @@ export function computeWeightedKpiScore(
     }
     const clampedScore = Math.max(0, Math.min(100, item.score));
     const w =
-      typeof item.weight === "number" && Number.isFinite(item.weight) && item.weight > 0
+      typeof item.weight === "number" && Number.isFinite(item.weight) && item.weight >= 0
         ? item.weight
         : 1;
     weightedSum += clampedScore * w;
     totalWeight += w;
   }
 
+  // Equivalent to SQL NULLIF(totalWeight, 0): when total weight is zero, return null (unscored)
   if (totalWeight <= 0) return null;
   return Math.round((weightedSum / totalWeight) * 100) / 100;
 }

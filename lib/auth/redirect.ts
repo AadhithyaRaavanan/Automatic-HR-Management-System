@@ -23,13 +23,14 @@ export function sanitizeRedirectPath(
     return safeFallback;
   }
 
-  // Reject protocol-relative paths, backslash escapes, userinfo tricks, or control chars
+  // Reject protocol-relative paths, backslash escapes, tab/newline/whitespace tricks, or control chars
   if (
     trimmed.startsWith("//") ||
     trimmed.startsWith("/\\") ||
     trimmed.includes("\\") ||
     /[\u0000-\u001f\u007f]/.test(trimmed) ||
-    /^\/+(?:@|%2f|%5c)/i.test(trimmed)
+    /^\/+[\s\u0000-\u001f\u007f]/.test(trimmed) ||
+    /^\/+(?:@|%2f|%5c|%09|%0a|%0d)/i.test(trimmed)
   ) {
     return safeFallback;
   }
@@ -55,5 +56,17 @@ export function sanitizeRedirectPath(
   }
 
   return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+}
+
+/**
+ * Validates a post-authentication redirect target, returning a strictly relative
+ * path (e.g. "/attendance", "/tasks?status=open") or the fallback path.
+ * Guarantees a consistent relative path return type across every branch.
+ */
+export function getSafeRedirectUrl(
+  input: string | null | undefined,
+  fallback = "/"
+): string {
+  return sanitizeRedirectPath(input, fallback);
 }
 

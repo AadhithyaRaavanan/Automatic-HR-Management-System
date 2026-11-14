@@ -44,13 +44,21 @@ describe("Section 4 KPI Helper & Weighting Formulas", () => {
       ])
     ).toBe(87.5);
 
-    // Non-positive weight safely falls back to 1; out-of-range scores clamp to [0, 100]
+    // All-zero weights: weight sum is 0, so NULLIF logic returns null
+    expect(
+      computeWeightedKpiScore([
+        { score: 90, weight: 0 },
+        { score: 80, weight: 0 },
+      ])
+    ).toBeNull();
+
+    // Partial zero weights: zero-weight items do not contribute to total weight
     expect(
       computeWeightedKpiScore([
         { score: 150, weight: 0 },
-        { score: -20, weight: -5 },
+        { score: 70, weight: 2 },
       ])
-    ).toBe(50);
+    ).toBe(70);
 
     // Unscored / null / non-finite entries are excluded from both numerator and weight denominator
     expect(

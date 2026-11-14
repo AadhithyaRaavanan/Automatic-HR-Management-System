@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { sanitizeRedirectPath } from "@/lib/auth/redirect";
+import { sanitizeRedirectPath, getSafeRedirectUrl } from "@/lib/auth/redirect";
 
 const mockExchangeCodeForSession = vi.fn();
 
@@ -39,6 +39,12 @@ describe("Auth redirect sanitization & /auth/callback guard", () => {
     expect(sanitizeRedirectPath("javascript:alert(1)")).toBe("/");
     expect(sanitizeRedirectPath("data:text/html,<script>alert(1)</script>")).toBe("/");
     expect(sanitizeRedirectPath("/\nevil.com")).toBe("/");
+    expect(sanitizeRedirectPath("/\tevil.com")).toBe("/");
+    expect(sanitizeRedirectPath("/\t/evil.com")).toBe("/");
+    expect(sanitizeRedirectPath("/ \t/evil.com")).toBe("/");
+    expect(sanitizeRedirectPath("/\r\n/evil.com")).toBe("/");
+    expect(getSafeRedirectUrl("/\t/evil.com")).toBe("/");
+    expect(getSafeRedirectUrl("/reports?month=2026-11")).toBe("/reports?month=2026-11");
     expect(sanitizeRedirectPath("")).toBe("/");
     expect(sanitizeRedirectPath(null)).toBe("/");
     expect(sanitizeRedirectPath(undefined)).toBe("/");
@@ -50,6 +56,8 @@ describe("Auth redirect sanitization & /auth/callback guard", () => {
       "//evil.com",
       "https://evil.com/steal",
       "/\\evil.com",
+      "/\\t/evil.com",
+      "/	/evil.com",
       "javascript:alert(1)",
     ];
 

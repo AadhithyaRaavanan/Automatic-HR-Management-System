@@ -588,3 +588,29 @@ $$;
 REVOKE ALL ON FUNCTION public.compute_kpi_scores(UUID) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.compute_kpi_scores(UUID) TO authenticated;
 
+-- ----------------------------------------------------------------------------
+-- SECTION 5: Unschedule Redundant Standalone Retention Cron
+--
+-- All automated retention cleanup is orchestrated exclusively through the
+-- automated archive pipeline (`weekly-retention-archive` -> Edge Function ->
+-- `archiveAndRunRetentionCleanup`), which archives sessions to storage before deletion.
+-- The legacy standalone `weekly-retention-cleanup` job is unscheduled to prevent
+-- deleting attendance records prior to storage backup.
+-- ----------------------------------------------------------------------------
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_extension e
+        JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace
+        WHERE e.extname = 'pg_cron'
+    ) THEN
+        IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'weekly-retention-cleanup') THEN
+            PERFORM cron.unschedule('weekly-retention-cleanup');
+        END IF;
+    END IF;
+END;
+$$;
+
+
