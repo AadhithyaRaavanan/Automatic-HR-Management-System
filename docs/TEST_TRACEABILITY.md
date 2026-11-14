@@ -1,6 +1,6 @@
 # RemoteHR — Automated Test Traceability Matrix
 
-**Generated**: 2026-11-14T16:45:42.462Z  
+**Generated**: 2026-11-14T16:49:50.582Z  
 **Branch**: `phase-2-multitenancy`  
 **Target Specification**: `FEATURES.md` (Sections 1 through 12)  
 
@@ -20,11 +20,11 @@ This matrix maps every documented feature, security control, and capability from
 | 6 | Task Management & Work Logging | 7 | 6 | 0 | 0 | 1 |
 | 7 | Performance & KPI Engine | 7 | 6 | 0 | 0 | 1 |
 | 8 | User Administration & Resend Credential Provisioning | 9 | 9 | 0 | 0 | 0 |
-| 9 | Data Retention, Archiving & Compliance | 7 | 0 | 0 | 5 | 2 |
+| 9 | Data Retention, Archiving & Compliance | 7 | 5 | 0 | 0 | 2 |
 | 10 | Analytics, Reporting & Data Portability | 5 | 0 | 0 | 5 | 0 |
 | 11 | Design System & Frontend UX | 4 | 0 | 0 | 4 | 0 |
 | 12 | Persona Capability Matrix | 30 | 0 | 0 | 30 | 0 |
-| **TOTAL** | **All Sections (1-12)** | **119** | **67** | **0** | **48** | **4** |
+| **TOTAL** | **All Sections (1-12)** | **119** | **72** | **0** | **43** | **4** |
 
 ---
 
@@ -145,13 +145,13 @@ This matrix maps every documented feature, security control, and capability from
 
 | Feature ID | Feature Name | Status | Test File(s) | Test Assertion Count |
 | :--- | :--- | :---: | :--- | :---: |
-| [F9.1.1] | Custom Retention Lifecycles | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F9.1.2] | Mandatory Archiving Flag (archive_before_delete) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F9.1.3] | Batched 500-Row Deletion Protection | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F9.2.1] | Dedicated Secret Authentication (RETENTION_CRON_SECRET) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F9.2.2] | Storage Bucket Storage (retention-archives) | ⚠️ `INACCURATE` | — | 0 |
-| [F9.2.3] | Execution Run History (retention_archives) | ⚠️ `INACCURATE` | — | 0 |
-| [F9.3.1] | Zero-Invasive Employee Privacy Manifesto & AST Guardrail Scan | ❌ `NOT IMPLEMENTED` | — | 0 |
+| [F9.1.1] | Custom Retention Lifecycles | ✅ `COVERED` | `tests/database/f9-retention.test.ts` | 1 |
+| [F9.1.2] | Mandatory Archiving Flag (archive_before_delete) | ✅ `COVERED` | `tests/database/f9-retention.test.ts` | 1 |
+| [F9.1.3] | Batched 500-Row Deletion Protection | ✅ `COVERED` | `tests/database/f9-retention.test.ts` | 1 |
+| [F9.2.1] | Dedicated Secret Authentication (RETENTION_CRON_SECRET) | ✅ `COVERED` | `tests/database/f9-retention.test.ts` | 1 |
+| [F9.2.2] | Storage Bucket Storage (retention-archives) | ⚠️ `INACCURATE` | `tests/database/f9-retention.test.ts` | 1 |
+| [F9.2.3] | Execution Run History (retention_archives) | ⚠️ `INACCURATE` | `tests/database/f9-retention.test.ts` | 1 |
+| [F9.3.1] | Zero-Invasive Employee Privacy Manifesto & AST Guardrail Scan | ✅ `COVERED` | `tests/database/f9-retention.test.ts` | 1 |
 
 ## Section 10: Analytics, Reporting & Data Portability
 
