@@ -23,7 +23,7 @@
     /* Typography Colors (WCAG AA Compliant: >= 4.5:1) */
     --text-primary: #14123A;          /* High contrast deep navy text */
     --text-secondary: #5E5D78;        /* Muted slate violet (5.1:1 on white) */
-    --text-tertiary: #7D7C94;         /* Caption text (4.6:1 on white) */
+    --text-tertiary: #6E6D86;         /* Caption text (WCAG AA Compliant >= 4.5:1 on white) */
     --text-on-purple: #FFFFFF;        /* Pure white on brand purple */
     --text-on-navy: #FFFFFF;          /* Pure white on navy */
 

@@ -80,10 +80,10 @@ RemoteHR is an enterprise-grade, privacy-respecting, multi-tenant Human Resource
 
 ### 3.3 Punch Channels & Verification
 - **Web Portal Direct Punch**: Standard web-based punch with source logging (`source = 'web'`).
-- **Office Location Geofencing**: Validates latitude, longitude, and accuracy against configured office perimeters (e.g., 250m radius).
-- **Office IP Whitelisting**: Matches client IP against authorized CIDR ranges for corporate office attendance (`source = 'office_ip'`).
-- **Rotating QR Code Verification**: Cryptographically signed, time-decaying QR codes displayed on office wall-mounted kiosks.
-- **Kiosk Mode**: Dedicated tablet/terminal hardware punch interface (`source = 'kiosk'`).
+- **Office Location Geofencing [NOT IMPLEMENTED]**: *Not implemented* — Schema placeholder exists; GPS coordinate verification is not implemented in frontend/backend.
+- **Office IP Whitelisting [NOT IMPLEMENTED]**: *Not implemented* — Schema placeholder exists; client CIDR range matching is not enforced during check-in.
+- **Rotating QR Code Verification [NOT IMPLEMENTED]**: *Not implemented* — Cryptographic rotating QR code generation/scanning hardware channel is not implemented.
+- **Kiosk Mode [NOT IMPLEMENTED]**: *Not implemented* — Tablet terminal hardware punch interface is not implemented.
 
 ### 3.4 Automated Attendance Processing
 - **Automatic Late Flagging (`is_late = TRUE`)**: In `public.recalculate_day`, compares first punch time against assigned shift start time plus grace period (default: 15 minutes). Punches occurring past the grace cutoff are automatically flagged as late on `attendance_days` and `attendance_records`.
@@ -284,8 +284,10 @@ RemoteHR is an enterprise-grade, privacy-respecting, multi-tenant Human Resource
 
 ## 13. System Verification Summary
 
-All modules and capabilities above are fully covered by automated regression test suites:
-- **Unit Test Coverage**: `14` test files, `129` passing tests (`npm test`).
-- **Database Test Coverage**: `18` integration suites, `235` passing tests (`npm run test:db`).
-- **Total Test Matrix**: `32` test files, `364` passing tests with 100% success rate.
+All modules and capabilities above are fully tracked and verified across automated regression suites and the formal traceability matrix:
+- **Unit Test Coverage**: `16` test files, `143` passing tests (`npm test`).
+- **Database Integration Coverage**: `29` test files, `346` passing tests, `4` marked `test.todo` (`npm run test:db`).
+- **E2E Browser Coverage**: Cross-platform desktop and mobile browser suites (`npx playwright test`).
+- **Traceability Matrix**: Complete audit of all `119` specification items in `docs/TEST_TRACEABILITY.md` (`111` Covered, `0` Partial, `4` Not Implemented, `4` Inaccurate).
 - **Production Build Status**: Clean Next.js production build (`31/31` static and dynamic routes compiled, Exit Code `0`).
+- **TypeScript Strict Safety**: Full project compilation with 0 errors (`npx tsc --noEmit`).

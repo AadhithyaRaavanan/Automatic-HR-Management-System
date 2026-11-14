@@ -13,7 +13,7 @@
  *   [F8.2.5] Last Admin Protection
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { Client } from "pg";
 import * as fs from "fs";
 import * as path from "path";
@@ -142,21 +142,72 @@ describe("Section 8: User Administration & Resend Credential Provisioning", () =
   });
 
   // [F8.1.3] Resend Email Integration & Local Simulation
-  it("[F8.1.3] verifies welcome email configuration and fallback simulation", async () => {
+  it("[F8.1.3] verifies welcome email configuration, password suppression from console/audit_logs, and production fail-closed", async () => {
     const { sendWelcomeCredentialsEmail } = await import("@/lib/email/resend");
     expect(typeof sendWelcomeCredentialsEmail).toBe("function");
 
-    // Calling simulation in development/test environment without API key succeeds
-    const res = await sendWelcomeCredentialsEmail({
-      to: "simulated@remotehr.io",
-      fullName: "Simulated Employee",
-      role: "employee",
-      temporaryPassword: "TempTestPass123!",
-      shiftStartTime: "09:00:00",
-      shiftEndTime: "17:00:00",
-    });
+    const spyLog = vi.spyOn(console, "log");
+    const spyInfo = vi.spyOn(console, "info");
+    const spyWarn = vi.spyOn(console, "warn");
+    const spyError = vi.spyOn(console, "error");
 
-    expect(res.success).toBe(true);
+    const testPassword = "TempSecretPass999!";
+
+    try {
+      // 1. In development/test environment without API key, simulation succeeds
+      const res = await sendWelcomeCredentialsEmail({
+        to: "simulated@remotehr.io",
+        fullName: "Simulated Employee",
+        role: "employee",
+        temporaryPassword: testPassword,
+        shiftStartTime: "09:00:00",
+        shiftEndTime: "17:00:00",
+      });
+
+      expect(res.success).toBe(true);
+
+      // Verify password NEVER appears in any console stream
+      const allConsoleCalls = [
+        ...spyLog.mock.calls,
+        ...spyInfo.mock.calls,
+        ...spyWarn.mock.calls,
+        ...spyError.mock.calls,
+      ].flat().map(String);
+
+      const leakedPasswordCall = allConsoleCalls.find((call) => call.includes(testPassword) || call.toLowerCase().includes("password:"));
+      expect(leakedPasswordCall).toBeUndefined();
+
+      // 2. In production environment without API key, must fail closed
+      const origEnv = process.env.NODE_ENV;
+      try {
+        (process.env as any).NODE_ENV = "production";
+        const prodRes = await sendWelcomeCredentialsEmail({
+          to: "prod-sim@remotehr.io",
+          fullName: "Prod Employee",
+          role: "employee",
+          temporaryPassword: testPassword,
+        });
+        expect(prodRes.success).toBe(false);
+        expect(prodRes.error).toMatch(/RESEND_API_KEY/i);
+      } finally {
+        (process.env as any).NODE_ENV = origEnv;
+      }
+
+      // 3. Verify audit_logs table during provisioning never logs passwords
+      const auditRows = await client.query(
+        "SELECT new_data FROM public.audit_logs WHERE action = 'MEMBER_INVITED' ORDER BY created_at DESC LIMIT 10;"
+      );
+      for (const row of auditRows.rows) {
+        const rawJson = JSON.stringify(row.new_data || {});
+        expect(rawJson).not.toContain(testPassword);
+        expect(rawJson).not.toContain("temporaryPassword");
+      }
+    } finally {
+      spyLog.mockRestore();
+      spyInfo.mockRestore();
+      spyWarn.mockRestore();
+      spyError.mockRestore();
+    }
   });
 
   // [F8.1.4] Credentials Created Modal with 1-Click Copy

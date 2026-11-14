@@ -120,11 +120,14 @@ export async function sendWelcomeCredentialsEmail(params: SendInviteEmailParams)
   `;
 
   if (!resend) {
-    // If RESEND_API_KEY is not yet in .env, simulate dispatch cleanly without crashing
-    console.log(`[Resend Simulated Email to ${to}] Subject: ${subject}`);
-    if (temporaryPassword) {
-      console.log(`[Resend Simulated Credentials] Password: ${temporaryPassword}`);
+    if (process.env.NODE_ENV === "production") {
+      return {
+        success: false,
+        error: "Email delivery service unavailable: RESEND_API_KEY is not configured in production environment.",
+      };
     }
+    // In non-production environments, simulate dispatch without leaking credentials
+    console.log(`[Resend Simulated Email to ${to}] Subject: ${subject}`);
     return { success: true, simulated: true, messageId: `sim_${Date.now()}` };
   }
 

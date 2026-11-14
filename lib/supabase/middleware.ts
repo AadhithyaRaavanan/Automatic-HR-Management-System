@@ -109,6 +109,36 @@ export async function updateSession(request: NextRequest) {
 
   // Role-Based Route Guards (RBAC) & Multi-Factor Authentication Enforcement
   if (isTokenValid) {
+    // Enforce temporary password must-change-password and 24-hour expiration
+    const userMeta = (claims?.user_metadata || {}) as Record<string, any>;
+    const mustChangePassword = Boolean(claims?.must_change_password || userMeta.must_change_password);
+
+    if (mustChangePassword) {
+      const expiresAt = userMeta.temp_password_expires_at;
+      const createdAt = userMeta.temp_password_created_at;
+      const isExpired =
+        (expiresAt && new Date(expiresAt).getTime() < Date.now()) ||
+        (createdAt && Date.now() - new Date(createdAt).getTime() > 24 * 60 * 60 * 1000);
+
+      if (isExpired) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/login";
+        url.searchParams.set("error", "expired_temp_password");
+        return NextResponse.redirect(url);
+      }
+
+      // Restrict user to settings page to change temporary password
+      if (
+        !pathname.startsWith("/settings") &&
+        !pathname.startsWith("/auth") &&
+        !pathname.startsWith("/login")
+      ) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/settings";
+        url.searchParams.set("must_change_password", "true");
+        return NextResponse.redirect(url);
+      }
+    }
     // Strict MFA AAL2 Enforcement for HR and Admin roles:
     // HR and Admins CANNOT reach protected application routes until MFA is verified (AAL2).
     // They are permitted on /mfa-challenge and /mfa-setup to complete verification/enrollment.

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { AppShell, useAppSession } from "@/components/shell/app-shell";
 import { BentoGrid } from "@/components/bento/bento-grid";
 import { BentoCard } from "@/components/bento/bento-card";
@@ -62,6 +63,9 @@ function SettingsPageContent() {
     toast.success("Notification preferences saved!");
   };
 
+  const searchParams = useSearchParams();
+  const isMustChangePassword = searchParams.get("must_change_password") === "true";
+
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword.length < 12) {
@@ -75,7 +79,13 @@ function SettingsPageContent() {
 
     setIsChangingPassword(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+        data: {
+          must_change_password: false,
+          temp_password_expires_at: null,
+        },
+      });
       if (error) throw error;
       toast.success("Your password has been updated successfully!");
       setNewPassword("");
@@ -107,6 +117,15 @@ function SettingsPageContent() {
           Edit Personal Profile →
         </Link>
       </section>
+
+      {isMustChangePassword && (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 flex items-center gap-3 animate-pulse" role="alert">
+          <KeyRound className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="text-xs sm:text-sm font-semibold">
+            Action Required: You are signed in with a temporary password. You must set a new permanent password below before accessing workplace features.
+          </div>
+        </div>
+      )}
 
       {/* Bento Grid */}
       <BentoGrid>
@@ -419,7 +438,9 @@ function SettingsPageContent() {
 export default function SettingsAndPrivacyPage() {
   return (
     <AppShell>
-      <SettingsPageContent />
+      <React.Suspense fallback={<div className="p-8 text-center text-sm text-text-tertiary">Loading settings...</div>}>
+        <SettingsPageContent />
+      </React.Suspense>
     </AppShell>
   );
 }

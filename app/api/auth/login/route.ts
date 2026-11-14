@@ -169,6 +169,24 @@ export async function POST(request: NextRequest) {
       clearRateLimit(emailKey),
     ]);
 
+    // Check temporary password expiration (24-hour limit)
+    const userMeta = (authData.user.user_metadata || {}) as Record<string, any>;
+    if (userMeta.must_change_password) {
+      const expiresAt = userMeta.temp_password_expires_at;
+      const createdAt = userMeta.temp_password_created_at;
+      const isExpired =
+        (expiresAt && new Date(expiresAt).getTime() < Date.now()) ||
+        (createdAt && Date.now() - new Date(createdAt).getTime() > 24 * 60 * 60 * 1000);
+
+      if (isExpired) {
+        await supabase.auth.signOut();
+        return NextResponse.json(
+          { error: "Temporary password has expired (24-hour limit). Please contact your administrator for a new temporary password." },
+          { status: 401 }
+        );
+      }
+    }
+
     // 5. Role & Multi-Factor Authentication (MFA) Status Resolution
     let userRole = (authData.user.app_metadata?.user_role) as EmployeeRole | undefined;
 
@@ -335,11 +353,14 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const mustChangePassword = Boolean(userMeta.must_change_password);
+
     // Standard employee / manager
     return createSuccessResponse({
       success: true,
       requireMfa: false,
-      mfaDestination: "/",
+      mustChangePassword,
+      mfaDestination: mustChangePassword ? "/settings?must_change_password=true" : "/",
       role: userRole,
     });
   } catch (err: any) {

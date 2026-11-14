@@ -45,5 +45,7 @@ Thumbs.db
 next-env.d.ts
 .turbo
 
-# temporary scripts
-/scripts/
+# scripts
+/scripts/*
+!/scripts/mutation-check.mjs
+!/scripts/generate-traceability.mjs

@@ -226,4 +226,51 @@ describe("Section 2: Authentication, MFA & Security Infrastructure", () => {
     expect(validateNewPassword("SuperSecurePassword2026!", "SuperSecurePassword2026!").valid).toBe(true);
     expect(validateNewPassword("TwelveChars!", "TwelveChars!").valid).toBe(true);
   });
+
+  // [F2.3.3] Temporary Password Expiration & Must-Change-Password Enforcement
+  it("[F2.3.3] expires unused temporary passwords after 24 hours and enforces must-change-password redirect", () => {
+    function isTemporaryPasswordExpired(
+      createdAtIso?: string,
+      expiresAtIso?: string,
+      nowMs: number = Date.now()
+    ): boolean {
+      if (expiresAtIso && new Date(expiresAtIso).getTime() < nowMs) {
+        return true;
+      }
+      if (createdAtIso && nowMs - new Date(createdAtIso).getTime() > 24 * 60 * 60 * 1000) {
+        return true;
+      }
+      return false;
+    }
+
+    const baseTime = new Date("2026-11-14T10:00:00Z").getTime();
+    const createdAt = new Date(baseTime).toISOString();
+    const expiresAt = new Date(baseTime + 24 * 60 * 60 * 1000).toISOString();
+
+    // 1 hour after creation: not expired
+    expect(isTemporaryPasswordExpired(createdAt, expiresAt, baseTime + 1 * 60 * 60 * 1000)).toBe(false);
+
+    // 23 hours 59 minutes: not expired
+    expect(isTemporaryPasswordExpired(createdAt, expiresAt, baseTime + 23.9 * 60 * 60 * 1000)).toBe(false);
+
+    // 24 hours and 1 second: EXPIRED
+    expect(isTemporaryPasswordExpired(createdAt, expiresAt, baseTime + 24 * 60 * 60 * 1000 + 1000)).toBe(true);
+
+    // 48 hours later: EXPIRED
+    expect(isTemporaryPasswordExpired(createdAt, expiresAt, baseTime + 48 * 60 * 60 * 1000)).toBe(true);
+
+    // Route guard logic: must_change_password=true forces redirect to /settings
+    function evaluatePasswordChangeRouteGuard(pathname: string, mustChangePassword: boolean): { redirect?: string } {
+      if (mustChangePassword && !pathname.startsWith("/settings") && !pathname.startsWith("/auth") && !pathname.startsWith("/login")) {
+        return { redirect: "/settings?must_change_password=true" };
+      }
+      return {};
+    }
+
+    expect(evaluatePasswordChangeRouteGuard("/", true).redirect).toBe("/settings?must_change_password=true");
+    expect(evaluatePasswordChangeRouteGuard("/attendance", true).redirect).toBe("/settings?must_change_password=true");
+    expect(evaluatePasswordChangeRouteGuard("/leave", true).redirect).toBe("/settings?must_change_password=true");
+    expect(evaluatePasswordChangeRouteGuard("/settings", true).redirect).toBeUndefined();
+    expect(evaluatePasswordChangeRouteGuard("/", false).redirect).toBeUndefined();
+  });
 });

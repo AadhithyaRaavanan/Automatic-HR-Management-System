@@ -142,6 +142,8 @@ export async function inviteSingleEmployee(
   // 1. Create or invite user via Supabase Auth Admin API
   let invitedUserId: string;
   const temporaryPassword = `Temp${Math.random().toString(36).slice(-8)}!${Math.floor(10 + Math.random() * 90)}`;
+  const now = new Date();
+  const tempPasswordExpiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
 
   // Attempt direct user creation with auto-confirmed email & temporary password
   const { data: createData, error: createError } = await supabaseAdmin.auth.admin.createUser({
@@ -151,6 +153,9 @@ export async function inviteSingleEmployee(
     user_metadata: {
       full_name: normalizedName,
       user_role: role,
+      must_change_password: true,
+      temp_password_created_at: now.toISOString(),
+      temp_password_expires_at: tempPasswordExpiresAt,
     },
   });
 
@@ -162,6 +167,9 @@ export async function inviteSingleEmployee(
         data: {
           full_name: normalizedName,
           user_role: role,
+          must_change_password: true,
+          temp_password_created_at: now.toISOString(),
+          temp_password_expires_at: tempPasswordExpiresAt,
         },
       }
     );
