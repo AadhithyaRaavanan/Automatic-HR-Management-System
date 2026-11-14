@@ -1,6 +1,6 @@
 # RemoteHR — Automated Test Traceability Matrix
 
-**Generated**: 2026-11-14T16:20:08.858Z  
+**Generated**: 2026-11-14T16:22:51.745Z  
 **Branch**: `phase-2-multitenancy`  
 **Target Specification**: `FEATURES.md` (Sections 1 through 12)  
 
@@ -13,7 +13,7 @@ This matrix maps every documented feature, security control, and capability from
 | Section | Module Name | Total Features | Covered | Partial | Not Implemented | Inaccurate |
 | :---: | :--- | :---: | :---: | :---: | :---: | :---: |
 | 1 | Core Architecture & Multi-Tenancy | 9 | 9 | 0 | 0 | 0 |
-| 2 | Authentication, MFA & Security Infrastructure | 9 | 0 | 0 | 9 | 0 |
+| 2 | Authentication, MFA & Security Infrastructure | 9 | 9 | 0 | 0 | 0 |
 | 3 | Attendance Tracking & Live Time Clock | 16 | 0 | 0 | 16 | 0 |
 | 4 | Shift Management & Night Shift Engine | 7 | 0 | 0 | 7 | 0 |
 | 5 | Leave Management & Balance Engine | 9 | 0 | 0 | 9 | 0 |
@@ -24,7 +24,7 @@ This matrix maps every documented feature, security control, and capability from
 | 10 | Analytics, Reporting & Data Portability | 5 | 0 | 0 | 5 | 0 |
 | 11 | Design System & Frontend UX | 4 | 0 | 0 | 4 | 0 |
 | 12 | Persona Capability Matrix | 30 | 0 | 0 | 30 | 0 |
-| **TOTAL** | **All Sections (1-12)** | **119** | **9** | **0** | **106** | **4** |
+| **TOTAL** | **All Sections (1-12)** | **119** | **18** | **0** | **97** | **4** |
 
 ---
 
@@ -46,15 +46,15 @@ This matrix maps every documented feature, security control, and capability from
 
 | Feature ID | Feature Name | Status | Test File(s) | Test Assertion Count |
 | :--- | :--- | :---: | :--- | :---: |
-| [F2.1.1] | Time-Based One-Time Password (TOTP) Full Lifecycle | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F2.1.2] | AAL2 Step-Up Verification for Privileged Roles | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F2.1.3] | Dynamic Challenge & Setup Pages (/mfa-challenge, /mfa-setup) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F2.1.4] | Privilege Separation (AAL1 employee vs AAL2 admin/HR) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F2.2.1] | Failed Attempt Lockout (5 failures per 15m -> 429) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F2.2.2] | IP & Account Lockout | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F2.2.3] | Clean Redirect Sanitization (getSafeRedirectUrl) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F2.3.1] | Instant Login Loading Overlay (isAuthenticating) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F2.3.2] | Self-Service Password Reset (minimum 12 chars) | ❌ `NOT IMPLEMENTED` | — | 0 |
+| [F2.1.1] | Time-Based One-Time Password (TOTP) Full Lifecycle | ✅ `COVERED` | `tests/unit/f2-auth.test.ts` | 1 |
+| [F2.1.2] | AAL2 Step-Up Verification for Privileged Roles | ✅ `COVERED` | `tests/unit/f2-auth.test.ts` | 1 |
+| [F2.1.3] | Dynamic Challenge & Setup Pages (/mfa-challenge, /mfa-setup) | ✅ `COVERED` | `tests/unit/f2-auth.test.ts` | 1 |
+| [F2.1.4] | Privilege Separation (AAL1 employee vs AAL2 admin/HR) | ✅ `COVERED` | `tests/unit/f2-auth.test.ts` | 1 |
+| [F2.2.1] | Failed Attempt Lockout (5 failures per 15m -> 429) | ✅ `COVERED` | `tests/unit/f2-auth.test.ts` | 1 |
+| [F2.2.2] | IP & Account Lockout | ✅ `COVERED` | `tests/unit/f2-auth.test.ts` | 1 |
+| [F2.2.3] | Clean Redirect Sanitization (getSafeRedirectUrl) | ✅ `COVERED` | `tests/unit/f2-auth.test.ts` | 1 |
+| [F2.3.1] | Instant Login Loading Overlay (isAuthenticating) | ✅ `COVERED` | `tests/unit/f2-auth.test.ts` | 1 |
+| [F2.3.2] | Self-Service Password Reset (minimum 12 chars) | ✅ `COVERED` | `tests/unit/f2-auth.test.ts` | 1 |
 
 ## Section 3: Attendance Tracking & Live Time Clock
 
