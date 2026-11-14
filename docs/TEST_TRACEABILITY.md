@@ -1,6 +1,6 @@
 # RemoteHR — Automated Test Traceability Matrix
 
-**Generated**: 2026-11-14T16:29:31.522Z  
+**Generated**: 2026-11-14T16:34:54.344Z  
 **Branch**: `phase-2-multitenancy`  
 **Target Specification**: `FEATURES.md` (Sections 1 through 12)  
 
@@ -16,7 +16,7 @@ This matrix maps every documented feature, security control, and capability from
 | 2 | Authentication, MFA & Security Infrastructure | 9 | 9 | 0 | 0 | 0 |
 | 3 | Attendance Tracking & Live Time Clock | 16 | 12 | 0 | 4 | 0 |
 | 4 | Shift Management & Night Shift Engine | 7 | 7 | 0 | 0 | 0 |
-| 5 | Leave Management & Balance Engine | 9 | 0 | 0 | 9 | 0 |
+| 5 | Leave Management & Balance Engine | 9 | 9 | 0 | 0 | 0 |
 | 6 | Task Management & Work Logging | 7 | 0 | 0 | 6 | 1 |
 | 7 | Performance & KPI Engine | 7 | 0 | 0 | 6 | 1 |
 | 8 | User Administration & Resend Credential Provisioning | 9 | 0 | 0 | 9 | 0 |
@@ -24,7 +24,7 @@ This matrix maps every documented feature, security control, and capability from
 | 10 | Analytics, Reporting & Data Portability | 5 | 0 | 0 | 5 | 0 |
 | 11 | Design System & Frontend UX | 4 | 0 | 0 | 4 | 0 |
 | 12 | Persona Capability Matrix | 30 | 0 | 0 | 30 | 0 |
-| **TOTAL** | **All Sections (1-12)** | **119** | **37** | **0** | **78** | **4** |
+| **TOTAL** | **All Sections (1-12)** | **119** | **46** | **0** | **69** | **4** |
 
 ---
 
@@ -93,15 +93,15 @@ This matrix maps every documented feature, security control, and capability from
 
 | Feature ID | Feature Name | Status | Test File(s) | Test Assertion Count |
 | :--- | :--- | :---: | :--- | :---: |
-| [F5.1.1] | Custom Leave Types (CRUD & Balances) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F5.1.2] | Yearly Allocation Engine (allocate_yearly_balances) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F5.1.3] | KPI Contribution Toggle (counts_toward_kpi) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F5.2.1] | Business Day Calculator (calculate_working_days) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F5.2.2] | Half-Day Boundary Protection (chk_leave_request_half_day_single_date) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F5.3.1] | Employee Leave Filing & Preview | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F5.3.2] | Manager Leave Approval Queue | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F5.3.3] | Automated Attendance Recalculation on Approval | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F5.3.4] | Approval Delegation (create, use, revoke, expire) | ❌ `NOT IMPLEMENTED` | — | 0 |
+| [F5.1.1] | Custom Leave Types (CRUD & Balances) | ✅ `COVERED` | `tests/database/f5-leave.test.ts` | 1 |
+| [F5.1.2] | Yearly Allocation Engine (allocate_yearly_balances) | ✅ `COVERED` | `tests/database/f5-leave.test.ts` | 1 |
+| [F5.1.3] | KPI Contribution Toggle (counts_toward_kpi) | ✅ `COVERED` | `tests/database/f5-leave.test.ts` | 1 |
+| [F5.2.1] | Business Day Calculator (calculate_working_days) | ✅ `COVERED` | `tests/database/f5-leave.test.ts` | 1 |
+| [F5.2.2] | Half-Day Boundary Protection (chk_leave_request_half_day_single_date) | ✅ `COVERED` | `tests/database/f5-leave.test.ts` | 1 |
+| [F5.3.1] | Employee Leave Filing & Preview | ✅ `COVERED` | `tests/database/f5-leave.test.ts` | 1 |
+| [F5.3.2] | Manager Leave Approval Queue | ✅ `COVERED` | `tests/database/f5-leave.test.ts` | 1 |
+| [F5.3.3] | Automated Attendance Recalculation on Approval | ✅ `COVERED` | `tests/database/f5-leave.test.ts` | 1 |
+| [F5.3.4] | Approval Delegation (create, use, revoke, expire) | ✅ `COVERED` | `tests/database/f5-leave.test.ts` | 1 |
 
 ## Section 6: Task Management & Work Logging
 
