@@ -18,10 +18,6 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
     },
-    {
-      name: "mobile-chrome",
-      use: { ...devices["Pixel 7"] },
-    },
   ],
   webServer: {
     command: "node --env-file=.env.staging node_modules/next/dist/bin/next dev",
