@@ -19,6 +19,11 @@ import {
   XCircle,
   Download,
   Users,
+  Copy,
+  Check,
+  Clock,
+  Send,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -33,6 +38,8 @@ interface EmployeeUser {
   location: string;
   status: "active" | "suspended" | "inactive";
   timezone: string;
+  shiftStartTime: string;
+  shiftEndTime: string;
 }
 
 interface BulkPreviewRow {
@@ -81,12 +88,27 @@ function UsersDirectoryContent() {
   );
   const [inviteWorkMode, setInviteWorkMode] = React.useState("remote");
   const [inviteTimezone, setInviteTimezone] = React.useState("Asia/Kolkata");
+  const [inviteShiftStart, setInviteShiftStart] = React.useState("09:00");
+  const [inviteShiftEnd, setInviteShiftEnd] = React.useState("17:00");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  // Credentials & Resend Delivery Modal State
+  const [createdCredentials, setCreatedCredentials] = React.useState<{
+    email: string;
+    tempPassword?: string;
+    role: string;
+    shift: string;
+    emailSent: boolean;
+  } | null>(null);
+  const [credentialsModalOpen, setCredentialsModalOpen] = React.useState(false);
+  const [hasCopied, setHasCopied] = React.useState(false);
 
   // Governance Edit Form State
   const [govWorkMode, setGovWorkMode] = React.useState("remote");
   const [govTimezone, setGovTimezone] = React.useState("UTC");
   const [govStatus, setGovStatus] = React.useState("active");
+  const [govShiftStart, setGovShiftStart] = React.useState("09:00");
+  const [govShiftEnd, setGovShiftEnd] = React.useState("17:00");
 
   // Bulk CSV Import State
   const [csvText, setCsvText] = React.useState(SAMPLE_BULK_CSV);
@@ -100,15 +122,20 @@ function UsersDirectoryContent() {
         (supabase as any)
           .from("employees")
           .select(
-            "id, full_name, email, work_mode, status, timezone, departments:department_id(name), locations:primary_location_id(name)"
+            "id, full_name, email, work_mode, status, timezone, shift_start_time, shift_end_time, departments:department_id(name), locations:primary_location_id(name)"
           )
           .order("full_name"),
-        (supabase as any).from("organization_members").select("user_id, role, status"),
+        (supabase as any).from("organization_members").select("user_id, role, status, shift_start_time, shift_end_time"),
       ]);
 
-      const memberMap = new Map<string, { role: string; status: string }>();
+      const memberMap = new Map<string, { role: string; status: string; shiftStartTime: string; shiftEndTime: string }>();
       for (const m of members || []) {
-        memberMap.set(m.user_id, { role: m.role, status: m.status });
+        memberMap.set(m.user_id, {
+          role: m.role,
+          status: m.status,
+          shiftStartTime: (m.shift_start_time || "09:00:00").slice(0, 5),
+          shiftEndTime: (m.shift_end_time || "17:00:00").slice(0, 5),
+        });
       }
 
       if (emps) {
@@ -131,6 +158,8 @@ function UsersDirectoryContent() {
               location: e.locations?.name || "Remote",
               status: effectiveStatus,
               timezone: e.timezone || "UTC",
+              shiftStartTime: mem?.shiftStartTime || (e.shift_start_time || "09:00:00").slice(0, 5),
+              shiftEndTime: mem?.shiftEndTime || (e.shift_end_time || "17:00:00").slice(0, 5),
             };
           })
         );
@@ -152,6 +181,8 @@ function UsersDirectoryContent() {
     setInviteRole("employee");
     setInviteWorkMode("remote");
     setInviteTimezone("Asia/Kolkata");
+    setInviteShiftStart("09:00");
+    setInviteShiftEnd("17:00");
     setInviteModalOpen(true);
   };
 
@@ -172,13 +203,31 @@ function UsersDirectoryContent() {
           role: inviteRole,
           workMode: inviteWorkMode,
           timezone: inviteTimezone,
+          shiftStartTime: inviteShiftStart + ":00",
+          shiftEndTime: inviteShiftEnd + ":00",
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to invite employee");
 
-      toast.success(`Invite sent to ${inviteEmail}.`);
+      toast.success(
+        data.emailSent
+          ? `User created and credentials dispatched via Resend!`
+          : `User ${inviteEmail} created successfully!`
+      );
       setInviteModalOpen(false);
+
+      if (data.temporaryPassword) {
+        setCreatedCredentials({
+          email: inviteEmail,
+          tempPassword: data.temporaryPassword,
+          role: inviteRole,
+          shift: `${inviteShiftStart} - ${inviteShiftEnd}`,
+          emailSent: Boolean(data.emailSent),
+        });
+        setCredentialsModalOpen(true);
+      }
+
       await loadDirectory();
     } catch (err: any) {
       toast.error(err.message || "Failed to invite user");
@@ -192,6 +241,8 @@ function UsersDirectoryContent() {
     setGovWorkMode(user.workMode);
     setGovTimezone(user.timezone);
     setGovStatus(user.status === "active" ? "active" : "inactive");
+    setGovShiftStart(user.shiftStartTime || "09:00");
+    setGovShiftEnd(user.shiftEndTime || "17:00");
     setGovernanceModalOpen(true);
   };
 
@@ -200,15 +251,31 @@ function UsersDirectoryContent() {
     if (!selectedUser) return;
     setIsSubmitting(true);
     try {
-      const { error } = await (supabase.rpc as any)("admin_update_employee_governance", {
-        p_employee_id: selectedUser.id,
-        p_work_mode: govWorkMode,
-        p_timezone: govTimezone,
-        p_status: govStatus === "active" ? "active" : "inactive",
-      });
-      if (error) throw error;
+      const [govRes, shiftFetchRes] = await Promise.all([
+        (supabase.rpc as any)("admin_update_employee_governance", {
+          p_employee_id: selectedUser.id,
+          p_work_mode: govWorkMode,
+          p_timezone: govTimezone,
+          p_status: govStatus === "active" ? "active" : "inactive",
+        }),
+        fetch("/api/admin/users/shift", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: selectedUser.id,
+            shiftStartTime: govShiftStart.length === 5 ? govShiftStart + ":00" : govShiftStart,
+            shiftEndTime: govShiftEnd.length === 5 ? govShiftEnd + ":00" : govShiftEnd,
+          }),
+        }),
+      ]);
 
-      toast.success("Governance fields updated.");
+      if (govRes.error) throw govRes.error;
+      if (!shiftFetchRes.ok) {
+        const errJson = await shiftFetchRes.json().catch(() => ({}));
+        throw new Error(errJson.error || "Failed to update shift schedule.");
+      }
+
+      toast.success("Governance & shift schedule updated successfully.");
       setGovernanceModalOpen(false);
       await loadDirectory();
     } catch (err: any) {
@@ -414,6 +481,7 @@ function UsersDirectoryContent() {
                   <th className="py-3.5 px-4">Department</th>
                   <th className="py-3.5 px-4">Location</th>
                   <th className="py-3.5 px-4">Timezone</th>
+                  <th className="py-3.5 px-4">Shift</th>
                   <th className="py-3.5 px-4">Status</th>
                   {isAdmin && <th className="py-3.5 px-5 text-right">Actions</th>}
                 </tr>
@@ -459,6 +527,24 @@ function UsersDirectoryContent() {
                       </td>
                       <td className="py-4 px-4 text-xs font-mono text-text-tertiary">
                         {u.timezone}
+                      </td>
+                      <td className="py-4 px-4">
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold font-mono",
+                            u.shiftEndTime < u.shiftStartTime
+                              ? "bg-brand-purple/15 text-brand-purple border border-brand-purple/30"
+                              : "bg-card-subtle text-text-secondary border border-border-light"
+                          )}
+                          title={
+                            u.shiftEndTime < u.shiftStartTime
+                              ? "Night Shift (crosses midnight)"
+                              : "Day Shift"
+                          }
+                        >
+                          {u.shiftEndTime < u.shiftStartTime ? "🌙 " : "☀️ "}
+                          {u.shiftStartTime} - {u.shiftEndTime}
+                        </span>
                       </td>
                       <td className="py-4 px-4">
                         <StatusPill status={u.status} />
@@ -606,6 +692,49 @@ function UsersDirectoryContent() {
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor="invite-shift-start"
+                className="text-xs font-bold text-text-secondary block mb-1 flex items-center gap-1"
+              >
+                <Clock className="w-3 h-3 text-brand-purple" />
+                Shift Start
+              </label>
+              <input
+                id="invite-shift-start"
+                type="time"
+                required
+                value={inviteShiftStart}
+                onChange={(e) => setInviteShiftStart(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="invite-shift-end"
+                className="text-xs font-bold text-text-secondary block mb-1 flex items-center gap-1"
+              >
+                <Clock className="w-3 h-3 text-brand-purple" />
+                Shift End
+              </label>
+              <input
+                id="invite-shift-end"
+                type="time"
+                required
+                value={inviteShiftEnd}
+                onChange={(e) => setInviteShiftEnd(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+              />
+            </div>
+          </div>
+          {inviteShiftEnd < inviteShiftStart && (
+            <p className="text-[11px] text-brand-purple font-semibold flex items-center gap-1">
+              <span>🌙 Night shift detected (crosses midnight, auto-checkout protected)</span>
+            </p>
+          )}
+
           <div>
             <label
               htmlFor="invite-timezone"
@@ -685,6 +814,49 @@ function UsersDirectoryContent() {
             />
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor="gov-shift-start"
+                className="text-xs font-bold text-text-secondary block mb-1 flex items-center gap-1"
+              >
+                <Clock className="w-3 h-3 text-brand-purple" />
+                Shift Start Time
+              </label>
+              <input
+                id="gov-shift-start"
+                type="time"
+                required
+                value={govShiftStart}
+                onChange={(e) => setGovShiftStart(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="gov-shift-end"
+                className="text-xs font-bold text-text-secondary block mb-1 flex items-center gap-1"
+              >
+                <Clock className="w-3 h-3 text-brand-purple" />
+                Shift End Time
+              </label>
+              <input
+                id="gov-shift-end"
+                type="time"
+                required
+                value={govShiftEnd}
+                onChange={(e) => setGovShiftEnd(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+              />
+            </div>
+          </div>
+          {govShiftEnd < govShiftStart && (
+            <p className="text-[11px] text-brand-purple font-semibold">
+              🌙 Night Shift: Crosses midnight. 23:59 auto-checkout is skipped until scheduled morning end time.
+            </p>
+          )}
+
           <div>
             <label
               htmlFor="gov-status"
@@ -720,6 +892,95 @@ function UsersDirectoryContent() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Credentials Created & Resend Dispatch Modal */}
+      <Modal
+        open={credentialsModalOpen && Boolean(createdCredentials)}
+        onOpenChange={(open) => {
+          setCredentialsModalOpen(open);
+          if (!open) setHasCopied(false);
+        }}
+        title="Employee Credentials Created"
+        description="Credentials have been generated and dispatched via Resend email"
+      >
+        <div className="space-y-4 pt-1">
+          <div className="p-4 rounded-2xl bg-card-subtle border border-border-light space-y-2.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-text-secondary">Workplace Account:</span>
+              <span className="font-bold text-text-primary">{createdCredentials?.email}</span>
+            </div>
+
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-text-secondary">Assigned Role:</span>
+              <span className="font-bold uppercase text-brand-purple bg-brand-purple-light/40 px-2 py-0.5 rounded-full text-[10px]">
+                {createdCredentials?.role}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-text-secondary">Shift Schedule:</span>
+              <span className="font-mono font-bold text-text-primary">{createdCredentials?.shift}</span>
+            </div>
+
+            <div className="pt-2 border-t border-border-light/60">
+              <span className="block text-xs font-semibold text-text-secondary mb-1">
+                Temporary Password:
+              </span>
+              <div className="flex items-center justify-between bg-card p-2.5 rounded-xl border border-border-light">
+                <code className="text-xs font-mono font-bold text-brand-navy select-all">
+                  {createdCredentials?.tempPassword}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (createdCredentials?.tempPassword) {
+                      const text = `RemoteHR Credentials\nEmail: ${createdCredentials.email}\nTemporary Password: ${createdCredentials.tempPassword}\nShift: ${createdCredentials.shift}\nLogin URL: ${window.location.origin}/login`;
+                      navigator.clipboard.writeText(text);
+                      setHasCopied(true);
+                      toast.success("Credentials copied to clipboard!");
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold transition-all cursor-pointer"
+                >
+                  {hasCopied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy Credentials</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-3 rounded-xl bg-brand-purple/10 border border-brand-purple/20 text-xs text-brand-purple flex items-start gap-2">
+            <Send className="w-4 h-4 shrink-0 mt-0.5 text-brand-purple" />
+            <div>
+              <span className="font-bold block">Resend Email Delivery</span>
+              <p className="text-[11px] text-text-secondary mt-0.5">
+                {createdCredentials?.emailSent
+                  ? "A welcome email with login credentials has been delivered to the employee."
+                  : "Email notification dispatched. You can also manually copy the temporary credentials above."}
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setCredentialsModalOpen(false)}
+              className="px-5 py-2.5 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold cursor-pointer transition-all shadow-sm"
+            >
+              Done
+            </button>
+          </div>
+        </div>
       </Modal>
 
       {/* Bulk CSV Import Modal */}

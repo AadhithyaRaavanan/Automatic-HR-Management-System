@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { QueryProvider } from "@/components/query-provider";
+import { AttendanceProvider } from "@/features/attendance/context/attendance-context";
 import { Toaster } from "sonner";
 import "./globals.css";
 
@@ -32,7 +33,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <QueryProvider>
-            {children}
+            <AttendanceProvider>
+              {children}
+            </AttendanceProvider>
             <Toaster richColors position="top-right" />
           </QueryProvider>
         </ThemeProvider>

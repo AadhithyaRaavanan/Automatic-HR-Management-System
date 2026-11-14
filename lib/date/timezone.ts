@@ -117,3 +117,77 @@ export function calculateSessionDuration(
   }
 }
 
+/**
+ * Checks if a shift crosses midnight (night shift, e.g. 17:00 to 01:00)
+ */
+export function isNightShift(shiftStartTime: string, shiftEndTime: string): boolean {
+  if (!shiftStartTime || !shiftEndTime) return false;
+  const [startH, startM = 0] = shiftStartTime.split(":").map(Number);
+  const [endH, endM = 0] = shiftEndTime.split(":").map(Number);
+  return endH * 60 + endM < startH * 60 + startM;
+}
+
+/**
+ * Computes human-readable 12-hour time when check-in opens (5 mins prior to shift start)
+ * e.g. "09:00:00" -> "08:55 AM"
+ */
+export function getCheckInOpenTime(shiftStartTime: string = "09:00:00"): string {
+  try {
+    const [startH, startM = 0] = shiftStartTime.split(":").map(Number);
+    let openMins = startH * 60 + startM - 5;
+    if (openMins < 0) openMins += 24 * 60;
+    const h24 = Math.floor(openMins / 60) % 24;
+    const m = openMins % 60;
+    const ampm = h24 >= 12 ? "PM" : "AM";
+    const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+    return `${h12.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")} ${ampm}`;
+  } catch {
+    return "08:55 AM";
+  }
+}
+
+/**
+ * Evaluates whether check-in is currently locked due to 5-min pre-check-in rule
+ */
+export function evaluatePreCheckInLock(
+  shiftStartTime: string = "09:00:00",
+  shiftEndTime: string = "17:00:00",
+  timezone: string = "UTC",
+  currentDate: Date = new Date()
+): { isLocked: boolean; openTimeString: string; isShiftStarted: boolean } {
+  try {
+    const [startH, startM = 0] = shiftStartTime.split(":").map(Number);
+    const [endH = 17, endM = 0] = (shiftEndTime || "17:00:00").split(":").map(Number);
+    const zoned = toZonedTime(currentDate, timezone || "UTC");
+    const currentMins = zoned.getHours() * 60 + zoned.getMinutes();
+
+    let openMins = startH * 60 + startM - 5;
+    if (openMins < 0) openMins += 24 * 60;
+
+    const shiftStartMins = startH * 60 + startM;
+    const shiftEndMins = endH * 60 + endM;
+    const crossesMidnight = shiftEndMins < shiftStartMins;
+
+    const openTimeString = getCheckInOpenTime(shiftStartTime);
+
+    if (crossesMidnight) {
+      // Night shift e.g. 17:00 to 01:00
+      // Check-in opens at 16:55 and is open until end of shift + 4 hours buffer
+      const isWithinShiftWindow =
+        currentMins >= openMins || currentMins <= shiftEndMins + 240;
+      const isLocked = !isWithinShiftWindow;
+      const isShiftStarted = currentMins >= shiftStartMins || currentMins <= shiftEndMins;
+      return { isLocked, openTimeString, isShiftStarted };
+    } else {
+      // Standard daytime shift e.g. 09:00 to 17:00
+      // Check-in opens at openMins (08:55). Before 08:55, it is locked.
+      const isLocked = currentMins < openMins;
+      const isShiftStarted = currentMins >= shiftStartMins;
+      return { isLocked, openTimeString, isShiftStarted };
+    }
+  } catch {
+    return { isLocked: false, openTimeString: "08:55 AM", isShiftStarted: true };
+  }
+}
+
+

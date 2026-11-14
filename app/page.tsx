@@ -172,8 +172,11 @@ function DashboardContent({
             activeTime={timer.formattedTime}
             workDate={data?.workDate || "Today"}
             targetMinutes={targetMinutes}
+            shiftStartTime={data?.shiftStartTime || "09:00:00"}
+            shiftEndTime={data?.shiftEndTime || "17:00:00"}
+            userTimezone={data?.timezone || timezone || "UTC"}
             isLoading={checkInMutation.isPending || checkOutMutation.isPending || isLoading}
-            onCheckIn={() => checkInMutation.mutate("Morning shift punch")}
+            onCheckIn={() => checkInMutation.mutate("Shift check-in")}
             onCheckOut={() => checkOutMutation.mutate()}
           />
         </div>

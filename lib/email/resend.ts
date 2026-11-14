@@ -1,74 +1,150 @@
-/**
- * Email notification service via Resend API
- */
+import { Resend } from "resend";
 
-interface SendEmailParams {
+const resendApiKey = process.env.RESEND_API_KEY;
+
+export const resend = resendApiKey ? new Resend(resendApiKey) : null;
+
+export interface SendInviteEmailParams {
   to: string;
-  subject: string;
-  html: string;
+  fullName: string;
+  role: string;
+  temporaryPassword?: string;
+  shiftStartTime?: string;
+  shiftEndTime?: string;
+  loginUrl?: string;
 }
 
-export async function sendEmail({ to, subject, html }: SendEmailParams): Promise<{ success: boolean; id?: string }> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.EMAIL_FROM || "RemoteHR <attendance@remotehr.io>";
-
-  if (!apiKey || apiKey.includes("your_api_key")) {
-    // Graceful fallback for local development without active credentials
-    console.log(`[Resend Email Mock] Sending email to: ${to} | Subject: ${subject}`);
-    return { success: true, id: "mock-email-id" };
-  }
-
-  try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: fromEmail,
-        to: [to],
-        subject,
-        html,
-      }),
-    });
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      console.error("[Resend Error]", errorText);
-      return { success: false };
-    }
-
-    const data = await res.json();
-    return { success: true, id: data.id };
-  } catch (error) {
-    console.error("[Resend Exception]", error);
-    return { success: false };
-  }
-}
-
-/**
- * HTML Email Template styled with RemoteHR tokens
- */
-export function buildAttendanceEmailTemplate(title: string, bodyText: string, ctaLabel?: string, ctaUrl?: string) {
+export function buildAttendanceEmailTemplate(
+  title: string,
+  message: string,
+  actionText: string,
+  actionUrl: string
+): string {
   return `
-    <div style="font-family: 'Plus Jakarta Sans', sans-serif, -apple-system; max-width: 580px; margin: 0 auto; background-color: #FFFFFF; border-radius: 24px; padding: 36px; border: 1px solid #ECEEF6; box-shadow: 0 10px 28px rgba(20, 18, 58, 0.05);">
-      <div style="display: flex; align-items: center; margin-bottom: 24px;">
-        <div style="background-color: #6C5CE7; width: 36px; height: 36px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; color: #FFFFFF; font-weight: bold; margin-right: 12px; text-align: center; line-height: 36px;">
-          HR
+    <!DOCTYPE html>
+    <html>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f7f6fd; padding: 24px;">
+        <div style="background-color: #ffffff; max-width: 520px; margin: 0 auto; border-radius: 20px; padding: 32px; border: 1px solid #e2e0f0;">
+          <h2 style="color: #6C5CE7; margin-top: 0;">RemoteHR Workplace</h2>
+          <h3 style="color: #14123A;">${title}</h3>
+          <p style="color: #4b5563; font-size: 14px; line-height: 1.5;">${message}</p>
+          <div style="margin-top: 24px;">
+            <a href="${actionUrl}" style="background-color: #14123A; color: #ffffff; padding: 12px 24px; border-radius: 12px; text-decoration: none; font-size: 13px; font-weight: 700; display: inline-block;">
+              ${actionText}
+            </a>
+          </div>
         </div>
-        <span style="font-size: 18px; font-weight: 800; color: #14123A;">RemoteHR Workplace</span>
-      </div>
-      <h2 style="font-size: 20px; font-weight: 700; color: #14123A; margin-bottom: 12px;">${title}</h2>
-      <p style="font-size: 14px; line-height: 1.6; color: #5E5D78; margin-bottom: 24px;">${bodyText}</p>
-      ${
-        ctaLabel && ctaUrl
-          ? `<a href="${ctaUrl}" style="display: inline-block; background-color: #14123A; color: #FFFFFF; font-size: 13px; font-weight: 700; text-decoration: none; padding: 12px 24px; border-radius: 12px;">${ctaLabel}</a>`
-          : ""
-      }
-      <hr style="border: none; border-top: 1px solid #ECEEF6; margin-top: 32px; margin-bottom: 16px;" />
-      <p style="font-size: 11px; color: #7D7C94;">Automated notification from RemoteHR Attendance System. No location or biometric tracking.</p>
-    </div>
+      </body>
+    </html>
   `;
 }
 
+export async function sendWelcomeCredentialsEmail(params: SendInviteEmailParams): Promise<{
+  success: boolean;
+  simulated?: boolean;
+  messageId?: string;
+  error?: string;
+}> {
+  const {
+    to,
+    fullName,
+    role,
+    temporaryPassword,
+    shiftStartTime = "09:00 AM",
+    shiftEndTime = "05:00 PM",
+    loginUrl = process.env.NEXT_PUBLIC_APP_URL
+      ? `${process.env.NEXT_PUBLIC_APP_URL}/login`
+      : "http://localhost:3000/login",
+  } = params;
+
+  const subject = `Welcome to RemoteHR — Your Account Credentials`;
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Welcome to RemoteHR</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f7f6fd; color: #1e1b4b; margin: 0; padding: 24px; }
+          .card { background-color: #ffffff; max-width: 540px; margin: 0 auto; border-radius: 20px; padding: 32px; border: 1px solid #e2e0f0; box-shadow: 0 4px 12px rgba(108, 92, 231, 0.08); }
+          .header { text-align: center; margin-bottom: 24px; }
+          .brand { font-size: 20px; font-weight: 800; color: #6c5ce7; }
+          .title { font-size: 18px; font-weight: 700; margin-top: 8px; color: #1e1b4b; }
+          .info-box { background-color: #f8f7ff; border-radius: 12px; padding: 18px; border: 1px solid #e6e4f7; margin: 20px 0; }
+          .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
+          .label { color: #64748b; font-weight: 600; }
+          .val { color: #0f172a; font-weight: 700; font-family: monospace; }
+          .btn { display: inline-block; background-color: #1e1b4b; color: #ffffff !important; text-decoration: none; padding: 12px 28px; border-radius: 12px; font-weight: 700; font-size: 13px; margin-top: 16px; }
+          .footer { font-size: 11px; color: #94a3b8; text-align: center; margin-top: 24px; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="header">
+            <div class="brand">RemoteHR</div>
+            <div class="title">Welcome, ${fullName}!</div>
+          </div>
+          <p style="font-size: 13px; line-height: 1.6; color: #334155;">
+            An account has been created for you at RemoteHR with role <strong>${role.toUpperCase()}</strong>.
+            Your assigned working hours are <strong>${shiftStartTime} - ${shiftEndTime}</strong>.
+          </p>
+          <div class="info-box">
+            <div class="info-row">
+              <span class="label">Login Email:</span>
+              <span class="val">${to}</span>
+            </div>
+            ${
+              temporaryPassword
+                ? `
+            <div class="info-row">
+              <span class="label">Temporary Password:</span>
+              <span class="val">${temporaryPassword}</span>
+            </div>
+            `
+                : ""
+            }
+          </div>
+          <p style="font-size: 12px; color: #64748b;">
+            Please log in and update your password under your Profile &amp; Settings.
+          </p>
+          <div style="text-align: center;">
+            <a href="${loginUrl}" class="btn">Sign In to Dashboard</a>
+          </div>
+          <div class="footer">
+            RemoteHR Secure Automated Workplace &bull; Zero Invasive Monitoring
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  if (!resend) {
+    // If RESEND_API_KEY is not yet in .env, simulate dispatch cleanly without crashing
+    console.log(`[Resend Simulated Email to ${to}] Subject: ${subject}`);
+    if (temporaryPassword) {
+      console.log(`[Resend Simulated Credentials] Password: ${temporaryPassword}`);
+    }
+    return { success: true, simulated: true, messageId: `sim_${Date.now()}` };
+  }
+
+  try {
+    const fromAddress = process.env.RESEND_FROM_EMAIL || "RemoteHR <onboarding@resend.dev>";
+    const response = await resend.emails.send({
+      from: fromAddress,
+      to: [to],
+      subject,
+      html: htmlContent,
+    });
+
+    if (response.error) {
+      console.error("[Resend Error]:", response.error);
+      return { success: false, error: response.error.message };
+    }
+
+    return { success: true, messageId: response.data?.id };
+  } catch (err: any) {
+    console.error("[Resend Exception]:", err);
+    return { success: false, error: err.message || String(err) };
+  }
+}

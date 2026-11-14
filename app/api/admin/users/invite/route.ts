@@ -25,6 +25,8 @@ export async function POST(request: NextRequest) {
       workTargetMinutes: body.workTargetMinutes,
       expectedOfficeDays: body.expectedOfficeDays,
       requiredOfficeDaysPerWeek: body.requiredOfficeDaysPerWeek,
+      shiftStartTime: body.shiftStartTime,
+      shiftEndTime: body.shiftEndTime,
     });
 
     if (!result.ok) {
@@ -34,6 +36,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       userId: result.userId,
+      temporaryPassword: result.temporaryPassword,
+      emailSent: result.emailSent,
       message: result.message,
       data: result.data,
     });

@@ -17,6 +17,7 @@ import {
   Globe,
   Bell,
   Lock,
+  KeyRound,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,6 +28,11 @@ function SettingsPageContent() {
   const [workTargetMinutes, setWorkTargetMinutes] = React.useState(480);
   const [emailAlerts, setEmailAlerts] = React.useState(true);
   const [slackAlerts, setSlackAlerts] = React.useState(true);
+
+  // Password Update State
+  const [newPassword, setNewPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [isChangingPassword, setIsChangingPassword] = React.useState(false);
 
   React.useEffect(() => {
     let active = true;
@@ -54,6 +60,31 @@ function SettingsPageContent() {
   const handleSaveNotifications = (e: React.FormEvent) => {
     e.preventDefault();
     toast.success("Notification preferences saved!");
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 12) {
+      toast.error("Password must be at least 12 characters long.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("New Password and Confirm Password do not match.");
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      toast.success("Your password has been updated successfully!");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update password.");
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   return (
@@ -307,6 +338,78 @@ function SettingsPageContent() {
             <Lock className="w-3.5 h-3.5 text-status-success-dot" />
             <span>Data encrypted at rest and in transit via Supabase TLS</span>
           </div>
+        </BentoCard>
+
+        {/* Security & Change Password Section */}
+        <BentoCard
+          title={
+            <div className="flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-brand-purple" />
+              <span className="text-lg">Security &amp; Change Password</span>
+            </div>
+          }
+          subtitle="Update your temporary password or establish a new strong credential"
+          className="lg:col-span-12 p-6"
+        >
+          <form onSubmit={handlePasswordChange} className="space-y-4 max-w-xl">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label
+                  htmlFor="new-password"
+                  className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1.5"
+                >
+                  New Password
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-text-tertiary absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    id="new-password"
+                    type="password"
+                    required
+                    minLength={12}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Min. 12 characters"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-medium text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-brand-purple focus:ring-2 focus:ring-brand-purple/20 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="confirm-password"
+                  className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1.5"
+                >
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-text-tertiary absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    id="confirm-password"
+                    type="password"
+                    required
+                    minLength={12}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter password"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-medium text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-brand-purple focus:ring-2 focus:ring-brand-purple/20 transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-text-tertiary">
+              Password must contain at least 12 characters. Changes take effect across all active sessions upon next sign-in.
+            </p>
+
+            <button
+              type="submit"
+              disabled={isChangingPassword || !newPassword}
+              className="px-5 py-2.5 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
+            >
+              {isChangingPassword ? "Updating Password..." : "Update Password"}
+            </button>
+          </form>
         </BentoCard>
       </BentoGrid>
     </div>

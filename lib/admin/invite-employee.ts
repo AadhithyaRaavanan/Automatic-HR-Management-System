@@ -2,6 +2,7 @@ import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { AuthenticatedCallerContext } from "@/lib/auth/admin-guard";
+import { sendWelcomeCredentialsEmail } from "@/lib/email/resend";
 
 export interface InviteEmployeeInput {
   email: string;
@@ -15,13 +16,17 @@ export interface InviteEmployeeInput {
   workTargetMinutes?: number;
   expectedOfficeDays?: number[];
   requiredOfficeDaysPerWeek?: number;
+  shiftStartTime?: string;
+  shiftEndTime?: string;
 }
 
 export type InviteEmployeeResult =
   | {
       ok: true;
       userId: string;
+      temporaryPassword?: string;
       message: string;
+      emailSent: boolean;
       data: any;
     }
   | {
@@ -47,6 +52,8 @@ export async function inviteSingleEmployee(
     workTargetMinutes = 480,
     expectedOfficeDays = [1, 2, 3, 4, 5],
     requiredOfficeDaysPerWeek = 0,
+    shiftStartTime = "09:00:00",
+    shiftEndTime = "17:00:00",
   } = input;
 
   if (!email || !fullName) {
@@ -132,52 +139,70 @@ export async function inviteSingleEmployee(
     };
   }
 
-  // 1. Invite user via Supabase Auth Admin API
+  // 1. Create or invite user via Supabase Auth Admin API
   let invitedUserId: string;
-  const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-    normalizedEmail,
-    {
-      data: {
-        full_name: normalizedName,
-        user_role: role,
-      },
-    }
-  );
+  const temporaryPassword = `Temp${Math.random().toString(36).slice(-8)}!${Math.floor(10 + Math.random() * 90)}`;
 
-  if (inviteError) {
-    const errMsg = inviteError.message?.toLowerCase() || "";
-    const errCode = (inviteError as any).code || "";
-    if (errMsg.includes("already registered") || errCode === "email_exists" || inviteError.status === 422) {
-      if (preExistingEmployee?.id) {
-        invitedUserId = preExistingEmployee.id;
+  // Attempt direct user creation with auto-confirmed email & temporary password
+  const { data: createData, error: createError } = await supabaseAdmin.auth.admin.createUser({
+    email: normalizedEmail,
+    password: temporaryPassword,
+    email_confirm: true,
+    user_metadata: {
+      full_name: normalizedName,
+      user_role: role,
+    },
+  });
+
+  if (createError) {
+    // If user already exists or createUser was denied, try inviteUserByEmail fallback
+    const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+      normalizedEmail,
+      {
+        data: {
+          full_name: normalizedName,
+          user_role: role,
+        },
+      }
+    );
+
+    if (inviteError) {
+      const errMsg = inviteError.message?.toLowerCase() || "";
+      const errCode = (inviteError as any).code || "";
+      if (errMsg.includes("already registered") || errCode === "email_exists" || inviteError.status === 422) {
+        if (preExistingEmployee?.id) {
+          invitedUserId = preExistingEmployee.id;
+        } else {
+          let foundUser: any = null;
+          let page = 1;
+          const perPage = 100;
+          while (!foundUser) {
+            const { data: listData, error: listErr } = await supabaseAdmin.auth.admin.listUsers({
+              page,
+              perPage,
+            });
+            if (listErr || !listData?.users || listData.users.length === 0) {
+              break;
+            }
+            foundUser = listData.users.find((u) => u.email?.toLowerCase() === normalizedEmail) || null;
+            if (listData.users.length < perPage) {
+              break;
+            }
+            page += 1;
+          }
+          if (!foundUser) {
+            return { ok: false, status: 400, error: `Invite failed: ${inviteError.message}` };
+          }
+          invitedUserId = foundUser.id;
+        }
       } else {
-        let foundUser: any = null;
-        let page = 1;
-        const perPage = 100;
-        while (!foundUser) {
-          const { data: listData, error: listErr } = await supabaseAdmin.auth.admin.listUsers({
-            page,
-            perPage,
-          });
-          if (listErr || !listData?.users || listData.users.length === 0) {
-            break;
-          }
-          foundUser = listData.users.find((u) => u.email?.toLowerCase() === normalizedEmail) || null;
-          if (listData.users.length < perPage) {
-            break;
-          }
-          page += 1;
-        }
-        if (!foundUser) {
-          return { ok: false, status: 400, error: `Invite failed: ${inviteError.message}` };
-        }
-        invitedUserId = foundUser.id;
+        return { ok: false, status: 400, error: `User creation failed: ${createError.message || inviteError.message}` };
       }
     } else {
-      return { ok: false, status: 400, error: `Invite failed: ${inviteError.message}` };
+      invitedUserId = inviteData.user.id;
     }
   } else {
-    invitedUserId = inviteData.user.id;
+    invitedUserId = createData.user.id;
   }
 
   // Check cross-tenant uniqueness across organization_members and employees
@@ -237,7 +262,33 @@ export async function inviteSingleEmployee(
     };
   }
 
-  // 3. Write audit row
+  // Persist shift schedule if specified
+  if (shiftStartTime || shiftEndTime) {
+    const startVal = shiftStartTime ? (shiftStartTime.length === 5 ? `${shiftStartTime}:00` : shiftStartTime) : "09:00:00";
+    const endVal = shiftEndTime ? (shiftEndTime.length === 5 ? `${shiftEndTime}:00` : shiftEndTime) : "17:00:00";
+    await Promise.all([
+      (supabaseAdmin.from("organization_members") as any)
+        .update({ shift_start_time: startVal, shift_end_time: endVal, updated_at: new Date().toISOString() })
+        .eq("user_id", invitedUserId)
+        .eq("organization_id", context.organizationId),
+      (supabaseAdmin.from("employees") as any)
+        .update({ shift_start_time: startVal, shift_end_time: endVal, updated_at: new Date().toISOString() })
+        .eq("id", invitedUserId)
+        .eq("organization_id", context.organizationId),
+    ]);
+  }
+
+  // 3. Dispatch credentials email via Resend
+  const emailResult = await sendWelcomeCredentialsEmail({
+    to: normalizedEmail,
+    fullName: normalizedName,
+    role,
+    temporaryPassword,
+    shiftStartTime: shiftStartTime.slice(0, 5),
+    shiftEndTime: shiftEndTime.slice(0, 5),
+  });
+
+  // 4. Write audit row
   await supabaseAdmin.from("audit_logs").insert({
     organization_id: context.organizationId,
     actor_id: context.userId,
@@ -251,6 +302,9 @@ export async function inviteSingleEmployee(
       role,
       work_mode: workMode,
       timezone,
+      shift_start_time: shiftStartTime,
+      shift_end_time: shiftEndTime,
+      email_dispatched: emailResult.success,
       department_id: departmentId || null,
       invited_at: new Date().toISOString(),
     },
@@ -259,7 +313,11 @@ export async function inviteSingleEmployee(
   return {
     ok: true,
     userId: invitedUserId,
-    message: `User ${normalizedEmail} invited and provisioned successfully.`,
+    temporaryPassword,
+    emailSent: emailResult.success,
+    message: emailResult.success
+      ? `User ${normalizedEmail} created and credentials email sent via Resend.`
+      : `User ${normalizedEmail} created successfully.`,
     data: provisionData,
   };
 }

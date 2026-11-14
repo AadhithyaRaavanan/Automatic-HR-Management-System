@@ -27,6 +27,8 @@ export interface TodayAttendanceData {
   workDate: string;
   timezone: string;
   targetMinutes: number;
+  shiftStartTime?: string;
+  shiftEndTime?: string;
   activeSession: AttendanceSessionItem | null;
   sessions: AttendanceSessionItem[];
   daySummary: DaySummaryRow | null;
@@ -37,6 +39,8 @@ export interface TodayAttendanceData {
 interface EmployeeProfileRow {
   timezone: string;
   work_target_minutes: number;
+  shift_start_time?: string;
+  shift_end_time?: string;
 }
 
 export function useAttendanceToday() {
@@ -93,17 +97,27 @@ export function useAttendanceToday() {
         };
       }
 
-      // Fetch employee profile
-      const { data: profileData } = await supabase
-        .from("employees")
-        .select("timezone, work_target_minutes")
-        .eq("id", user.id)
-        .maybeSingle();
+      // Fetch employee profile & shift hours
+      const [{ data: profileData }, { data: memberData }] = await Promise.all([
+        supabase
+          .from("employees")
+          .select("timezone, work_target_minutes")
+          .eq("id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("organization_members")
+          .select("shift_start_time, shift_end_time")
+          .eq("user_id", user.id)
+          .maybeSingle(),
+      ]);
 
       const empProfile = profileData as EmployeeProfileRow | null;
+      const memRow = memberData as any;
       const effectiveTz = empProfile?.timezone || userTimezone;
       const effectiveWorkDate = getEmployeeWorkDate(effectiveTz);
       const targetMins = empProfile?.work_target_minutes || 480;
+      const shiftStartTime = memRow?.shift_start_time || "09:00:00";
+      const shiftEndTime = memRow?.shift_end_time || "17:00:00";
 
       // 1. Fetch today's sessions
       const { data: sessions } = await supabase
@@ -151,6 +165,8 @@ export function useAttendanceToday() {
         workDate: effectiveWorkDate,
         timezone: effectiveTz,
         targetMinutes: targetMins,
+        shiftStartTime,
+        shiftEndTime,
         activeSession: active,
         sessions: sessionList,
         daySummary: daySummary || null,
@@ -158,5 +174,6 @@ export function useAttendanceToday() {
         streakDays,
       };
     },
+    staleTime: 60 * 1000, // Keep data fresh without flashing empty on route change
   });
 }

@@ -31,6 +31,7 @@ function LoginForm() {
   const [password, setPassword] = React.useState("");
   const [isMagicLink, setIsMagicLink] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [isAuthenticating, setIsAuthenticating] = React.useState(false);
   const [captchaToken, setCaptchaToken] = React.useState<string | null>(null);
   const [lockoutMessage, setLockoutMessage] = React.useState<string | null>(null);
 
@@ -39,16 +40,16 @@ function LoginForm() {
 
   const supabase = createClient();
 
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const performLogin = async (loginEmail: string, loginPassword: string) => {
     setLockoutMessage(null);
     setIsLoading(true);
+    setIsAuthenticating(true);
 
     try {
       if (isMagicLink) {
         // Magic link flow via Supabase client
         const { error } = await supabase.auth.signInWithOtp({
-          email,
+          email: loginEmail,
           options: {
             emailRedirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent(
               redirectPath
@@ -61,6 +62,7 @@ function LoginForm() {
         }
 
         toast.success("If an account exists, a secure sign-in link has been sent to your email.");
+        setIsAuthenticating(false);
       } else {
         // Authoritative Server-Side Login via /api/auth/login
         // Enforces server-side IP + email sliding-window rate limiting & CAPTCHA validation
@@ -68,8 +70,8 @@ function LoginForm() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            email,
-            password,
+            email: loginEmail,
+            password: loginPassword,
             captchaToken: captchaToken || undefined,
           }),
         });
@@ -80,11 +82,13 @@ function LoginForm() {
           // Account / IP rate limit locked out
           setLockoutMessage(data.error || "Too many failed attempts. Login locked for 15 minutes.");
           toast.error(data.error || "Account locked due to multiple failed attempts.");
+          setIsAuthenticating(false);
           return;
         }
 
         if (!res.ok) {
           // Generic auth error (status 400 or 401)
+          setIsAuthenticating(false);
           throw new Error(data.error || "Invalid email or password. Please verify your credentials and try again.");
         }
 
@@ -107,20 +111,42 @@ function LoginForm() {
         router.refresh();
       }
     } catch (err: any) {
+      setIsAuthenticating(false);
       toast.error(err.message || "Invalid credentials. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleQuickDemoRole = (role: string, emailPreset: string) => {
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await performLogin(email, password);
+  };
+
+  const handleQuickDemoRole = async (role: string, emailPreset: string) => {
     setEmail(emailPreset);
     setPassword("DemoPassword123!");
-    toast.info(`Filled credentials for ${role} demo (${emailPreset})`);
+    setIsAuthenticating(true);
+    toast.info(`Authenticating as ${role} (${emailPreset})...`);
+    await performLogin(emailPreset, "DemoPassword123!");
   };
+
+  const isFormDisabled = isLoading || isAuthenticating;
 
   return (
     <div className="w-full max-w-md bg-shell rounded-[32px] shadow-shell border border-border-light/60 p-8 sm:p-10 relative overflow-hidden">
+      {/* Instant Authentication Loading Overlay */}
+      {isAuthenticating && (
+        <div className="absolute inset-0 z-50 bg-shell/85 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-200">
+          <div className="w-12 h-12 rounded-full border-4 border-brand-purple/20 border-t-brand-purple animate-spin mb-4" />
+          <p className="text-sm font-bold text-text-primary tracking-tight">
+            Authenticating &amp; Syncing Session...
+          </p>
+          <p className="text-xs text-text-secondary mt-1 max-w-[240px]">
+            Please wait while we verify your credentials and configure your session.
+          </p>
+        </div>
+      )}
       {/* Top Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-2.5">
@@ -168,10 +194,11 @@ function LoginForm() {
             <input
               type="email"
               required
+              disabled={isFormDisabled}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@company.com"
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-medium text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-brand-purple focus:ring-2 focus:ring-brand-purple/20 transition-all"
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-medium text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-brand-purple focus:ring-2 focus:ring-brand-purple/20 transition-all disabled:opacity-50"
             />
           </div>
         </div>
@@ -184,8 +211,9 @@ function LoginForm() {
               </label>
               <button
                 type="button"
+                disabled={isFormDisabled}
                 onClick={() => setIsMagicLink(true)}
-                className="text-xs text-brand-purple font-semibold hover:underline"
+                className="text-xs text-brand-purple font-semibold hover:underline disabled:opacity-50"
               >
                 Use Magic Link
               </button>
@@ -195,10 +223,11 @@ function LoginForm() {
               <input
                 type="password"
                 required
+                disabled={isFormDisabled}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••"
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-medium text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-brand-purple focus:ring-2 focus:ring-brand-purple/20 transition-all"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-medium text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-brand-purple focus:ring-2 focus:ring-brand-purple/20 transition-all disabled:opacity-50"
               />
             </div>
           </div>
@@ -208,8 +237,9 @@ function LoginForm() {
           <div className="text-right">
             <button
               type="button"
+              disabled={isFormDisabled}
               onClick={() => setIsMagicLink(false)}
-              className="text-xs text-brand-purple font-semibold hover:underline"
+              className="text-xs text-brand-purple font-semibold hover:underline disabled:opacity-50"
             >
               Use Password instead
             </button>
@@ -225,11 +255,17 @@ function LoginForm() {
 
         <button
           type="submit"
-          disabled={isLoading}
+          disabled={isFormDisabled}
           className="w-full mt-2 py-3 px-4 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50"
         >
           <span>
-            {isLoading ? "Signing in..." : isMagicLink ? "Send Magic Link" : "Sign In"}
+            {isAuthenticating
+              ? "Authenticating..."
+              : isLoading
+              ? "Signing in..."
+              : isMagicLink
+              ? "Send Magic Link"
+              : "Sign In"}
           </span>
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
@@ -249,8 +285,9 @@ function LoginForm() {
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
+              disabled={isFormDisabled}
               onClick={() => handleQuickDemoRole("Employee", "employee@remotehr.io")}
-              className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
             >
               <Users className="w-3 h-3 text-brand-purple" />
               <span>Employee</span>
@@ -258,8 +295,9 @@ function LoginForm() {
 
             <button
               type="button"
+              disabled={isFormDisabled}
               onClick={() => handleQuickDemoRole("Manager", "manager@remotehr.io")}
-              className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
             >
               <UserCheck className="w-3 h-3 text-brand-purple" />
               <span>Manager</span>
@@ -267,8 +305,9 @@ function LoginForm() {
 
             <button
               type="button"
+              disabled={isFormDisabled}
               onClick={() => handleQuickDemoRole("HR Ops", "hr@remotehr.io")}
-              className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
             >
               <Briefcase className="w-3 h-3 text-brand-purple" />
               <span>HR Admin</span>
@@ -276,8 +315,9 @@ function LoginForm() {
 
             <button
               type="button"
+              disabled={isFormDisabled}
               onClick={() => handleQuickDemoRole("System Admin", "admin@remotehr.io")}
-              className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
             >
               <ShieldCheck className="w-3 h-3 text-brand-purple" />
               <span>Super Admin</span>
