@@ -25,7 +25,7 @@ describe("Section 4 KPI Helper & Weighting Formulas", () => {
     expect(getKpiMetricMeta("absence_days").defaultDirection).toBe("lower_is_better");
   });
 
-  it("computes weighted average KPI scores and handles edge cases", () => {
+  it("computes weighted average KPI scores for standard equal and custom positive weights", () => {
     expect(computeWeightedKpiScore([])).toBeNull();
 
     // Equal weights: (80 + 100) / 2 = 90
@@ -43,15 +43,19 @@ describe("Section 4 KPI Helper & Weighting Formulas", () => {
         { score: 50, weight: 1 },
       ])
     ).toBe(87.5);
+  });
 
-    // All-zero weights: weight sum is 0, so NULLIF logic returns null
+  it("returns null when all weights are zero (NULLIF guard on weight sum)", () => {
+    // All-zero weights: weight sum is 0, so NULLIF logic returns null ("not scored")
     expect(
       computeWeightedKpiScore([
         { score: 90, weight: 0 },
         { score: 80, weight: 0 },
       ])
     ).toBeNull();
+  });
 
+  it("excludes zero-weight items without diluting positive weights", () => {
     // Partial zero weights: zero-weight items do not contribute to total weight
     expect(
       computeWeightedKpiScore([
@@ -59,8 +63,9 @@ describe("Section 4 KPI Helper & Weighting Formulas", () => {
         { score: 70, weight: 2 },
       ])
     ).toBe(70);
+  });
 
-    // Unscored / null / non-finite entries are excluded from both numerator and weight denominator
+  it("excludes unscored (null/NaN) metrics from both numerator and weight denominator", () => {
     expect(
       computeWeightedKpiScore([
         { score: null, weight: 3 },
@@ -68,8 +73,9 @@ describe("Section 4 KPI Helper & Weighting Formulas", () => {
         { score: 80, weight: 2 },
       ])
     ).toBe(80);
+  });
 
-    // All unscored -> null
+  it("returns null when all metrics are unscored", () => {
     expect(
       computeWeightedKpiScore([
         { score: null, weight: 1 },

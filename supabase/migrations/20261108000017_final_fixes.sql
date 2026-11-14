@@ -252,6 +252,154 @@ GRANT EXECUTE ON FUNCTION public.calculate_kpi_score(NUMERIC, NUMERIC, TEXT) TO 
 -- SECTION 4: Timezone-Correct, Null-Safe & Period-Scoped compute_kpi_scores
 -- ----------------------------------------------------------------------------
 
+-- Allow zero weights for informational KPIs (weight >= 0)
+ALTER TABLE public.kpi_definitions DROP CONSTRAINT IF EXISTS kpi_definitions_weight_check;
+ALTER TABLE public.kpi_definitions ADD CONSTRAINT kpi_definitions_weight_check CHECK (weight >= 0 AND weight <= 1000);
+
+CREATE OR REPLACE FUNCTION public.upsert_kpi_definition(
+    p_name TEXT,
+    p_source_metric TEXT,
+    p_target_value NUMERIC,
+    p_direction TEXT,
+    p_weight NUMERIC DEFAULT 1.0,
+    p_description TEXT DEFAULT NULL,
+    p_applies_to_role TEXT DEFAULT NULL,
+    p_applies_to_department_id UUID DEFAULT NULL,
+    p_is_active BOOLEAN DEFAULT TRUE,
+    p_definition_id UUID DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    v_caller_id UUID;
+    v_caller_role TEXT;
+    v_caller_aal TEXT;
+    v_org_id UUID;
+    v_name TEXT;
+    v_desc TEXT;
+    v_role_filter TEXT;
+    v_old_row RECORD;
+    v_new_row RECORD;
+BEGIN
+    v_caller_id := (SELECT auth.uid());
+    IF v_caller_id IS NULL OR NOT public.is_active_org_member() THEN
+        RAISE EXCEPTION 'Forbidden: Active organization membership required.' USING ERRCODE = '42501';
+    END IF;
+
+    v_caller_role := public.current_user_role();
+    IF v_caller_role IS NULL OR v_caller_role NOT IN ('hr', 'admin') THEN
+        RAISE EXCEPTION 'Forbidden: Only HR or administrators can manage KPI definitions.' USING ERRCODE = '42501';
+    END IF;
+
+    v_caller_aal := COALESCE((SELECT (auth.jwt())->>'aal'), 'aal1');
+    IF v_caller_aal IS DISTINCT FROM 'aal2' THEN
+        RAISE EXCEPTION 'MFA AAL2 verification required for KPI definition changes.' USING ERRCODE = '42501';
+    END IF;
+
+    v_org_id := public.current_org_id();
+
+    v_name := pg_catalog.btrim(COALESCE(p_name, ''));
+    IF char_length(v_name) < 2 THEN
+        RAISE EXCEPTION 'KPI name must be at least 2 characters.' USING ERRCODE = '22023';
+    END IF;
+
+    IF p_source_metric IS NULL OR p_source_metric NOT IN (
+        'attendance_on_time_rate',
+        'hours_vs_target',
+        'absence_days',
+        'leave_days_taken',
+        'tasks_completed',
+        'tasks_on_time_rate',
+        'tasks_overdue',
+        'avg_task_cycle_days'
+    ) THEN
+        RAISE EXCEPTION 'Invalid KPI source metric: %.', p_source_metric USING ERRCODE = '22023';
+    END IF;
+
+    IF p_target_value IS NULL OR p_target_value < 0 THEN
+        RAISE EXCEPTION 'target_value must be non-negative.' USING ERRCODE = '22023';
+    END IF;
+
+    IF p_direction IS NULL OR p_direction NOT IN ('higher_is_better', 'lower_is_better') THEN
+        RAISE EXCEPTION 'direction must be higher_is_better or lower_is_better.' USING ERRCODE = '22023';
+    END IF;
+
+    IF p_weight IS NULL OR p_weight < 0 OR p_weight > 1000 THEN
+        RAISE EXCEPTION 'weight must be between 0 and 1000.' USING ERRCODE = '22023';
+    END IF;
+
+    v_role_filter := NULLIF(pg_catalog.btrim(COALESCE(p_applies_to_role, '')), '');
+    IF v_role_filter IS NOT NULL AND v_role_filter NOT IN ('employee', 'manager', 'hr', 'admin') THEN
+        RAISE EXCEPTION 'Invalid applies_to_role: %.', v_role_filter USING ERRCODE = '22023';
+    END IF;
+
+    IF p_applies_to_department_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM public.departments d
+        WHERE d.id = p_applies_to_department_id AND d.organization_id = v_org_id
+    ) THEN
+        RAISE EXCEPTION 'Forbidden: Department not found in caller organization.' USING ERRCODE = '42501';
+    END IF;
+
+    v_desc := NULLIF(pg_catalog.btrim(COALESCE(p_description, '')), '');
+
+    IF p_definition_id IS NOT NULL THEN
+        SELECT * INTO v_old_row
+        FROM public.kpi_definitions
+        WHERE id = p_definition_id
+        FOR UPDATE;
+
+        IF v_old_row IS NULL OR v_old_row.organization_id IS DISTINCT FROM v_org_id THEN
+            RAISE EXCEPTION 'Forbidden: KPI definition not found in caller organization.' USING ERRCODE = '42501';
+        END IF;
+
+        UPDATE public.kpi_definitions
+        SET name = v_name,
+            description = v_desc,
+            source_metric = p_source_metric,
+            target_value = p_target_value,
+            direction = p_direction,
+            weight = p_weight,
+            applies_to_role = v_role_filter,
+            applies_to_department_id = p_applies_to_department_id,
+            is_active = COALESCE(p_is_active, TRUE),
+            updated_at = pg_catalog.now()
+        WHERE id = p_definition_id
+        RETURNING * INTO v_new_row;
+
+        INSERT INTO public.audit_logs (
+            organization_id, actor_id, action, table_name, record_id, old_data, new_data
+        ) VALUES (
+            v_org_id, v_caller_id, 'KPI_DEFINITION_UPDATED', 'kpi_definitions', v_new_row.id,
+            to_jsonb(v_old_row), to_jsonb(v_new_row)
+        );
+    ELSE
+        INSERT INTO public.kpi_definitions (
+            organization_id, name, description, source_metric, target_value, direction,
+            weight, applies_to_role, applies_to_department_id, is_active, created_by
+        ) VALUES (
+            v_org_id, v_name, v_desc, p_source_metric, p_target_value, p_direction,
+            p_weight, v_role_filter, p_applies_to_department_id, COALESCE(p_is_active, TRUE), v_caller_id
+        )
+        RETURNING * INTO v_new_row;
+
+        INSERT INTO public.audit_logs (
+            organization_id, actor_id, action, table_name, record_id, old_data, new_data
+        ) VALUES (
+            v_org_id, v_caller_id, 'KPI_DEFINITION_CREATED', 'kpi_definitions', v_new_row.id,
+            NULL, to_jsonb(v_new_row)
+        );
+    END IF;
+
+    RETURN jsonb_build_object('success', true, 'definition', to_jsonb(v_new_row));
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.upsert_kpi_definition(TEXT, TEXT, NUMERIC, TEXT, NUMERIC, TEXT, TEXT, UUID, BOOLEAN, UUID) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.upsert_kpi_definition(TEXT, TEXT, NUMERIC, TEXT, NUMERIC, TEXT, TEXT, UUID, BOOLEAN, UUID) TO authenticated;
+
 CREATE OR REPLACE FUNCTION public.compute_kpi_scores(
     p_period_id UUID
 )
@@ -283,6 +431,7 @@ DECLARE
     v_actual NUMERIC(12,2);
     v_score NUMERIC(5,2);
     v_written INTEGER := 0;
+    v_weighted_summary JSONB;
 BEGIN
     v_caller_id := (SELECT auth.uid());
     IF v_caller_id IS NULL OR NOT public.is_active_org_member() THEN
@@ -574,14 +723,48 @@ BEGIN
         END LOOP;
     END LOOP;
 
+    -- Compute normalized weighted total per employee for the period:
+    -- Weighted total = SUM(score * weight) / NULLIF(SUM(weight of scored metrics), 0)
+    -- Guarded with NULLIF to prevent division-by-zero when all weights are zero or all metrics are unscored.
+    SELECT COALESCE(
+        jsonb_object_agg(
+            emp_weighted.employee_id::text,
+            emp_weighted.weighted_score
+        ),
+        '{}'::jsonb
+    )
+    INTO v_weighted_summary
+    FROM (
+        SELECT
+            s.employee_id,
+            ROUND(
+                SUM(s.score * d.weight) / NULLIF(SUM(CASE WHEN s.score IS NOT NULL THEN d.weight ELSE 0 END), 0),
+                2
+            ) AS weighted_score
+        FROM public.kpi_scores s
+        JOIN public.kpi_definitions d ON d.id = s.kpi_definition_id
+        WHERE s.period_id = p_period_id
+          AND s.organization_id = v_org_id
+        GROUP BY s.employee_id
+    ) emp_weighted;
+
     INSERT INTO public.audit_logs (
         organization_id, actor_id, action, table_name, record_id, old_data, new_data
     ) VALUES (
         v_org_id, v_caller_id, 'KPI_SCORES_COMPUTED', 'kpi_scores', p_period_id,
-        NULL, jsonb_build_object('period_id', p_period_id, 'scores_written', v_written)
+        NULL, jsonb_build_object(
+            'period_id', p_period_id,
+            'scores_written', v_written,
+            'weighted_scores', v_weighted_summary
+        )
     );
 
-    RETURN jsonb_build_object('success', true, 'period_id', p_period_id, 'scores_written', v_written);
+    RETURN jsonb_build_object(
+        'success', true,
+        'period_id', p_period_id,
+        'scores_written', v_written,
+        'weighted_scores', v_weighted_summary
+    );
 END;
 $$;
 

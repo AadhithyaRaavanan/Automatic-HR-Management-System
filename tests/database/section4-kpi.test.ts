@@ -785,7 +785,8 @@ describe("Section 4: KPI System", () => {
             `SELECT public.create_kpi_period('Sec4 Dec 2099 Edge', 'monthly', '2099-12-01', '2099-12-31') AS res;`
           );
           periodId = pRes.rows[0].res.period.id;
-          await client.query(`SELECT public.compute_kpi_scores($1);`, [periodId]);
+          const cRes = await client.query(`SELECT public.compute_kpi_scores($1) AS res;`, [periodId]);
+          expect(cRes.rows[0].res.weighted_scores[ORG_1.nonReportEmp]).toBeNull();
         },
         { commit: true }
       );
@@ -1279,6 +1280,109 @@ describe("Section 4: KPI System", () => {
           `DELETE FROM public.audit_logs WHERE record_id = $1 AND action = 'LEAVE_TYPE_KPI_SETTING_UPDATED';`,
           [sickLtId]
         ).catch(() => {});
+      }
+    }
+  });
+
+  it("8. Database authoritative weighted KPI total guarded by NULLIF handles all-zero weights and matches TypeScript helper", async () => {
+    let periodId: string | null = null;
+    const seededDefIds: string[] = [];
+    const seededTaskIds: string[] = [];
+
+    try {
+      // Create period
+      await asRole(ORG_1.admin, ORG_1_ID, "admin", "aal2", async () => {
+        const pRes = await client.query<{ res: { period: { id: string } } }>(
+          `SELECT public.create_kpi_period('Sec4 Zero Weight Period', 'monthly', '2026-06-01', '2026-06-30') AS res;`
+        );
+        periodId = pRes.rows[0].res.period.id;
+
+        // Upsert 2 KPI definitions with weight = 0.0 (informational KPIs)
+        const d1 = await client.query<{ res: { definition: { id: string } } }>(
+          `SELECT public.upsert_kpi_definition('Sec4 Zero Weight Tasks', 'tasks_completed', 2, 'higher_is_better', 0.0, NULL, NULL, NULL, TRUE, NULL) AS res;`
+        );
+        seededDefIds.push(d1.rows[0].res.definition.id);
+
+        const d2 = await client.query<{ res: { definition: { id: string } } }>(
+          `SELECT public.upsert_kpi_definition('Sec4 Zero Weight Cycle', 'avg_task_cycle_days', 5, 'lower_is_better', 0.0, NULL, NULL, NULL, TRUE, NULL) AS res;`
+        );
+        seededDefIds.push(d2.rows[0].res.definition.id);
+      }, { commit: true });
+
+      // Seed 2 completed tasks in June 2026 for employee
+      const t1 = await client.query<{ id: string }>(
+        `INSERT INTO public.tasks (organization_id, title, status, priority, creator_id, assignee_id, due_date, created_at, started_at, completed_at)
+         VALUES ($1, 'Zero Weight Task 1', 'done', 'medium', $2, $3, '2026-06-15', '2026-06-01 10:00:00+00', '2026-06-01 10:00:00+00', '2026-06-02 10:00:00+00')
+         RETURNING id;`,
+        [ORG_1_ID, ORG_1.manager, ORG_1.reportEmp]
+      );
+      seededTaskIds.push(t1.rows[0].id);
+
+      const t2 = await client.query<{ id: string }>(
+        `INSERT INTO public.tasks (organization_id, title, status, priority, creator_id, assignee_id, due_date, created_at, started_at, completed_at)
+         VALUES ($1, 'Zero Weight Task 2', 'done', 'medium', $2, $3, '2026-06-20', '2026-06-01 10:00:00+00', '2026-06-01 10:00:00+00', '2026-06-03 10:00:00+00')
+         RETURNING id;`,
+        [ORG_1_ID, ORG_1.manager, ORG_1.reportEmp]
+      );
+      seededTaskIds.push(t2.rows[0].id);
+
+      // Compute KPI scores via RPC
+      let computeRes: any;
+      await asRole(ORG_1.admin, ORG_1_ID, "admin", "aal2", async () => {
+        const cRes = await client.query(
+          `SELECT public.compute_kpi_scores($1) AS res;`,
+          [periodId]
+        );
+        computeRes = cRes.rows[0].res;
+      }, { commit: true });
+
+      // 1. In compute_kpi_scores return payload, employee weighted score is null (not 0, not NaN, no division by zero)
+      expect(computeRes.weighted_scores[ORG_1.reportEmp]).toBeNull();
+
+      // 2. Direct SQL query: evaluating SUM(score * weight) / NULLIF(SUM(CASE WHEN score IS NOT NULL THEN weight ELSE 0 END), 0)
+      const sqlWeightedRes = await client.query<{ sql_weighted: string | null }>(
+        `SELECT ROUND(
+            SUM(s.score * d.weight) / NULLIF(SUM(CASE WHEN s.score IS NOT NULL THEN d.weight ELSE 0 END), 0),
+            2
+         )::text AS sql_weighted
+         FROM public.kpi_scores s
+         JOIN public.kpi_definitions d ON d.id = s.kpi_definition_id
+         WHERE s.period_id = $1 AND s.employee_id = $2 AND d.id = ANY($3::uuid[]);`,
+        [periodId, ORG_1.reportEmp, seededDefIds]
+      );
+      expect(sqlWeightedRes.rows[0].sql_weighted).toBeNull();
+
+      // 3. Query the individual scores from DB to verify both were scored with non-null scores (e.g. 100)
+      const scoreRows = await client.query<{ score: string; weight: string }>(
+        `SELECT s.score::text, d.weight::text
+         FROM public.kpi_scores s
+         JOIN public.kpi_definitions d ON d.id = s.kpi_definition_id
+         WHERE s.period_id = $1 AND s.employee_id = $2 AND d.id = ANY($3::uuid[]);`,
+        [periodId, ORG_1.reportEmp, seededDefIds]
+      );
+      expect(scoreRows.rows.length).toBe(2);
+      expect(scoreRows.rows.every((r) => Number(r.weight) === 0)).toBe(true);
+      expect(scoreRows.rows.every((r) => Number(r.score) > 0)).toBe(true);
+
+      // 4. Test that TypeScript computeWeightedKpiScore matches the authoritative SQL output exactly
+      const tsInputs = scoreRows.rows.map((r) => ({
+        score: Number(r.score),
+        weight: Number(r.weight),
+      }));
+      const tsResult = computeWeightedKpiScore(tsInputs);
+      expect(tsResult).toBeNull();
+      expect(tsResult).toBe(sqlWeightedRes.rows[0].sql_weighted);
+    } finally {
+      if (periodId) {
+        await client.query(`DELETE FROM public.audit_logs WHERE record_id = $1 OR new_data->>'period_id' = $1::text;`, [periodId]).catch(() => {});
+        await client.query(`DELETE FROM public.kpi_scores WHERE period_id = $1;`, [periodId]).catch(() => {});
+        await client.query(`DELETE FROM public.kpi_periods WHERE id = $1;`, [periodId]).catch(() => {});
+      }
+      if (seededDefIds.length > 0) {
+        await client.query(`DELETE FROM public.kpi_definitions WHERE id = ANY($1::uuid[]);`, [seededDefIds]).catch(() => {});
+      }
+      if (seededTaskIds.length > 0) {
+        await client.query(`DELETE FROM public.tasks WHERE id = ANY($1::uuid[]);`, [seededTaskIds]).catch(() => {});
       }
     }
   });

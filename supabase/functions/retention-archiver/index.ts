@@ -1,5 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 
+// Ambient Deno declaration for dual Deno / Node/Vitest typechecking
+declare const Deno: any;
+
 interface ExportBatch {
   organization_id: string;
   archive_month: string;
@@ -11,7 +14,7 @@ interface ExportBatch {
   sessions: Array<Record<string, unknown>>;
 }
 
-function constantTimeEqual(a: string, b: string): boolean {
+export function constantTimeEqual(a: string, b: string): boolean {
   const enc = new TextEncoder();
   const ab = enc.encode(a);
   const bb = enc.encode(b);
@@ -23,29 +26,37 @@ function constantTimeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-async function gzipText(raw: string): Promise<Uint8Array> {
+export async function gzipText(raw: string): Promise<Uint8Array> {
   const inputStream = new Blob([raw]).stream();
   const compressedStream = inputStream.pipeThrough(new CompressionStream("gzip"));
   const compressedBuf = await new Response(compressedStream).arrayBuffer();
   return new Uint8Array(compressedBuf);
 }
 
-async function sha256Hex(bytes: Uint8Array): Promise<string> {
+export async function sha256Hex(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", bytes.buffer as ArrayBuffer);
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
 
-Deno.serve(async (req: Request) => {
+export async function handleRetentionArchiverRequest(
+  req: Request,
+  envGetter: (key: string) => string | undefined = (k) => {
+    if (typeof Deno !== "undefined" && typeof (Deno as any).env?.get === "function") {
+      return (Deno as any).env.get(k);
+    }
+    return typeof process !== "undefined" && process.env ? process.env[k] : undefined;
+  }
+): Promise<Response> {
   if (req.method !== "POST" && req.method !== "GET") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
 
   const expectedSecret =
-    Deno.env.get("RETENTION_CRON_SECRET")?.trim() ||
-    Deno.env.get("CRON_SECRET")?.trim() ||
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim();
+    envGetter("RETENTION_CRON_SECRET")?.trim() ||
+    envGetter("CRON_SECRET")?.trim() ||
+    envGetter("SUPABASE_SERVICE_ROLE_KEY")?.trim();
 
   if (!expectedSecret) {
     return Response.json({ error: "Archiver secret not configured." }, { status: 503 });
@@ -61,8 +72,8 @@ Deno.serve(async (req: Request) => {
     return Response.json({ error: "Forbidden: Invalid bearer token." }, { status: 403 });
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const supabaseUrl = envGetter("SUPABASE_URL") || envGetter("NEXT_PUBLIC_SUPABASE_URL");
+  const serviceRoleKey = envGetter("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !serviceRoleKey) {
     return Response.json({ error: "Supabase service credentials missing." }, { status: 500 });
   }
@@ -204,5 +215,12 @@ Deno.serve(async (req: Request) => {
     failures,
     results,
   });
-});
+}
+
+// Guard Deno.serve invocation so module can be imported cleanly in Node/Vitest test suites
+if (typeof Deno !== "undefined" && typeof (Deno as any).serve === "function") {
+  (Deno as any).serve((req: Request) =>
+    handleRetentionArchiverRequest(req, (k: string) => (Deno as any).env.get(k))
+  );
+}
 

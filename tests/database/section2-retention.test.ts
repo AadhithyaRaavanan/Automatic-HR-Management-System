@@ -34,6 +34,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
+import { handleRetentionArchiverRequest, constantTimeEqual } from "../../supabase/functions/retention-archiver/index";
 
 const config = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -905,5 +906,56 @@ describe("Section 2: Retention, Archival & Admin System Health", () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
   }, 45000);
+
+  it("6. retention-archiver Edge Function request handler enforces constant-time bearer authentication against local stack", async () => {
+    const testSecret = "sec2-edge-secret-test-key-2026";
+    const envMap: Record<string, string> = {
+      RETENTION_CRON_SECRET: testSecret,
+      SUPABASE_URL: config.supabaseUrl,
+      SUPABASE_SERVICE_ROLE_KEY: config.serviceKey,
+    };
+    const envGetter = (k: string) => envMap[k];
+
+    // 1. Missing bearer token -> 401 Unauthorized
+    const missingReq = new Request("http://127.0.0.1:54321/functions/v1/retention-archiver", {
+      method: "POST",
+    });
+    const missingRes = await handleRetentionArchiverRequest(missingReq, envGetter);
+    expect(missingRes.status).toBe(401);
+    const missingJson = await missingRes.json();
+    expect(missingJson.error).toMatch(/Missing bearer token/i);
+
+    // 2. Wrong bearer token -> 403 Forbidden
+    const wrongReq = new Request("http://127.0.0.1:54321/functions/v1/retention-archiver", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer wrong-secret-token-12345",
+      },
+    });
+    const wrongRes = await handleRetentionArchiverRequest(wrongReq, envGetter);
+    expect(wrongRes.status).toBe(403);
+    const wrongJson = await wrongRes.json();
+    expect(wrongJson.error).toMatch(/Invalid bearer token/i);
+
+    // Constant-time comparator sanity checks
+    expect(constantTimeEqual("secret", "secret")).toBe(true);
+    expect(constantTimeEqual("secret", "secrxt")).toBe(false);
+    expect(constantTimeEqual("secret", "longer_secret")).toBe(false);
+
+    // 3. Correct bearer token -> 200 OK (executes against local Supabase stack)
+    const validReq = new Request("http://127.0.0.1:54321/functions/v1/retention-archiver", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${testSecret}`,
+      },
+    });
+    const validRes = await handleRetentionArchiverRequest(validReq, envGetter);
+    expect(validRes.status).toBe(200);
+    const validJson = await validRes.json();
+    expect(validJson.automated).toBe(true);
+    expect(validJson.runtime).toBe("supabase-edge-function");
+    expect(validJson.failures).toBe(0);
+    expect(Array.isArray(validJson.results)).toBe(true);
+  });
 });
 
