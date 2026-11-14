@@ -1372,6 +1372,20 @@ describe("Section 4: KPI System", () => {
       const tsResult = computeWeightedKpiScore(tsInputs);
       expect(tsResult).toBeNull();
       expect(tsResult).toBe(sqlWeightedRes.rows[0].sql_weighted);
+
+      // 5. Invariant: audit_logs must store period id, scores_written, and actor - NEVER every employee's weighted score
+      const compAudit = await client.query<{ actor_id: string; new_data: any }>(
+        `SELECT actor_id, new_data FROM public.audit_logs
+         WHERE record_id = $1 AND action = 'KPI_SCORES_COMPUTED'
+         ORDER BY created_at DESC LIMIT 1;`,
+        [periodId]
+      );
+      expect(compAudit.rows.length).toBe(1);
+      expect(compAudit.rows[0].actor_id).toBe(ORG_1.admin);
+      expect(compAudit.rows[0].new_data.period_id).toBe(periodId);
+      expect(compAudit.rows[0].new_data.scores_written).toBeGreaterThan(0);
+      expect(compAudit.rows[0].new_data.actor_id).toBe(ORG_1.admin);
+      expect(compAudit.rows[0].new_data.weighted_scores).toBeUndefined();
     } finally {
       if (periodId) {
         await client.query(`DELETE FROM public.audit_logs WHERE record_id = $1 OR new_data->>'period_id' = $1::text;`, [periodId]).catch(() => {});

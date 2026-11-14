@@ -49,14 +49,13 @@ export async function handleRetentionArchiverRequest(
     return typeof process !== "undefined" && process.env ? process.env[k] : undefined;
   }
 ): Promise<Response> {
-  if (req.method !== "POST" && req.method !== "GET") {
+  // Disallow GET or other HTTP methods: allow POST only
+  if (req.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
 
-  const expectedSecret =
-    envGetter("RETENTION_CRON_SECRET")?.trim() ||
-    envGetter("CRON_SECRET")?.trim() ||
-    envGetter("SUPABASE_SERVICE_ROLE_KEY")?.trim();
+  // Require dedicated RETENTION_CRON_SECRET; fail closed (503) without fallback
+  const expectedSecret = envGetter("RETENTION_CRON_SECRET")?.trim();
 
   if (!expectedSecret) {
     return Response.json({ error: "Archiver secret not configured." }, { status: 503 });

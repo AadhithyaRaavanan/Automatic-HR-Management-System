@@ -916,7 +916,36 @@ describe("Section 2: Retention, Archival & Admin System Health", () => {
     };
     const envGetter = (k: string) => envMap[k];
 
-    // 1. Missing bearer token -> 401 Unauthorized
+    // 1. Disallows GET: allow POST only -> 405 Method Not Allowed
+    const getReq = new Request("http://127.0.0.1:54321/functions/v1/retention-archiver", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${testSecret}`,
+      },
+    });
+    const getRes = await handleRetentionArchiverRequest(getReq, envGetter);
+    expect(getRes.status).toBe(405);
+    const getJson = await getRes.json();
+    expect(getJson.error).toMatch(/Method not allowed/i);
+
+    // 2. Requires dedicated RETENTION_CRON_SECRET: fail closed (503) without fallback
+    const missingSecretEnv: Record<string, string> = {
+      CRON_SECRET: "old-cron-secret",
+      SUPABASE_SERVICE_ROLE_KEY: config.serviceKey,
+      SUPABASE_URL: config.supabaseUrl,
+    };
+    const noSecretReq = new Request("http://127.0.0.1:54321/functions/v1/retention-archiver", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.serviceKey}`,
+      },
+    });
+    const noSecretRes = await handleRetentionArchiverRequest(noSecretReq, (k) => missingSecretEnv[k]);
+    expect(noSecretRes.status).toBe(503);
+    const noSecretJson = await noSecretRes.json();
+    expect(noSecretJson.error).toMatch(/Archiver secret not configured/i);
+
+    // 3. Missing bearer token -> 401 Unauthorized
     const missingReq = new Request("http://127.0.0.1:54321/functions/v1/retention-archiver", {
       method: "POST",
     });
@@ -925,7 +954,7 @@ describe("Section 2: Retention, Archival & Admin System Health", () => {
     const missingJson = await missingRes.json();
     expect(missingJson.error).toMatch(/Missing bearer token/i);
 
-    // 2. Wrong bearer token -> 403 Forbidden
+    // 4. Wrong bearer token -> 403 Forbidden
     const wrongReq = new Request("http://127.0.0.1:54321/functions/v1/retention-archiver", {
       method: "POST",
       headers: {
@@ -942,7 +971,7 @@ describe("Section 2: Retention, Archival & Admin System Health", () => {
     expect(constantTimeEqual("secret", "secrxt")).toBe(false);
     expect(constantTimeEqual("secret", "longer_secret")).toBe(false);
 
-    // 3. Correct bearer token -> 200 OK (executes against local Supabase stack)
+    // 5. Correct bearer token -> 200 OK (executes against local Supabase stack)
     const validReq = new Request("http://127.0.0.1:54321/functions/v1/retention-archiver", {
       method: "POST",
       headers: {

@@ -179,23 +179,22 @@ Expected:
 
 A **single automated trigger path** inside Supabase (`pg_cron` -> `pg_net` + Vault -> `retention-archiver` Edge Function at `02:00 UTC Sunday`) handles monthly `.json.gz` compression, Storage upload, and batched purge:
 
-1. **Deploy the Supabase Edge Function (`retention-archiver`) & set secrets:**
+1. **Deploy the Supabase Edge Function (`retention-archiver`) & set dedicated secret:**
    ```bash
    npx supabase functions deploy retention-archiver --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
    npx supabase secrets set \
      --project-ref "$SUPABASE_PROJECT_REF" \
-     RETENTION_CRON_SECRET="$CRON_SECRET" \
-     CRON_SECRET="$CRON_SECRET"
+     RETENTION_CRON_SECRET="$RETENTION_CRON_SECRET"
    ```
-   *(Authentication is strictly enforced inside `supabase/functions/retention-archiver/index.ts` via constant-time bearer token comparison against `RETENTION_CRON_SECRET` / `CRON_SECRET`.)*
+   *(Authentication is strictly enforced inside `supabase/functions/retention-archiver/index.ts` via constant-time bearer token comparison against the dedicated `RETENTION_CRON_SECRET`. All fallbacks to other keys are removed; the function fails closed with HTTP 503 if the secret is unconfigured, and allows POST requests only.)*
 
 2. **Store Vault secrets so Postgres `pg_cron` + `pg_net` can invoke the archiver automatically at `02:00 UTC` every Sunday:**
    ```bash
    psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
      -v archiver_url="${SUPABASE_URL}/functions/v1/retention-archiver" \
-     -v cron_secret="$CRON_SECRET" <<'SQL'
+     -v retention_secret="$RETENTION_CRON_SECRET" <<'SQL'
    SELECT vault.create_secret(:'archiver_url', 'retention_archiver_url', 'Edge Function URL for automated retention archival');
-   SELECT vault.create_secret(:'cron_secret', 'retention_archiver_token', 'Bearer secret for automated retention archival');
+   SELECT vault.create_secret(:'retention_secret', 'retention_archiver_token', 'Bearer secret for automated retention archival');
    SQL
    ```
    *(If updating an existing secret, delete/update via `vault.secrets` first rather than inserting duplicates.)*
@@ -221,12 +220,13 @@ A **single automated trigger path** inside Supabase (`pg_cron` -> `pg_net` + Vau
 4. **Testing & Verification of the Retention Archiver:**
    - **Automated Test Suite (`tests/database/section2-retention.test.ts`)**:
      - *In unit/integration tests*, Docker containers stop the Supabase Edge Runtime container during database resets. Therefore, test 5 verifies the end-to-end `pg_cron` + `pg_net` + Vault path by testing `cron_trigger_retention_archive()` against an in-test HTTP mock server, verifying the bearer token exchange and Vault secret resolution.
+     - Test 6 verifies the `retention-archiver` request handler directly: enforcing POST-only (GET -> 405), fail-closed without `RETENTION_CRON_SECRET` (503), missing token (401), invalid token (403), and valid secret (200).
      - Test 5 also directly invokes `archiveAndRunRetentionCleanup(orgId)` from `lib/retention/archiver.ts` to test gzip file compression, upload to `retention-archives` bucket, and manifest registration in `public.retention_archives`.
    - **Manual Live Production Verification**:
      Trigger the deployed Edge Function directly with a test payload:
      ```bash
      curl -i -X POST "${SUPABASE_URL}/functions/v1/retention-archiver" \
-       -H "Authorization: Bearer $CRON_SECRET" \
+       -H "Authorization: Bearer $RETENTION_CRON_SECRET" \
        -H "Content-Type: application/json" \
        -d '{"dryRun": true}'
      ```
@@ -369,10 +369,11 @@ vercel env ls production
      -d '{"secret":"test"}'
    # Expected: HTTP/2 404
    ```
-2. **Verify Supabase `retention-archiver` Edge Function fails closed on missing / invalid bearer (`401` / `403`):**
+2. **Verify Supabase `retention-archiver` Edge Function enforces POST-only and fails closed on missing / invalid bearer (`405` / `401` / `403`):**
    ```bash
-   curl -i "${SUPABASE_URL}/functions/v1/retention-archiver"         # Expected: 401
-   curl -i -H "Authorization: Bearer invalid" "${SUPABASE_URL}/functions/v1/retention-archiver"  # Expected: 403
+   curl -i -X GET "${SUPABASE_URL}/functions/v1/retention-archiver"                               # Expected: 405 Method Not Allowed
+   curl -i -X POST "${SUPABASE_URL}/functions/v1/retention-archiver"                              # Expected: 401 Unauthorized
+   curl -i -X POST -H "Authorization: Bearer invalid" "${SUPABASE_URL}/functions/v1/retention-archiver"  # Expected: 403 Forbidden
    ```
 3. **Verify authenticated flows manually in browser:**
    - Unauthenticated `/dashboard` -> redirects to `/login`.

@@ -755,7 +755,7 @@ BEGIN
         NULL, jsonb_build_object(
             'period_id', p_period_id,
             'scores_written', v_written,
-            'weighted_scores', v_weighted_summary
+            'actor_id', v_caller_id
         )
     );
 
