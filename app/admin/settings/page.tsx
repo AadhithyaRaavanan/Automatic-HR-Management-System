@@ -519,6 +519,72 @@ export default function OrganizationSettingsAdminPage() {
                 </button>
               </div>
             </form>
+
+            {/* Punch Channels & Verification Governance */}
+            <div className="pt-6 border-t border-border-light dark:border-slate-800 space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-text-primary dark:text-white">
+                  Punch Channels &amp; Verification Governance
+                </h3>
+                <p className="text-xs text-text-secondary dark:text-slate-400 mt-0.5">
+                  Configure permitted authentication mechanisms for workforce check-ins.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="p-4 rounded-2xl bg-card-subtle dark:bg-slate-800 border border-status-success-border/60 flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-text-primary dark:text-white">Manual Web Check-In</span>
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-status-success-bg text-status-success">ACTIVE</span>
+                    </div>
+                    <p className="text-[11px] text-text-secondary dark:text-slate-400 mt-1">
+                      Authenticated self-service web punches with pre-shift 5-min gate and persistent timer.
+                    </p>
+                  </div>
+                  <input type="checkbox" checked disabled className="rounded text-brand-purple cursor-not-allowed mt-1" />
+                </div>
+
+                <div className="p-4 rounded-2xl bg-card-subtle/50 dark:bg-slate-800/40 border border-border-light dark:border-slate-800 flex items-start justify-between opacity-75">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-text-secondary dark:text-slate-400">Geofence GPS Punch</span>
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500">Enterprise / In Development</span>
+                    </div>
+                    <p className="text-[11px] text-text-tertiary mt-1">
+                      Restricts mobile and desktop punches to physical office boundary coordinates.
+                    </p>
+                  </div>
+                  <input type="checkbox" disabled className="rounded cursor-not-allowed opacity-50 mt-1" />
+                </div>
+
+                <div className="p-4 rounded-2xl bg-card-subtle/50 dark:bg-slate-800/40 border border-border-light dark:border-slate-800 flex items-start justify-between opacity-75">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-text-secondary dark:text-slate-400">Office IP Allowlist</span>
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500">Enterprise / In Development</span>
+                    </div>
+                    <p className="text-[11px] text-text-tertiary mt-1">
+                      Requires check-in requests to originate from registered corporate subnet CIDRs.
+                    </p>
+                  </div>
+                  <input type="checkbox" disabled className="rounded cursor-not-allowed opacity-50 mt-1" />
+                </div>
+
+                <div className="p-4 rounded-2xl bg-card-subtle/50 dark:bg-slate-800/40 border border-border-light dark:border-slate-800 flex items-start justify-between opacity-75">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-text-secondary dark:text-slate-400">Rotating QR &amp; Kiosk Mode</span>
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500">Enterprise / In Development</span>
+                    </div>
+                    <p className="text-[11px] text-text-tertiary mt-1">
+                      Shared tablet kiosk scanner with time-expiring rolling QR code tokens.
+                    </p>
+                  </div>
+                  <input type="checkbox" disabled className="rounded cursor-not-allowed opacity-50 mt-1" />
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

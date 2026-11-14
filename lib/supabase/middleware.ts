@@ -6,12 +6,16 @@ import { isDemoModeEnabled } from "@/lib/config/demo";
 export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // Demo gallery is strictly restricted to demo mode (non-production + opt-in flag)
+  // Demo routes are strictly restricted to demo mode (non-production + opt-in flag)
   if (pathname === "/gallery" || pathname.startsWith("/gallery/")) {
     if (!isDemoModeEnabled()) {
       return new NextResponse(null, { status: 404 });
     }
     return NextResponse.next();
+  }
+
+  if (pathname.startsWith("/api/auth/demo-totp") && !isDemoModeEnabled()) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   // 1. Instant Fast-Path for static assets and public routes that don't need auth checks

@@ -533,6 +533,7 @@ function LoginForm() {
 
             <button
               type="button"
+              aria-label="Admin Preset"
               disabled={isFormDisabled}
               onClick={() => handleQuickDemoRole("System Admin", "admin@remotehr.io")}
               className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"

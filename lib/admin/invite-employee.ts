@@ -25,8 +25,8 @@ export type InviteEmployeeResult =
   | {
       ok: true;
       userId: string;
-      temporaryPassword?: string;
       inviteLink?: string;
+      temporaryPassword?: string;
       message: string;
       emailSent: boolean;
       data: any;

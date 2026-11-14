@@ -1141,14 +1141,15 @@ function UsersDirectoryContent() {
               </span>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-card p-2.5 rounded-xl border border-border-light gap-2">
                 <code className="text-xs font-mono font-bold text-brand-navy select-all break-all">
-                  {createdCredentials?.inviteLink || (typeof window !== "undefined" ? `${window.location.origin}/login` : "/login")}
+                  {createdCredentials?.inviteLink || `${typeof window !== "undefined" ? window.location.origin : ""}/login`}
                 </code>
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
                     data-testid="copy-invite-link"
                     onClick={() => {
-                      const link = createdCredentials?.inviteLink || (typeof window !== "undefined" ? `${window.location.origin}/login` : "/login");
+                      const origin = typeof window !== "undefined" ? window.location.origin : "";
+                      const link = createdCredentials?.inviteLink || `${origin}/login`;
                       navigator.clipboard.writeText(link);
                       setHasCopied(true);
                       toast.success("Invite link copied to clipboard!");

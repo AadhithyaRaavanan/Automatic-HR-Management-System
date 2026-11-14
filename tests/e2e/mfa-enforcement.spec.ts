@@ -129,6 +129,7 @@ test.describe("Phase 1: Multi-Factor Authentication (TOTP MFA) E2E Suite", () =>
     const isVisible = await demoHeading.isVisible().catch(() => false);
     if (process.env.NEXT_PUBLIC_DEMO_MODE === "false") {
       expect(isVisible).toBe(false);
+      await expect(page.getByRole("button", { name: /admin preset/i })).toHaveCount(0);
     }
   });
 
