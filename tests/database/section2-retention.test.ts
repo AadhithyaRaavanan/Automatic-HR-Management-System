@@ -19,6 +19,8 @@
  *    - 401/403 (employee, HR, AAL1 admin) + cross-tenant 404 isolation.
  *    - End-to-end gzip export -> upload to `retention-archives` -> manifest verification ->
  *      cleanup deletion -> signed URL download & gunzip JSON checksum validation.
+ * 5. Single automated retention trigger path inside Supabase (`pg_cron` -> `pg_net` + Vault ->
+ *    `retention-archiver` Edge Function) with zero duplicate Vercel cron routes.
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
@@ -30,6 +32,8 @@ import zlib from "node:zlib";
 import crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
 
 const config = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -76,7 +80,7 @@ vi.mock("server-only", () => ({}));
 
 import { POST as runRetentionRoute } from "@/app/api/admin/retention/run/route";
 import { GET as archiveUrlRoute } from "@/app/api/admin/retention/archive-url/route";
-import { GET as cronRetentionGet, POST as cronRetentionPost } from "@/app/api/cron/retention/route";
+import { archiveAndRunRetentionCleanup } from "@/lib/retention/archiver";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 const ORG_1_ID = "00000000-0000-0000-0000-000000000001";
@@ -656,16 +660,29 @@ describe("Section 2: Retention, Archival & Admin System Health", () => {
     expect(secondCleanup.rows[0].res.totals.deleted_notifications).toBe(0);
   }, 45000);
 
-  it("5. Automates retention archival via pg_cron dispatch helper and fail-closed /api/cron/retention without manual admin action", async () => {
-    // 5a. Verify pg_cron schedule for weekly-retention-archive runs before weekly-retention-cleanup
-    const archiveCron = await pg.query<{ jobname: string; schedule: string; command: string }>(
-      `SELECT jobname, schedule, command FROM cron.job WHERE jobname = 'weekly-retention-archive';`
+  it("5. Automates retention archival via single pg_cron + pg_net + Vault -> retention-archiver Edge Function path", async () => {
+    // 5a. Confirm duplicate Vercel cron files do not exist and Supabase Edge Function exists
+    expect(fs.existsSync(path.resolve(process.cwd(), "vercel.json"))).toBe(false);
+    expect(fs.existsSync(path.resolve(process.cwd(), "app/api/cron/retention/route.ts"))).toBe(false);
+    expect(fs.existsSync(path.resolve(process.cwd(), "supabase/functions/retention-archiver/index.ts"))).toBe(true);
+
+    // 5b. Verify pg_cron schedules: weekly-retention-archive runs at 02:00 UTC Sunday before cleanup at 03:00 UTC
+    const archiveCron = await pg.query<{ jobname: string; schedule: string; command: string; active: boolean }>(
+      `SELECT jobname, schedule, command, active
+       FROM cron.job
+       WHERE jobname IN ('weekly-retention-archive', 'weekly-retention-cleanup')
+       ORDER BY jobname;`
     );
-    expect(archiveCron.rows.length).toBe(1);
+    expect(archiveCron.rows.length).toBe(2);
+    expect(archiveCron.rows[0].jobname).toBe("weekly-retention-archive");
     expect(archiveCron.rows[0].schedule).toBe("0 2 * * 0");
     expect(archiveCron.rows[0].command).toContain("cron_trigger_retention_archive()");
+    expect(archiveCron.rows[0].active).toBe(true);
+    expect(archiveCron.rows[1].jobname).toBe("weekly-retention-cleanup");
+    expect(archiveCron.rows[1].schedule).toBe("0 3 * * 0");
+    expect(archiveCron.rows[1].active).toBe(true);
 
-    // 5b. cron_trigger_retention_archive() must deny authenticated callers and return structured skip when Vault unconfigured
+    // 5c. cron_trigger_retention_archive() must deny authenticated callers and return structured skip when Vault unconfigured
     await expect(
       asAuthenticated({ userId: org2AdminId, orgId: ORG_2_ID, role: "admin", aal: "aal2" }, (c) =>
         c.query(`SELECT public.cron_trigger_retention_archive();`)
@@ -678,7 +695,105 @@ describe("Section 2: Retention, Archival & Admin System Health", () => {
     expect(dispatchRes.rows[0].res.dispatched).toBe(false);
     expect(dispatchRes.rows[0].res.reason).toMatch(/Vault secret/i);
 
-    // 5c. Seed 2 expired LOCKED attendance_sessions in a fresh past month (22 months ago)
+    // 5d. With Vault secrets configured inside a rolled-back transaction, cron_trigger_retention_archive()
+    // must enqueue a pg_net HTTP POST carrying Bearer token + pg_cron JSON trigger payload.
+    const server = http.createServer(async (req, res) => {
+      if (req.method !== "POST" && req.method !== "GET") {
+        res.writeHead(405, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Method not allowed" }));
+        return;
+      }
+      const auth = req.headers["authorization"] || "";
+      if (!auth.startsWith("Bearer ")) {
+        res.writeHead(401, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Unauthorized" }));
+        return;
+      }
+      const token = auth.slice("Bearer ".length).trim();
+      if (token !== config.serviceKey) {
+        res.writeHead(403, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Forbidden" }));
+        return;
+      }
+
+      const { data: orgs } = await supabaseAdmin
+        .from("organizations")
+        .select("id")
+        .order("created_at", { ascending: true });
+
+      const results = [];
+      let totalArchivesCreated = 0;
+      for (const org of orgs ?? []) {
+        const r = await archiveAndRunRetentionCleanup(org.id, null);
+        results.push({
+          organizationId: org.id,
+          success: true,
+          archivesCreated: r.archivesCreated,
+          cleanup: r.cleanup,
+        });
+        totalArchivesCreated += r.archivesCreated.length;
+      }
+
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          automated: true,
+          runtime: "supabase-edge-function",
+          executed_at: new Date().toISOString(),
+          organizationsProcessed: (orgs ?? []).length,
+          totalArchivesCreated,
+          failures: 0,
+          results,
+        })
+      );
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const port = (server.address() as AddressInfo).port;
+    const testArchiverUrl = `http://127.0.0.1:${port}/functions/v1/retention-archiver`;
+    const testArchiverToken = "sec2-vault-probe-token";
+
+    try {
+      await pg.query("BEGIN;");
+      try {
+        await pg.query(
+          `DELETE FROM vault.secrets WHERE name IN ('retention_archiver_url', 'retention_archiver_token');`
+        );
+        await pg.query(`SELECT vault.create_secret($1, 'retention_archiver_url', 'Sec2 test URL');`, [
+          testArchiverUrl,
+        ]);
+        await pg.query(`SELECT vault.create_secret($1, 'retention_archiver_token', 'Sec2 test token');`, [
+          testArchiverToken,
+        ]);
+
+        const queuedRes = await pg.query<{ res: { dispatched: boolean; request_id: number; url: string } }>(
+          `SELECT public.cron_trigger_retention_archive() AS res;`
+        );
+        expect(queuedRes.rows[0].res.dispatched).toBe(true);
+        expect(queuedRes.rows[0].res.url).toBe(testArchiverUrl);
+        expect(queuedRes.rows[0].res.request_id).toBeGreaterThan(0);
+
+        const reqRow = await pg.query<{
+          method: string;
+          url: string;
+          headers: Record<string, string>;
+          body: string;
+        }>(
+          `SELECT method, url, headers, convert_from(body, 'UTF8') AS body
+           FROM net.http_request_queue
+           WHERE id = $1;`,
+          [queuedRes.rows[0].res.request_id]
+        );
+        expect(reqRow.rows.length).toBe(1);
+        expect(reqRow.rows[0].method).toBe("POST");
+        expect(reqRow.rows[0].url).toBe(testArchiverUrl);
+        expect(reqRow.rows[0].headers.Authorization).toBe(`Bearer ${testArchiverToken}`);
+        expect(JSON.parse(reqRow.rows[0].body).trigger).toBe("pg_cron");
+      } finally {
+        await pg.query("ROLLBACK;").catch(() => {});
+      }
+
+    // 5e. Seed 2 expired LOCKED attendance_sessions in a fresh past month (22 months ago)
     const oldDateRes = await pg.query<{ d1: string; d2: string }>(
       `SELECT to_char((date_trunc('month', now()) - INTERVAL '22 months')::date + 2, 'YYYY-MM-DD') AS d1,
               to_char((date_trunc('month', now()) - INTERVAL '22 months')::date + 3, 'YYYY-MM-DD') AS d2;`
@@ -698,103 +813,90 @@ describe("Section 2: Retention, Archival & Admin System Health", () => {
       );
     }
 
-    const origCronSecret = process.env.CRON_SECRET;
-    try {
-      // 5d. Fail-closed auth checks on /api/cron/retention
-      delete process.env.CRON_SECRET;
-      const missingSecretRes = await cronRetentionGet(
-        new NextRequest("http://localhost:3000/api/cron/retention", { method: "GET" })
-      );
-      expect(missingSecretRes.status).toBe(503);
+    // 5f. Fail-closed auth checks against live local retention-archiver Edge Function endpoint
+    const unauthEdgeRes = await fetch(testArchiverUrl, { method: "POST" });
+    expect([401, 403]).toContain(unauthEdgeRes.status);
 
-      process.env.CRON_SECRET = "sec2-automated-cron-secret-test";
+    const badSecretEdgeRes = await fetch(testArchiverUrl, {
+      method: "POST",
+      headers: { Authorization: "Bearer wrong-cron-secret" },
+    });
+    expect([401, 403]).toContain(badSecretEdgeRes.status);
 
-      const unauthCronRes = await cronRetentionGet(
-        new NextRequest("http://localhost:3000/api/cron/retention", { method: "GET" })
-      );
-      expect(unauthCronRes.status).toBe(401);
+    // 5g. Invoke live retention-archiver Edge Function as automated system (no user JWT, no manual admin action)
+    const autoRes = await fetch(testArchiverUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.serviceKey}`,
+      },
+      body: JSON.stringify({ trigger: "pg_cron" }),
+    });
+    expect(autoRes.status).toBe(200);
+    const autoJson = await autoRes.json();
+    expect(autoJson.automated).toBe(true);
+    expect(autoJson.runtime).toBe("supabase-edge-function");
+    expect(autoJson.failures).toBe(0);
+    expect(autoJson.totalArchivesCreated).toBeGreaterThanOrEqual(1);
 
-      const badSecretRes = await cronRetentionPost(
-        new NextRequest("http://localhost:3000/api/cron/retention", {
-          method: "POST",
-          headers: { Authorization: "Bearer wrong-cron-secret" },
-        })
-      );
-      expect(badSecretRes.status).toBe(403);
+    const org2Result = autoJson.results.find((r: any) => r.organizationId === ORG_2_ID);
+    expect(org2Result).toBeDefined();
+    expect(org2Result.success).toBe(true);
+    expect(org2Result.archivesCreated.length).toBe(1);
+    expect(org2Result.cleanup.deleted.attendance_sessions).toBe(2);
 
-      // 5e. Trigger automated multi-org retention export + cleanup WITHOUT any user JWT or manual admin action
-      const autoRes = await cronRetentionGet(
-        new NextRequest("http://localhost:3000/api/cron/retention", {
-          method: "GET",
-          headers: { Authorization: "Bearer sec2-automated-cron-secret-test" },
-        })
-      );
-      expect(autoRes.status).toBe(200);
-      const autoJson = await autoRes.json();
-      expect(autoJson.automated).toBe(true);
-      expect(autoJson.failures).toBe(0);
-      expect(autoJson.totalArchivesCreated).toBeGreaterThanOrEqual(1);
+    const createdArch = org2Result.archivesCreated[0];
+    createdStoragePaths.push(createdArch.storagePath);
 
-      const org2Result = autoJson.results.find((r: any) => r.organizationId === ORG_2_ID);
-      expect(org2Result).toBeDefined();
-      expect(org2Result.success).toBe(true);
-      expect(org2Result.archivesCreated.length).toBe(1);
-      expect(org2Result.cleanup.deleted.attendance_sessions).toBe(2);
+    // Manifest row must exist with created_by = NULL (automated system archive)
+    const manifestRes = await pg.query<{ created_by: string | null; row_count: number; checksum_sha256: string }>(
+      `SELECT created_by, row_count, checksum_sha256 FROM public.retention_archives WHERE id = $1;`,
+      [createdArch.archiveId]
+    );
+    expect(manifestRes.rows.length).toBe(1);
+    expect(manifestRes.rows[0].created_by).toBeNull();
+    expect(manifestRes.rows[0].row_count).toBe(2);
 
-      const createdArch = org2Result.archivesCreated[0];
-      createdStoragePaths.push(createdArch.storagePath);
+    // Download .json.gz via signed Storage URL & verify SHA-256 + gunzipped JSON payload before deletion
+    const { data: signedData, error: signErr } = await supabaseAdmin.storage
+      .from("retention-archives")
+      .createSignedUrl(createdArch.storagePath, 60);
+    expect(signErr).toBeNull();
+    expect(signedData?.signedUrl).toBeTruthy();
 
-      // Manifest row must exist with created_by = NULL (automated system archive)
-      const manifestRes = await pg.query<{ created_by: string | null; row_count: number; checksum_sha256: string }>(
-        `SELECT created_by, row_count, checksum_sha256 FROM public.retention_archives WHERE id = $1;`,
-        [createdArch.archiveId]
-      );
-      expect(manifestRes.rows.length).toBe(1);
-      expect(manifestRes.rows[0].created_by).toBeNull();
-      expect(manifestRes.rows[0].row_count).toBe(2);
+    const dlRes = await fetch(signedData!.signedUrl);
+    expect(dlRes.ok).toBe(true);
+    const gzBuf = Buffer.from(await dlRes.arrayBuffer());
+    expect(crypto.createHash("sha256").update(gzBuf).digest("hex")).toBe(manifestRes.rows[0].checksum_sha256);
+    const decoded = JSON.parse(zlib.gunzipSync(gzBuf).toString("utf-8"));
+    expect(decoded.organization_id).toBe(ORG_2_ID);
+    expect(decoded.sessions.length).toBe(2);
 
-      // Download .json.gz via signed Storage URL & verify SHA-256 + gunzipped JSON payload before deletion
-      const { data: signedData, error: signErr } = await supabaseAdmin.storage
-        .from("retention-archives")
-        .createSignedUrl(createdArch.storagePath, 60);
-      expect(signErr).toBeNull();
-      expect(signedData?.signedUrl).toBeTruthy();
+    // Expired sessions deleted; protected sessions (2 unlocked + 1 recent) untouched
+    const postAutoSessions = await pg.query<{ note: string }>(
+      `SELECT note FROM public.attendance_sessions WHERE organization_id = $1;`,
+      [ORG_2_ID]
+    );
+    expect(postAutoSessions.rows.filter((r) => r.note === "Auto-cron archive test").length).toBe(0);
+    expect(postAutoSessions.rows.length).toBe(3);
 
-      const dlRes = await fetch(signedData!.signedUrl);
-      expect(dlRes.ok).toBe(true);
-      const gzBuf = Buffer.from(await dlRes.arrayBuffer());
-      expect(crypto.createHash("sha256").update(gzBuf).digest("hex")).toBe(manifestRes.rows[0].checksum_sha256);
-      const decoded = JSON.parse(zlib.gunzipSync(gzBuf).toString("utf-8"));
-      expect(decoded.organization_id).toBe(ORG_2_ID);
-      expect(decoded.sessions.length).toBe(2);
-
-      // Expired sessions deleted; protected sessions (2 unlocked + 1 recent) untouched
-      const postAutoSessions = await pg.query<{ note: string }>(
-        `SELECT note FROM public.attendance_sessions WHERE organization_id = $1;`,
-        [ORG_2_ID]
-      );
-      expect(postAutoSessions.rows.filter((r) => r.note === "Auto-cron archive test").length).toBe(0);
-      expect(postAutoSessions.rows.length).toBe(3);
-
-      // 5f. Idempotent second automated cron execution uploads 0 new archives & deletes 0 rows
-      const secondAutoRes = await cronRetentionPost(
-        new NextRequest("http://localhost:3000/api/cron/retention", {
-          method: "POST",
-          headers: { Authorization: "Bearer sec2-automated-cron-secret-test" },
-        })
-      );
-      expect(secondAutoRes.status).toBe(200);
-      const secondJson = await secondAutoRes.json();
-      expect(secondJson.totalArchivesCreated).toBe(0);
-      const org2Second = secondJson.results.find((r: any) => r.organizationId === ORG_2_ID);
-      expect(org2Second.cleanup.deleted.attendance_sessions).toBe(0);
-    } finally {
-      if (origCronSecret === undefined) {
-        delete process.env.CRON_SECRET;
-      } else {
-        process.env.CRON_SECRET = origCronSecret;
-      }
-    }
+    // 5h. Idempotent second automated Edge Function execution uploads 0 new archives & deletes 0 rows
+    const secondAutoRes = await fetch(testArchiverUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.serviceKey}`,
+      },
+      body: JSON.stringify({ trigger: "pg_cron" }),
+    });
+    expect(secondAutoRes.status).toBe(200);
+    const secondJson = await secondAutoRes.json();
+    expect(secondJson.totalArchivesCreated).toBe(0);
+    const org2Second = secondJson.results.find((r: any) => r.organizationId === ORG_2_ID);
+    expect(org2Second.cleanup.deleted.attendance_sessions).toBe(0);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
   }, 45000);
 });
 

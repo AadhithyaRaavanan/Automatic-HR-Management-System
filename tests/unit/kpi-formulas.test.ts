@@ -52,22 +52,32 @@ describe("Section 4 KPI Helper & Weighting Formulas", () => {
       ])
     ).toBe(50);
 
-    // Non-finite score becomes 0
+    // Unscored / null / non-finite entries are excluded from both numerator and weight denominator
     expect(
       computeWeightedKpiScore([
+        { score: null, weight: 3 },
         { score: Number.NaN, weight: 2 },
         { score: 80, weight: 2 },
       ])
-    ).toBe(40);
+    ).toBe(80);
+
+    // All unscored -> null
+    expect(
+      computeWeightedKpiScore([
+        { score: null, weight: 1 },
+        { score: null, weight: 2 },
+      ])
+    ).toBeNull();
   });
 
   it("formats KPI values and computes performance bands accurately", () => {
     expect(formatKpiValue(95.5, "%")).toBe("95.5%");
     expect(formatKpiValue(100, "%")).toBe("100%");
     expect(formatKpiValue(3, "tasks")).toBe("3 tasks");
-    expect(formatKpiValue(null, "days")).toBe("0 days");
+    expect(formatKpiValue(null, "days")).toBe("No data");
+    expect(formatKpiValue(undefined, "%")).toBe("No data");
 
-    expect(getKpiBandLabel(null).label).toBe("Not Computed");
+    expect(getKpiBandLabel(null).label).toBe("Not Scored");
     expect(getKpiBandLabel(92).tone).toBe("success");
     expect(getKpiBandLabel(72).tone).toBe("warning");
     expect(getKpiBandLabel(42).tone).toBe("danger");

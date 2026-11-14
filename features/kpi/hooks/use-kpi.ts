@@ -34,9 +34,9 @@ export interface KpiScoreRecord {
   period_id: string;
   employee_id: string;
   kpi_definition_id: string;
-  actual_value: number;
+  actual_value: number | null;
   target_value: number;
-  score: number;
+  score: number | null;
   computed_at: string;
 }
 
@@ -132,9 +132,9 @@ export function useKpiData(enabled = true) {
         periods: (periodsRes.data || []) as KpiPeriodRecord[],
         scores: (scoresRes.data || []).map((s: any) => ({
           ...s,
-          actual_value: Number(s.actual_value),
+          actual_value: s.actual_value === null || s.actual_value === undefined ? null : Number(s.actual_value),
           target_value: Number(s.target_value),
-          score: Number(s.score),
+          score: s.score === null || s.score === undefined ? null : Number(s.score),
         })) as KpiScoreRecord[],
         reviews: (reviewsRes.data || []).map((r: any) => ({
           ...r,

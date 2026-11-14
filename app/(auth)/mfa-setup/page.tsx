@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import { sanitizeRedirectPath } from "@/lib/auth/redirect";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { KeyRound, ShieldCheck, Copy, Check, ArrowRight, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
@@ -12,7 +13,7 @@ import { toast } from "sonner";
 function MfaSetupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectPath = searchParams.get("redirect") || "/";
+  const redirectPath = sanitizeRedirectPath(searchParams.get("redirect"), "/");
 
   const [isLoading, setIsLoading] = React.useState(true);
   const [enrollData, setEnrollData] = React.useState<{

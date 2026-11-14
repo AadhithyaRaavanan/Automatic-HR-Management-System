@@ -6,6 +6,7 @@ export interface LeaveType {
   description?: string | null;
   is_paid: boolean;
   is_active: boolean;
+  counts_toward_kpi?: boolean;
 }
 
 export interface LeavePolicy {

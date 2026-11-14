@@ -535,14 +535,14 @@ isOneToOne: false
                   ]
                 },"kpi_scores": {
                   Row: {
-                    "actual_value": number,"computed_at": string,"employee_id": string,"id": string,"kpi_definition_id": string,"organization_id": string,"period_id": string,"score": number,"target_value": number
+                    "actual_value": number | null,"computed_at": string,"employee_id": string,"id": string,"kpi_definition_id": string,"organization_id": string,"period_id": string,"score": number | null,"target_value": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "actual_value"?: number,"computed_at"?: string,"employee_id": string,"id"?: string,"kpi_definition_id": string,"organization_id": string,"period_id": string,"score": number,"target_value": number
+                    "actual_value"?: number | null,"computed_at"?: string,"employee_id": string,"id"?: string,"kpi_definition_id": string,"organization_id": string,"period_id": string,"score"?: number | null,"target_value": number
                   }
                   Update: {
-                    "actual_value"?: number,"computed_at"?: string,"employee_id"?: string,"id"?: string,"kpi_definition_id"?: string,"organization_id"?: string,"period_id"?: string,"score"?: number,"target_value"?: number
+                    "actual_value"?: number | null,"computed_at"?: string,"employee_id"?: string,"id"?: string,"kpi_definition_id"?: string,"organization_id"?: string,"period_id"?: string,"score"?: number | null,"target_value"?: number
                   }
                   Relationships: [
                     {
@@ -707,14 +707,14 @@ isOneToOne: false
                   ]
                 },"leave_types": {
                   Row: {
-                    "code": string,"created_at": string,"description": string | null,"id": string,"is_active": boolean,"is_paid": boolean,"name": string,"organization_id": string,"updated_at": string
+                    "code": string,"counts_toward_kpi": boolean,"created_at": string,"description": string | null,"id": string,"is_active": boolean,"is_paid": boolean,"name": string,"organization_id": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "code": string,"created_at"?: string,"description"?: string | null,"id"?: string,"is_active"?: boolean,"is_paid"?: boolean,"name": string,"organization_id": string,"updated_at"?: string
+                    "code": string,"counts_toward_kpi"?: boolean,"created_at"?: string,"description"?: string | null,"id"?: string,"is_active"?: boolean,"is_paid"?: boolean,"name": string,"organization_id": string,"updated_at"?: string
                   }
                   Update: {
-                    "code"?: string,"created_at"?: string,"description"?: string | null,"id"?: string,"is_active"?: boolean,"is_paid"?: boolean,"name"?: string,"organization_id"?: string,"updated_at"?: string
+                    "code"?: string,"counts_toward_kpi"?: boolean,"created_at"?: string,"description"?: string | null,"id"?: string,"is_active"?: boolean,"is_paid"?: boolean,"name"?: string,"organization_id"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {

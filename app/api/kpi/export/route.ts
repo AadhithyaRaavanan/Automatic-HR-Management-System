@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
       periodStatus: string;
       employeeName: string;
       employeeEmail: string;
-      items: Array<{ score: number; weight: number }>;
+      items: Array<{ score: number | null; weight: number }>;
       review: any;
     }
   >();
@@ -151,20 +151,21 @@ export async function GET(request: NextRequest) {
       });
     }
     grouped.get(key)!.items.push({
-      score: Number(r.score || 0),
+      score: r.score === null || r.score === undefined ? null : Number(r.score),
       weight: Number(r.kpi_definitions?.weight || 1),
     });
   }
 
   for (const entry of Array.from(grouped.values())) {
     const weighted = computeWeightedKpiScore(entry.items);
+    const scoredCount = entry.items.filter((i) => i.score !== null && Number.isFinite(i.score)).length;
     summarySheet.addRow({
       period_name: sanitizeSpreadsheetCell(entry.periodName),
       period_status: sanitizeSpreadsheetCell(entry.periodStatus),
       employee_name: sanitizeSpreadsheetCell(entry.employeeName),
       employee_email: sanitizeSpreadsheetCell(entry.employeeEmail),
-      metric_count: entry.items.length,
-      weighted_score: weighted ?? 0,
+      metric_count: scoredCount,
+      weighted_score: weighted ?? "No data",
       rating: entry.review ? Number(entry.review.rating) : "",
       comment: entry.review ? sanitizeSpreadsheetCell(entry.review.comment || "") : "",
     });
@@ -214,9 +215,9 @@ export async function GET(request: NextRequest) {
       source_metric: sanitizeSpreadsheetCell(metricMeta.label),
       direction: sanitizeSpreadsheetCell(r.kpi_definitions?.direction || ""),
       weight: Number(r.kpi_definitions?.weight || 1),
-      actual_value: Number(r.actual_value ?? 0),
+      actual_value: r.actual_value === null || r.actual_value === undefined ? "No data" : Number(r.actual_value),
       target_value: Number(r.target_value ?? 0),
-      score: Number(r.score ?? 0),
+      score: r.score === null || r.score === undefined ? "No data" : Number(r.score),
       computed_at: r.computed_at ? format(new Date(r.computed_at), "yyyy-MM-dd HH:mm") : "",
     });
   }

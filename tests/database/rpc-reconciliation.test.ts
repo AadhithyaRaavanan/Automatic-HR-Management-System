@@ -3,15 +3,15 @@
  *
  * Replaces static file-mention checks with a live, database-executed 4-cell security
  * matrix generated directly from `pg_proc`:
- *   1. Reconciles EVERY `SECURITY DEFINER` function in `public` (95 functions) for
+ *   1. Reconciles EVERY `SECURITY DEFINER` function in `public` (96 functions) for
  *      `search_path=""`, zero `PUBLIC`/`anon` EXECUTE grants, and role gating.
  *   2. Queries `pg_proc` dynamically for EVERY `authenticated`-executable `SECURITY DEFINER`
- *      function (67 functions) and executes live probes for:
+ *      function (68 functions) and executes live probes for:
  *        - crossTenant (`Org 2` caller targeting `Org 1` IDs / spoofed org claim)
  *        - wrongRole (`employee` / `manager` / `hr@aal2` attempting unauthorized RPC)
  *        - aal1 (`hr` or `admin` holding only `aal = 'aal1'` on AAL2-gated RPC)
  *        - suspendedMember (member with `status = 'suspended'` holding valid `aal2` JWT)
- *   3. Logs the complete 67-row matrix summary and lists every function with any
+ *   3. Logs the complete 68-row matrix summary and lists every function with any
  *      missing (`N/A`) cell and its exact architectural justification.
  */
 
@@ -250,7 +250,7 @@ function buildAuthenticatedMatrix(org1LeaveTypeId: string): Record<string, Funct
       suspendedMember: p("org1_suspended", "aal2", `SELECT public.unlock_month(2098, 8, 'Suspended');`),
     },
 
-    // 2. HR / Admin AAL2 RPCs (22)
+    // 2. HR / Admin AAL2 RPCs (23)
     "admin_create_department(text,text,uuid,uuid)": {
       crossTenant: p("org2_admin", "aal2", `SELECT public.admin_create_department('CrossDept', 'CD9', '${ORG_1.manager}', NULL);`),
       wrongRole: p("org1_mgr", "aal1", `SELECT public.admin_create_department('MgrDept', 'MD9');`),
@@ -358,6 +358,12 @@ function buildAuthenticatedMatrix(org1LeaveTypeId: string): Record<string, Funct
       wrongRole: p("org1_mgr", "aal1", `SELECT public.hr_correct_attendance('${ORG_1.employee}', '2098-08-20', '[]'::jsonb, 'Mgr');`),
       aal1: p("org1_hr", "aal1", `SELECT public.hr_correct_attendance('${ORG_1.employee}', '2098-08-20', '[]'::jsonb, 'AAL1');`),
       suspendedMember: p("org1_suspended", "aal2", `SELECT public.hr_correct_attendance('${ORG_1.employee}', '2098-08-20', '[]'::jsonb, 'Susp');`),
+    },
+    "hr_update_leave_type_kpi_setting(uuid,boolean)": {
+      crossTenant: p("org2_admin", "aal2", `SELECT public.hr_update_leave_type_kpi_setting('${org1LeaveTypeId}', false);`),
+      wrongRole: p("org1_mgr", "aal1", `SELECT public.hr_update_leave_type_kpi_setting('${org1LeaveTypeId}', false);`),
+      aal1: p("org1_hr", "aal1", `SELECT public.hr_update_leave_type_kpi_setting('${org1LeaveTypeId}', false);`),
+      suspendedMember: p("org1_suspended", "aal2", `SELECT public.hr_update_leave_type_kpi_setting('${org1LeaveTypeId}', false);`),
     },
     "import_holiday_template(text,integer)": {
       crossTenant: na("No UUID argument; imports global template into current_org_id()"),
@@ -522,9 +528,9 @@ function buildAuthenticatedMatrix(org1LeaveTypeId: string): Record<string, Funct
       suspendedMember: p("org1_suspended", "aal2", `SELECT * FROM public.get_organization_leave_period('${ORG_1_ID}', '2098-08-20');`),
     },
     "get_user_role(uuid)": {
-      crossTenant: p("org2_emp", "aal1", `SELECT public.get_user_role('${ORG_1.admin}') AS r;`, "null"),
-      wrongRole: na("Org-scoped RLS/lookup helper callable by all active org members"),
-      aal1: na("Read-only role helper; no AAL2 requirement"),
+      crossTenant: p("org2_admin", "aal2", `SELECT public.get_user_role('${ORG_1.admin}') AS r;`, "null"),
+      wrongRole: p("org1_emp", "aal1", `SELECT public.get_user_role('${ORG_1.admin}');`),
+      aal1: p("org1_hr", "aal1", `SELECT public.get_user_role('${ORG_1.employee}');`),
       suspendedMember: p("org1_suspended", "aal2", `SELECT public.get_user_role('${ORG_1.employee}');`),
     },
     "is_active_delegated_approver(uuid)": {
@@ -688,7 +694,7 @@ describe("Item 2 & Section 0d: Live pg_proc Security Matrix & Function Reconcili
     }
   });
 
-  it("1. Reconciles all 95 public SECURITY DEFINER functions in pg_proc with search_path='', zero PUBLIC/anon grants, and non-authenticated privilege denials", async () => {
+  it("1. Reconciles all 96 public SECURITY DEFINER functions in pg_proc with search_path='', zero PUBLIC/anon grants, and non-authenticated privilege denials", async () => {
     const res = await client.query<{
       sig: string;
       proconfig: string[] | null;
@@ -763,7 +769,7 @@ describe("Item 2 & Section 0d: Live pg_proc Security Matrix & Function Reconcili
     const liveAuthSigs = authRes.rows.map((r) => r.sig).sort();
     const matrix = buildAuthenticatedMatrix(org1LeaveTypeId);
     expect(liveAuthSigs).toEqual(Object.keys(matrix).sort());
-    expect(liveAuthSigs.length).toBe(67);
+    expect(liveAuthSigs.length).toBe(68);
 
     const resolveActor = (actor: CellProbe["actor"], spoofOrgId?: string) => {
       switch (actor) {
@@ -874,7 +880,7 @@ describe("Item 2 & Section 0d: Live pg_proc Security Matrix & Function Reconcili
       console.log(`  N/A cell(s) -> ${m.sig}: ${m.missing.join(" | ")}`);
     }
 
-    expect(summaryRows.length).toBe(67);
+    expect(summaryRows.length).toBe(68);
   }, 60000);
 
   it("3. Verifies audit_logs trigger/RPC writes conform to UPPER_SNAKE naming convention", async () => {
@@ -885,5 +891,57 @@ describe("Item 2 & Section 0d: Live pg_proc Security Matrix & Function Reconcili
         expect(row.action).toMatch(/^[A-Z][A-Z0-9_]+$/);
       }
     }
+  });
+
+  it("4. Restricts get_user_role(uuid) strictly to self (any active AAL) or own-org HR/admin at AAL2", async () => {
+    const callAs = async (
+      uid: string,
+      orgId: string,
+      role: string,
+      aal: "aal1" | "aal2",
+      targetId: string
+    ) => {
+      const claims = JSON.stringify({
+        sub: uid,
+        aud: "authenticated",
+        role: "authenticated",
+        aal,
+        user_role: role,
+        organization_id: orgId,
+      });
+      await client.query("BEGIN;");
+      try {
+        await client.query("SET LOCAL ROLE authenticated;");
+        await client.query(`SELECT set_config('request.jwt.claims', $1, true);`, [claims]);
+        const r = await client.query<{ role: string | null }>(`SELECT public.get_user_role($1) AS role;`, [targetId]);
+        await client.query("ROLLBACK;");
+        return r.rows[0].role;
+      } catch (err) {
+        await client.query("ROLLBACK;").catch(() => {});
+        throw err;
+      } finally {
+        await client.query("RESET ROLE;").catch(() => {});
+      }
+    };
+
+    // Positive: self lookup works at AAL1 for any active member
+    expect(await callAs(ORG_1.employee, ORG_1_ID, "employee", "aal1", ORG_1.employee)).toBe("employee");
+    expect(await callAs(ORG_1.manager, ORG_1_ID, "manager", "aal1", ORG_1.manager)).toBe("manager");
+
+    // Negative: peer / manager lookup of another user is denied with 42501
+    await expect(callAs(ORG_1.employee, ORG_1_ID, "employee", "aal1", ORG_1.manager)).rejects.toThrow(/Forbidden/i);
+    await expect(callAs(ORG_1.manager, ORG_1_ID, "manager", "aal1", ORG_1.employee)).rejects.toThrow(/Forbidden/i);
+    await expect(callAs(ORG_1.manager, ORG_1_ID, "manager", "aal2", ORG_1.employee)).rejects.toThrow(/Forbidden/i);
+
+    // Negative: HR / admin querying another user at AAL1 is denied MFA AAL2 error
+    await expect(callAs(ORG_1.hr, ORG_1_ID, "hr", "aal1", ORG_1.employee)).rejects.toThrow(/MFA AAL2 required/i);
+    await expect(callAs(ORG_1.admin, ORG_1_ID, "admin", "aal1", ORG_1.employee)).rejects.toThrow(/MFA AAL2 required/i);
+
+    // Positive: own-org HR / admin at AAL2 can look up own-org user's role
+    expect(await callAs(ORG_1.hr, ORG_1_ID, "hr", "aal2", ORG_1.employee)).toBe("employee");
+    expect(await callAs(ORG_1.admin, ORG_1_ID, "admin", "aal2", ORG_1.hr)).toBe("hr");
+
+    // Cross-tenant: Org 2 admin at AAL2 gets NULL for Org 1 target (zero cross-tenant leakage)
+    expect(await callAs(FIX.org2Admin, FIX.org2Id, "admin", "aal2", ORG_1.employee)).toBeNull();
   });
 });

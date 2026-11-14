@@ -292,6 +292,7 @@ describe("Database Grants Snapshot Test", () => {
       "hr_adjust_balance",
       "hr_assign_leave",
       "hr_correct_attendance",
+      "hr_update_leave_type_kpi_setting",
       "import_holiday_template",
       "is_active_delegated_approver",
       "is_active_org_member",

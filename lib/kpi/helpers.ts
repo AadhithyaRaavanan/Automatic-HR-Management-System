@@ -49,7 +49,8 @@ export const KPI_SOURCE_METRICS: readonly KpiMetricMeta[] = [
     unit: "days",
     defaultDirection: "lower_is_better",
     defaultTarget: 2,
-    description: "Total approved leave days overlapping the KPI period.",
+    description:
+      "Working days of approved countable leave overlapping the KPI period (excludes sick/statutory by default).",
     category: "Leave",
   },
   {
@@ -76,7 +77,8 @@ export const KPI_SOURCE_METRICS: readonly KpiMetricMeta[] = [
     unit: "tasks",
     defaultDirection: "lower_is_better",
     defaultTarget: 0,
-    description: "Open tasks past due date or completed after due date in period.",
+    description:
+      "Open tasks due within the period that are past due, plus tasks completed late in the period.",
     category: "Tasks",
   },
   {
@@ -105,13 +107,14 @@ export function getKpiMetricMeta(metric: KpiSourceMetric | string): KpiMetricMet
 }
 
 export interface WeightedScoreInput {
-  score: number;
+  score: number | null | undefined;
   weight?: number | null;
 }
 
 /**
  * Computes normalized weighted average KPI score on a 0..100 scale.
- * Returns null if no score rows exist for the employee/period.
+ * Unscored metrics (`null` / no underlying data) are excluded from both
+ * numerator and denominator weights. Returns null if no scored rows remain.
  */
 export function computeWeightedKpiScore(
   items: WeightedScoreInput[]
@@ -122,8 +125,10 @@ export function computeWeightedKpiScore(
   let totalWeight = 0;
 
   for (const item of items) {
-    const rawScore = Number.isFinite(item.score) ? item.score : 0;
-    const clampedScore = Math.max(0, Math.min(100, rawScore));
+    if (item.score === null || item.score === undefined || !Number.isFinite(item.score)) {
+      continue;
+    }
+    const clampedScore = Math.max(0, Math.min(100, item.score));
     const w =
       typeof item.weight === "number" && Number.isFinite(item.weight) && item.weight > 0
         ? item.weight
@@ -137,8 +142,10 @@ export function computeWeightedKpiScore(
 }
 
 export function formatKpiValue(value: number | null | undefined, unit: string): string {
-  const num = typeof value === "number" && Number.isFinite(value) ? value : 0;
-  const rounded = Math.round(num * 100) / 100;
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return "No data";
+  }
+  const rounded = Math.round(value * 100) / 100;
   const formatted = String(rounded);
   if (unit === "%") return `${formatted}%`;
   return unit ? `${formatted} ${unit}` : formatted;
@@ -149,7 +156,7 @@ export function getKpiBandLabel(score: number | null): {
   tone: "success" | "warning" | "danger" | "neutral";
 } {
   if (score === null || !Number.isFinite(score)) {
-    return { label: "Not Computed", tone: "neutral" };
+    return { label: "Not Scored", tone: "neutral" };
   }
   if (score >= 85) return { label: "Exceeding Target", tone: "success" };
   if (score >= 65) return { label: "On Track", tone: "warning" };
@@ -173,7 +180,7 @@ export interface KpiPeriodRecord {
 export interface KpiScoreWithDef {
   period_id: string;
   employee_id: string;
-  score: number;
+  score: number | null;
   weight?: number | null;
 }
 
@@ -188,6 +195,7 @@ export interface KpiTrendPoint {
 
 /**
  * Builds chronological multi-period trend points for a given employee.
+ * Periods where all KPI rows lack underlying data (`score === null`) are omitted.
  */
 export function buildEmployeeKpiTrend(
   periods: KpiPeriodRecord[],
@@ -198,11 +206,15 @@ export function buildEmployeeKpiTrend(
   const points: KpiTrendPoint[] = [];
 
   for (const period of sorted) {
-    const periodScores = scores.filter(
-      (s) => s.period_id === period.id && s.employee_id === employeeId
+    const scoredRows = scores.filter(
+      (s) =>
+        s.period_id === period.id &&
+        s.employee_id === employeeId &&
+        s.score !== null &&
+        Number.isFinite(s.score)
     );
-    if (periodScores.length === 0) continue;
-    const weighted = computeWeightedKpiScore(periodScores);
+    if (scoredRows.length === 0) continue;
+    const weighted = computeWeightedKpiScore(scoredRows);
     if (weighted === null) continue;
     points.push({
       periodId: period.id,
@@ -210,7 +222,7 @@ export function buildEmployeeKpiTrend(
       startDate: period.start_date,
       status: period.status,
       overallScore: weighted,
-      metricCount: periodScores.length,
+      metricCount: scoredRows.length,
     });
   }
 

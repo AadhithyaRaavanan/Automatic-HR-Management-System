@@ -22,18 +22,24 @@ export function LeavePolicyModal({ open, onOpenChange }: LeavePolicyModalProps) 
   const [editedPolicies, setEditedPolicies] = React.useState<
     Record<string, { yearly_quota: number; monthly_cap: number | null; carry_forward_max: number }>
   >({});
+  const [editedKpiFlags, setEditedKpiFlags] = React.useState<Record<string, boolean>>({});
 
   React.useEffect(() => {
     if (policies.length > 0) {
       const initial: Record<string, any> = {};
+      const kpiInitial: Record<string, boolean> = {};
       policies.forEach((p) => {
         initial[p.id] = {
           yearly_quota: Number(p.yearly_quota),
           monthly_cap: p.monthly_cap ? Number(p.monthly_cap) : null,
           carry_forward_max: Number(p.carry_forward_max),
         };
+        if (p.leave_type_id) {
+          kpiInitial[p.leave_type_id] = p.leave_types?.counts_toward_kpi ?? true;
+        }
       });
       setEditedPolicies(initial);
+      setEditedKpiFlags(kpiInitial);
     }
   }, [policies]);
 
@@ -63,7 +69,23 @@ export function LeavePolicyModal({ open, onOpenChange }: LeavePolicyModalProps) 
         if (error) throw error;
       }
 
+      for (const p of policies) {
+        const originalFlag = p.leave_types?.counts_toward_kpi ?? true;
+        const nextFlag = editedKpiFlags[p.leave_type_id] ?? originalFlag;
+        if (nextFlag !== originalFlag) {
+          const { error: rpcError } = await (supabase.rpc as any)(
+            "hr_update_leave_type_kpi_setting",
+            {
+              p_leave_type_id: p.leave_type_id,
+              p_counts_toward_kpi: nextFlag,
+            }
+          );
+          if (rpcError) throw rpcError;
+        }
+      }
+
       queryClient.invalidateQueries({ queryKey: ["leave-policies"] });
+      queryClient.invalidateQueries({ queryKey: ["leave-types"] });
       toast.success("Leave policies updated successfully");
       onOpenChange(false);
     } catch (err: any) {
@@ -158,6 +180,21 @@ export function LeavePolicyModal({ open, onOpenChange }: LeavePolicyModalProps) 
                     />
                   </div>
                 </div>
+
+                <label className="flex items-center gap-2 pt-1 text-[11px] font-semibold text-text-secondary cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editedKpiFlags[p.leave_type_id] ?? p.leave_types?.counts_toward_kpi ?? true}
+                    onChange={(e) =>
+                      setEditedKpiFlags((prev) => ({
+                        ...prev,
+                        [p.leave_type_id]: e.target.checked,
+                      }))
+                    }
+                    className="rounded border-border-light text-brand-purple focus:ring-brand-purple"
+                  />
+                  <span>Count toward Leave KPI metric (unchecked excludes sick/statutory leave)</span>
+                </label>
               </div>
             );
           })}

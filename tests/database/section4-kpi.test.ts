@@ -13,12 +13,16 @@
  *    notifications (`kpi_review`), and UPPER_SNAKE audits.
  * 4. Complete RLS & RPC authorization matrix across Employee, Manager, HR, Admin,
  *    AAL1 vs AAL2, and cross-tenant Organization 2.
+ * 5. No-data metrics return NULL across all 8 metrics and are excluded from weighted totals.
+ * 6. Employee effective timezone (`Asia/Kolkata` midnight edge case) & period-scoped open overdue single-count.
+ * 7. Straddling leave working-day calculation (`calculate_working_days`) & Sick/Statutory exclusion toggle.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Client } from "pg";
 import * as fs from "fs";
 import * as path from "path";
+import { computeWeightedKpiScore } from "@/lib/kpi/helpers";
 
 function getDatabaseUrl(): string {
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
@@ -177,18 +181,18 @@ describe("Section 4: KPI System", () => {
   }
 
   it("1. Pure SQL calculate_kpi_score handles NULL/no data, zero targets, bounds, and directions", async () => {
-    const calc = async (actual: number | null, target: number, dir: string) => {
-      const r = await client.query<{ score: string }>(
+    const calc = async (actual: number | null, target: number, dir: string): Promise<number | null> => {
+      const r = await client.query<{ score: string | null }>(
         `SELECT public.calculate_kpi_score($1, $2, $3)::text AS score;`,
         [actual, target, dir]
       );
-      return Number(r.rows[0].score);
+      return r.rows[0].score === null ? null : Number(r.rows[0].score);
     };
 
-    // NULL actual (no data) resolves cleanly to 0.00
-    expect(await calc(null, 95, "higher_is_better")).toBe(0);
-    expect(await calc(null, 2, "lower_is_better")).toBe(0);
-    expect(await calc(null, 0, "lower_is_better")).toBe(0);
+    // NULL actual (no data) stays NULL ("not scored"), never 0 or 100
+    expect(await calc(null, 95, "higher_is_better")).toBeNull();
+    expect(await calc(null, 2, "lower_is_better")).toBeNull();
+    expect(await calc(null, 0, "lower_is_better")).toBeNull();
 
     // Zero target edge cases
     expect(await calc(0, 0, "higher_is_better")).toBe(0);
@@ -213,36 +217,36 @@ describe("Section 4: KPI System", () => {
   });
 
   it("2. Computes live KPI snapshots from attendance, leave, and tasks + supports open recalculation", async () => {
-    const startDate = "2099-05-01";
-    const endDate = "2099-05-31";
+    const startDate = "2025-05-01";
+    const endDate = "2025-05-31";
     const seededDefIds: string[] = [];
     const seededTaskIds: string[] = [];
-    const seededAttDates: string[] = ["2099-05-04", "2099-05-05", "2099-05-06"];
+    const seededAttDates: string[] = ["2025-05-04", "2025-05-05", "2025-05-06"];
     let seededLeaveId: string | null = null;
     let periodId: string | null = null;
 
     try {
-      // Seed real attendance_days for reportEmp in 2099-05 window (1 on-time 480m, 1 late 240m, 1 absent 0m)
+      // Seed real attendance_days for reportEmp in 2025-05 window (1 on-time 480m, 1 late 240m, 1 absent 0m)
       await client.query(
         `INSERT INTO public.attendance_days (organization_id, employee_id, work_date, total_minutes, status, is_late)
          VALUES
-           ($1, $2, '2099-05-04', 480, 'present', false),
-           ($1, $2, '2099-05-05', 240, 'half_day', true),
-           ($1, $2, '2099-05-06', 0, 'absent', false)
+           ($1, $2, '2025-05-04', 480, 'present', false),
+           ($1, $2, '2025-05-05', 240, 'half_day', true),
+           ($1, $2, '2025-05-06', 0, 'absent', false)
          ON CONFLICT (employee_id, work_date) DO UPDATE
            SET total_minutes = EXCLUDED.total_minutes, status = EXCLUDED.status, is_late = EXCLUDED.is_late;`,
         [ORG_1_ID, ORG_1.reportEmp]
       );
 
-      // Seed 1 approved leave_request for reportEmp (2 days) using any existing Org 1 leave type
+      // Seed 1 approved CASUAL leave_request for reportEmp (Mon May 12 - Tue May 13 2025 = 2 working days)
       const ltRes = await client.query<{ id: string }>(
-        `SELECT id FROM public.leave_types WHERE organization_id = $1 LIMIT 1;`,
+        `SELECT id FROM public.leave_types WHERE organization_id = $1 AND code = 'CASUAL' LIMIT 1;`,
         [ORG_1_ID]
       );
       if (ltRes.rows[0]?.id) {
         const lrRes = await client.query<{ id: string }>(
           `INSERT INTO public.leave_requests (organization_id, employee_id, leave_type_id, start_date, end_date, day_part, total_days, reason, status)
-           VALUES ($1, $2, $3, '2099-05-12', '2099-05-13', 'full', 2.0, 'Sec4 Leave Metric', 'approved')
+           VALUES ($1, $2, $3, '2025-05-12', '2025-05-13', 'full', 2.0, 'Sec4 Leave Metric', 'approved')
            RETURNING id;`,
           [ORG_1_ID, ORG_1.reportEmp, ltRes.rows[0].id]
         );
@@ -252,22 +256,22 @@ describe("Section 4: KPI System", () => {
       // Seed 3 tasks assigned to reportEmp:
       // 1) Done on time (2-day cycle time)
       // 2) Done late (4-day cycle time)
-      // 3) Overdue open task with past due_date <= end_date
+      // 3) Overdue open task whose due_date falls inside this period (< local_today)
       const t1 = await client.query<{ id: string }>(
         `INSERT INTO public.tasks (organization_id, title, creator_id, assignee_id, status, priority, due_date, started_at, completed_at)
-         VALUES ($1, 'Sec4 OnTime Task', $2, $3, 'done', 'medium', '2099-05-10', '2099-05-07T00:00:00Z', '2099-05-09T00:00:00Z')
+         VALUES ($1, 'Sec4 OnTime Task', $2, $3, 'done', 'medium', '2025-05-10', '2025-05-07T12:00:00Z', '2025-05-09T12:00:00Z')
          RETURNING id;`,
         [ORG_1_ID, ORG_1.manager, ORG_1.reportEmp]
       );
       const t2 = await client.query<{ id: string }>(
         `INSERT INTO public.tasks (organization_id, title, creator_id, assignee_id, status, priority, due_date, started_at, completed_at)
-         VALUES ($1, 'Sec4 Late Task', $2, $3, 'done', 'high', '2099-05-15', '2099-05-14T00:00:00Z', '2099-05-18T00:00:00Z')
+         VALUES ($1, 'Sec4 Late Task', $2, $3, 'done', 'high', '2025-05-15', '2025-05-14T12:00:00Z', '2025-05-18T12:00:00Z')
          RETURNING id;`,
         [ORG_1_ID, ORG_1.manager, ORG_1.reportEmp]
       );
       const t3 = await client.query<{ id: string }>(
         `INSERT INTO public.tasks (organization_id, title, creator_id, assignee_id, status, priority, due_date)
-         VALUES ($1, 'Sec4 Overdue Task', $2, $3, 'in_progress', 'urgent', '2020-01-01')
+         VALUES ($1, 'Sec4 Overdue Task', $2, $3, 'in_progress', 'urgent', '2025-05-02')
          RETURNING id;`,
         [ORG_1_ID, ORG_1.manager, ORG_1.reportEmp]
       );
@@ -300,7 +304,7 @@ describe("Section 4: KPI System", () => {
           }
 
           const pRes = await client.query(
-            `SELECT public.create_kpi_period('Sec4 May 2099', 'monthly', $1, $2) AS res;`,
+            `SELECT public.create_kpi_period('Sec4 May 2025', 'monthly', $1, $2) AS res;`,
             [startDate, endDate]
           );
           periodId = pRes.rows[0].res.period.id;
@@ -351,9 +355,9 @@ describe("Section 4: KPI System", () => {
       expect(Number(byMetric.get("avg_task_cycle_days")?.actual_value)).toBe(3);
       expect(Number(byMetric.get("avg_task_cycle_days")?.score)).toBe(100);
 
-      // Recalculate while period is open after finishing t3 on time? Update t3 completed_at in 2099-05-20
+      // Recalculate while period is open after finishing t3 on time in 2025-05-20
       await client.query(
-        `UPDATE public.tasks SET status = 'done', due_date = '2099-05-25', completed_at = '2099-05-20T00:00:00Z' WHERE id = $1;`,
+        `UPDATE public.tasks SET status = 'done', due_date = '2025-05-25', completed_at = '2025-05-20T12:00:00Z' WHERE id = $1;`,
         [t3.rows[0].id]
       );
       await asRole(
@@ -787,22 +791,31 @@ describe("Section 4: KPI System", () => {
       );
 
       // Zero-data employee (nonReportEmp) scores safely without NULL/division-by-zero failures
-      const nrRes = await client.query<{ source_metric: string; actual_value: string; score: string }>(
+      const nrRes = await client.query<{ source_metric: string; actual_value: string | null; score: string | null }>(
         `SELECT d.source_metric, s.actual_value::text, s.score::text
          FROM public.kpi_scores s
          JOIN public.kpi_definitions d ON d.id = s.kpi_definition_id
          WHERE s.period_id = $1 AND s.employee_id = $2;`,
         [periodId, ORG_1.nonReportEmp]
       );
-      const nrMap = new Map(nrRes.rows.map((r) => [r.source_metric, { actual: Number(r.actual_value), score: Number(r.score) }]));
-      expect(nrMap.get("attendance_on_time_rate")).toEqual({ actual: 0, score: 0 });
-      expect(nrMap.get("hours_vs_target")).toEqual({ actual: 0, score: 0 });
-      expect(nrMap.get("absence_days")).toEqual({ actual: 0, score: 100 });
-      expect(nrMap.get("leave_days_taken")).toEqual({ actual: 0, score: 100 });
-      expect(nrMap.get("tasks_completed")).toEqual({ actual: 0, score: 0 }); // 0 vs target 0 higher_is_better -> 0
-      expect(nrMap.get("tasks_on_time_rate")).toEqual({ actual: 0, score: 0 });
-      expect(nrMap.get("tasks_overdue")).toEqual({ actual: 0, score: 100 }); // future due_date excluded; 0 vs target 0 lower_is_better -> 100
-      expect(nrMap.get("avg_task_cycle_days")).toEqual({ actual: 0, score: 100 });
+      const nrMap = new Map(
+        nrRes.rows.map((r) => [
+          r.source_metric,
+          {
+            actual: r.actual_value === null ? null : Number(r.actual_value),
+            score: r.score === null ? null : Number(r.score),
+          },
+        ])
+      );
+      // Item 4(a): A metric with no underlying data must produce NULL / "not scored", not 0 or 100
+      expect(nrMap.get("attendance_on_time_rate")).toEqual({ actual: null, score: null });
+      expect(nrMap.get("hours_vs_target")).toEqual({ actual: null, score: null });
+      expect(nrMap.get("absence_days")).toEqual({ actual: null, score: null });
+      expect(nrMap.get("leave_days_taken")).toEqual({ actual: null, score: null });
+      expect(nrMap.get("tasks_completed")).toEqual({ actual: null, score: null });
+      expect(nrMap.get("tasks_on_time_rate")).toEqual({ actual: null, score: null });
+      expect(nrMap.get("tasks_overdue")).toEqual({ actual: null, score: null });
+      expect(nrMap.get("avg_task_cycle_days")).toEqual({ actual: null, score: null });
 
       // Zero-target > 0 actual under higher_is_better scores 100 inside compute_kpi_scores
       const omRes = await client.query<{ actual_value: string; score: string }>(
@@ -828,5 +841,328 @@ describe("Section 4: KPI System", () => {
       }
     }
   });
-});
+  it("6. IST employee timezone edge case: task completed after midnight IST is excluded from prior-month KPI period", async () => {
+    // Employee in Asia/Kolkata (UTC+5:30). A task completed at 2025-05-31T19:00:00Z =
+    // 2025-06-01T00:30:00+05:30 IST — this is in June for the employee, so it must NOT
+    // count as a May completion in compute_kpi_scores.
+    const IST_EMP_ID = "00000000-0000-0000-0000-000000000960";
+    const seededDefIds: string[] = [];
+    const seededTaskIds: string[] = [];
+    let periodId: string | null = null;
 
+    await client.query(`
+      INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+      VALUES ('${IST_EMP_ID}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'sec4-ist-emp@org1.test', 'fake', now(), '{"provider":"email"}', '{}', now(), now())
+      ON CONFLICT (id) DO NOTHING;
+    `);
+    await client.query(`
+      INSERT INTO public.organization_members (organization_id, user_id, role, status)
+      VALUES ('${ORG_1_ID}', '${IST_EMP_ID}', 'employee', 'active')
+      ON CONFLICT (user_id) DO UPDATE SET organization_id = '${ORG_1_ID}', role = 'employee', status = 'active';
+    `);
+    await client.query(`
+      INSERT INTO public.employees (id, organization_id, email, full_name, manager_id, status, work_mode, timezone)
+      VALUES ('${IST_EMP_ID}', '${ORG_1_ID}', 'sec4-ist-emp@org1.test', 'Sec4 IST Employee', '${ORG_1.manager}', 'active', 'hybrid', 'Asia/Kolkata')
+      ON CONFLICT (id) DO UPDATE SET timezone = 'Asia/Kolkata', status = 'active';
+    `);
+
+    try {
+      // Task completed at 2025-05-31T19:00:00Z = 2025-06-01 00:30 IST → NOT in May period
+      const tMidnight = await client.query<{ id: string }>(
+        `INSERT INTO public.tasks (organization_id, title, creator_id, assignee_id, status, priority, due_date, started_at, completed_at)
+         VALUES ($1, 'Sec4 IST Midnight Task', $2, $3, 'done', 'high', '2025-05-31', '2025-05-28T10:00:00Z', '2025-05-31T19:00:00Z')
+         RETURNING id;`,
+        [ORG_1_ID, ORG_1.manager, IST_EMP_ID]
+      );
+      seededTaskIds.push(tMidnight.rows[0].id);
+
+      // Open overdue task due on 2025-04-15 is BEFORE period start (2025-05-01) → not period-scoped overdue
+      const tOverdueApr = await client.query<{ id: string }>(
+        `INSERT INTO public.tasks (organization_id, title, creator_id, assignee_id, status, priority, due_date)
+         VALUES ($1, 'Sec4 IST Apr Overdue', $2, $3, 'in_progress', 'medium', '2025-04-15')
+         RETURNING id;`,
+        [ORG_1_ID, ORG_1.manager, IST_EMP_ID]
+      );
+      seededTaskIds.push(tOverdueApr.rows[0].id);
+
+      await asRole(
+        ORG_1.admin,
+        ORG_1_ID,
+        "admin",
+        "aal2",
+        async () => {
+          const dRes = await client.query(
+            `SELECT public.upsert_kpi_definition('Sec4 IST Tasks Done', 'tasks_completed', 1, 'higher_is_better', 1.0, NULL, NULL, NULL, TRUE, NULL) AS res;`
+          );
+          seededDefIds.push(dRes.rows[0].res.definition.id);
+          const dRes2 = await client.query(
+            `SELECT public.upsert_kpi_definition('Sec4 IST Overdue', 'tasks_overdue', 0, 'lower_is_better', 1.0, NULL, NULL, NULL, TRUE, NULL) AS res;`
+          );
+          seededDefIds.push(dRes2.rows[0].res.definition.id);
+
+          const pRes = await client.query(
+            `SELECT public.create_kpi_period('Sec4 IST May 2025', 'monthly', '2025-05-01', '2025-05-31') AS res;`
+          );
+          periodId = pRes.rows[0].res.period.id;
+          await client.query(`SELECT public.compute_kpi_scores($1);`, [periodId]);
+        },
+        { commit: true }
+      );
+
+      const istScores = await client.query<{ source_metric: string; actual_value: string }>(
+        `SELECT d.source_metric, s.actual_value::text
+         FROM public.kpi_scores s
+         JOIN public.kpi_definitions d ON d.id = s.kpi_definition_id
+         WHERE s.period_id = $1 AND s.employee_id = $2;`,
+        [periodId, IST_EMP_ID]
+      );
+      const istMap = new Map(istScores.rows.map((r) => [r.source_metric, Number(r.actual_value)]));
+
+      // Completion at 19:00 UTC = 00:30 IST next day → NOT counted in May period
+      expect(istMap.get("tasks_completed")).toBe(0);
+      // Overdue task due on 2025-04-15 is before period start → not period-scoped overdue
+      expect(istMap.get("tasks_overdue")).toBe(0);
+    } finally {
+      if (periodId) {
+        await client.query(`DELETE FROM public.audit_logs WHERE record_id = $1 OR new_data->>'period_id' = $1::text;`, [periodId]).catch(() => {});
+        await client.query(`DELETE FROM public.kpi_scores WHERE period_id = $1;`, [periodId]).catch(() => {});
+        await client.query(`DELETE FROM public.kpi_periods WHERE id = $1;`, [periodId]).catch(() => {});
+      }
+      if (seededDefIds.length > 0) {
+        await client.query(`DELETE FROM public.kpi_definitions WHERE id = ANY($1::uuid[]);`, [seededDefIds]).catch(() => {});
+      }
+      if (seededTaskIds.length > 0) {
+        await client.query(`DELETE FROM public.tasks WHERE id = ANY($1::uuid[]);`, [seededTaskIds]).catch(() => {});
+      }
+      await client.query(`DELETE FROM public.notifications WHERE user_id = '${IST_EMP_ID}';`).catch(() => {});
+      await client.query(`DELETE FROM public.organization_members WHERE user_id = '${IST_EMP_ID}';`).catch(() => {});
+      await client.query(`DELETE FROM public.employees WHERE id = '${IST_EMP_ID}';`).catch(() => {});
+      await client.query(`DELETE FROM auth.users WHERE id = '${IST_EMP_ID}';`).catch(() => {});
+    }
+  });
+
+  it("7. Straddling leave uses calculate_working_days for period overlap; Sick/Statutory excluded via counts_toward_kpi toggle; hr_update_leave_type_kpi_setting writes audit", async () => {
+    const STRADDLE_EMP_ID = "00000000-0000-0000-0000-000000000961";
+    const seededDefIds: string[] = [];
+    let seededLeaveId: string | null = null;
+    let seededSickLeaveId: string | null = null;
+    let periodId: string | null = null;
+    let origSickKpiSetting: boolean | null = null;
+    let sickLtId: string | null = null;
+    let casualLtId: string | null = null;
+
+    await client.query(`
+      INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+      VALUES ('${STRADDLE_EMP_ID}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'sec4-straddle@org1.test', 'fake', now(), '{"provider":"email"}', '{}', now(), now())
+      ON CONFLICT (id) DO NOTHING;
+    `);
+    await client.query(`
+      INSERT INTO public.organization_members (organization_id, user_id, role, status)
+      VALUES ('${ORG_1_ID}', '${STRADDLE_EMP_ID}', 'employee', 'active')
+      ON CONFLICT (user_id) DO UPDATE SET organization_id = '${ORG_1_ID}', role = 'employee', status = 'active';
+    `);
+    await client.query(`
+      INSERT INTO public.employees (id, organization_id, email, full_name, manager_id, status, work_mode, timezone)
+      VALUES ('${STRADDLE_EMP_ID}', '${ORG_1_ID}', 'sec4-straddle@org1.test', 'Sec4 Straddle Employee', '${ORG_1.manager}', 'active', 'hybrid', 'UTC')
+      ON CONFLICT (id) DO UPDATE SET status = 'active';
+    `);
+
+    try {
+      const casualRes = await client.query<{ id: string }>(
+        `SELECT id FROM public.leave_types WHERE organization_id = $1 AND code = 'CASUAL' LIMIT 1;`,
+        [ORG_1_ID]
+      );
+      casualLtId = casualRes.rows[0]?.id ?? null;
+
+      const sickRes = await client.query<{ id: string; counts_toward_kpi: boolean }>(
+        `SELECT id, counts_toward_kpi FROM public.leave_types WHERE organization_id = $1 AND code = 'SICK' LIMIT 1;`,
+        [ORG_1_ID]
+      );
+      sickLtId = sickRes.rows[0]?.id ?? null;
+      origSickKpiSetting = sickRes.rows[0]?.counts_toward_kpi ?? null;
+
+      // Straddling CASUAL leave: Apr 29–May 2 → May 1–2 = 2 working days in period
+      if (casualLtId) {
+        const lrRes = await client.query<{ id: string }>(
+          `INSERT INTO public.leave_requests (organization_id, employee_id, leave_type_id, start_date, end_date, day_part, total_days, reason, status)
+           VALUES ($1, $2, $3, '2025-04-29', '2025-05-02', 'full', 4.0, 'Sec4 Straddle Leave', 'approved')
+           RETURNING id;`,
+          [ORG_1_ID, STRADDLE_EMP_ID, casualLtId]
+        );
+        seededLeaveId = lrRes.rows[0].id;
+      }
+
+      // SICK leave within period (counts_toward_kpi = TRUE by default)
+      if (sickLtId) {
+        const slRes = await client.query<{ id: string }>(
+          `INSERT INTO public.leave_requests (organization_id, employee_id, leave_type_id, start_date, end_date, day_part, total_days, reason, status)
+           VALUES ($1, $2, $3, '2025-05-05', '2025-05-06', 'full', 2.0, 'Sec4 Sick Leave', 'approved')
+           RETURNING id;`,
+          [ORG_1_ID, STRADDLE_EMP_ID, sickLtId]
+        );
+        seededSickLeaveId = slRes.rows[0].id;
+      }
+
+      await asRole(
+        ORG_1.admin,
+        ORG_1_ID,
+        "admin",
+        "aal2",
+        async () => {
+          const dRes = await client.query(
+            `SELECT public.upsert_kpi_definition('Sec4 Straddle Leave Taken', 'leave_days_taken', 5, 'lower_is_better', 1.0, NULL, NULL, NULL, TRUE, NULL) AS res;`
+          );
+          seededDefIds.push(dRes.rows[0].res.definition.id);
+          const pRes = await client.query(
+            `SELECT public.create_kpi_period('Sec4 Straddle May 2025', 'monthly', '2025-05-01', '2025-05-31') AS res;`
+          );
+          periodId = pRes.rows[0].res.period.id;
+          await client.query(`SELECT public.compute_kpi_scores($1);`, [periodId]);
+        },
+        { commit: true }
+      );
+
+      // Default setting: Sick and Statutory leave are excluded from KPI by default (counts_toward_kpi = FALSE).
+      // Straddle CASUAL leave (Apr 29-May 2) overlaps May 1-2 = 2 working days in period.
+      // Sick leave (May 5-6) is excluded by default -> expected leave_days_taken = 2.
+      const defaultRes = await client.query<{ actual_value: string }>(
+        `SELECT s.actual_value::text
+         FROM public.kpi_scores s
+         JOIN public.kpi_definitions d ON d.id = s.kpi_definition_id
+         WHERE s.period_id = $1 AND s.employee_id = $2 AND d.source_metric = 'leave_days_taken';`,
+        [periodId, STRADDLE_EMP_ID]
+      );
+      expect(Number(defaultRes.rows[0]?.actual_value)).toBe(2);
+
+      // Now HR enables Sick leave for KPI (counts_toward_kpi = TRUE) using hr_update_leave_type_kpi_setting
+      if (sickLtId) {
+        await asRole(
+          ORG_1.hr,
+          ORG_1_ID,
+          "hr",
+          "aal2",
+          async () => {
+            await client.query(`SELECT public.hr_update_leave_type_kpi_setting($1, TRUE);`, [sickLtId]);
+          },
+          { commit: true }
+        );
+
+        // Audit row written with counts_toward_kpi = true
+        const enableAudit = await client.query<{ action: string; new_data: Record<string, unknown> }>(
+          `SELECT action, new_data FROM public.audit_logs
+           WHERE record_id = $1 AND action = 'LEAVE_TYPE_KPI_SETTING_UPDATED'
+           ORDER BY created_at DESC LIMIT 1;`,
+          [sickLtId]
+        );
+        expect(enableAudit.rows.length).toBe(1);
+        expect(enableAudit.rows[0].new_data).toMatchObject({ counts_toward_kpi: true });
+
+        // Recompute: now both straddle CASUAL (2) and SICK (2) count = 4
+        await asRole(
+          ORG_1.hr,
+          ORG_1_ID,
+          "hr",
+          "aal2",
+          async () => {
+            await client.query(`SELECT public.compute_kpi_scores($1);`, [periodId]);
+          },
+          { commit: true }
+        );
+
+        const enabledRes = await client.query<{ actual_value: string }>(
+          `SELECT s.actual_value::text
+           FROM public.kpi_scores s
+           JOIN public.kpi_definitions d ON d.id = s.kpi_definition_id
+           WHERE s.period_id = $1 AND s.employee_id = $2 AND d.source_metric = 'leave_days_taken';`,
+          [periodId, STRADDLE_EMP_ID]
+        );
+        expect(Number(enabledRes.rows[0]?.actual_value)).toBe(4);
+
+        // Now HR disables Sick leave again (counts_toward_kpi = FALSE)
+        await asRole(
+          ORG_1.hr,
+          ORG_1_ID,
+          "hr",
+          "aal2",
+          async () => {
+            await client.query(`SELECT public.hr_update_leave_type_kpi_setting($1, FALSE);`, [sickLtId]);
+          },
+          { commit: true }
+        );
+
+        // Audit row written with counts_toward_kpi = false
+        const disableAudit = await client.query<{ action: string; new_data: Record<string, unknown> }>(
+          `SELECT action, new_data FROM public.audit_logs
+           WHERE record_id = $1 AND action = 'LEAVE_TYPE_KPI_SETTING_UPDATED'
+           ORDER BY created_at DESC LIMIT 1;`,
+          [sickLtId]
+        );
+        expect(disableAudit.rows.length).toBe(1);
+        expect(disableAudit.rows[0].new_data).toMatchObject({ counts_toward_kpi: false });
+
+        // Recompute: only 2 straddle days remain
+        await asRole(
+          ORG_1.hr,
+          ORG_1_ID,
+          "hr",
+          "aal2",
+          async () => {
+            await client.query(`SELECT public.compute_kpi_scores($1);`, [periodId]);
+          },
+          { commit: true }
+        );
+
+        const disabledRes = await client.query<{ actual_value: string }>(
+          `SELECT s.actual_value::text
+           FROM public.kpi_scores s
+           JOIN public.kpi_definitions d ON d.id = s.kpi_definition_id
+           WHERE s.period_id = $1 AND s.employee_id = $2 AND d.source_metric = 'leave_days_taken';`,
+          [periodId, STRADDLE_EMP_ID]
+        );
+        expect(Number(disabledRes.rows[0]?.actual_value)).toBe(2);
+      }
+
+      // Cross-tenant denial: Org 2 admin at aal2 cannot call hr_update_leave_type_kpi_setting with an Org 1 UUID
+      if (casualLtId) {
+        await expect(
+          asRole(ORG_2.admin, ORG_2_ID, "admin", "aal2", async () => {
+            await client.query(`SELECT public.hr_update_leave_type_kpi_setting($1, FALSE);`, [casualLtId]);
+          })
+        ).rejects.toThrow(/42501|not found|permission denied/i);
+      }
+    } finally {
+      if (sickLtId && origSickKpiSetting !== null) {
+        await asRole(
+          ORG_1.hr,
+          ORG_1_ID,
+          "hr",
+          "aal2",
+          async () => {
+            await client.query(`SELECT public.hr_update_leave_type_kpi_setting($1, $2);`, [sickLtId, origSickKpiSetting]);
+          },
+          { commit: true }
+        ).catch(() => {});
+      }
+      if (periodId) {
+        await client.query(`DELETE FROM public.audit_logs WHERE record_id = $1 OR new_data->>'period_id' = $1::text;`, [periodId]).catch(() => {});
+        await client.query(`DELETE FROM public.kpi_scores WHERE period_id = $1;`, [periodId]).catch(() => {});
+        await client.query(`DELETE FROM public.kpi_periods WHERE id = $1;`, [periodId]).catch(() => {});
+      }
+      if (seededDefIds.length > 0) {
+        await client.query(`DELETE FROM public.kpi_definitions WHERE id = ANY($1::uuid[]);`, [seededDefIds]).catch(() => {});
+      }
+      if (seededSickLeaveId) await client.query(`DELETE FROM public.leave_requests WHERE id = $1;`, [seededSickLeaveId]).catch(() => {});
+      if (seededLeaveId) await client.query(`DELETE FROM public.leave_requests WHERE id = $1;`, [seededLeaveId]).catch(() => {});
+      await client.query(`DELETE FROM public.notifications WHERE user_id = '${STRADDLE_EMP_ID}';`).catch(() => {});
+      await client.query(`DELETE FROM public.organization_members WHERE user_id = '${STRADDLE_EMP_ID}';`).catch(() => {});
+      await client.query(`DELETE FROM public.employees WHERE id = '${STRADDLE_EMP_ID}';`).catch(() => {});
+      await client.query(`DELETE FROM auth.users WHERE id = '${STRADDLE_EMP_ID}';`).catch(() => {});
+      if (sickLtId) {
+        await client.query(
+          `DELETE FROM public.audit_logs WHERE record_id = $1 AND action = 'LEAVE_TYPE_KPI_SETTING_UPDATED';`,
+          [sickLtId]
+        ).catch(() => {});
+      }
+    }
+  });
+});

@@ -207,6 +207,9 @@ function KpiWorkspaceContent() {
         const empScores = scores.filter(
           (s) => s.period_id === selectedPeriod.id && s.employee_id === empId
         );
+        const scoredCount = empScores.filter(
+          (s) => s.score !== null && Number.isFinite(s.score)
+        ).length;
         const weighted = computeWeightedKpiScore(
           empScores.map((s) => ({
             score: s.score,
@@ -221,6 +224,7 @@ function KpiWorkspaceContent() {
           fullName: emp?.full_name || (empId === userId ? "You" : "Employee"),
           email: emp?.email || "",
           metricCount: empScores.length,
+          scoredCount,
           weightedScore: weighted,
           review: review || null,
           isSelf: empId === userId,
@@ -583,14 +587,25 @@ function KpiWorkspaceContent() {
                   }
                 >
                   <div className="flex flex-col sm:flex-row items-center gap-6 py-2">
-                    <AnimatedProgressRing
-                      percentage={myWeightedScore ?? 0}
-                      size={132}
-                      strokeWidth={11}
-                      color={myScoreRingColor}
-                      title="Weighted Score"
-                      caption={`${myPeriodScores.length} active KPI${myPeriodScores.length === 1 ? "" : "s"}`}
-                    />
+                    {(() => {
+                      const scoredCount = myPeriodScores.filter(
+                        (s) => s.score !== null && Number.isFinite(s.score)
+                      ).length;
+                      return (
+                        <AnimatedProgressRing
+                          percentage={myWeightedScore ?? 0}
+                          size={132}
+                          strokeWidth={11}
+                          color={myScoreRingColor}
+                          title={myWeightedScore === null ? "No Data" : "Weighted Score"}
+                          caption={
+                            scoredCount === myPeriodScores.length
+                              ? `${scoredCount} active KPI${scoredCount === 1 ? "" : "s"}`
+                              : `${scoredCount} / ${myPeriodScores.length} scored`
+                          }
+                        />
+                      );
+                    })()}
 
                     <div className="flex-1 w-full space-y-3">
                       <div className="p-3.5 rounded-2xl bg-card-subtle border border-border-light">
@@ -685,12 +700,15 @@ function KpiWorkspaceContent() {
                     const meta = getKpiMetricMeta(item.def?.source_metric || "");
                     const direction = item.def?.direction || meta.defaultDirection;
                     const weight = item.def?.weight ?? 1;
-                    const barColor =
-                      item.score >= 85
-                        ? "bg-status-success-dot"
-                        : item.score >= 65
-                        ? "bg-status-warning-dot"
-                        : "bg-status-danger-dot";
+                    const isScored = item.score !== null && Number.isFinite(item.score);
+                    const numericScore = isScored ? Number(item.score) : 0;
+                    const barColor = !isScored
+                      ? "bg-border-light"
+                      : numericScore >= 85
+                      ? "bg-status-success-dot"
+                      : numericScore >= 65
+                      ? "bg-status-warning-dot"
+                      : "bg-status-danger-dot";
 
                     return (
                       <BentoCard
@@ -716,15 +734,21 @@ function KpiWorkspaceContent() {
                                 / {formatKpiValue(item.target_value, meta.unit)}
                               </span>
                             </div>
-                            <span className="text-2xl font-black text-brand-purple tabular-nums">
-                              {Math.round(item.score)}%
-                            </span>
+                            {isScored ? (
+                              <span className="text-2xl font-black text-brand-purple tabular-nums">
+                                {Math.round(numericScore)}%
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full bg-card-subtle text-text-tertiary text-xs font-bold">
+                                No data
+                              </span>
+                            )}
                           </div>
 
                           <div className="w-full h-2.5 rounded-full bg-card-subtle overflow-hidden">
                             <div
                               className={cn("h-full rounded-full transition-all duration-500", barColor)}
-                              style={{ width: `${Math.min(100, Math.max(0, item.score))}%` }}
+                              style={{ width: isScored ? `${Math.min(100, Math.max(0, numericScore))}%` : "0%" }}
                             />
                           </div>
 
@@ -784,7 +808,9 @@ function KpiWorkspaceContent() {
                         <div className="text-xs text-text-tertiary">{row.email}</div>
                       </td>
                       <td className="py-3.5 px-4 text-xs font-semibold text-text-secondary">
-                        {row.metricCount} KPI{row.metricCount === 1 ? "" : "s"}
+                        {row.metricCount === 0
+                          ? "0 KPIs"
+                          : `${row.scoredCount} / ${row.metricCount} scored`}
                       </td>
                       <td className="py-3.5 px-4">
                         {row.weightedScore !== null ? (
@@ -800,7 +826,7 @@ function KpiWorkspaceContent() {
                             </span>
                           </div>
                         ) : (
-                          <span className="text-xs text-text-tertiary">Not computed</span>
+                          <span className="text-xs text-text-tertiary">No data</span>
                         )}
                       </td>
                       <td className="py-3.5 px-4 max-w-xs">

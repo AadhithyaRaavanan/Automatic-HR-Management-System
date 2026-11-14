@@ -2,7 +2,7 @@
  * Item 1: Exhaustive UUID Argument Tenant-Isolation Suite
  *
  * Queries `pg_proc` for EVERY `authenticated`-executable function in schema `public`
- * that accepts at least one `uuid` or `uuid[]` parameter (47 signatures), asserts 100%
+ * that accepts at least one `uuid` or `uuid[]` parameter (48 signatures), asserts 100%
  * reconciliation with this test manifest, and verifies that an Org 2 caller passing
  * Org 1 UUIDs (including compound secondary UUID arguments such as leave types,
  * departments, locations, managers, shifts, projects, parent tasks, and JSONB location_ids)
@@ -115,6 +115,7 @@ const ALL_EXPECTED_UUID_SIGNATURES = [
   "hr_adjust_balance(uuid,uuid,numeric,text)",
   "hr_assign_leave(uuid[],uuid,date,date,text,text,boolean)",
   "hr_correct_attendance(uuid,date,jsonb,text)",
+  "hr_update_leave_type_kpi_setting(uuid,boolean)",
   "is_active_delegated_approver(uuid)",
   "log_task_time(uuid,date,integer,text)",
   "reject_leave(uuid,text)",
@@ -348,15 +349,35 @@ describe("Item 1: UUID Argument Tenant-Isolation Suite", () => {
     `);
     const liveSigs = res.rows.map((r) => r.sig).sort();
     expect(liveSigs).toEqual(ALL_EXPECTED_UUID_SIGNATURES);
-    expect(liveSigs.length).toBe(47);
+    expect(liveSigs.length).toBe(48);
   });
 
   it("explicitly validates the 5 core review RPCs plus newly hardened compound-UUID edge cases", async () => {
-    // 1. get_user_role(uuid): returns NULL for Org 1 target when queried by Org 2 caller
-    const roleLookup = await asOrg2("employee", (c) =>
+    // 1. get_user_role(uuid): restricted to self, active HR (AAL2), or active admin (AAL2) in caller org
+    await expect(
+      asOrg2("employee", (c) => c.query(`SELECT public.get_user_role($1) AS r;`, [ORG_1.admin]), "aal1")
+    ).rejects.toThrow(/Forbidden/i);
+
+    await expect(
+      asOrg2("hr", (c) => c.query(`SELECT public.get_user_role($1) AS r;`, [ORG_1.admin]), "aal1")
+    ).rejects.toThrow(/MFA AAL2 required/i);
+
+    const roleLookup = await asOrg2("admin", (c) =>
       c.query<{ r: string | null }>(`SELECT public.get_user_role($1) AS r;`, [ORG_1.admin])
     );
     expect(roleLookup.rows[0].r).toBeNull();
+
+    const selfRole = await asOrg2(
+      "employee",
+      (c) => c.query<{ r: string | null }>(`SELECT public.get_user_role($1) AS r;`, [ORG_2.employee]),
+      "aal1"
+    );
+    expect(selfRole.rows[0].r).toBe("employee");
+
+    const hrSameOrgRole = await asOrg2("hr", (c) =>
+      c.query<{ r: string | null }>(`SELECT public.get_user_role($1) AS r;`, [ORG_2.employee])
+    );
+    expect(hrSameOrgRole.rows[0].r).toBe("employee");
 
     // 2. calculate_working_days(uuid,...): denies Org 1 employee even when start_date > end_date (M16 fix)
     await expect(
@@ -419,7 +440,7 @@ describe("Item 1: UUID Argument Tenant-Isolation Suite", () => {
     ).rejects.toThrow(/leave type not found in caller organization/i);
   });
 
-  it("denies or returns empty for ALL 47 authenticated UUID-argument functions when Org 2 passes Org 1 UUIDs", async () => {
+  it("denies or returns empty for ALL 48 authenticated UUID-argument functions when Org 2 passes Org 1 UUIDs", async () => {
     const executedSignatures = new Set<string>();
 
     const expectThrows = async (
@@ -694,6 +715,13 @@ describe("Item 1: UUID Argument Tenant-Isolation Suite", () => {
       [ORG_2.employee, org1LeaveTypeId]
     );
     await expectThrows(
+      "hr_update_leave_type_kpi_setting(uuid,boolean)",
+      "admin",
+      `SELECT public.hr_update_leave_type_kpi_setting($1, false);`,
+      [org1LeaveTypeId],
+      /Cross-tenant violation/i
+    );
+    await expectThrows(
       "hr_assign_leave(uuid[],uuid,date,date,text,text,boolean)",
       "hr",
       `SELECT public.hr_assign_leave(ARRAY[$1]::uuid[], $2, '2098-06-15', '2098-06-15', 'full', 'Cross emp', true);`,
@@ -848,7 +876,7 @@ describe("Item 1: UUID Argument Tenant-Isolation Suite", () => {
       [ORG_2.kpiPeriodId, ORG_1.employee]
     );
 
-    // Assert every single one of the 47 signatures was executed
+    // Assert every single one of the 48 signatures was executed
     expect(Array.from(executedSignatures).sort()).toEqual(ALL_EXPECTED_UUID_SIGNATURES);
   });
 });

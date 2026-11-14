@@ -60,9 +60,9 @@ This runbook documents the exact ordered procedure to **rebuild from scratch and
 
 ---
 
-## 2. Clean Rebuild & Apply All 16 Migrations (From Scratch)
+## 2. Clean Rebuild & Apply All 17 Migrations (From Scratch)
 
-The repository contains **16 sequential migrations** (the **15 core schema/feature migrations** through KPI management, plus **Migration 16** for final-review UUID validation hardening, timezone-correct 15-minute crons, and automated retention archive scheduling):
+The repository contains **17 sequential migrations** (the **15 core schema/feature migrations** through KPI management, **Migration 16** for final-review UUID validation hardening & timezone-correct 15-minute crons, plus **Migration 17** for `get_user_role(uuid)` access restrictions & KPI computation/timezone/leave-type fixes):
 
 - `20261107000001_initial_schema.sql` — Base attendance, holidays, requests, audit logs
 - `20261107000002_custom_access_token_hook.sql` — JWT claim hook (`user_role`, `organization_id`)
@@ -80,6 +80,7 @@ The repository contains **16 sequential migrations** (the **15 core schema/featu
 - `20261108000014_task_management.sql` — Projects, tasks, comments, time logs, events, due/overdue notifications
 - `20261108000015_kpi_system.sql` — KPI definitions, periods, 8 metrics, `calculate_kpi_score`, reviews, immutability
 - `20261108000016_final_review_hardening.sql` — UUID leave/admin hardening, 15-min timezone-aware org/location crons, `pg_net` weekly retention archive trigger
+- `20261108000017_final_fixes.sql` — `get_user_role(uuid)` self/HR/Admin restriction, nullable unscored KPI snapshots (`NULL` = no data), employee-timezone KPI task evaluation, straddling leave working-day & `counts_toward_kpi` rules, period-scoped open overdue tasks
 
 1. **Wipe existing demo `public` schema, migration history, and cron schedules cleanly:**
    ```bash
@@ -107,12 +108,12 @@ The repository contains **16 sequential migrations** (the **15 core schema/featu
    ```
    *(If rebuilding a non-empty storage state cleanly, also remove test objects in `storage.objects` where `bucket_id IN ('avatars', 'retention-archives')` via Storage API before recreating buckets.)*
 
-2. **Push all 16 migrations from clean git state (do NOT run `seed.sql`):**
+2. **Push all 17 migrations from clean git state (do NOT run `seed.sql`):**
    ```bash
    npx supabase db push --include-all
    ```
 
-3. **Verify exact migration ledger (all 16 applied, zero pending):**
+3. **Verify exact migration ledger (all 17 applied, zero pending):**
    ```bash
    npx supabase migration list --linked
    ```
@@ -176,7 +177,7 @@ Expected:
 
 ## 5. Deploy Automated Retention Archiver & Verify `pg_cron` Schedules
 
-Two complementary automated mechanisms handle monthly `.json.gz` compression and Storage upload BEFORE Postgres purge (`03:00 UTC Sunday`):
+A **single automated trigger path** inside Supabase (`pg_cron` -> `pg_net` + Vault -> `retention-archiver` Edge Function at `02:00 UTC Sunday`) handles monthly `.json.gz` compression and Storage upload BEFORE the Postgres purge job (`weekly-retention-cleanup` at `03:00 UTC Sunday`):
 
 1. **Deploy the Supabase Edge Function (`retention-archiver`) & set secrets:**
    ```bash
@@ -209,7 +210,7 @@ Two complementary automated mechanisms handle monthly `.json.gz` compression and
    | `daily-task-due-notifications` | `0 8 * * *` | Daily task due-soon & overdue alerts |
    | `nightly-auto-checkout` | `*/15 * * * *` | Every 15m per-org/location timezone-aware auto-checkout |
    | `nightly-finalize-attendance` | `*/15 * * * *` | Every 15m per-org/location timezone-aware `01:00` local finalize |
-   | `weekly-retention-archive` | `0 2 * * 0` | Dispatches Edge Function monthly `.json.gz` archival via `pg_net` |
+   | `weekly-retention-archive` | `0 2 * * 0` | Single trigger path: `pg_cron` + `pg_net` + Vault invokes `retention-archiver` Edge Function |
    | `weekly-retention-cleanup` | `0 3 * * 0` | Batched purge (`<=500` rows/batch) only after verified archive exists |
 
 ---
@@ -320,7 +321,6 @@ Set every variable in **Vercel Project -> Settings -> Environment Variables (Pro
 | `SUPABASE_SERVICE_ROLE_KEY` | Project `service_role` JWT (server-only) | **Yes** |
 | `NEXT_PUBLIC_APP_URL` | `https://app.yourdomain.com` | No |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Cloudflare Turnstile site key | No |
-| `CRON_SECRET` | Same 32-byte random hex secret used by Vercel Cron `/api/cron/retention` | **Yes** |
 | `UPSTASH_REDIS_REST_URL` | Upstash Redis REST endpoint (distributed server rate limiting) | **Yes** |
 | `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis REST token | **Yes** |
 | `RESEND_API_KEY` | Production Resend API key | **Yes** |
@@ -329,7 +329,7 @@ Set every variable in **Vercel Project -> Settings -> Environment Variables (Pro
 | `NEXT_PUBLIC_SENTRY_DSN` | Optional Sentry error DSN | No |
 | `NEXT_PUBLIC_DEMO_MODE` | **MUST BE UNSET** (never `"true"` in production; guarantees `/api/auth/demo-totp` returns `404`) | Guard |
 
-Deploy and verify Vercel Cron registration (`vercel.json` -> `GET /api/cron/retention` every Sunday `02:00 UTC`):
+Deploy and verify production environment variables:
 
 ```bash
 vercel --prod
@@ -347,10 +347,10 @@ vercel env ls production
      -d '{"secret":"test"}'
    # Expected: HTTP/2 404
    ```
-2. **Verify cron endpoint fails closed on missing / invalid bearer (`401` / `403`):**
+2. **Verify Supabase `retention-archiver` Edge Function fails closed on missing / invalid bearer (`401` / `403`):**
    ```bash
-   curl -i "${PROD_APP_URL}/api/cron/retention"         # Expected: 401
-   curl -i -H "Authorization: Bearer invalid" "${PROD_APP_URL}/api/cron/retention"  # Expected: 403
+   curl -i "${SUPABASE_URL}/functions/v1/retention-archiver"         # Expected: 401
+   curl -i -H "Authorization: Bearer invalid" "${SUPABASE_URL}/functions/v1/retention-archiver"  # Expected: 403
    ```
 3. **Verify authenticated flows manually in browser:**
    - Unauthenticated `/dashboard` -> redirects to `/login`.
