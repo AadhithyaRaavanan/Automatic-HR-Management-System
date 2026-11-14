@@ -1,6 +1,6 @@
 # RemoteHR — Automated Test Traceability Matrix
 
-**Generated**: 2026-11-14T16:34:54.344Z  
+**Generated**: 2026-11-14T16:37:21.765Z  
 **Branch**: `phase-2-multitenancy`  
 **Target Specification**: `FEATURES.md` (Sections 1 through 12)  
 
@@ -17,14 +17,14 @@ This matrix maps every documented feature, security control, and capability from
 | 3 | Attendance Tracking & Live Time Clock | 16 | 12 | 0 | 4 | 0 |
 | 4 | Shift Management & Night Shift Engine | 7 | 7 | 0 | 0 | 0 |
 | 5 | Leave Management & Balance Engine | 9 | 9 | 0 | 0 | 0 |
-| 6 | Task Management & Work Logging | 7 | 0 | 0 | 6 | 1 |
+| 6 | Task Management & Work Logging | 7 | 6 | 0 | 0 | 1 |
 | 7 | Performance & KPI Engine | 7 | 0 | 0 | 6 | 1 |
 | 8 | User Administration & Resend Credential Provisioning | 9 | 0 | 0 | 9 | 0 |
 | 9 | Data Retention, Archiving & Compliance | 7 | 0 | 0 | 5 | 2 |
 | 10 | Analytics, Reporting & Data Portability | 5 | 0 | 0 | 5 | 0 |
 | 11 | Design System & Frontend UX | 4 | 0 | 0 | 4 | 0 |
 | 12 | Persona Capability Matrix | 30 | 0 | 0 | 30 | 0 |
-| **TOTAL** | **All Sections (1-12)** | **119** | **46** | **0** | **69** | **4** |
+| **TOTAL** | **All Sections (1-12)** | **119** | **52** | **0** | **63** | **4** |
 
 ---
 
@@ -107,13 +107,13 @@ This matrix maps every documented feature, security control, and capability from
 
 | Feature ID | Feature Name | Status | Test File(s) | Test Assertion Count |
 | :--- | :--- | :---: | :--- | :---: |
-| [F6.1.1] | Multi-Project Organization & Colors | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F6.1.2] | Priority & Due Dates | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F6.1.3] | Status Workflow (todo, in_progress, done, cancelled) | ⚠️ `INACCURATE` | — | 0 |
-| [F6.1.4] | Deadline Dispatcher (dispatch_task_due_notifications) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F6.2.1] | Granular Work Logging (log_task_time) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F6.2.2] | Task Comments (add_task_comment) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F6.2.3] | Performance Tie-In to KPI Engine | ❌ `NOT IMPLEMENTED` | — | 0 |
+| [F6.1.1] | Multi-Project Organization & Colors | ✅ `COVERED` | `tests/database/f6-tasks.test.ts` | 1 |
+| [F6.1.2] | Priority & Due Dates | ✅ `COVERED` | `tests/database/f6-tasks.test.ts` | 1 |
+| [F6.1.3] | Status Workflow (todo, in_progress, done, cancelled) | ⚠️ `INACCURATE` | `tests/database/f6-tasks.test.ts` | 1 |
+| [F6.1.4] | Deadline Dispatcher (dispatch_task_due_notifications) | ✅ `COVERED` | `tests/database/f6-tasks.test.ts` | 1 |
+| [F6.2.1] | Granular Work Logging (log_task_time) | ✅ `COVERED` | `tests/database/f6-tasks.test.ts` | 1 |
+| [F6.2.2] | Task Comments (add_task_comment) | ✅ `COVERED` | `tests/database/f6-tasks.test.ts` | 1 |
+| [F6.2.3] | Performance Tie-In to KPI Engine | ✅ `COVERED` | `tests/database/f6-tasks.test.ts` | 1 |
 
 ## Section 7: Performance & KPI Engine
 
