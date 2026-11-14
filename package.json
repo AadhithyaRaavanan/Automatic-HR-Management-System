@@ -13,7 +13,8 @@
     "test:all": "vitest run tests/unit && npm run test:db && npx playwright test",
     "test:feature": "node scripts/test-feature.mjs",
     "test:matrix": "node scripts/generate-traceability.mjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "scan:secrets": "node scripts/scan-secrets.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -28,10 +29,13 @@
     "@radix-ui/react-slot": "^1.1.0",
     "@radix-ui/react-tabs": "^1.1.1",
     "@radix-ui/react-tooltip": "^1.1.4",
+    "@sentry/nextjs": "^11.12.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.46.1",
     "@tanstack/react-query": "^5.60.6",
     "@tanstack/react-table": "^8.20.5",
+    "@upstash/ratelimit": "^2.2.1",
+    "@upstash/redis": "^1.41.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",

@@ -17,6 +17,243 @@ export interface SendInviteEmailParams {
   loginUrl?: string;
 }
 
+/**
+ * Builds responsive HTML email template for employee invitations adhering strictly
+ * to the RemoteHR brand design system tokens:
+ * - Brand Deep Indigo: #14123A
+ * - Brand Electric Purple: #6C5CE7
+ * - Brand Border / Accent: #e2e0f0
+ */
+export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
+  const {
+    to,
+    fullName,
+    role,
+    jobTitle,
+    departmentName,
+    inviteLink,
+    shiftStartTime = "09:00 AM",
+    shiftEndTime = "05:00 PM",
+    loginUrl = process.env.NEXT_PUBLIC_APP_URL
+      ? `${process.env.NEXT_PUBLIC_APP_URL}/login`
+      : "http://localhost:3000/login",
+  } = params;
+
+  const actionUrl = inviteLink || loginUrl;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Welcome to RemoteHR</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #f7f6fd;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        color: #14123A;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrapper {
+        width: 100%;
+        table-layout: fixed;
+        background-color: #f7f6fd;
+        padding: 30px 10px;
+      }
+      .container {
+        max-width: 560px;
+        margin: 0 auto;
+        background-color: #ffffff;
+        border-radius: 20px;
+        border: 1px solid #e2e0f0;
+        overflow: hidden;
+        box-shadow: 0 4px 16px rgba(20, 18, 58, 0.06);
+      }
+      .header {
+        background-color: #14123A;
+        padding: 28px 32px;
+        text-align: center;
+      }
+      .brand-title {
+        color: #ffffff;
+        font-size: 22px;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+        margin: 0;
+      }
+      .brand-tag {
+        color: #6C5CE7;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-top: 4px;
+      }
+      .body-content {
+        padding: 32px;
+      }
+      .welcome-heading {
+        font-size: 20px;
+        font-weight: 700;
+        color: #14123A;
+        margin-top: 0;
+        margin-bottom: 12px;
+      }
+      .intro-text {
+        font-size: 14px;
+        line-height: 1.6;
+        color: #4b5563;
+        margin-bottom: 24px;
+      }
+      .details-card {
+        background-color: #fcfcff;
+        border: 1px solid #e2e0f0;
+        border-radius: 14px;
+        padding: 20px;
+        margin-bottom: 24px;
+      }
+      .detail-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 0;
+        border-bottom: 1px solid #f1f0fa;
+        font-size: 13px;
+      }
+      .detail-row:last-child {
+        border-bottom: none;
+      }
+      .detail-label {
+        color: #6C5CE7;
+        font-weight: 600;
+      }
+      .detail-value {
+        color: #14123A;
+        font-weight: 700;
+        text-align: right;
+      }
+      .cta-container {
+        text-align: center;
+        margin: 28px 0;
+      }
+      .cta-button {
+        display: inline-block;
+        background-color: #6C5CE7;
+        color: #ffffff !important;
+        text-decoration: none;
+        padding: 14px 32px;
+        border-radius: 12px;
+        font-weight: 700;
+        font-size: 14px;
+        letter-spacing: 0.2px;
+        box-shadow: 0 4px 12px rgba(108, 92, 231, 0.25);
+      }
+      .security-box {
+        background-color: #f7f6fd;
+        border-left: 4px solid #6C5CE7;
+        border-radius: 4px;
+        padding: 14px 16px;
+        margin-top: 24px;
+        margin-bottom: 24px;
+      }
+      .security-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: #14123A;
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+      }
+      .security-text {
+        font-size: 12px;
+        line-height: 1.5;
+        color: #64748b;
+        margin: 0;
+      }
+      .footer {
+        padding: 24px 32px;
+        background-color: #faf9ff;
+        border-top: 1px solid #e2e0f0;
+        text-align: center;
+        font-size: 11px;
+        color: #94a3b8;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrapper">
+      <div class="container">
+        <div class="header">
+          <div class="brand-title">RemoteHR</div>
+          <div class="brand-tag">Secure Workforce Management</div>
+        </div>
+        <div class="body-content">
+          <h2 class="welcome-heading">Welcome, ${fullName}!</h2>
+          <p class="intro-text">
+            Your organization has invited you to join RemoteHR with the role of
+            <strong>${role.toUpperCase()}</strong>.
+            ${jobTitle ? `You are appointed as <strong>${jobTitle}</strong>.` : ""}
+            ${departmentName ? `Assigned department: <strong>${departmentName}</strong>.` : ""}
+          </p>
+
+          <div class="details-card">
+            <div class="detail-row">
+              <span class="detail-label">Login Email</span>
+              <span class="detail-value">${to}</span>
+            </div>
+            ${
+              departmentName
+                ? `
+            <div class="detail-row">
+              <span class="detail-label">Department</span>
+              <span class="detail-value">${departmentName}</span>
+            </div>`
+                : ""
+            }
+            ${
+              jobTitle
+                ? `
+            <div class="detail-row">
+              <span class="detail-label">Title</span>
+              <span class="detail-value">${jobTitle}</span>
+            </div>`
+                : ""
+            }
+            <div class="detail-row">
+              <span class="detail-label">Working Hours</span>
+              <span class="detail-value">${shiftStartTime} - ${shiftEndTime}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">System Role</span>
+              <span class="detail-value">${role.toUpperCase()}</span>
+            </div>
+          </div>
+
+          <div class="cta-container">
+            <a href="${actionUrl}" class="cta-button" target="_blank" rel="noopener noreferrer">
+              Accept Invitation &amp; Set Password
+            </a>
+          </div>
+
+          <div class="security-box">
+            <div class="security-title">Anti-Phishing Security Notice</div>
+            <p class="security-text">
+              RemoteHR administrators will never ask for your password, TOTP code, or multi-factor authentication setup key. Always verify that your browser address bar points to your organization's legitimate RemoteHR domain before entering any credentials.
+            </p>
+          </div>
+        </div>
+        <div class="footer">
+          RemoteHR Automated Management System &bull; Zero Invasive Monitoring<br />
+          If you did not expect this invitation, please contact your company administrator.
+        </div>
+      </div>
+    </div>
+  </body>
+</html>`;
+}
+
 export function buildAttendanceEmailTemplate(
   title: string,
   message: string,
@@ -48,114 +285,28 @@ export async function sendWelcomeCredentialsEmail(params: SendInviteEmailParams)
   messageId?: string;
   error?: string;
 }> {
-  const {
-    to,
-    fullName,
-    role,
-    jobTitle,
-    departmentName,
-    inviteLink,
-    temporaryPassword,
-    shiftStartTime = "09:00 AM",
-    shiftEndTime = "05:00 PM",
-    loginUrl = process.env.NEXT_PUBLIC_APP_URL
-      ? `${process.env.NEXT_PUBLIC_APP_URL}/login`
-      : "http://localhost:3000/login",
-  } = params;
+  const { to } = params;
+  const subject = `Welcome to RemoteHR — Your Account Invitation`;
+  const htmlContent = buildWelcomeEmailHtml(params);
 
-  const subject = `Welcome to RemoteHR — Your Account Credentials`;
-
-  const htmlContent = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Welcome to RemoteHR</title>
-        <style>
-          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f7f6fd; color: #1e1b4b; margin: 0; padding: 24px; }
-          .card { background-color: #ffffff; max-width: 540px; margin: 0 auto; border-radius: 20px; padding: 32px; border: 1px solid #e2e0f0; box-shadow: 0 4px 12px rgba(108, 92, 231, 0.08); }
-          .header { text-align: center; margin-bottom: 24px; }
-          .brand { font-size: 20px; font-weight: 800; color: #6c5ce7; }
-          .title { font-size: 18px; font-weight: 700; margin-top: 8px; color: #1e1b4b; }
-          .info-box { background-color: #f8f7ff; border-radius: 12px; padding: 18px; border: 1px solid #e6e4f7; margin: 20px 0; }
-          .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
-          .label { color: #64748b; font-weight: 600; }
-          .val { color: #0f172a; font-weight: 700; font-family: monospace; }
-          .btn { display: inline-block; background-color: #1e1b4b; color: #ffffff !important; text-decoration: none; padding: 12px 28px; border-radius: 12px; font-weight: 700; font-size: 13px; margin-top: 16px; }
-          .footer { font-size: 11px; color: #94a3b8; text-align: center; margin-top: 24px; }
-        </style>
-      </head>
-      <body>
-        <div class="card">
-          <div class="header">
-            <div class="brand">RemoteHR</div>
-            <div class="title">Welcome, ${fullName}!</div>
-          </div>
-          <p style="font-size: 13px; line-height: 1.6; color: #334155;">
-            An account has been created for you at RemoteHR with security role <strong>${role.toUpperCase()}</strong>.
-            ${jobTitle ? `You are appointed as <strong>${jobTitle}</strong>.` : ""}
-            ${departmentName ? `Assigned department: <strong>${departmentName}</strong>.` : ""}
-            Your assigned working hours are <strong>${shiftStartTime} - ${shiftEndTime}</strong>.
-          </p>
-          <div class="info-box">
-            <div class="info-row">
-              <span class="label">Login Email:</span>
-              <span class="val">${to}</span>
-            </div>
-            ${
-              jobTitle
-                ? `
-            <div class="info-row">
-              <span class="label">Company Role / Title:</span>
-              <span class="val">${jobTitle}</span>
-            </div>
-            `
-                : ""
-            }
-            ${
-              departmentName
-                ? `
-            <div class="info-row">
-              <span class="label">Department:</span>
-              <span class="val">${departmentName}</span>
-            </div>
-            `
-                : ""
-            }
-            <div class="info-row">
-              <span class="label">Portal URL:</span>
-              <span class="val">${loginUrl}</span>
-            </div>
-          </div>
-          <p style="font-size: 12px; color: #64748b;">
-            Click below to accept your invitation and securely configure your password (link expires in 24 hours).
-          </p>
-          <div style="text-align: center;">
-            <a href="${inviteLink || loginUrl}" class="btn">Accept Invitation &amp; Set Password</a>
-          </div>
-          <div class="footer">
-            RemoteHR Secure Automated Workplace &bull; Zero Invasive Monitoring
-          </div>
-        </div>
-      </body>
-    </html>
-  `;
-
-  if (!resend) {
+  // Fail closed in production if RESEND_API_KEY is not configured
+  if (!process.env.RESEND_API_KEY) {
     if (process.env.NODE_ENV === "production") {
       return {
         success: false,
         error: "Email delivery service unavailable: RESEND_API_KEY is not configured in production environment.",
       };
     }
-    // In non-production environments, simulate dispatch without leaking credentials
-    console.log(`[Resend Simulated Email to ${to}] Subject: ${subject}`);
+    // In development and test environments, fall back cleanly with a logged warning
+    console.warn(`[Resend Simulated Email to ${to}] RESEND_API_KEY not configured. Subject: ${subject}`);
     return { success: true, simulated: true, messageId: `sim_${Date.now()}` };
   }
 
+  const client = resend || new Resend(process.env.RESEND_API_KEY);
+
   try {
-    const fromAddress = process.env.RESEND_FROM_EMAIL || "RemoteHR <onboarding@resend.dev>";
-    const response = await resend.emails.send({
+    const fromAddress = process.env.RESEND_FROM_EMAIL || "RemoteHR <onboarding@remotehr.io>";
+    const response = await client.emails.send({
       from: fromAddress,
       to: [to],
       subject,

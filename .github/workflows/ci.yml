@@ -1,0 +1,64 @@
+name: Continuous Integration & Security Pipeline
+
+on:
+  push:
+    branches: [main, master, production-readiness, phase-2-multitenancy]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  verification:
+    name: Production Readiness Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      NODE_ENV: test
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM0MTI4MDB9.CRXP1A_test_anon_key
+      SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzQxMjgwMH0.CRXP1A_test_service_key
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      NEXT_PUBLIC_DEMO_MODE: false
+
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install Project Dependencies
+        run: npm ci
+
+      - name: Secret Scan Verification
+        run: node scripts/scan-secrets.mjs
+
+      - name: TypeScript Compilation Verification
+        run: npx tsc --noEmit
+
+      - name: Run Vitest Unit Tests
+        run: npm test
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start Local Supabase Stack
+        run: supabase start
+
+      - name: Run Database Integration & RLS Tests
+        run: npm run test:db
+
+      - name: Build Next.js Production Assets
+        run: npm run build
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright End-to-End Suite
+        run: npx playwright test

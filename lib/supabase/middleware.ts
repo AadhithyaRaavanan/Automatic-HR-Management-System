@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { Database, EmployeeRole } from "@/types/database.types";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import { applySecurityHeaders } from "@/lib/security/headers";
 
 export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
@@ -87,7 +88,10 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth") ||
     pathname.startsWith("/mfa-challenge") ||
-    pathname.startsWith("/mfa-setup");
+    pathname.startsWith("/mfa-setup") ||
+    pathname.startsWith("/forgot-password") ||
+    pathname === "/privacy" ||
+    pathname === "/terms";
 
   // If unauthenticated user tries to access a protected app route
   if (!isTokenValid && !isPublicPath) {
