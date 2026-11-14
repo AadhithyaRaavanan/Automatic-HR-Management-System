@@ -1,6 +1,6 @@
 # RemoteHR — Automated Test Traceability Matrix
 
-**Generated**: 2026-11-14T16:22:51.745Z  
+**Generated**: 2026-11-14T16:26:18.741Z  
 **Branch**: `phase-2-multitenancy`  
 **Target Specification**: `FEATURES.md` (Sections 1 through 12)  
 
@@ -14,7 +14,7 @@ This matrix maps every documented feature, security control, and capability from
 | :---: | :--- | :---: | :---: | :---: | :---: | :---: |
 | 1 | Core Architecture & Multi-Tenancy | 9 | 9 | 0 | 0 | 0 |
 | 2 | Authentication, MFA & Security Infrastructure | 9 | 9 | 0 | 0 | 0 |
-| 3 | Attendance Tracking & Live Time Clock | 16 | 0 | 0 | 16 | 0 |
+| 3 | Attendance Tracking & Live Time Clock | 16 | 12 | 0 | 4 | 0 |
 | 4 | Shift Management & Night Shift Engine | 7 | 0 | 0 | 7 | 0 |
 | 5 | Leave Management & Balance Engine | 9 | 0 | 0 | 9 | 0 |
 | 6 | Task Management & Work Logging | 7 | 0 | 0 | 6 | 1 |
@@ -24,7 +24,7 @@ This matrix maps every documented feature, security control, and capability from
 | 10 | Analytics, Reporting & Data Portability | 5 | 0 | 0 | 5 | 0 |
 | 11 | Design System & Frontend UX | 4 | 0 | 0 | 4 | 0 |
 | 12 | Persona Capability Matrix | 30 | 0 | 0 | 30 | 0 |
-| **TOTAL** | **All Sections (1-12)** | **119** | **18** | **0** | **97** | **4** |
+| **TOTAL** | **All Sections (1-12)** | **119** | **30** | **0** | **85** | **4** |
 
 ---
 
@@ -60,22 +60,22 @@ This matrix maps every documented feature, security control, and capability from
 
 | Feature ID | Feature Name | Status | Test File(s) | Test Assertion Count |
 | :--- | :--- | :---: | :--- | :---: |
-| [F3.1.1] | Persistent Global Attendance Timer | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F3.1.2] | Single-Click Punch | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F3.1.3] | Single Open Session Guarantee (idx_single_open_session) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F3.1.4] | Daily Target Progress Visualizer (progress bar & ring) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F3.2.1] | 5-Minute Pre-Shift Lock | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F3.2.2] | Pre-Shift Badge ('Check-in opens at HH:MM AM/PM') | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F3.2.3] | Shift-Start In-App Notification Toast | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F3.3.1] | Web Portal Direct Punch (source = 'web') | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F3.3.2] | Office Location Geofencing | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F3.3.3] | Office IP Whitelisting | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F3.3.4] | Rotating QR Code Verification | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F3.3.5] | Kiosk Mode Terminal | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F3.4.1] | Automatic Late Flagging (is_late = TRUE) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F3.4.2] | Status Classification (7 attendance day statuses) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F3.4.3] | Overtime Calculation | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F3.4.4] | Month Finalization & Locking (lock_month) | ❌ `NOT IMPLEMENTED` | — | 0 |
+| [F3.1.1] | Persistent Global Attendance Timer | ✅ `COVERED` | `tests/database/f3-attendance.test.ts` | 1 |
+| [F3.1.2] | Single-Click Punch | ✅ `COVERED` | `tests/database/f3-attendance.test.ts` | 1 |
+| [F3.1.3] | Single Open Session Guarantee (idx_single_open_session) | ✅ `COVERED` | `tests/database/f3-attendance.test.ts` | 1 |
+| [F3.1.4] | Daily Target Progress Visualizer (progress bar & ring) | ✅ `COVERED` | `tests/database/f3-attendance.test.ts` | 1 |
+| [F3.2.1] | 5-Minute Pre-Shift Lock | ✅ `COVERED` | `tests/database/f3-attendance.test.ts` | 1 |
+| [F3.2.2] | Pre-Shift Badge ('Check-in opens at HH:MM AM/PM') | ✅ `COVERED` | `tests/database/f3-attendance.test.ts` | 1 |
+| [F3.2.3] | Shift-Start In-App Notification Toast | ✅ `COVERED` | `tests/database/f3-attendance.test.ts` | 1 |
+| [F3.3.1] | Web Portal Direct Punch (source = 'web') | ✅ `COVERED` | `tests/database/f3-attendance.test.ts` | 1 |
+| [F3.3.2] | Office Location Geofencing | ❌ `NOT IMPLEMENTED` | `tests/database/f3-attendance.test.ts` | 1 |
+| [F3.3.3] | Office IP Whitelisting | ❌ `NOT IMPLEMENTED` | `tests/database/f3-attendance.test.ts` | 1 |
+| [F3.3.4] | Rotating QR Code Verification | ❌ `NOT IMPLEMENTED` | `tests/database/f3-attendance.test.ts` | 1 |
+| [F3.3.5] | Kiosk Mode Terminal | ❌ `NOT IMPLEMENTED` | `tests/database/f3-attendance.test.ts` | 1 |
+| [F3.4.1] | Automatic Late Flagging (is_late = TRUE) | ✅ `COVERED` | `tests/database/f3-attendance.test.ts` | 1 |
+| [F3.4.2] | Status Classification (7 attendance day statuses) | ✅ `COVERED` | `tests/database/f3-attendance.test.ts` | 1 |
+| [F3.4.3] | Overtime Calculation | ✅ `COVERED` | `tests/database/f3-attendance.test.ts` | 1 |
+| [F3.4.4] | Month Finalization & Locking (lock_month) | ✅ `COVERED` | `tests/database/f3-attendance.test.ts` | 1 |
 
 ## Section 4: Shift Management & Night Shift Engine
 
