@@ -1,6 +1,6 @@
 # RemoteHR — Automated Test Traceability Matrix
 
-**Generated**: 2026-11-14T16:49:50.582Z  
+**Generated**: 2026-11-14T16:52:43.606Z  
 **Branch**: `phase-2-multitenancy`  
 **Target Specification**: `FEATURES.md` (Sections 1 through 12)  
 
@@ -21,10 +21,10 @@ This matrix maps every documented feature, security control, and capability from
 | 7 | Performance & KPI Engine | 7 | 6 | 0 | 0 | 1 |
 | 8 | User Administration & Resend Credential Provisioning | 9 | 9 | 0 | 0 | 0 |
 | 9 | Data Retention, Archiving & Compliance | 7 | 5 | 0 | 0 | 2 |
-| 10 | Analytics, Reporting & Data Portability | 5 | 0 | 0 | 5 | 0 |
+| 10 | Analytics, Reporting & Data Portability | 5 | 5 | 0 | 0 | 0 |
 | 11 | Design System & Frontend UX | 4 | 0 | 0 | 4 | 0 |
 | 12 | Persona Capability Matrix | 30 | 0 | 0 | 30 | 0 |
-| **TOTAL** | **All Sections (1-12)** | **119** | **72** | **0** | **43** | **4** |
+| **TOTAL** | **All Sections (1-12)** | **119** | **77** | **0** | **38** | **4** |
 
 ---
 
@@ -157,11 +157,11 @@ This matrix maps every documented feature, security control, and capability from
 
 | Feature ID | Feature Name | Status | Test File(s) | Test Assertion Count |
 | :--- | :--- | :---: | :--- | :---: |
-| [F10.1.1] | High-Performance Ledger (sorting, filters, keyset pagination) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F10.1.2] | Column Visibility Customization | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F10.2.1] | Recharts Visual Dashboards & Render Integrity | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F10.3.1] | Excel Workbooks (.xlsx) with exceljs | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F10.3.2] | Streaming CSV Export with Formula Injection Sanitization | ❌ `NOT IMPLEMENTED` | — | 0 |
+| [F10.1.1] | High-Performance Ledger (sorting, filters, keyset pagination) | ✅ `COVERED` | `tests/unit/f10-reporting.test.ts` | 1 |
+| [F10.1.2] | Column Visibility Customization | ✅ `COVERED` | `tests/unit/f10-reporting.test.ts` | 1 |
+| [F10.2.1] | Recharts Visual Dashboards & Render Integrity | ✅ `COVERED` | `tests/unit/f10-reporting.test.ts` | 1 |
+| [F10.3.1] | Excel Workbooks (.xlsx) with exceljs | ✅ `COVERED` | `tests/unit/f10-reporting.test.ts` | 1 |
+| [F10.3.2] | Streaming CSV Export with Formula Injection Sanitization | ✅ `COVERED` | `tests/unit/f10-reporting.test.ts` | 1 |
 
 ## Section 11: Design System & Frontend UX
 
