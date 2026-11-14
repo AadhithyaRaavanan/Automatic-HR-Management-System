@@ -14,7 +14,8 @@
     "test:feature": "node scripts/test-feature.mjs",
     "test:matrix": "node scripts/generate-traceability.mjs",
     "test:e2e": "playwright test",
-    "scan:secrets": "node scripts/scan-secrets.mjs"
+    "scan:secrets": "node scripts/scan-secrets.mjs",
+    "verify:docs": "node scripts/verify-docs.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

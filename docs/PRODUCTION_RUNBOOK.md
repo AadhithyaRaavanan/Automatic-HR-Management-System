@@ -348,7 +348,10 @@ Set every variable in **Vercel Project -> Settings -> Environment Variables (Pro
 | `RESEND_API_KEY` | Production Resend API key | **Yes** |
 | `EMAIL_FROM` | Verified domain sender e.g. `"Acme HR <hr@yourdomain.com>"` | No |
 | `SLACK_WEBHOOK_URL` | Optional operational alert webhook | **Yes** |
-| `NEXT_PUBLIC_SENTRY_DSN` | Optional Sentry error DSN | No |
+| `UPSTASH_REDIS_REST_URL` | Upstash Redis REST URL for distributed sliding rate limiting | No |
+| `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis REST Token (Server only) | **Yes** |
+| `SENTRY_DSN` | Sentry error reporting DSN (Server only) | **Yes** |
+| `NEXT_PUBLIC_SENTRY_DSN` | Optional Sentry error DSN for client runtime | No |
 | `NEXT_PUBLIC_DEMO_MODE` | **MUST BE UNSET** (never `"true"` in production; guarantees `/api/auth/demo-totp` returns `404`) | Guard |
 
 Deploy and verify production environment variables:

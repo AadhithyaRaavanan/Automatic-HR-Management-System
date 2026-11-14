@@ -176,11 +176,11 @@ RemoteHR is an enterprise-grade, privacy-respecting, multi-tenant Human Resource
 
 ## 8. User Administration & Resend Credential Provisioning
 
-### 8.1 Employee Invitation & Credential Delivery
-- **Instant Admin Provisioning**: Add employees via `/admin/users` with work email, full name, role, work mode, and shift hours.
-- **Auto-Generated Credentials**: Generates a cryptographically strong 16-character temporary password and sets `email_confirm: true`.
-- **Resend Email Integration**: Dispatches a branded HTML welcome email containing login credentials, assigned shift schedule, and portal link via the **Resend API** (`lib/email/resend.ts`). In local dev without API keys, logs simulated delivery safely.
-- **Credentials Created Modal**: Displays email, temporary password badge, and a **1-click "Copy Credentials" button** for manual sharing.
+### 8.1 Employee Invitation & Passwordless Link Delivery
+- **Instant Admin Provisioning**: Add employees via `/admin/users` with work email, full name, role, custom job title, department, work mode, and shift hours (`lib/admin/invite-employee.ts`, `app/api/admin/users/invite/route.ts`).
+- **Secure Single-Use Invite Links**: Generates a single-use 24-hour invitation link via Supabase Auth Admin `generateLink({ type: 'invite' })`. Zero temporary passwords are generated or logged.
+- **Resend Email Integration**: Dispatches a branded responsive HTML welcome email containing the employee name, role, department, shift times, single-use invite link, and anti-phishing note via **Resend API** (`lib/email/resend.ts`). In production, fails closed if unconfigured; in dev/test, logs simulation cleanly.
+- **Invitation Created Modal**: Displays invited email, expiration countdown, and a **1-click "Copy Invitation Link" button** for manual sharing.
 
 ### 8.2 User Governance & Directory
 - **Role Assignment**: Seamlessly transition users between `employee`, `manager`, `hr`, and `admin` with audit tracking.
@@ -200,8 +200,8 @@ RemoteHR is an enterprise-grade, privacy-respecting, multi-tenant Human Resource
 
 ### 9.2 Automated Retention Archiver Edge Function
 - **Dedicated Secret Authentication**: The archiver Edge Function (`retention-archiver`) authenticates callers via a dedicated `RETENTION_CRON_SECRET` using constant-time timing-safe string comparison. Requests without the secret fail closed (`503 Service Unavailable`).
-- **Storage Bucket Storage**: Generates gzip-compressed JSON/CSV files stored in the private `attendance-archives` Supabase Storage bucket.
-- **Execution Run History**: Logs every run in `retention_archive_runs` (tracking rows archived, file size, bucket path, and checksums).
+- **Storage Bucket Storage**: Generates gzip-compressed JSON/CSV files stored in the private `retention-archives` Supabase Storage bucket.
+- **Execution Run History**: Logs every run in `retention_archives` table (tracking rows archived, file size, bucket path, and checksums).
 
 ### 9.3 Zero-Invasive Employee Privacy Manifesto
 - ❌ **No Keystroke / Mouse Tracking**: Zero monitoring of typing speed or cursor jitter.

@@ -5,7 +5,7 @@
 **Backend**: Supabase Local Docker Stack (`http://127.0.0.1:54321`)  
 **Studio UI**: `http://127.0.0.1:54323`  
 **Mailpit UI**: `http://127.0.0.1:54324`  
-**Application Branch**: `phase-2-multitenancy`  
+**Application Branch**: `production-readiness`  
 
 ---
 
@@ -100,7 +100,7 @@ Before starting manual tests, verify that local services are operating normally:
 
 1. **Verify Web Application**: Open [http://localhost:3000](http://localhost:3000) in your browser. It should redirect automatically to `/login`.
 2. **Verify Demo Presets**: On the login page, verify the 4 "Demo Mode Presets" buttons appear at the bottom: `Employee`, `Manager`, `HR Admin`, `System Admin`.
-3. **Verify Supabase Studio**: Open [http://127.0.0.1:54323](http://127.0.0.1:54323). Navigate to **Table Editor** to confirm tables exist (`attendance_records`, `leave_requests`, `organizations`, `kpi_scorecards`, etc.).
+3. **Verify Supabase Studio**: Open [http://127.0.0.1:54323](http://127.0.0.1:54323). Navigate to **Table Editor** to confirm tables exist (`attendance_sessions`, `leave_requests`, `organizations`, `kpi_scores`, etc.).
 4. **Verify Mailpit**: Open [http://127.0.0.1:54324](http://127.0.0.1:54324). Confirm the Mailpit inbox loads with zero connection errors.
 
 ---
@@ -217,7 +217,7 @@ Before starting manual tests, verify that local services are operating normally:
      - Scenario B: Coordinates 5 kilometers away from office.
 - **Expected Result**:
   - Scenario A: Check-in succeeds with `geofence_status: 'inside'`.
-  - Scenario B: Check-in records `geofence_status: 'outside'`. If organization policy strictly requires geofence compliance, an alert or warning pill flags the out-of-bounds punch.
+  - Check-in records start timestamp in `attendance_sessions.check_in_at`. (Note: Physical geofencing is tracked under Punch Channels Governance as Enterprise / In Development).
 
 ---
 
@@ -229,7 +229,7 @@ Before starting manual tests, verify that local services are operating normally:
   3. Confirm check-out.
 - **Expected Result**:
   - Live timer stops.
-  - Total elapsed minutes are computed and stored in `attendance_records.total_minutes`.
+  - Total elapsed minutes are computed and stored in `attendance_sessions.duration_minutes`.
   - The record is appended to the **Recent Activity** list and **Calendar** view.
 
 ---
@@ -345,7 +345,7 @@ Before starting manual tests, verify that local services are operating normally:
   3. Click **Approve**.
 - **Expected Result**:
   - Status becomes `approved`.
-  - Underlying `attendance_records` row is created/updated with the approved punch times.
+  - Underlying `attendance_sessions` row is created/updated with the approved punch times.
   - Total minutes for the work date are recalculated.
 
 ---
@@ -596,7 +596,7 @@ Before starting manual tests, verify that local services are operating normally:
 - **Steps**:
   1. Configure an employee's shift start time to `09:00:00`.
   2. Clock in at `09:16:00` or later (or run a test punch with timestamp > 09:15:00 UTC).
-  3. Check the database `attendance_days` and `attendance_records` records:
+  3. Check the database `daily_attendance_summary` and `attendance_sessions` records:
      ```sql
      SELECT user_id, work_date, check_in, is_late 
      FROM attendance_days 
@@ -692,15 +692,14 @@ SELECT
   p.full_name,
   om.role,
   ar.check_in,
-  ar.check_out,
-  ar.total_minutes,
-  ar.status,
-  ar.geofence_status
-FROM attendance_records ar
-JOIN profiles p ON p.id = ar.user_id
-JOIN organization_members om ON om.user_id = ar.user_id
-WHERE ar.work_date = CURRENT_DATE
-ORDER BY ar.check_in DESC;
+  s.check_out_at,
+  s.duration_minutes,
+  s.source
+FROM attendance_sessions s
+JOIN profiles p ON p.id = s.employee_id
+JOIN organization_members om ON om.user_id = s.employee_id
+WHERE s.work_date = CURRENT_DATE
+ORDER BY s.check_in_at DESC;
 ```
 
 ### 2. Verify Leave Balances & Usages
