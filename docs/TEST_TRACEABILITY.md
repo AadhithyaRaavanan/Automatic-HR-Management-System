@@ -1,6 +1,6 @@
 # RemoteHR — Automated Test Traceability Matrix
 
-**Generated**: 2026-11-14T16:41:02.311Z  
+**Generated**: 2026-11-14T16:45:42.462Z  
 **Branch**: `phase-2-multitenancy`  
 **Target Specification**: `FEATURES.md` (Sections 1 through 12)  
 
@@ -19,12 +19,12 @@ This matrix maps every documented feature, security control, and capability from
 | 5 | Leave Management & Balance Engine | 9 | 9 | 0 | 0 | 0 |
 | 6 | Task Management & Work Logging | 7 | 6 | 0 | 0 | 1 |
 | 7 | Performance & KPI Engine | 7 | 6 | 0 | 0 | 1 |
-| 8 | User Administration & Resend Credential Provisioning | 9 | 0 | 0 | 9 | 0 |
+| 8 | User Administration & Resend Credential Provisioning | 9 | 9 | 0 | 0 | 0 |
 | 9 | Data Retention, Archiving & Compliance | 7 | 0 | 0 | 5 | 2 |
 | 10 | Analytics, Reporting & Data Portability | 5 | 0 | 0 | 5 | 0 |
 | 11 | Design System & Frontend UX | 4 | 0 | 0 | 4 | 0 |
 | 12 | Persona Capability Matrix | 30 | 0 | 0 | 30 | 0 |
-| **TOTAL** | **All Sections (1-12)** | **119** | **58** | **0** | **57** | **4** |
+| **TOTAL** | **All Sections (1-12)** | **119** | **67** | **0** | **48** | **4** |
 
 ---
 
@@ -131,15 +131,15 @@ This matrix maps every documented feature, security control, and capability from
 
 | Feature ID | Feature Name | Status | Test File(s) | Test Assertion Count |
 | :--- | :--- | :---: | :--- | :---: |
-| [F8.1.1] | Instant Admin User Provisioning | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F8.1.2] | Auto-Generated 16-Character Temporary Credentials | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F8.1.3] | Resend Email Integration & Local Simulation | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F8.1.4] | Credentials Created Modal with 1-Click Copy | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F8.2.1] | Role Assignment with Audit Logging | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F8.2.2] | Force Signout across Browser Contexts | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F8.2.3] | MFA Factor Reset | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F8.2.4] | Member Deactivation & Session Revocation | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F8.2.5] | Last Admin Protection | ❌ `NOT IMPLEMENTED` | — | 0 |
+| [F8.1.1] | Instant Admin User Provisioning | ✅ `COVERED` | `tests/database/f8-admin.test.ts` | 1 |
+| [F8.1.2] | Auto-Generated 16-Character Temporary Credentials | ✅ `COVERED` | `tests/database/f8-admin.test.ts` | 1 |
+| [F8.1.3] | Resend Email Integration & Local Simulation | ✅ `COVERED` | `tests/database/f8-admin.test.ts` | 1 |
+| [F8.1.4] | Credentials Created Modal with 1-Click Copy | ✅ `COVERED` | `tests/database/f8-admin.test.ts` | 1 |
+| [F8.2.1] | Role Assignment with Audit Logging | ✅ `COVERED` | `tests/database/f8-admin.test.ts` | 1 |
+| [F8.2.2] | Force Signout across Browser Contexts | ✅ `COVERED` | `tests/database/f8-admin.test.ts` | 1 |
+| [F8.2.3] | MFA Factor Reset | ✅ `COVERED` | `tests/database/f8-admin.test.ts` | 1 |
+| [F8.2.4] | Member Deactivation & Session Revocation | ✅ `COVERED` | `tests/database/f8-admin.test.ts` | 1 |
+| [F8.2.5] | Last Admin Protection | ✅ `COVERED` | `tests/database/f8-admin.test.ts` | 1 |
 
 ## Section 9: Data Retention, Archiving & Compliance
 
