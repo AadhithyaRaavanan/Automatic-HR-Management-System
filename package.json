@@ -10,7 +10,9 @@
     "test": "vitest run tests/unit",
     "test:watch": "vitest tests/unit",
     "test:db": "npx supabase db reset && vitest run tests/database --no-file-parallelism",
-    "test:all": "vitest run",
+    "test:all": "vitest run tests/unit && npm run test:db && npx playwright test",
+    "test:feature": "node scripts/test-feature.mjs",
+    "test:matrix": "node scripts/generate-traceability.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {
