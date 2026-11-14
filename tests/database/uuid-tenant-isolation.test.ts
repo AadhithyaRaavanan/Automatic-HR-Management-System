@@ -75,6 +75,7 @@ const ORG_1_FIXTURES = {
   taskId: "00000000-0000-0000-0000-000000000969",
   kpiDefId: "00000000-0000-0000-0000-00000000096a",
   kpiPeriodId: "00000000-0000-0000-0000-00000000096b",
+  jobTitleId: "00000000-0000-0000-0000-000000000021",
 };
 
 const ALL_EXPECTED_UUID_SIGNATURES = [
@@ -84,12 +85,14 @@ const ALL_EXPECTED_UUID_SIGNATURES = [
   "admin_create_department(text,text,uuid,uuid)",
   "admin_deactivate_member(uuid)",
   "admin_delete_department(uuid)",
+  "admin_delete_job_title(uuid)",
   "admin_delete_location(uuid)",
   "admin_delete_shift_template(uuid)",
   "admin_remove_org_member(uuid,uuid)",
   "admin_update_department(uuid,text,text,uuid,uuid)",
   "admin_update_employee(uuid,uuid,text,text,uuid,integer,integer[],integer,text)",
   "admin_update_employee_governance(uuid,text,uuid,uuid,text,text,uuid,integer,integer[],integer,text)",
+  "admin_update_job_title(uuid,text,text)",
   "admin_update_location(uuid,text,text,text,integer,integer[])",
   "admin_update_org_member_role(uuid,uuid,text)",
   "admin_update_shift_template(uuid,text,time without time zone,time without time zone,integer,integer)",
@@ -349,7 +352,7 @@ describe("Item 1: UUID Argument Tenant-Isolation Suite", () => {
     `);
     const liveSigs = res.rows.map((r) => r.sig).sort();
     expect(liveSigs).toEqual(ALL_EXPECTED_UUID_SIGNATURES);
-    expect(liveSigs.length).toBe(48);
+    expect(liveSigs.length).toBe(50);
   });
 
   it("get_user_role: self inspection permitted at AAL1", async () => {
@@ -889,7 +892,21 @@ describe("Item 1: UUID Argument Tenant-Isolation Suite", () => {
       [ORG_2.kpiPeriodId, ORG_1.employee]
     );
 
-    // Assert every single one of the 48 signatures was executed
+    // --- Job Titles ---
+    await expectThrows(
+      "admin_update_job_title(uuid,text,text)",
+      "admin",
+      `SELECT public.admin_update_job_title($1, 'Cross Title', 'Cross Desc');`,
+      [ORG_1_FIXTURES.jobTitleId]
+    );
+    await expectThrows(
+      "admin_delete_job_title(uuid)",
+      "admin",
+      `SELECT public.admin_delete_job_title($1);`,
+      [ORG_1_FIXTURES.jobTitleId]
+    );
+
+    // Assert every single one of the 50 signatures was executed
     expect(Array.from(executedSignatures).sort()).toEqual(ALL_EXPECTED_UUID_SIGNATURES);
   });
 });

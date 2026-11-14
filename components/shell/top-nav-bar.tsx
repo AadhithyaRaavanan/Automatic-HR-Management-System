@@ -9,6 +9,7 @@ import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { CommandPalette } from "@/components/shared/command-palette";
 import { NotificationCenter } from "@/components/shared/notification-center";
 import { useNotifications } from "@/features/notifications/hooks/use-notifications";
+import { useAppSession } from "@/components/shell/app-shell";
 import { cn } from "@/lib/utils";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import { toast } from "sonner";
@@ -29,6 +30,7 @@ export function TopNavBar({
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+  const session = useAppSession();
   const [commandOpen, setCommandOpen] = React.useState(false);
   const [notificationsOpen, setNotificationsOpen] = React.useState(false);
   const { unreadCount } = useNotifications();
@@ -154,10 +156,33 @@ export function TopNavBar({
             )}
           </button>
 
+          {/* User Role / Job Title & Department Badges */}
+          {(session.jobTitleName || session.departmentName) && (
+            <div className="hidden xl:flex items-center gap-1.5 px-3 py-1 rounded-full bg-card-subtle border border-border-light text-xs">
+              {session.jobTitleName && (
+                <span className="font-bold text-text-primary text-[11px] truncate max-w-[140px]">
+                  {session.jobTitleName}
+                </span>
+              )}
+              {session.jobTitleName && session.departmentName && (
+                <span className="text-text-tertiary text-[10px]">•</span>
+              )}
+              {session.departmentName && (
+                <span className="text-text-secondary text-[11px] truncate max-w-[120px]">
+                  {session.departmentName}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* My Profile Shortcut */}
           <Link
             href="/profile"
-            title="My Profile"
+            title={
+              session.fullName
+                ? `${session.fullName} (${session.jobTitleName || session.userRole})`
+                : "My Profile"
+            }
             aria-label="My Profile"
             className={cn(
               "p-2 rounded-full border transition-colors cursor-pointer",

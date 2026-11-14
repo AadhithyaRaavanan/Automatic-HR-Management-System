@@ -49,7 +49,7 @@ test.describe("Phase 1: Multi-Factor Authentication (TOTP MFA) E2E Suite", () =>
     await expect(h1).toBeVisible({ timeout: 10000 });
     const text = await h1.innerText();
 
-    if (text.includes("Protect Your Elevated Account")) {
+    if (text.includes("Protect Your") || text.includes("Elevated")) {
       const activateBtn = page.getByRole("button", { name: /Confirm & Complete Enrollment/i });
       await expect(activateBtn).toBeDisabled();
       const verifyInput = page.locator('input[type="text"]');

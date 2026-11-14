@@ -8,6 +8,9 @@ export interface SendInviteEmailParams {
   to: string;
   fullName: string;
   role: string;
+  jobTitle?: string;
+  departmentName?: string;
+  inviteLink?: string;
   temporaryPassword?: string;
   shiftStartTime?: string;
   shiftEndTime?: string;
@@ -49,6 +52,9 @@ export async function sendWelcomeCredentialsEmail(params: SendInviteEmailParams)
     to,
     fullName,
     role,
+    jobTitle,
+    departmentName,
+    inviteLink,
     temporaryPassword,
     shiftStartTime = "09:00 AM",
     shiftEndTime = "05:00 PM",
@@ -86,7 +92,9 @@ export async function sendWelcomeCredentialsEmail(params: SendInviteEmailParams)
             <div class="title">Welcome, ${fullName}!</div>
           </div>
           <p style="font-size: 13px; line-height: 1.6; color: #334155;">
-            An account has been created for you at RemoteHR with role <strong>${role.toUpperCase()}</strong>.
+            An account has been created for you at RemoteHR with security role <strong>${role.toUpperCase()}</strong>.
+            ${jobTitle ? `You are appointed as <strong>${jobTitle}</strong>.` : ""}
+            ${departmentName ? `Assigned department: <strong>${departmentName}</strong>.` : ""}
             Your assigned working hours are <strong>${shiftStartTime} - ${shiftEndTime}</strong>.
           </p>
           <div class="info-box">
@@ -95,21 +103,35 @@ export async function sendWelcomeCredentialsEmail(params: SendInviteEmailParams)
               <span class="val">${to}</span>
             </div>
             ${
-              temporaryPassword
+              jobTitle
                 ? `
             <div class="info-row">
-              <span class="label">Temporary Password:</span>
-              <span class="val">${temporaryPassword}</span>
+              <span class="label">Company Role / Title:</span>
+              <span class="val">${jobTitle}</span>
             </div>
             `
                 : ""
             }
+            ${
+              departmentName
+                ? `
+            <div class="info-row">
+              <span class="label">Department:</span>
+              <span class="val">${departmentName}</span>
+            </div>
+            `
+                : ""
+            }
+            <div class="info-row">
+              <span class="label">Portal URL:</span>
+              <span class="val">${loginUrl}</span>
+            </div>
           </div>
           <p style="font-size: 12px; color: #64748b;">
-            Please log in and update your password under your Profile &amp; Settings.
+            Click below to accept your invitation and securely configure your password (link expires in 24 hours).
           </p>
           <div style="text-align: center;">
-            <a href="${loginUrl}" class="btn">Sign In to Dashboard</a>
+            <a href="${inviteLink || loginUrl}" class="btn">Accept Invitation &amp; Set Password</a>
           </div>
           <div class="footer">
             RemoteHR Secure Automated Workplace &bull; Zero Invasive Monitoring

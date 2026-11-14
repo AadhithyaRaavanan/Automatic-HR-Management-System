@@ -18,6 +18,7 @@ export interface InviteEmployeeInput {
   requiredOfficeDaysPerWeek?: number;
   shiftStartTime?: string;
   shiftEndTime?: string;
+  jobTitleId?: string | null;
 }
 
 export type InviteEmployeeResult =
@@ -25,6 +26,7 @@ export type InviteEmployeeResult =
       ok: true;
       userId: string;
       temporaryPassword?: string;
+      inviteLink?: string;
       message: string;
       emailSent: boolean;
       data: any;
@@ -54,6 +56,7 @@ export async function inviteSingleEmployee(
     requiredOfficeDaysPerWeek = 0,
     shiftStartTime = "09:00:00",
     shiftEndTime = "17:00:00",
+    jobTitleId = null,
   } = input;
 
   if (!email || !fullName) {
@@ -75,11 +78,14 @@ export async function inviteSingleEmployee(
     };
   }
 
+  let resolvedDepartmentName: string | undefined;
+  let resolvedJobTitleName: string | undefined;
+
   // Validate foreign keys belong to caller's organization before provisioning
   if (departmentId) {
     const { data: dept } = await supabaseAdmin
       .from("departments")
-      .select("id")
+      .select("id, name")
       .eq("id", departmentId)
       .eq("organization_id", context.organizationId)
       .maybeSingle();
@@ -90,6 +96,24 @@ export async function inviteSingleEmployee(
         error: "Forbidden: Department does not belong to your organization.",
       };
     }
+    resolvedDepartmentName = dept.name;
+  }
+
+  if (jobTitleId) {
+    const { data: jt } = await (supabaseAdmin as any)
+      .from("job_titles")
+      .select("id, title_name")
+      .eq("id", jobTitleId)
+      .eq("organization_id", context.organizationId)
+      .maybeSingle();
+    if (!jt) {
+      return {
+        ok: false,
+        status: 403,
+        error: "Forbidden: Job title does not belong to your organization.",
+      };
+    }
+    resolvedJobTitleName = jt.title_name;
   }
 
   if (managerId) {
@@ -139,78 +163,58 @@ export async function inviteSingleEmployee(
     };
   }
 
-  // 1. Create or invite user via Supabase Auth Admin API
+  // 1. Create or invite user via Supabase Auth Admin generateLink flow (No temporary passwords)
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   let invitedUserId: string;
-  const temporaryPassword = `Temp${Math.random().toString(36).slice(-8)}!${Math.floor(10 + Math.random() * 90)}`;
-  const now = new Date();
-  const tempPasswordExpiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+  let actionInviteLink: string = "";
 
-  // Attempt direct user creation with auto-confirmed email & temporary password
-  const { data: createData, error: createError } = await supabaseAdmin.auth.admin.createUser({
+  const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+    type: "invite",
     email: normalizedEmail,
-    password: temporaryPassword,
-    email_confirm: true,
-    user_metadata: {
-      full_name: normalizedName,
-      user_role: role,
-      must_change_password: true,
-      temp_password_created_at: now.toISOString(),
-      temp_password_expires_at: tempPasswordExpiresAt,
+    options: {
+      data: {
+        full_name: normalizedName,
+        user_role: role,
+        must_change_password: true,
+      },
+      redirectTo: `${appUrl}/settings?must_change_password=true`,
     },
   });
 
-  if (createError) {
-    // If user already exists or createUser was denied, try inviteUserByEmail fallback
-    const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-      normalizedEmail,
-      {
-        data: {
-          full_name: normalizedName,
-          user_role: role,
-          must_change_password: true,
-          temp_password_created_at: now.toISOString(),
-          temp_password_expires_at: tempPasswordExpiresAt,
-        },
-      }
-    );
-
-    if (inviteError) {
-      const errMsg = inviteError.message?.toLowerCase() || "";
-      const errCode = (inviteError as any).code || "";
-      if (errMsg.includes("already registered") || errCode === "email_exists" || inviteError.status === 422) {
-        if (preExistingEmployee?.id) {
-          invitedUserId = preExistingEmployee.id;
-        } else {
-          let foundUser: any = null;
-          let page = 1;
-          const perPage = 100;
-          while (!foundUser) {
-            const { data: listData, error: listErr } = await supabaseAdmin.auth.admin.listUsers({
-              page,
-              perPage,
-            });
-            if (listErr || !listData?.users || listData.users.length === 0) {
-              break;
-            }
-            foundUser = listData.users.find((u) => u.email?.toLowerCase() === normalizedEmail) || null;
-            if (listData.users.length < perPage) {
-              break;
-            }
-            page += 1;
-          }
-          if (!foundUser) {
-            return { ok: false, status: 400, error: `Invite failed: ${inviteError.message}` };
-          }
-          invitedUserId = foundUser.id;
-        }
-      } else {
-        return { ok: false, status: 400, error: `User creation failed: ${createError.message || inviteError.message}` };
-      }
+  if (linkError || !linkData?.user) {
+    if (preExistingEmployee?.id) {
+      invitedUserId = preExistingEmployee.id;
     } else {
-      invitedUserId = inviteData.user.id;
+      let foundUser: any = null;
+      let page = 1;
+      const perPage = 100;
+      while (!foundUser) {
+        const { data: listData, error: listErr } = await supabaseAdmin.auth.admin.listUsers({
+          page,
+          perPage,
+        });
+        if (listErr || !listData?.users || listData.users.length === 0) break;
+        foundUser = listData.users.find((u) => u.email?.toLowerCase() === normalizedEmail) || null;
+        if (listData.users.length < perPage) break;
+        page += 1;
+      }
+      if (!foundUser) {
+        return { ok: false, status: 400, error: `Invite failed: ${linkError?.message || "User creation failed"}` };
+      }
+      invitedUserId = foundUser.id;
     }
+
+    const { data: recoveryData } = await supabaseAdmin.auth.admin.generateLink({
+      type: "magiclink",
+      email: normalizedEmail,
+      options: {
+        redirectTo: `${appUrl}/settings?must_change_password=true`,
+      },
+    });
+    actionInviteLink = recoveryData?.properties?.action_link || "";
   } else {
-    invitedUserId = createData.user.id;
+    invitedUserId = linkData.user.id;
+    actionInviteLink = linkData.properties?.action_link || "";
   }
 
   // Check cross-tenant uniqueness across organization_members and employees
@@ -270,33 +274,46 @@ export async function inviteSingleEmployee(
     };
   }
 
-  // Persist shift schedule if specified
-  if (shiftStartTime || shiftEndTime) {
-    const startVal = shiftStartTime ? (shiftStartTime.length === 5 ? `${shiftStartTime}:00` : shiftStartTime) : "09:00:00";
-    const endVal = shiftEndTime ? (shiftEndTime.length === 5 ? `${shiftEndTime}:00` : shiftEndTime) : "17:00:00";
-    await Promise.all([
-      (supabaseAdmin.from("organization_members") as any)
-        .update({ shift_start_time: startVal, shift_end_time: endVal, updated_at: new Date().toISOString() })
-        .eq("user_id", invitedUserId)
-        .eq("organization_id", context.organizationId),
-      (supabaseAdmin.from("employees") as any)
-        .update({ shift_start_time: startVal, shift_end_time: endVal, updated_at: new Date().toISOString() })
-        .eq("id", invitedUserId)
-        .eq("organization_id", context.organizationId),
-    ]);
-  }
+  // Persist shift schedule, job title, and department if specified
+  const startVal = shiftStartTime ? (shiftStartTime.length === 5 ? `${shiftStartTime}:00` : shiftStartTime) : "09:00:00";
+  const endVal = shiftEndTime ? (shiftEndTime.length === 5 ? `${shiftEndTime}:00` : shiftEndTime) : "17:00:00";
+  await Promise.all([
+    (supabaseAdmin.from("organization_members") as any)
+      .update({
+        shift_start_time: startVal,
+        shift_end_time: endVal,
+        department_id: departmentId || null,
+        job_title_id: jobTitleId || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", invitedUserId)
+      .eq("organization_id", context.organizationId),
+    (supabaseAdmin.from("employees") as any)
+      .update({
+        shift_start_time: startVal,
+        shift_end_time: endVal,
+        department_id: departmentId || null,
+        job_title_id: jobTitleId || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", invitedUserId)
+      .eq("organization_id", context.organizationId),
+  ]);
 
-  // 3. Dispatch credentials email via Resend
+  // 3. Dispatch invitation email via Resend (Invite Link, no passwords)
   const emailResult = await sendWelcomeCredentialsEmail({
     to: normalizedEmail,
     fullName: normalizedName,
     role,
-    temporaryPassword,
+    jobTitle: resolvedJobTitleName,
+    departmentName: resolvedDepartmentName,
+    inviteLink: actionInviteLink,
     shiftStartTime: shiftStartTime.slice(0, 5),
     shiftEndTime: shiftEndTime.slice(0, 5),
+    loginUrl: appUrl,
   });
 
-  // 4. Write audit row
+  // 4. Write audit row (Token & invite link are never logged or stored)
   await supabaseAdmin.from("audit_logs").insert({
     organization_id: context.organizationId,
     actor_id: context.userId,
@@ -314,6 +331,7 @@ export async function inviteSingleEmployee(
       shift_end_time: shiftEndTime,
       email_dispatched: emailResult.success,
       department_id: departmentId || null,
+      job_title_id: jobTitleId || null,
       invited_at: new Date().toISOString(),
     },
   });
@@ -321,11 +339,11 @@ export async function inviteSingleEmployee(
   return {
     ok: true,
     userId: invitedUserId,
-    temporaryPassword,
+    inviteLink: actionInviteLink,
     emailSent: emailResult.success,
     message: emailResult.success
-      ? `User ${normalizedEmail} created and credentials email sent via Resend.`
-      : `User ${normalizedEmail} created successfully.`,
+      ? `User ${normalizedEmail} invited and invitation email dispatched via Resend.`
+      : `User ${normalizedEmail} invited. Email delivery failed, please copy the invite link manually.`,
     data: provisionData,
   };
 }

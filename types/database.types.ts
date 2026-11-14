@@ -249,6 +249,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"job_titles": {
+                  Row: {
+                    "created_at": string,"description": string | null,"id": string,"organization_id": string,"title_name": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"description"?: string | null,"id"?: string,"organization_id": string,"title_name": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"description"?: string | null,"id"?: string,"organization_id"?: string,"title_name"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+                      foreignKeyName: "job_titles_organization_id_fkey"
+                      columns: ["organization_id"]
+                      isOneToOne: false
+                      referencedRelation: "organizations"
+                      referencedColumns: ["id"]
+                    }
+                  ]
                 },"departments": {
                   Row: {
                     "code": string,"created_at": string,"department_head_id": string | null,"id": string,"name": string,"organization_id": string,"parent_department_id": string | null,"updated_at": string
@@ -315,14 +335,14 @@ isOneToOne: false
                   ]
                 },"employees": {
                   Row: {
-                    "avatar_url": string | null,"created_at": string,"department_id": string | null,"email": string,"emergency_contact": string | null,"expected_office_days": (number)[] | null,"full_name": string,"id": string,"joined_on": string,"manager_id": string | null,"onboarding_completed_at": string | null,"organization_id": string,"phone": string | null,"primary_location_id": string | null,"required_office_days_per_week": number | null,"status": string,"timezone": string,"updated_at": string,"work_mode": string | null,"work_target_minutes": number
+                    "avatar_url": string | null,"created_at": string,"department_id": string | null,"email": string,"emergency_contact": string | null,"expected_office_days": (number)[] | null,"full_name": string,"id": string,"job_title_id": string | null,"joined_on": string,"manager_id": string | null,"onboarding_completed_at": string | null,"organization_id": string,"phone": string | null,"primary_location_id": string | null,"required_office_days_per_week": number | null,"status": string,"timezone": string,"updated_at": string,"work_mode": string | null,"work_target_minutes": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "avatar_url"?: string | null,"created_at"?: string,"department_id"?: string | null,"email": string,"emergency_contact"?: string | null,"expected_office_days"?: (number)[] | null,"full_name": string,"id": string,"joined_on"?: string,"manager_id"?: string | null,"onboarding_completed_at"?: string | null,"organization_id"?: string,"phone"?: string | null,"primary_location_id"?: string | null,"required_office_days_per_week"?: number | null,"status"?: string,"timezone"?: string,"updated_at"?: string,"work_mode"?: string | null,"work_target_minutes"?: number
+                    "avatar_url"?: string | null,"created_at"?: string,"department_id"?: string | null,"email": string,"emergency_contact"?: string | null,"expected_office_days"?: (number)[] | null,"full_name": string,"id": string,"job_title_id"?: string | null,"joined_on"?: string,"manager_id"?: string | null,"onboarding_completed_at"?: string | null,"organization_id"?: string,"phone"?: string | null,"primary_location_id"?: string | null,"required_office_days_per_week"?: number | null,"status"?: string,"timezone"?: string,"updated_at"?: string,"work_mode"?: string | null,"work_target_minutes"?: number
                   }
                   Update: {
-                    "avatar_url"?: string | null,"created_at"?: string,"department_id"?: string | null,"email"?: string,"emergency_contact"?: string | null,"expected_office_days"?: (number)[] | null,"full_name"?: string,"id"?: string,"joined_on"?: string,"manager_id"?: string | null,"onboarding_completed_at"?: string | null,"organization_id"?: string,"phone"?: string | null,"primary_location_id"?: string | null,"required_office_days_per_week"?: number | null,"status"?: string,"timezone"?: string,"updated_at"?: string,"work_mode"?: string | null,"work_target_minutes"?: number
+                    "avatar_url"?: string | null,"created_at"?: string,"department_id"?: string | null,"email"?: string,"emergency_contact"?: string | null,"expected_office_days"?: (number)[] | null,"full_name"?: string,"id"?: string,"job_title_id"?: string | null,"joined_on"?: string,"manager_id"?: string | null,"onboarding_completed_at"?: string | null,"organization_id"?: string,"phone"?: string | null,"primary_location_id"?: string | null,"required_office_days_per_week"?: number | null,"status"?: string,"timezone"?: string,"updated_at"?: string,"work_mode"?: string | null,"work_target_minutes"?: number
                   }
                   Relationships: [
                     {
@@ -767,14 +787,14 @@ isOneToOne: false
                   ]
                 },"organization_members": {
                   Row: {
-                    "created_at": string,"id": string,"organization_id": string,"role": string,"status": string,"updated_at": string,"user_id": string
+                    "created_at": string,"department_id": string | null,"id": string,"job_title_id": string | null,"organization_id": string,"role": string,"status": string,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"id"?: string,"organization_id": string,"role": string,"status"?: string,"updated_at"?: string,"user_id": string
+                    "created_at"?: string,"department_id"?: string | null,"id"?: string,"job_title_id"?: string | null,"organization_id": string,"role": string,"status"?: string,"updated_at"?: string,"user_id": string
                   }
                   Update: {
-                    "created_at"?: string,"id"?: string,"organization_id"?: string,"role"?: string,"status"?: string,"updated_at"?: string,"user_id"?: string
+                    "created_at"?: string,"department_id"?: string | null,"id"?: string,"job_title_id"?: string | null,"organization_id"?: string,"role"?: string,"status"?: string,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {

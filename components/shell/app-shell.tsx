@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
+import { AlertTriangle } from "lucide-react";
 import { CurvedSidebar } from "@/components/shell/curved-sidebar";
 import { TopNavBar } from "@/components/shell/top-nav-bar";
 import { BottomTabBar } from "@/components/shell/bottom-tab-bar";
@@ -17,6 +19,9 @@ export interface AppSessionState {
   fullName: string | null;
   timezone: string;
   isLoaded: boolean;
+  departmentName?: string | null;
+  jobTitleName?: string | null;
+  requireMfaForPrivileged?: boolean;
 }
 
 const AppSessionContext = React.createContext<AppSessionState>({
@@ -26,6 +31,9 @@ const AppSessionContext = React.createContext<AppSessionState>({
   fullName: null,
   timezone: "UTC",
   isLoaded: false,
+  departmentName: null,
+  jobTitleName: null,
+  requireMfaForPrivileged: true,
 });
 
 export function useAppSession(): AppSessionState {
@@ -66,6 +74,9 @@ export function AppShell({
       let resolvedUserId: string | null = null;
       let resolvedOrgId: string | null = null;
       let resolvedName: string | null = null;
+      let resolvedDeptName: string | null = null;
+      let resolvedJobTitle: string | null = null;
+      let resolvedReqMfa: boolean = true;
       let resolvedTz = "UTC";
       let shouldOpenTour = false;
 
@@ -100,7 +111,9 @@ export function AppShell({
 
           const { data: empProfile } = await (supabase as any)
             .from("employees")
-            .select("full_name, timezone, organization_id, onboarding_completed_at")
+            .select(
+              "full_name, timezone, organization_id, onboarding_completed_at, departments:department_id(name), job_titles:job_title_id(title_name)"
+            )
             .eq("id", user.id)
             .maybeSingle();
 
@@ -108,8 +121,21 @@ export function AppShell({
             resolvedName = empProfile.full_name || null;
             resolvedTz = empProfile.timezone || "UTC";
             resolvedOrgId = resolvedOrgId || empProfile.organization_id || null;
+            resolvedDeptName = empProfile.departments?.name || null;
+            resolvedJobTitle = empProfile.job_titles?.title_name || null;
             if (empProfile.onboarding_completed_at === null) {
               shouldOpenTour = true;
+            }
+          }
+
+          if (resolvedOrgId) {
+            const { data: orgData } = await (supabase as any)
+              .from("organizations")
+              .select("require_mfa_for_privileged")
+              .eq("id", resolvedOrgId)
+              .maybeSingle();
+            if (orgData && typeof orgData.require_mfa_for_privileged === "boolean") {
+              resolvedReqMfa = orgData.require_mfa_for_privileged;
             }
           }
         }
@@ -124,6 +150,9 @@ export function AppShell({
         userRole: propUserRole || resolvedRole,
         fullName: resolvedName,
         timezone: resolvedTz,
+        departmentName: resolvedDeptName,
+        jobTitleName: resolvedJobTitle,
+        requireMfaForPrivileged: resolvedReqMfa,
         isLoaded: true,
       });
       if (shouldOpenTour) {
@@ -154,6 +183,29 @@ export function AppShell({
           />
 
           <main className={cn("flex-1 w-full flex flex-col min-w-0", className)}>
+            {/* Warning banner when organization has disabled mandatory MFA for privileged accounts */}
+            {sessionState.isLoaded && sessionState.requireMfaForPrivileged === false && (
+              <div
+                className="mb-4 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 flex items-center justify-between gap-3 text-xs font-semibold shadow-sm"
+                role="alert"
+                data-testid="mfa-disabled-warning-banner"
+              >
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span>
+                    <strong>Security Warning:</strong> Mandatory Two-Factor Authentication (MFA) for privileged accounts is currently disabled for this organization.
+                  </span>
+                </div>
+                {userRole === "admin" && (
+                  <Link
+                    href="/settings"
+                    className="underline text-amber-900 dark:text-amber-100 font-bold hover:opacity-80 shrink-0 text-[11px]"
+                  >
+                    Configure in Settings →
+                  </Link>
+                )}
+              </div>
+            )}
             {children}
           </main>
         </div>

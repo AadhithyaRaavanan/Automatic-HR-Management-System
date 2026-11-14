@@ -18,7 +18,6 @@ function MfaSetupForm() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [enrollData, setEnrollData] = React.useState<{
     factorId: string;
-    qrCode: string;
     secret: string;
   } | null>(null);
   const [verifyCode, setVerifyCode] = React.useState("");
@@ -56,7 +55,7 @@ function MfaSetupForm() {
         }
 
         // 2. Initiate TOTP enrollment with unique friendlyName to avoid parallel session collisions
-        const friendlySuffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+        const friendlySuffix = `${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
         const { data, error } = await supabase.auth.mfa.enroll({
           factorType: "totp",
           issuer: "RemoteHR",
@@ -68,7 +67,6 @@ function MfaSetupForm() {
 
         setEnrollData({
           factorId: data.id,
-          qrCode: data.totp.qr_code,
           secret: data.totp.secret,
         });
       } catch (err: any) {
@@ -152,7 +150,7 @@ function MfaSetupForm() {
     if (!enrollData?.secret) return;
     navigator.clipboard.writeText(enrollData.secret);
     setCopied(true);
-    toast.success("Secret copied to clipboard!");
+    toast.success("Setup key copied to clipboard!");
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -182,7 +180,7 @@ function MfaSetupForm() {
               Two-Factor Setup
             </h2>
             <span className="text-[11px] font-bold uppercase tracking-wider text-brand-purple">
-              Mandatory for HR & Admin
+              Account Protection
             </span>
           </div>
         </div>
@@ -191,40 +189,46 @@ function MfaSetupForm() {
 
       <div className="mb-4">
         <h1 className="text-xl font-extrabold text-text-primary tracking-tight">
-          Protect Your Elevated Account
+          Protect Your Workplace Account
         </h1>
         <p className="text-xs text-text-secondary mt-1">
-          Your account holds privileged permissions. Scan this QR code in Google Authenticator, Authy, or 1Password to activate Two-Factor Authentication.
+          Add an extra layer of security. Enter the setup key below into Google Authenticator, Authy, or 1Password to activate Two-Factor Authentication.
         </p>
       </div>
 
       {enrollData && (
         <div className="space-y-4">
-          <div className="flex flex-col items-center bg-card-subtle p-4 rounded-2xl border border-border-light">
-            <div className="bg-white p-2.5 rounded-xl shadow-sm border border-border-light mb-3">
-              <img
-                src={enrollData.qrCode}
-                alt="Authenticator QR Code"
-                className="w-36 h-36 block"
-              />
+          {/* Setup Key Display (QR code removed per security spec) */}
+          <div className="flex flex-col items-center bg-card-subtle p-5 rounded-2xl border border-border-light text-center">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-text-tertiary block mb-2">
+              Two-Factor Setup Key
+            </span>
+            <div className="w-full bg-card p-3.5 rounded-xl border border-border-light font-mono text-sm sm:text-base font-extrabold tracking-widest text-text-primary select-all text-center break-all mb-3 shadow-inner">
+              <span data-testid="mfa-secret">
+                {enrollData.secret.replace(/\s+/g, "").match(/.{1,4}/g)?.join(" ") || enrollData.secret}
+              </span>
             </div>
 
-            <div className="w-full text-center">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-text-tertiary block mb-1">
-                Manual Key:
-              </span>
-              <div className="flex items-center justify-center gap-2 bg-card px-3 py-1.5 rounded-lg border border-border-light font-mono text-xs text-text-primary select-all">
-                <span data-testid="mfa-secret">{enrollData.secret}</span>
-                <button
-                  type="button"
-                  onClick={handleCopySecret}
-                  className="p-1 hover:text-brand-purple text-text-tertiary transition-colors"
-                  title="Copy secret"
-                >
-                  {copied ? <Check className="w-3.5 h-3.5 text-status-success-dot" /> : <Copy className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={handleCopySecret}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-4 h-4 text-white" />
+                  <span>Setup Key Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  <span>Copy Setup Key</span>
+                </>
+              )}
+            </button>
+            <p className="text-[11px] text-text-tertiary mt-2">
+              Paste this key into your authenticator app to generate 6-digit confirmation codes.
+            </p>
           </div>
 
           <form onSubmit={handleVerify} className="space-y-3">
@@ -234,7 +238,7 @@ function MfaSetupForm() {
                   <p className="text-xs font-bold text-brand-purple flex items-center gap-1">
                     <span>⚡ Demo Mode</span>
                   </p>
-                  <p className="text-[11px] text-text-secondary">Skip scanning QR with your phone</p>
+                  <p className="text-[11px] text-text-secondary">Skip manual setup key entry</p>
                 </div>
                 <button
                   type="button"

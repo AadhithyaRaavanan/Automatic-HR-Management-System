@@ -19,6 +19,7 @@ import {
   Bell,
   Lock,
   KeyRound,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -34,6 +35,10 @@ function SettingsPageContent() {
   const [newPassword, setNewPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
   const [isChangingPassword, setIsChangingPassword] = React.useState(false);
+
+  // Organization MFA Policy State (Admin Only)
+  const [requireMfaPolicy, setRequireMfaPolicy] = React.useState<boolean>(true);
+  const [isUpdatingPolicy, setIsUpdatingPolicy] = React.useState(false);
 
   React.useEffect(() => {
     let active = true;
@@ -72,6 +77,13 @@ function SettingsPageContent() {
       toast.error("Password must be at least 12 characters long.");
       return;
     }
+    const hasUpper = /[A-Z]/.test(newPassword);
+    const hasLower = /[a-z]/.test(newPassword);
+    const hasDigitOrSpecial = /[\d!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(newPassword);
+    if (!hasUpper || !hasLower || !hasDigitOrSpecial) {
+      toast.error("Password must include uppercase, lowercase, and a number or symbol.");
+      return;
+    }
     if (newPassword !== confirmPassword) {
       toast.error("New Password and Confirm Password do not match.");
       return;
@@ -94,6 +106,53 @@ function SettingsPageContent() {
       toast.error(err.message || "Failed to update password.");
     } finally {
       setIsChangingPassword(false);
+    }
+  };
+
+  React.useEffect(() => {
+    async function loadOrgPolicy() {
+      try {
+        const { data: member } = await (supabase as any)
+          .from("organization_members")
+          .select("organization_id")
+          .maybeSingle();
+        if (member?.organization_id) {
+          const { data: org } = await (supabase as any)
+            .from("organizations")
+            .select("require_mfa_for_privileged")
+            .eq("id", member.organization_id)
+            .maybeSingle();
+          if (org && typeof org.require_mfa_for_privileged === "boolean") {
+            setRequireMfaPolicy(org.require_mfa_for_privileged);
+          }
+        }
+      } catch {}
+    }
+    loadOrgPolicy();
+  }, [supabase]);
+
+  const handleToggleMfaPolicy = async () => {
+    setIsUpdatingPolicy(true);
+    try {
+      const nextVal = !requireMfaPolicy;
+      const { data, error } = await (supabase.rpc as any)("admin_set_mfa_policy", {
+        p_require_mfa: nextVal,
+      });
+      if (error) throw error;
+      setRequireMfaPolicy(nextVal);
+      toast.success(
+        nextVal
+          ? "Organization MFA policy updated: MFA is now mandatory for HR and Admins."
+          : "Organization MFA policy updated: MFA is now optional for privileged accounts."
+      );
+    } catch (err: any) {
+      if (err.message?.includes("AAL2") || err.message?.includes("aal2")) {
+        toast.error("MFA AAL2 verification required. Please verify your Two-Factor authenticator code first.");
+      } else {
+        toast.error(err.message || "Failed to update MFA policy.");
+      }
+    } finally {
+      setIsUpdatingPolicy(false);
     }
   };
 
@@ -207,11 +266,76 @@ function SettingsPageContent() {
               <span>Account Security & Two-Factor Authentication (MFA)</span>
             </div>
           }
-          subtitle="RFC 6238 TOTP hardware & mobile authenticator enforcement (Required for HR & Admin)"
+          subtitle="Protect your account with RFC 6238 TOTP mobile or hardware authenticator"
           className="lg:col-span-12 p-6"
         >
           <TotpMfaManager />
         </BentoCard>
+
+        {/* Admin-Only Organization MFA Enforcement Policy Card */}
+        {userRole === "admin" && (
+          <BentoCard
+            title={
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-brand-purple" />
+                <span>Organization Security & MFA Enforcement</span>
+              </div>
+            }
+            subtitle="Admin-governed policy for mandatory Two-Factor Authentication across privileged roles (HR & Admin)"
+            className="lg:col-span-12 p-6"
+          >
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-card-subtle border border-border-light">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-text-primary uppercase tracking-wider">
+                      Mandatory MFA for Privileged Accounts
+                    </span>
+                    <span
+                      className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
+                        requireMfaPolicy
+                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                          : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+                      }`}
+                    >
+                      {requireMfaPolicy ? "Enforced (AAL2 Required)" : "Opt-In (Disabled)"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-text-secondary max-w-xl">
+                    When enabled, all HR and Admin accounts must enroll and verify TOTP Two-Factor Authentication before accessing management interfaces and privileged RPC endpoints.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isUpdatingPolicy}
+                  onClick={handleToggleMfaPolicy}
+                  data-testid="toggle-mfa-policy-button"
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer whitespace-nowrap disabled:opacity-50 ${
+                    requireMfaPolicy
+                      ? "bg-rose-500 hover:bg-rose-600 text-white"
+                      : "bg-brand-purple hover:bg-brand-purple-hover text-white"
+                  }`}
+                >
+                  {isUpdatingPolicy
+                    ? "Updating Policy..."
+                    : requireMfaPolicy
+                    ? "Disable Mandatory MFA"
+                    : "Enforce Mandatory MFA"}
+                </button>
+              </div>
+
+              {!requireMfaPolicy && (
+                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span>
+                    <strong>Warning:</strong> Privileged endpoints and data access are not protected by mandatory AAL2 multi-factor verification while this setting is disabled.
+                  </span>
+                </div>
+              )}
+            </div>
+          </BentoCard>
+        )}
 
         {/* Work Schedule & Shift (Strictly HR/Admin-Only Governance) */}
         <BentoCard

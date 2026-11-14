@@ -274,25 +274,6 @@ export async function POST(request: NextRequest) {
               } finally {
                 await pgClient.end().catch(() => {});
               }
-            } else {
-              const { data: enrollData, error: enrollError } = await supabase.auth.mfa.enroll({
-                factorType: "totp",
-                issuer: "RemoteHR Demo",
-                friendlyName: `RemoteHR-Demo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-              });
-              if (!enrollError && enrollData) {
-                factorId = enrollData.id;
-                factorSecret = enrollData.totp.secret;
-              } else if (attempt === 0) {
-                const { data: retryAuth } = await supabase.auth.signInWithPassword({
-                  email,
-                  password,
-                });
-                if (retryAuth?.user) {
-                  latestUserFactors = ((retryAuth.user as any).factors as any[]) || latestUserFactors;
-                }
-                continue;
-              }
             }
 
             if (factorId && factorSecret) {
@@ -335,11 +316,36 @@ export async function POST(request: NextRequest) {
       );
 
       if (!hasVerifiedFactor) {
-        // Privileged user without enrolled MFA -> Route to enrollment page at AAL1
+        let reqMfa = true;
+        try {
+          const { data: memberData } = await (supabase as any)
+            .from("organization_members")
+            .select("organizations(require_mfa_for_privileged)")
+            .eq("user_id", authData.user.id)
+            .eq("status", "active")
+            .maybeSingle();
+          if (memberData?.organizations && typeof memberData.organizations.require_mfa_for_privileged === "boolean") {
+            reqMfa = memberData.organizations.require_mfa_for_privileged;
+          }
+        } catch {}
+
+        if (reqMfa) {
+          // MFA required by organization policy -> route unenrolled admin/hr to /mfa-setup
+          return createSuccessResponse({
+            success: true,
+            requireMfa: true,
+            mfaDestination: "/mfa-setup",
+            role: userRole,
+          });
+        }
+
+        // 2FA disabled by organization policy -> allow single-factor sign in
+        const mustChangePassword = Boolean(userMeta.must_change_password);
         return createSuccessResponse({
           success: true,
-          requireMfa: true,
-          mfaDestination: "/mfa-setup",
+          requireMfa: false,
+          mustChangePassword,
+          mfaDestination: mustChangePassword ? "/settings?must_change_password=true" : "/",
           role: userRole,
         });
       }

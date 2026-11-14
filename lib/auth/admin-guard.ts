@@ -115,7 +115,26 @@ export async function verifyAdminRouteCaller(
     }
   }
 
-  if ((role === "admin" || role === "hr") && currentAal !== "aal2") {
+  // MFA Policy Enforcement for Admin & HR:
+  // mfa_required = caller has verified TOTP factor OR (role in ['hr', 'admin'] AND organizations.require_mfa_for_privileged is TRUE)
+  const { data: orgData } = await supabaseAdmin
+    .from("organizations")
+    .select("require_mfa_for_privileged")
+    .eq("id", member.organization_id)
+    .maybeSingle();
+
+  const reqMfa = (orgData as any)?.require_mfa_for_privileged ?? true;
+  let hasEnrolledFactor = false;
+  try {
+    if (typeof supabase.auth.mfa?.getAuthenticatorAssuranceLevel === "function") {
+      const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aalData?.nextLevel === "aal2") hasEnrolledFactor = true;
+    }
+  } catch {}
+
+  const mfaRequired = hasEnrolledFactor || ((role === "admin" || role === "hr") && reqMfa);
+
+  if (mfaRequired && currentAal !== "aal2") {
     return {
       response: NextResponse.json(
         { error: "Forbidden: Elevated action requires active AAL2 multi-factor authentication." },

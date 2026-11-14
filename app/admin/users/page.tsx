@@ -24,9 +24,12 @@ import {
   Clock,
   Send,
   ShieldCheck,
+  Briefcase,
+  Building2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { JobTitlesManager } from "@/features/admin/components/job-titles-manager";
 
 interface EmployeeUser {
   id: string;
@@ -35,6 +38,9 @@ interface EmployeeUser {
   role: "employee" | "manager" | "hr" | "admin";
   workMode: string;
   department: string;
+  departmentId?: string;
+  jobTitle?: string;
+  jobTitleId?: string;
   location: string;
   status: "active" | "suspended" | "inactive";
   timezone: string;
@@ -78,7 +84,12 @@ function UsersDirectoryContent() {
   const [inviteModalOpen, setInviteModalOpen] = React.useState(false);
   const [governanceModalOpen, setGovernanceModalOpen] = React.useState(false);
   const [bulkModalOpen, setBulkModalOpen] = React.useState(false);
+  const [jobTitlesManagerOpen, setJobTitlesManagerOpen] = React.useState(false);
   const [selectedUser, setSelectedUser] = React.useState<EmployeeUser | null>(null);
+
+  // Job Titles & Departments Lookups
+  const [jobTitlesList, setJobTitlesList] = React.useState<{ id: string; title_name: string }[]>([]);
+  const [departmentsList, setDepartmentsList] = React.useState<{ id: string; name: string }[]>([]);
 
   // Invite Form State
   const [inviteEmail, setInviteEmail] = React.useState("");
@@ -86,6 +97,8 @@ function UsersDirectoryContent() {
   const [inviteRole, setInviteRole] = React.useState<"employee" | "manager" | "hr" | "admin">(
     "employee"
   );
+  const [inviteJobTitleId, setInviteJobTitleId] = React.useState("");
+  const [inviteDepartmentId, setInviteDepartmentId] = React.useState("");
   const [inviteWorkMode, setInviteWorkMode] = React.useState("remote");
   const [inviteTimezone, setInviteTimezone] = React.useState("Asia/Kolkata");
   const [inviteShiftStart, setInviteShiftStart] = React.useState("09:00");
@@ -95,10 +108,14 @@ function UsersDirectoryContent() {
   // Credentials & Resend Delivery Modal State
   const [createdCredentials, setCreatedCredentials] = React.useState<{
     email: string;
+    inviteLink?: string;
     tempPassword?: string;
     role: string;
+    jobTitle?: string;
+    department?: string;
     shift: string;
     emailSent: boolean;
+    status?: string;
   } | null>(null);
   const [credentialsModalOpen, setCredentialsModalOpen] = React.useState(false);
   const [hasCopied, setHasCopied] = React.useState(false);
@@ -109,6 +126,8 @@ function UsersDirectoryContent() {
   const [govStatus, setGovStatus] = React.useState("active");
   const [govShiftStart, setGovShiftStart] = React.useState("09:00");
   const [govShiftEnd, setGovShiftEnd] = React.useState("17:00");
+  const [govDepartmentId, setGovDepartmentId] = React.useState("");
+  const [govJobTitleId, setGovJobTitleId] = React.useState("");
 
   // Bulk CSV Import State
   const [csvText, setCsvText] = React.useState(SAMPLE_BULK_CSV);
@@ -118,23 +137,48 @@ function UsersDirectoryContent() {
   const loadDirectory = React.useCallback(async () => {
     setLoading(true);
     try {
-      const [{ data: emps }, { data: members }] = await Promise.all([
+      const [{ data: emps }, { data: members }, { data: jobTitlesData }, { data: deptsData }] = await Promise.all([
         (supabase as any)
           .from("employees")
           .select(
-            "id, full_name, email, work_mode, status, timezone, shift_start_time, shift_end_time, departments:department_id(name), locations:primary_location_id(name)"
+            "id, full_name, email, work_mode, status, timezone, shift_start_time, shift_end_time, department_id, job_title_id, departments:department_id(id, name), job_titles:job_title_id(id, title_name), locations:primary_location_id(name)"
           )
           .order("full_name"),
-        (supabase as any).from("organization_members").select("user_id, role, status, shift_start_time, shift_end_time"),
+        (supabase as any)
+          .from("organization_members")
+          .select("user_id, role, status, shift_start_time, shift_end_time, department_id, job_title_id"),
+        (supabase as any)
+          .from("job_titles")
+          .select("id, title_name")
+          .order("title_name"),
+        (supabase as any)
+          .from("departments")
+          .select("id, name")
+          .order("name"),
       ]);
 
-      const memberMap = new Map<string, { role: string; status: string; shiftStartTime: string; shiftEndTime: string }>();
+      if (jobTitlesData) setJobTitlesList(jobTitlesData);
+      if (deptsData) setDepartmentsList(deptsData);
+
+      const memberMap = new Map<
+        string,
+        {
+          role: string;
+          status: string;
+          shiftStartTime: string;
+          shiftEndTime: string;
+          departmentId?: string;
+          jobTitleId?: string;
+        }
+      >();
       for (const m of members || []) {
         memberMap.set(m.user_id, {
           role: m.role,
           status: m.status,
           shiftStartTime: (m.shift_start_time || "09:00:00").slice(0, 5),
           shiftEndTime: (m.shift_end_time || "17:00:00").slice(0, 5),
+          departmentId: m.department_id,
+          jobTitleId: m.job_title_id,
         });
       }
 
@@ -155,6 +199,9 @@ function UsersDirectoryContent() {
               role: (mem?.role || "employee") as EmployeeUser["role"],
               workMode: e.work_mode || "remote",
               department: e.departments?.name || "Unassigned",
+              departmentId: e.department_id || mem?.departmentId || "",
+              jobTitle: e.job_titles?.title_name || "",
+              jobTitleId: e.job_title_id || mem?.jobTitleId || "",
               location: e.locations?.name || "Remote",
               status: effectiveStatus,
               timezone: e.timezone || "UTC",
@@ -179,6 +226,8 @@ function UsersDirectoryContent() {
     setInviteEmail("");
     setInviteName("");
     setInviteRole("employee");
+    setInviteJobTitleId("");
+    setInviteDepartmentId("");
     setInviteWorkMode("remote");
     setInviteTimezone("Asia/Kolkata");
     setInviteShiftStart("09:00");
@@ -201,6 +250,8 @@ function UsersDirectoryContent() {
           email: inviteEmail,
           fullName: inviteName,
           role: inviteRole,
+          jobTitleId: inviteJobTitleId || undefined,
+          departmentId: inviteDepartmentId || undefined,
           workMode: inviteWorkMode,
           timezone: inviteTimezone,
           shiftStartTime: inviteShiftStart + ":00",
@@ -212,18 +263,23 @@ function UsersDirectoryContent() {
 
       toast.success(
         data.emailSent
-          ? `User created and credentials dispatched via Resend!`
-          : `User ${inviteEmail} created successfully!`
+          ? `Invitation email dispatched via Resend!`
+          : `User ${inviteEmail} invited successfully!`
       );
       setInviteModalOpen(false);
 
-      if (data.temporaryPassword) {
+      if (data.inviteLink) {
+        const selectedJobTitleObj = jobTitlesList.find((j) => j.id === inviteJobTitleId);
+        const selectedDeptObj = departmentsList.find((d) => d.id === inviteDepartmentId);
         setCreatedCredentials({
           email: inviteEmail,
-          tempPassword: data.temporaryPassword,
+          inviteLink: data.inviteLink,
           role: inviteRole,
+          jobTitle: selectedJobTitleObj?.title_name,
+          department: selectedDeptObj?.name,
           shift: `${inviteShiftStart} - ${inviteShiftEnd}`,
           emailSent: Boolean(data.emailSent),
+          status: "pending",
         });
         setCredentialsModalOpen(true);
       }
@@ -243,6 +299,8 @@ function UsersDirectoryContent() {
     setGovStatus(user.status === "active" ? "active" : "inactive");
     setGovShiftStart(user.shiftStartTime || "09:00");
     setGovShiftEnd(user.shiftEndTime || "17:00");
+    setGovDepartmentId(user.departmentId || "");
+    setGovJobTitleId(user.jobTitleId || "");
     setGovernanceModalOpen(true);
   };
 
@@ -257,6 +315,7 @@ function UsersDirectoryContent() {
           p_work_mode: govWorkMode,
           p_timezone: govTimezone,
           p_status: govStatus === "active" ? "active" : "inactive",
+          p_department_id: govDepartmentId || null,
         }),
         fetch("/api/admin/users/shift", {
           method: "POST",
@@ -267,6 +326,19 @@ function UsersDirectoryContent() {
             shiftEndTime: govShiftEnd.length === 5 ? govShiftEnd + ":00" : govShiftEnd,
           }),
         }),
+        (supabase.from("organization_members") as any)
+          .update({
+            department_id: govDepartmentId || null,
+            job_title_id: govJobTitleId || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("user_id", selectedUser.id),
+        (supabase.from("employees") as any)
+          .update({
+            job_title_id: govJobTitleId || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", selectedUser.id),
       ]);
 
       if (govRes.error) throw govRes.error;
@@ -441,6 +513,15 @@ function UsersDirectoryContent() {
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
+              onClick={() => setJobTitlesManagerOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-card border border-border-light hover:bg-card-subtle text-text-primary text-xs font-bold shadow-sm transition-all cursor-pointer"
+            >
+              <Briefcase className="w-4 h-4 text-brand-purple" />
+              <span>Manage Company Titles</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => {
                 setBulkPreview(null);
                 setBulkModalOpen(true);
@@ -478,6 +559,7 @@ function UsersDirectoryContent() {
                 <tr>
                   <th className="py-3.5 px-5">Member</th>
                   <th className="py-3.5 px-4">Role</th>
+                  <th className="py-3.5 px-4">Company Title</th>
                   <th className="py-3.5 px-4">Department</th>
                   <th className="py-3.5 px-4">Location</th>
                   <th className="py-3.5 px-4">Timezone</th>
@@ -519,8 +601,25 @@ function UsersDirectoryContent() {
                           </span>
                         )}
                       </td>
-                      <td className="py-4 px-4 text-xs text-text-secondary font-medium">
-                        {u.department}
+                      <td className="py-4 px-4 text-xs font-medium">
+                        {u.jobTitle ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-brand-navy/10 text-brand-navy border border-brand-navy/20">
+                            <Briefcase className="w-3 h-3 text-brand-purple" />
+                            {u.jobTitle}
+                          </span>
+                        ) : (
+                          <span className="text-text-tertiary text-xs italic">Unassigned</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-4 text-xs font-medium">
+                        {u.department && u.department !== "Unassigned" ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-card-subtle border border-border-light text-text-primary">
+                            <Building2 className="w-3 h-3 text-brand-purple" />
+                            {u.department}
+                          </span>
+                        ) : (
+                          <span className="text-text-tertiary text-xs italic">Unassigned</span>
+                        )}
                       </td>
                       <td className="py-4 px-4 text-xs text-text-secondary font-medium">
                         {u.location} ({u.workMode})
@@ -651,13 +750,13 @@ function UsersDirectoryContent() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label
                 htmlFor="invite-role"
                 className="text-xs font-bold text-text-secondary block mb-1"
               >
-                Role
+                System Security Role
               </label>
               <select
                 id="invite-role"
@@ -674,22 +773,66 @@ function UsersDirectoryContent() {
 
             <div>
               <label
-                htmlFor="invite-work-mode"
+                htmlFor="invite-job-title"
                 className="text-xs font-bold text-text-secondary block mb-1"
               >
-                Work Mode
+                Company Job Title
               </label>
               <select
-                id="invite-work-mode"
-                value={inviteWorkMode}
-                onChange={(e) => setInviteWorkMode(e.target.value)}
+                id="invite-job-title"
+                value={inviteJobTitleId}
+                onChange={(e) => setInviteJobTitleId(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
               >
-                <option value="remote">Remote</option>
-                <option value="office">Office</option>
-                <option value="hybrid">Hybrid</option>
+                <option value="">Select Job Title...</option>
+                {jobTitlesList.map((jt) => (
+                  <option key={jt.id} value={jt.id}>
+                    {jt.title_name}
+                  </option>
+                ))}
               </select>
             </div>
+
+            <div>
+              <label
+                htmlFor="invite-department"
+                className="text-xs font-bold text-text-secondary block mb-1"
+              >
+                Department
+              </label>
+              <select
+                id="invite-department"
+                value={inviteDepartmentId}
+                onChange={(e) => setInviteDepartmentId(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+              >
+                <option value="">Select Department...</option>
+                {departmentsList.map((dept) => (
+                  <option key={dept.id} value={dept.id}>
+                    {dept.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label
+              htmlFor="invite-work-mode"
+              className="text-xs font-bold text-text-secondary block mb-1"
+            >
+              Work Mode
+            </label>
+            <select
+              id="invite-work-mode"
+              value={inviteWorkMode}
+              onChange={(e) => setInviteWorkMode(e.target.value)}
+              className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+            >
+              <option value="remote">Remote</option>
+              <option value="office">Office</option>
+              <option value="hybrid">Hybrid</option>
+            </select>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -857,6 +1000,54 @@ function UsersDirectoryContent() {
             </p>
           )}
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor="gov-job-title"
+                className="text-xs font-bold text-text-secondary block mb-1"
+              >
+                Company Job Title {isAdmin ? "(Admin Only)" : ""}
+              </label>
+              <select
+                id="gov-job-title"
+                disabled={!isAdmin}
+                value={govJobTitleId}
+                onChange={(e) => setGovJobTitleId(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary disabled:opacity-50"
+              >
+                <option value="">Unassigned</option>
+                {jobTitlesList.map((jt) => (
+                  <option key={jt.id} value={jt.id}>
+                    {jt.title_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="gov-department"
+                className="text-xs font-bold text-text-secondary block mb-1"
+              >
+                Department {isAdmin ? "(Admin Only)" : ""}
+              </label>
+              <select
+                id="gov-department"
+                disabled={!isAdmin}
+                value={govDepartmentId}
+                onChange={(e) => setGovDepartmentId(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary disabled:opacity-50"
+              >
+                <option value="">Unassigned</option>
+                {departmentsList.map((dept) => (
+                  <option key={dept.id} value={dept.id}>
+                    {dept.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           <div>
             <label
               htmlFor="gov-status"
@@ -894,15 +1085,15 @@ function UsersDirectoryContent() {
         </form>
       </Modal>
 
-      {/* Credentials Created & Resend Dispatch Modal */}
+      {/* Invitation Link & Resend Dispatch Modal */}
       <Modal
         open={credentialsModalOpen && Boolean(createdCredentials)}
         onOpenChange={(open) => {
           setCredentialsModalOpen(open);
           if (!open) setHasCopied(false);
         }}
-        title="Employee Credentials Created"
-        description="Credentials have been generated and dispatched via Resend email"
+        title="Employee Invitation Link Created"
+        description="Single-use secure invitation link (24-hour expiry)"
       >
         <div className="space-y-4 pt-1">
           <div className="p-4 rounded-2xl bg-card-subtle border border-border-light space-y-2.5">
@@ -912,11 +1103,32 @@ function UsersDirectoryContent() {
             </div>
 
             <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-text-secondary">Invitation Status:</span>
+              <span className="font-bold uppercase text-brand-purple bg-brand-purple-light/40 px-2 py-0.5 rounded-full text-[10px]">
+                {createdCredentials?.status || "Pending"}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-xs">
               <span className="font-semibold text-text-secondary">Assigned Role:</span>
               <span className="font-bold uppercase text-brand-purple bg-brand-purple-light/40 px-2 py-0.5 rounded-full text-[10px]">
                 {createdCredentials?.role}
               </span>
             </div>
+
+            {createdCredentials?.jobTitle && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-text-secondary">Company Job Title:</span>
+                <span className="font-bold text-text-primary">{createdCredentials.jobTitle}</span>
+              </div>
+            )}
+
+            {createdCredentials?.department && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-text-secondary">Department:</span>
+                <span className="font-bold text-text-primary">{createdCredentials.department}</span>
+              </div>
+            )}
 
             <div className="flex items-center justify-between text-xs">
               <span className="font-semibold text-text-secondary">Shift Schedule:</span>
@@ -925,36 +1137,69 @@ function UsersDirectoryContent() {
 
             <div className="pt-2 border-t border-border-light/60">
               <span className="block text-xs font-semibold text-text-secondary mb-1">
-                Temporary Password:
+                Single-Use Invite Link (Expires in 24 hours):
               </span>
-              <div className="flex items-center justify-between bg-card p-2.5 rounded-xl border border-border-light">
-                <code className="text-xs font-mono font-bold text-brand-navy select-all">
-                  {createdCredentials?.tempPassword}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-card p-2.5 rounded-xl border border-border-light gap-2">
+                <code className="text-xs font-mono font-bold text-brand-navy select-all break-all">
+                  {createdCredentials?.inviteLink || (typeof window !== "undefined" ? `${window.location.origin}/login` : "/login")}
                 </code>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (createdCredentials?.tempPassword) {
-                      const text = `RemoteHR Credentials\nEmail: ${createdCredentials.email}\nTemporary Password: ${createdCredentials.tempPassword}\nShift: ${createdCredentials.shift}\nLogin URL: ${window.location.origin}/login`;
-                      navigator.clipboard.writeText(text);
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    data-testid="copy-invite-link"
+                    onClick={() => {
+                      const link = createdCredentials?.inviteLink || (typeof window !== "undefined" ? `${window.location.origin}/login` : "/login");
+                      navigator.clipboard.writeText(link);
                       setHasCopied(true);
-                      toast.success("Credentials copied to clipboard!");
-                    }
-                  }}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold transition-all cursor-pointer"
-                >
-                  {hasCopied ? (
-                    <>
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Copied</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copy Credentials</span>
-                    </>
-                  )}
-                </button>
+                      toast.success("Invite link copied to clipboard!");
+                    }}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold transition-all cursor-pointer"
+                  >
+                    {hasCopied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy Invite Link</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!createdCredentials?.email) return;
+                      try {
+                        const res = await fetch("/api/admin/users/invite", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            email: createdCredentials.email,
+                            fullName: createdCredentials.email.split("@")[0],
+                            role: createdCredentials.role,
+                          }),
+                        });
+                        const data = await res.json();
+                        if (res.ok && data.emailSent) {
+                          toast.success("Invitation re-dispatched via Resend!");
+                        } else {
+                          toast.info("Invite refreshed. Copy the link below.");
+                          if (data.inviteLink) {
+                            setCreatedCredentials((prev) => prev ? { ...prev, inviteLink: data.inviteLink } : null);
+                          }
+                        }
+                      } catch {
+                        toast.error("Failed to resend invite.");
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-card border border-border-light hover:bg-card-subtle text-text-primary text-xs font-bold transition-all cursor-pointer"
+                  >
+                    <Send className="w-3.5 h-3.5 text-brand-purple" />
+                    <span>Resend Invite</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -962,11 +1207,11 @@ function UsersDirectoryContent() {
           <div className="p-3 rounded-xl bg-brand-purple/10 border border-brand-purple/20 text-xs text-brand-purple flex items-start gap-2">
             <Send className="w-4 h-4 shrink-0 mt-0.5 text-brand-purple" />
             <div>
-              <span className="font-bold block">Resend Email Delivery</span>
+              <span className="font-bold block">Resend Email Status</span>
               <p className="text-[11px] text-text-secondary mt-0.5">
                 {createdCredentials?.emailSent
-                  ? "A welcome email with login credentials has been delivered to the employee."
-                  : "Email notification dispatched. You can also manually copy the temporary credentials above."}
+                  ? "An invitation email has been delivered to the employee with secure password setup instructions."
+                  : "Email delivery failed via Resend. The invitation link has been generated; please copy the link above and share it directly with the employee."}
               </p>
             </div>
           </div>
@@ -982,6 +1227,13 @@ function UsersDirectoryContent() {
           </div>
         </div>
       </Modal>
+
+      {/* Admin Custom Company Job Titles Manager Modal */}
+      <JobTitlesManager
+        open={jobTitlesManagerOpen}
+        onOpenChange={setJobTitlesManagerOpen}
+        onTitlesUpdated={loadDirectory}
+      />
 
       {/* Bulk CSV Import Modal */}
       <Modal

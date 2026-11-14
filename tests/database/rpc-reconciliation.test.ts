@@ -69,6 +69,7 @@ const FIX = {
   org1Task: "00000000-0000-0000-0000-00000000097c",
   org1KpiDef: "00000000-0000-0000-0000-00000000097d",
   org1KpiPeriod: "00000000-0000-0000-0000-00000000097e",
+  org1JobTitle: "00000000-0000-0000-0000-000000000021",
 };
 
 const NON_AUTHENTICATED_SECDEF_ROLES: Record<string, "service_role" | "supabase_auth_admin" | "trigger"> = {
@@ -146,7 +147,43 @@ const p = (
 
 function buildAuthenticatedMatrix(org1LeaveTypeId: string): Record<string, FunctionMatrixSpec> {
   return {
-    // 1. Admin-only RPCs (17)
+    "aal2_ok()": {
+      crossTenant: na("No UUID argument; derives caller from auth.uid()"),
+      wrongRole: na("Context resolver; callable by all active org roles"),
+      aal1: na("Context resolver; does not require AAL2"),
+      suspendedMember: na("Identity resolver; reads caller claims"),
+    },
+    "mfa_required_for_caller()": {
+      crossTenant: na("No UUID argument; derives caller from auth.uid()"),
+      wrongRole: na("Context resolver; callable by all active org roles"),
+      aal1: na("Context resolver; does not require AAL2"),
+      suspendedMember: na("Identity resolver; reads caller claims"),
+    },
+    // 1. Admin-only RPCs
+    "admin_create_job_title(text,text)": {
+      crossTenant: na("No UUID argument; inserts into caller org via current_org_id()"),
+      wrongRole: p("org1_hr", "aal2", `SELECT public.admin_create_job_title('Matrix Job Title', 'Desc');`),
+      aal1: p("org1_admin", "aal1", `SELECT public.admin_create_job_title('Matrix Job Title', 'Desc');`),
+      suspendedMember: p("org1_suspended", "aal2", `SELECT public.admin_create_job_title('Matrix Job Title', 'Desc');`),
+    },
+    "admin_delete_job_title(uuid)": {
+      crossTenant: p("org2_admin", "aal2", `SELECT public.admin_delete_job_title('${FIX.org1JobTitle}');`),
+      wrongRole: p("org1_hr", "aal2", `SELECT public.admin_delete_job_title('${FIX.org1JobTitle}');`),
+      aal1: p("org1_admin", "aal1", `SELECT public.admin_delete_job_title('${FIX.org1JobTitle}');`),
+      suspendedMember: p("org1_suspended", "aal2", `SELECT public.admin_delete_job_title('${FIX.org1JobTitle}');`),
+    },
+    "admin_set_mfa_policy(boolean)": {
+      crossTenant: na("No UUID argument; updates caller org via current_org_id()"),
+      wrongRole: p("org1_hr", "aal2", `SELECT public.admin_set_mfa_policy(FALSE);`),
+      aal1: p("org1_admin", "aal1", `SELECT public.admin_set_mfa_policy(FALSE);`),
+      suspendedMember: p("org1_suspended", "aal2", `SELECT public.admin_set_mfa_policy(FALSE);`),
+    },
+    "admin_update_job_title(uuid,text,text)": {
+      crossTenant: p("org2_admin", "aal2", `SELECT public.admin_update_job_title('${FIX.org1JobTitle}', 'Matrix Title', 'Desc');`),
+      wrongRole: p("org1_hr", "aal2", `SELECT public.admin_update_job_title('${FIX.org1JobTitle}', 'Matrix Title', 'Desc');`),
+      aal1: p("org1_admin", "aal1", `SELECT public.admin_update_job_title('${FIX.org1JobTitle}', 'Matrix Title', 'Desc');`),
+      suspendedMember: p("org1_suspended", "aal2", `SELECT public.admin_update_job_title('${FIX.org1JobTitle}', 'Matrix Title', 'Desc');`),
+    },
     "admin_add_org_member(uuid,uuid,text)": {
       crossTenant: p("org2_admin", "aal2", `SELECT public.admin_add_org_member('${ORG_1_ID}', '${FIX.org2Employee}', 'employee');`),
       wrongRole: p("org1_hr", "aal2", `SELECT public.admin_add_org_member('${ORG_1_ID}', '${ORG_1.employee}', 'employee');`),
@@ -769,7 +806,7 @@ describe("Item 2 & Section 0d: Live pg_proc Security Matrix & Function Reconcili
     const liveAuthSigs = authRes.rows.map((r) => r.sig).sort();
     const matrix = buildAuthenticatedMatrix(org1LeaveTypeId);
     expect(liveAuthSigs).toEqual(Object.keys(matrix).sort());
-    expect(liveAuthSigs.length).toBe(68);
+    expect(liveAuthSigs.length).toBe(74);
 
     const resolveActor = (actor: CellProbe["actor"], spoofOrgId?: string) => {
       switch (actor) {
@@ -880,7 +917,7 @@ describe("Item 2 & Section 0d: Live pg_proc Security Matrix & Function Reconcili
       console.log(`  N/A cell(s) -> ${m.sig}: ${m.missing.join(" | ")}`);
     }
 
-    expect(summaryRows.length).toBe(68);
+    expect(summaryRows.length).toBe(74);
   }, 60000);
 
   it("3. Verifies audit_logs trigger/RPC writes conform to UPPER_SNAKE naming convention", async () => {

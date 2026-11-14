@@ -32,8 +32,10 @@ test.describe("Phase 3: Organization Admin Role-Based Access Control E2E", () =>
     await page.getByRole("button", { name: /Sign in/i }).click();
 
     await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 30000 });
-    if (page.url().includes("/mfa-challenge") || page.url().includes("/mfa-setup")) {
+    await page.waitForTimeout(1000);
+    if (page.url().includes("/mfa")) {
       const demoBtn = page.getByRole("button", { name: /1-Click/i });
+      await demoBtn.waitFor({ state: "visible", timeout: 10000 }).catch(() => {});
       if (await demoBtn.isVisible().catch(() => false)) {
         await demoBtn.click();
         await page.waitForURL((url) => !url.pathname.includes("/mfa"), { timeout: 30000 });
@@ -68,8 +70,10 @@ test.describe("Phase 3: Organization Admin Role-Based Access Control E2E", () =>
     await page.getByRole("button", { name: /Sign in/i }).click();
 
     await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 30000 });
-    if (page.url().includes("/mfa-challenge") || page.url().includes("/mfa-setup")) {
+    await page.waitForTimeout(1000);
+    if (page.url().includes("/mfa")) {
       const demoBtn = page.getByRole("button", { name: /1-Click/i });
+      await demoBtn.waitFor({ state: "visible", timeout: 10000 }).catch(() => {});
       if (await demoBtn.isVisible().catch(() => false)) {
         await demoBtn.click();
         await page.waitForURL((url) => !url.pathname.includes("/mfa"), { timeout: 30000 });

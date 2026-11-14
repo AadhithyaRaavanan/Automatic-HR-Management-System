@@ -18,6 +18,7 @@ import {
   Save,
   CheckCircle2,
   Building2,
+  Briefcase,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -43,6 +44,7 @@ function ProfilePageContent() {
   const [workMode, setWorkMode] = React.useState("remote");
   const [workTargetMinutes, setWorkTargetMinutes] = React.useState(480);
   const [departmentName, setDepartmentName] = React.useState<string | null>(null);
+  const [jobTitleName, setJobTitleName] = React.useState<string | null>(null);
 
   const resolveAvatarSignedUrl = React.useCallback(
     async (storagePath: string | null) => {
@@ -88,7 +90,7 @@ function ProfilePageContent() {
         const { data, error } = await (supabase as any)
           .from("employees")
           .select(
-            "full_name, email, phone, emergency_contact, avatar_url, timezone, work_mode, work_target_minutes, departments:department_id(name)"
+            "full_name, email, phone, emergency_contact, avatar_url, timezone, work_mode, work_target_minutes, departments:department_id(name), job_titles:job_title_id(title_name)"
           )
           .eq("id", uid)
           .maybeSingle();
@@ -105,6 +107,7 @@ function ProfilePageContent() {
           setWorkMode(data.work_mode || "remote");
           setWorkTargetMinutes(data.work_target_minutes || 480);
           setDepartmentName(data.departments?.name || null);
+          setJobTitleName(data.job_titles?.title_name || null);
           if (data.avatar_url) {
             await resolveAvatarSignedUrl(data.avatar_url);
           }
@@ -283,13 +286,19 @@ function ProfilePageContent() {
                 {fullName || "Employee"}
               </h2>
               <p className="text-xs text-text-tertiary font-mono mt-0.5">{email}</p>
-              <div className="flex items-center justify-center gap-2 mt-2">
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-brand-purple-light text-brand-purple">
                   {userRole}
                 </span>
+                {jobTitleName && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-navy/10 text-brand-navy border border-brand-navy/20 flex items-center gap-1">
+                    <Briefcase className="w-3 h-3 text-brand-purple" />
+                    {jobTitleName}
+                  </span>
+                )}
                 {departmentName && (
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-card-subtle border border-border-light text-text-secondary flex items-center gap-1">
-                    <Building2 className="w-3 h-3" />
+                    <Building2 className="w-3 h-3 text-brand-purple" />
                     {departmentName}
                   </span>
                 )}

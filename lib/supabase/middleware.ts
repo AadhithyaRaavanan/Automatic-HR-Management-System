@@ -95,8 +95,9 @@ export async function updateSession(request: NextRequest) {
 
   // If authenticated user visits login
   if (isTokenValid && pathname === "/login") {
-    // If privileged user has not completed AAL2 MFA, route to MFA flow
-    if ((userRole === "hr" || userRole === "admin") && aal !== "aal2") {
+    // If user has an active enrolled TOTP factor but has not verified AAL2, route to MFA challenge
+    const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aalData?.nextLevel === "aal2" && aal !== "aal2") {
       const url = request.nextUrl.clone();
       url.pathname = "/mfa-challenge";
       return NextResponse.redirect(url);
@@ -139,20 +140,62 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url);
       }
     }
-    // Strict MFA AAL2 Enforcement for HR and Admin roles:
-    // HR and Admins CANNOT reach protected application routes until MFA is verified (AAL2).
-    // They are permitted on /mfa-challenge and /mfa-setup to complete verification/enrollment.
-    if (
-      (userRole === "hr" || userRole === "admin") &&
-      aal !== "aal2" &&
-      !pathname.startsWith("/mfa-challenge") &&
-      !pathname.startsWith("/mfa-setup") &&
-      !pathname.startsWith("/auth")
-    ) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/mfa-challenge";
-      url.searchParams.set("redirect", pathname);
-      return NextResponse.redirect(url);
+
+    // Multi-Factor Authentication Enforcement:
+    // 1. If user has an enrolled factor and current assurance is not aal2 -> /mfa-challenge
+    // 2. If user is HR/Admin in an organization with require_mfa_for_privileged = TRUE,
+    //    and user has NO verified factor -> session at aal1 may reach ONLY /mfa-setup,
+    //    the MFA enroll/verify endpoints, change-password, and sign-out. Everything else redirects to /mfa-setup.
+    if (aal !== "aal2") {
+      let hasEnrolledFactor = false;
+      try {
+        const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        hasEnrolledFactor = aalData?.nextLevel === "aal2";
+      } catch {}
+
+      if (hasEnrolledFactor) {
+        if (
+          !pathname.startsWith("/mfa-challenge") &&
+          !pathname.startsWith("/mfa-setup") &&
+          !pathname.startsWith("/auth")
+        ) {
+          const url = request.nextUrl.clone();
+          url.pathname = "/mfa-challenge";
+          url.searchParams.set("redirect", pathname);
+          return NextResponse.redirect(url);
+        }
+      } else if (userRole === "hr" || userRole === "admin") {
+        let reqMfa = true;
+        try {
+          const orgId = claims?.organization_id || claims?.app_metadata?.organization_id;
+          if (orgId) {
+            const { data: org } = await (supabase as any)
+              .from("organizations")
+              .select("require_mfa_for_privileged")
+              .eq("id", orgId)
+              .maybeSingle();
+            if (org && typeof org.require_mfa_for_privileged === "boolean") {
+              reqMfa = org.require_mfa_for_privileged;
+            }
+          }
+        } catch {}
+
+        if (reqMfa) {
+          const isAllowedUnenrolledPath =
+            pathname.startsWith("/mfa-setup") ||
+            pathname.startsWith("/api/auth") ||
+            pathname.startsWith("/auth") ||
+            pathname === "/login" ||
+            (pathname.startsWith("/settings") && request.nextUrl.searchParams.get("must_change_password") === "true");
+
+          if (!isAllowedUnenrolledPath) {
+            const url = request.nextUrl.clone();
+            url.pathname = "/mfa-setup";
+            url.searchParams.set("redirect", pathname);
+            return NextResponse.redirect(url);
+          }
+        }
+      }
     }
 
     // Team route guard (Manager+)

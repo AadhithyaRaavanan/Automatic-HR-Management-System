@@ -37,6 +37,8 @@ interface TeamMemberRosterItem {
   status: "online" | "idle" | "offline";
   dayStatus: AttendanceDayStatus;
   isLate: boolean;
+  jobTitle?: string;
+  department?: string;
 }
 
 function TeamPageContent() {
@@ -55,7 +57,7 @@ function TeamPageContent() {
       const todayIso = new Date().toISOString().slice(0, 10);
       let empQuery = (supabase as any)
         .from("employees")
-        .select("id, full_name, email, timezone, work_mode, departments:department_id(name)")
+        .select("id, full_name, email, timezone, work_mode, departments:department_id(name), job_titles:job_title_id(title_name)")
         .eq("status", "active")
         .order("full_name");
 
@@ -111,6 +113,8 @@ function TeamPageContent() {
               status: isOnline ? "online" : firstIn ? "idle" : "offline",
               dayStatus: (d?.status || "absent") as AttendanceDayStatus,
               isLate: Boolean(d?.is_late),
+              jobTitle: e.job_titles?.title_name,
+              department: e.departments?.name,
             };
           })
         );
@@ -248,9 +252,21 @@ function TeamPageContent() {
                     </div>
 
                     <div>
-                      <h3 className="text-xs font-bold text-text-primary">{member.name}</h3>
-                      <p className="text-[11px] text-text-tertiary">
-                        {member.subtitle} • {member.timezone}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <h3 className="text-xs font-bold text-text-primary">{member.name}</h3>
+                        {member.jobTitle && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-navy/10 text-brand-navy border border-brand-navy/20">
+                            {member.jobTitle}
+                          </span>
+                        )}
+                        {member.department && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-card border border-border-light text-text-secondary">
+                            {member.department}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-text-tertiary mt-0.5">
+                        {member.timezone}
                       </p>
                     </div>
                   </div>

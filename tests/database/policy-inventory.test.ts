@@ -97,6 +97,9 @@ const EXPECTED_POLICY_INVENTORY: Array<{
   { tablename: "holidays", policyname: "enforce_active_org_membership_holidays", permissive: "RESTRICTIVE", cmd: "ALL" },
   { tablename: "holidays", policyname: "enforce_mfa_aal2_holidays", permissive: "RESTRICTIVE", cmd: "ALL" },
   { tablename: "holidays", policyname: "holidays_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
+  // job_titles (2) — DML now RPC-only; only SELECT policy remains permissive
+  { tablename: "job_titles", policyname: "enforce_active_org_membership_job_titles", permissive: "RESTRICTIVE", cmd: "ALL" },
+  { tablename: "job_titles", policyname: "tenant_job_titles_select_policy", permissive: "PERMISSIVE", cmd: "SELECT" },
   // kiosk_devices (6)
   { tablename: "kiosk_devices", policyname: "enforce_active_org_membership_kiosk_devices", permissive: "RESTRICTIVE", cmd: "ALL" },
   { tablename: "kiosk_devices", policyname: "enforce_mfa_aal2_kiosk_devices", permissive: "RESTRICTIVE", cmd: "ALL" },

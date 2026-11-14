@@ -1,0 +1,125 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@supabase/ssr";
+import { Database } from "@/types/database.types";
+import {
+  getRateLimitKey,
+  getEmailRateLimitKey,
+  checkRateLimit,
+  recordFailure,
+} from "@/lib/auth/rate-limiter";
+import { checkTurnstileRequirements } from "@/lib/auth/turnstile";
+
+function getPlatformTrustedClientIp(request: NextRequest): string {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  if (forwardedFor && forwardedFor.trim()) {
+    const clientIp = forwardedFor.split(",")[0].trim();
+    if (clientIp) return clientIp;
+  }
+  const realIp = request.headers.get("x-real-ip");
+  if (realIp && realIp.trim()) {
+    return realIp.trim();
+  }
+  return "127.0.0.1";
+}
+
+export const dynamic = "force-dynamic";
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const turnstileToken = typeof body.turnstileToken === "string" ? body.turnstileToken : undefined;
+
+    if (!email || !email.includes("@")) {
+      return NextResponse.json(
+        { error: "A valid email address is required." },
+        { status: 400 }
+      );
+    }
+
+    // 1. Validate Cloudflare Turnstile CAPTCHA in production
+    const turnstileCheck = checkTurnstileRequirements(turnstileToken);
+    if (!turnstileCheck.valid) {
+      return NextResponse.json(
+        { error: turnstileCheck.error || "Turnstile verification failed. Please complete the CAPTCHA." },
+        { status: 403 }
+      );
+    }
+
+    // 2. Dual IP & Email Rate Limiting
+    const clientIp = getPlatformTrustedClientIp(request);
+    const ipLimitKey = getRateLimitKey(clientIp, email);
+    const emailLimitKey = getEmailRateLimitKey(email);
+
+    const [ipLimit, emailLimit] = await Promise.all([
+      checkRateLimit(ipLimitKey),
+      checkRateLimit(emailLimitKey),
+    ]);
+
+    if (!ipLimit.allowed || !emailLimit.allowed) {
+      const waitSeconds = Math.max(ipLimit.retryAfterSeconds, emailLimit.retryAfterSeconds);
+      return NextResponse.json(
+        {
+          error: "Too many password reset requests. Please wait before trying again.",
+          retryAfterSeconds: waitSeconds,
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(waitSeconds) },
+        }
+      );
+    }
+
+    // 3. Trigger Supabase Auth signInWithOtp with shouldCreateUser: false
+    let response = NextResponse.next();
+    const supabase = createServerClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll(cookiesToSet: { name: string; value: string; options?: any }[]) {
+            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+            response = NextResponse.next();
+            cookiesToSet.forEach(({ name, value, options }) =>
+              response.cookies.set(name, value, options)
+            );
+          },
+        },
+      }
+    );
+
+    // Record request count for rate limiting
+    await Promise.all([
+      recordFailure(ipLimitKey),
+      recordFailure(emailLimitKey),
+    ]);
+
+    await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: false,
+      },
+    });
+
+    // 4. Return identical generic response to prevent email enumeration
+    const res = NextResponse.json({
+      success: true,
+      message: "If an account exists for this email, a verification code has been sent.",
+    });
+
+    response.cookies.getAll().forEach((cookie) => {
+      res.cookies.set(cookie);
+    });
+
+    return res;
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: err.message || "An unexpected error occurred." },
+      { status: 500 }
+    );
+  }
+}
+

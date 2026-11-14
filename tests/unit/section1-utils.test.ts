@@ -248,6 +248,18 @@ describe("Section 1 API Guard: /api/admin/users/bulk-import", () => {
           }),
         };
       }
+      if (table === "organizations") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              require_mfa_for_privileged: true,
+            },
+            error: null,
+          }),
+        };
+      }
       if (table === "departments") {
         return {
           select: vi.fn().mockReturnThis(),
