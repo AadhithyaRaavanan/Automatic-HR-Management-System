@@ -1,6 +1,6 @@
 # RemoteHR — Automated Test Traceability Matrix
 
-**Generated**: 2026-11-14T16:37:21.765Z  
+**Generated**: 2026-11-14T16:41:02.311Z  
 **Branch**: `phase-2-multitenancy`  
 **Target Specification**: `FEATURES.md` (Sections 1 through 12)  
 
@@ -18,13 +18,13 @@ This matrix maps every documented feature, security control, and capability from
 | 4 | Shift Management & Night Shift Engine | 7 | 7 | 0 | 0 | 0 |
 | 5 | Leave Management & Balance Engine | 9 | 9 | 0 | 0 | 0 |
 | 6 | Task Management & Work Logging | 7 | 6 | 0 | 0 | 1 |
-| 7 | Performance & KPI Engine | 7 | 0 | 0 | 6 | 1 |
+| 7 | Performance & KPI Engine | 7 | 6 | 0 | 0 | 1 |
 | 8 | User Administration & Resend Credential Provisioning | 9 | 0 | 0 | 9 | 0 |
 | 9 | Data Retention, Archiving & Compliance | 7 | 0 | 0 | 5 | 2 |
 | 10 | Analytics, Reporting & Data Portability | 5 | 0 | 0 | 5 | 0 |
 | 11 | Design System & Frontend UX | 4 | 0 | 0 | 4 | 0 |
 | 12 | Persona Capability Matrix | 30 | 0 | 0 | 30 | 0 |
-| **TOTAL** | **All Sections (1-12)** | **119** | **52** | **0** | **63** | **4** |
+| **TOTAL** | **All Sections (1-12)** | **119** | **58** | **0** | **57** | **4** |
 
 ---
 
@@ -119,13 +119,13 @@ This matrix maps every documented feature, security control, and capability from
 
 | Feature ID | Feature Name | Status | Test File(s) | Test Assertion Count |
 | :--- | :--- | :---: | :--- | :---: |
-| [F7.1.1] | 8 Automated KPI Metrics Computation | ⚠️ `INACCURATE` | — | 0 |
-| [F7.1.2] | Division-by-Zero Guarded Total (NULLIF weight guard) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F7.1.3] | Timezone-Correct On-Time Formula | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F7.2.1] | KPI Period Management & Immutability after Closure | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F7.2.2] | Straddling Leave Handling (prorated by working days) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F7.2.3] | Lean Audit Logging (period ID, score count, actor ID) | ❌ `NOT IMPLEMENTED` | — | 0 |
-| [F7.2.4] | Scorecard Export (Excel & CSV) | ❌ `NOT IMPLEMENTED` | — | 0 |
+| [F7.1.1] | 8 Automated KPI Metrics Computation | ⚠️ `INACCURATE` | `tests/database/f7-kpi.test.ts` | 1 |
+| [F7.1.2] | Division-by-Zero Guarded Total (NULLIF weight guard) | ✅ `COVERED` | `tests/database/f7-kpi.test.ts` | 1 |
+| [F7.1.3] | Timezone-Correct On-Time Formula | ✅ `COVERED` | `tests/database/f7-kpi.test.ts` | 1 |
+| [F7.2.1] | KPI Period Management & Immutability after Closure | ✅ `COVERED` | `tests/database/f7-kpi.test.ts` | 1 |
+| [F7.2.2] | Straddling Leave Handling (prorated by working days) | ✅ `COVERED` | `tests/database/f7-kpi.test.ts` | 1 |
+| [F7.2.3] | Lean Audit Logging (period ID, score count, actor ID) | ✅ `COVERED` | `tests/database/f7-kpi.test.ts` | 1 |
+| [F7.2.4] | Scorecard Export (Excel & CSV) | ✅ `COVERED` | `tests/database/f7-kpi.test.ts` | 1 |
 
 ## Section 8: User Administration & Resend Credential Provisioning
 
