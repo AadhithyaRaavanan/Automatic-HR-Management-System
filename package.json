@@ -16,7 +16,9 @@
     "test:e2e": "playwright test",
     "scan:secrets": "node scripts/scan-secrets.mjs",
     "verify:docs": "node scripts/verify-docs.mjs",
-    "verify:release": "node scripts/verify-release.mjs"
+    "verify:release": "node scripts/verify-release.mjs",
+    "demo:reset": "npx supabase db reset && npx tsx scripts/seed-demo-data.ts",
+    "demo:start": "next dev"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
