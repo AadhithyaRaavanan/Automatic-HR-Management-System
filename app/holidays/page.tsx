@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { getTamilMonthInfo } from "@/lib/date/holidays-tn";
 import { createClient } from "@/lib/supabase/client";
 import { HolidayType } from "@/types/database.types";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 interface HolidayDisplayItem {
   id: string;
@@ -180,6 +181,24 @@ function HolidaysPageContent() {
       toast.error("Holiday name and date are required.");
       return;
     }
+
+    if (isDemoModeEnabled()) {
+      const newHol: HolidayDisplayItem = {
+        id: `hol-${Date.now()}`,
+        name: newName.trim(),
+        local_name: newLocalName.trim() || null,
+        date: newDate,
+        region: newRegion,
+        holiday_type: newType,
+        is_active: true,
+      };
+      setHolidays((prev) => [newHol, ...prev]);
+      toast.success(`Holiday "${newName.trim()}" added. (demo session)`);
+      setNewName("");
+      setNewLocalName("");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const { error } = await (supabase.rpc as any)("create_holiday", {
@@ -214,6 +233,27 @@ function HolidaysPageContent() {
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editTarget || !editName.trim() || !editDate) return;
+
+    if (isDemoModeEnabled()) {
+      setHolidays((prev) =>
+        prev.map((h) =>
+          h.id === editTarget.id
+            ? {
+                ...h,
+                name: editName.trim(),
+                local_name: editLocalName.trim() || null,
+                date: editDate,
+                region: editRegion,
+                holiday_type: editType,
+              }
+            : h
+        )
+      );
+      toast.success(`Holiday "${editName.trim()}" updated. (demo session)`);
+      setEditTarget(null);
+      return;
+    }
+
     setSubmitting(true);
     try {
       const { error } = await (supabase.rpc as any)("update_holiday", {
@@ -237,6 +277,12 @@ function HolidaysPageContent() {
   };
 
   const handleDeleteHoliday = async (id: string, name: string) => {
+    if (isDemoModeEnabled()) {
+      setHolidays((prev) => prev.filter((h) => h.id !== id));
+      toast.success(`Holiday "${name}" deleted. (demo session)`);
+      return;
+    }
+
     try {
       const { error } = await (supabase.rpc as any)("delete_holiday", {
         p_holiday_id: id,
@@ -250,6 +296,12 @@ function HolidaysPageContent() {
   };
 
   const handleImportTemplate = async (code: string, year: number) => {
+    if (isDemoModeEnabled()) {
+      toast.success(`Imported 12 holiday(s) for ${year} from ${code} template. (demo session)`);
+      setImportModalOpen(false);
+      return;
+    }
+
     setImporting(true);
     try {
       const { data, error } = await (supabase.rpc as any)("import_holiday_template", {
@@ -275,6 +327,12 @@ function HolidaysPageContent() {
   const handleSavePolicies = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAdmin) return;
+
+    if (isDemoModeEnabled()) {
+      toast.success("Attendance policies updated. (demo session)");
+      return;
+    }
+
     setSavingPolicy(true);
     try {
       const { error } = await (supabase.rpc as any)("admin_update_attendance_policy", {

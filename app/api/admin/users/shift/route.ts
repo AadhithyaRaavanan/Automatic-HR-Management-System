@@ -25,12 +25,23 @@ export async function POST(request: Request) {
     }
 
     // Verify caller role and organization
+    const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
     const { data: callerMember, error: callerError } = await supabaseAdmin
       .from("organization_members")
       .select("organization_id, role")
       .eq("user_id", user.id)
       .eq("status", "active")
       .maybeSingle();
+
+    if (isDemo) {
+      return NextResponse.json({
+        success: true,
+        userId,
+        shiftStartTime: shiftStartTime.length === 5 ? `${shiftStartTime}:00` : shiftStartTime,
+        shiftEndTime: shiftEndTime.length === 5 ? `${shiftEndTime}:00` : shiftEndTime,
+        crossesMidnight: shiftEndTime < shiftStartTime,
+      });
+    }
 
     if (callerError || !callerMember || !["admin", "hr"].includes(callerMember.role)) {
       return NextResponse.json(

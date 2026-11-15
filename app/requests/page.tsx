@@ -19,6 +19,7 @@ import {
 } from "@/features/leave/hooks/use-leave";
 import { createClient } from "@/lib/supabase/client";
 import { RegularizationStatus } from "@/types/database.types";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 import {
   Plus,
   Filter,
@@ -188,6 +189,26 @@ function RequestsPageContent() {
       toast.error("Self-delegation is not permitted.");
       return;
     }
+
+    if (isDemoModeEnabled()) {
+      const newDel: DelegationItem = {
+        id: `del-${Date.now()}`,
+        delegator_id: targetManager,
+        delegate_id: delegateId,
+        starts_on: startsOn,
+        ends_on: endsOn,
+        reason: delegationReason.trim() || "Planned coverage delegation",
+        is_active: true,
+        revoked_at: null,
+        delegator_name: colleagues.find((c) => c.id === targetManager)?.full_name || "Manager",
+        delegate_name: colleagues.find((c) => c.id === delegateId)?.full_name || "Delegate",
+      };
+      setDelegations((prev) => [newDel, ...prev]);
+      toast.success("Approval delegation activated. (demo session)");
+      setDelegationModalOpen(false);
+      return;
+    }
+
     setSavingDelegation(true);
     try {
       const { error } = await (supabase.rpc as any)("create_approval_delegation", {
@@ -209,6 +230,12 @@ function RequestsPageContent() {
   };
 
   const handleRevokeDelegation = async (id: string) => {
+    if (isDemoModeEnabled()) {
+      setDelegations((prev) => prev.filter((d) => d.id !== id));
+      toast.success("Approval delegation revoked. (demo session)");
+      return;
+    }
+
     try {
       const { error } = await (supabase.rpc as any)("revoke_approval_delegation", {
         p_delegation_id: id,

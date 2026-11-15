@@ -30,6 +30,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { JobTitlesManager } from "@/features/admin/components/job-titles-manager";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 interface EmployeeUser {
   id: string;
@@ -182,7 +183,7 @@ function UsersDirectoryContent() {
         });
       }
 
-      if (emps) {
+      if (emps && emps.length > 0) {
         setUsers(
           emps.map((e: any) => {
             const mem = memberMap.get(e.id);
@@ -190,8 +191,8 @@ function UsersDirectoryContent() {
               mem?.status === "suspended"
                 ? "suspended"
                 : e.status === "inactive"
-                ? "inactive"
-                : "active";
+                  ? "inactive"
+                  : "active";
             return {
               id: e.id,
               name: e.full_name,
@@ -210,6 +211,84 @@ function UsersDirectoryContent() {
             };
           })
         );
+      } else if (isDemoModeEnabled()) {
+        const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_users") : null;
+        if (stored) {
+          try {
+            setUsers(JSON.parse(stored));
+            return;
+          } catch {}
+        }
+        const defaultDemoUsers: EmployeeUser[] = [
+          {
+            id: "demo-user-1",
+            name: "James Aathithyan",
+            email: "admin@remotehr.io",
+            role: "admin",
+            workMode: "remote",
+            department: "Engineering",
+            departmentId: "dept-1",
+            jobTitle: "Lead Systems Architect",
+            jobTitleId: "jt-1",
+            location: "San Francisco HQ",
+            status: "active",
+            timezone: "America/Los_Angeles",
+            shiftStartTime: "09:00",
+            shiftEndTime: "17:00",
+          },
+          {
+            id: "demo-user-2",
+            name: "Sarah Jenkins",
+            email: "hr@remotehr.io",
+            role: "hr",
+            workMode: "hybrid",
+            department: "People Operations",
+            departmentId: "dept-2",
+            jobTitle: "HR Director",
+            jobTitleId: "jt-2",
+            location: "New York Hub",
+            status: "active",
+            timezone: "America/New_York",
+            shiftStartTime: "09:00",
+            shiftEndTime: "17:00",
+          },
+          {
+            id: "demo-user-3",
+            name: "David Chen",
+            email: "manager@remotehr.io",
+            role: "manager",
+            workMode: "remote",
+            department: "Engineering",
+            departmentId: "dept-1",
+            jobTitle: "Engineering Manager",
+            jobTitleId: "jt-3",
+            location: "Remote",
+            status: "active",
+            timezone: "America/Chicago",
+            shiftStartTime: "08:30",
+            shiftEndTime: "16:30",
+          },
+          {
+            id: "demo-user-4",
+            name: "Maya Patel",
+            email: "employee@remotehr.io",
+            role: "employee",
+            workMode: "remote",
+            department: "Design",
+            departmentId: "dept-3",
+            jobTitle: "Senior Product Designer",
+            jobTitleId: "jt-4",
+            location: "Remote",
+            status: "active",
+            timezone: "Europe/London",
+            shiftStartTime: "09:00",
+            shiftEndTime: "17:00",
+          },
+        ];
+        setUsers(defaultDemoUsers);
+        if (typeof window !== "undefined") {
+          try { localStorage.setItem("remotehr_demo_users", JSON.stringify(defaultDemoUsers)); } catch {}
+        }
       }
     } catch {
       // Keep UI clean
@@ -241,6 +320,51 @@ function UsersDirectoryContent() {
       toast.error("Please enter email and full name.");
       return;
     }
+
+    if (isDemoModeEnabled()) {
+      const selectedJobTitleObj = jobTitlesList.find((j) => j.id === inviteJobTitleId);
+      const selectedDeptObj = departmentsList.find((d) => d.id === inviteDepartmentId);
+      const newUser: EmployeeUser = {
+        id: `user-${Date.now()}`,
+        name: inviteName,
+        email: inviteEmail,
+        role: inviteRole,
+        workMode: inviteWorkMode,
+        department: selectedDeptObj?.name || "Engineering",
+        departmentId: inviteDepartmentId || "dept-1",
+        jobTitle: selectedJobTitleObj?.title_name || "Specialist",
+        jobTitleId: inviteJobTitleId || "jt-1",
+        location: "Remote",
+        status: "active",
+        timezone: inviteTimezone,
+        shiftStartTime: inviteShiftStart,
+        shiftEndTime: inviteShiftEnd,
+      };
+
+      setUsers((prev) => {
+        const next = [newUser, ...prev];
+        if (typeof window !== "undefined") {
+          try { localStorage.setItem("remotehr_demo_users", JSON.stringify(next)); } catch {}
+        }
+        return next;
+      });
+
+      toast.success(`User ${inviteEmail} invited successfully! (demo session)`);
+      setInviteModalOpen(false);
+      setCreatedCredentials({
+        email: inviteEmail,
+        inviteLink: `${typeof window !== "undefined" ? window.location.origin : ""}/login?demo_invite=${encodeURIComponent(inviteEmail)}`,
+        role: inviteRole,
+        jobTitle: newUser.jobTitle,
+        department: newUser.department,
+        shift: `${inviteShiftStart} - ${inviteShiftEnd}`,
+        emailSent: true,
+        status: "pending",
+      });
+      setCredentialsModalOpen(true);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const res = await fetch("/api/admin/users/invite", {
@@ -307,6 +431,37 @@ function UsersDirectoryContent() {
   const handleSaveGovernance = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser) return;
+
+    if (isDemoModeEnabled()) {
+      const selectedJobTitleObj = jobTitlesList.find((j) => j.id === govJobTitleId);
+      const selectedDeptObj = departmentsList.find((d) => d.id === govDepartmentId);
+      setUsers((prev) => {
+        const next = prev.map((u) =>
+          u.id === selectedUser.id
+            ? {
+                ...u,
+                workMode: govWorkMode,
+                timezone: govTimezone,
+                status: govStatus === "active" ? ("active" as const) : ("inactive" as const),
+                shiftStartTime: govShiftStart,
+                shiftEndTime: govShiftEnd,
+                departmentId: govDepartmentId,
+                department: selectedDeptObj?.name || u.department,
+                jobTitleId: govJobTitleId,
+                jobTitle: selectedJobTitleObj?.title_name || u.jobTitle,
+              }
+            : u
+        );
+        if (typeof window !== "undefined") {
+          try { localStorage.setItem("remotehr_demo_users", JSON.stringify(next)); } catch {}
+        }
+        return next;
+      });
+      toast.success("Governance & shift schedule updated successfully.");
+      setGovernanceModalOpen(false);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const [govRes, shiftFetchRes] = await Promise.all([
@@ -361,6 +516,18 @@ function UsersDirectoryContent() {
     targetUserId: string,
     newRole: "employee" | "manager" | "hr" | "admin"
   ) => {
+    if (isDemoModeEnabled()) {
+      setUsers((prev) => {
+        const next = prev.map((u) => (u.id === targetUserId ? { ...u, role: newRole } : u));
+        if (typeof window !== "undefined") {
+          try { localStorage.setItem("remotehr_demo_users", JSON.stringify(next)); } catch {}
+        }
+        return next;
+      });
+      toast.success(`Role updated to ${newRole}.`);
+      return;
+    }
+
     if (!organizationId) {
       toast.error("Organization context unavailable.");
       return;
@@ -387,6 +554,23 @@ function UsersDirectoryContent() {
     ) {
       return;
     }
+
+    if (isDemoModeEnabled()) {
+      setUsers((prev) => {
+        const next = prev.map((u) =>
+          u.id === user.id
+            ? { ...u, status: u.status === "active" ? ("inactive" as const) : ("active" as const) }
+            : u
+        );
+        if (typeof window !== "undefined") {
+          try { localStorage.setItem("remotehr_demo_users", JSON.stringify(next)); } catch {}
+        }
+        return next;
+      });
+      toast.success(`${user.name} status updated.`);
+      return;
+    }
+
     try {
       const res = await fetch("/api/admin/users/deactivate", {
         method: "POST",
@@ -411,6 +595,12 @@ function UsersDirectoryContent() {
     ) {
       return;
     }
+
+    if (isDemoModeEnabled()) {
+      toast.success(`MFA factors reset for ${user.name}. (demo session)`);
+      return;
+    }
+
     try {
       const res = await fetch("/api/admin/users/reset-mfa", {
         method: "POST",
@@ -427,6 +617,11 @@ function UsersDirectoryContent() {
   };
 
   const handleForceSignOut = async (user: EmployeeUser) => {
+    if (isDemoModeEnabled()) {
+      toast.success(`Active sessions revoked for ${user.name}. (demo session)`);
+      return;
+    }
+
     try {
       const res = await fetch("/api/admin/users/force-signout", {
         method: "POST",
@@ -464,8 +659,7 @@ function UsersDirectoryContent() {
         );
       } else {
         toast.success(
-          `Imported ${data.importedCount ?? 0} employee(s)${
-            data.failedCount ? ` (${data.failedCount} failed)` : ""
+          `Imported ${data.importedCount ?? 0} employee(s)${data.failedCount ? ` (${data.failedCount} failed)` : ""
           }.`
         );
         await loadDirectory();
@@ -1141,15 +1335,14 @@ function UsersDirectoryContent() {
               </span>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-card p-2.5 rounded-xl border border-border-light gap-2">
                 <code className="text-xs font-mono font-bold text-brand-navy select-all break-all">
-                  {createdCredentials?.inviteLink || `${typeof window !== "undefined" ? window.location.origin : ""}/login`}
+                  {createdCredentials?.inviteLink || (typeof window !== "undefined" ? `${window.location.origin}/login` : "/login")}
                 </code>
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
                     data-testid="copy-invite-link"
                     onClick={() => {
-                      const origin = typeof window !== "undefined" ? window.location.origin : "";
-                      const link = createdCredentials?.inviteLink || `${origin}/login`;
+                      const link = createdCredentials?.inviteLink || (typeof window !== "undefined" ? `${window.location.origin}/login` : "/login");
                       navigator.clipboard.writeText(link);
                       setHasCopied(true);
                       toast.success("Invite link copied to clipboard!");
@@ -1236,151 +1429,151 @@ function UsersDirectoryContent() {
         onTitlesUpdated={loadDirectory}
       />
 
-      {/* Bulk CSV Import Modal */}
-      <Modal
-        open={bulkModalOpen}
-        onOpenChange={setBulkModalOpen}
-        title="Bulk CSV Employee Import"
-        description="Validate rows in dry-run preview, download formula-sanitized error reports, and commit valid invites"
-        className="max-w-2xl"
-      >
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <label
-              htmlFor="bulk-csv-file"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card-subtle hover:bg-card border border-border-light text-xs font-bold text-text-primary cursor-pointer"
-            >
-              <Upload className="w-3.5 h-3.5 text-brand-purple" />
-              <span>Upload .CSV File</span>
-              <input
-                id="bulk-csv-file"
-                type="file"
-                accept=".csv,text/csv"
-                onChange={handleCsvFileUpload}
-                className="hidden"
-              />
-            </label>
+    {/* Bulk CSV Import Modal */ }
+    < Modal
+  open = { bulkModalOpen }
+  onOpenChange = { setBulkModalOpen }
+  title = "Bulk CSV Employee Import"
+  description = "Validate rows in dry-run preview, download formula-sanitized error reports, and commit valid invites"
+  className = "max-w-2xl"
+    >
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label
+          htmlFor="bulk-csv-file"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card-subtle hover:bg-card border border-border-light text-xs font-bold text-text-primary cursor-pointer"
+        >
+          <Upload className="w-3.5 h-3.5 text-brand-purple" />
+          <span>Upload .CSV File</span>
+          <input
+            id="bulk-csv-file"
+            type="file"
+            accept=".csv,text/csv"
+            onChange={handleCsvFileUpload}
+            className="hidden"
+          />
+        </label>
 
-            <button
-              type="button"
-              onClick={() => {
-                setCsvText(SAMPLE_BULK_CSV);
-                setBulkPreview(null);
-              }}
-              className="text-xs font-bold text-brand-purple hover:underline cursor-pointer"
-            >
-              Load Sample CSV
-            </button>
-          </div>
+        <button
+          type="button"
+          onClick={() => {
+            setCsvText(SAMPLE_BULK_CSV);
+            setBulkPreview(null);
+          }}
+          className="text-xs font-bold text-brand-purple hover:underline cursor-pointer"
+        >
+          Load Sample CSV
+        </button>
+      </div>
 
-          <div>
-            <label
-              htmlFor="bulk-csv-textarea"
-              className="block text-xs font-bold text-text-primary mb-1"
-            >
-              CSV Data
-            </label>
-            <textarea
-              id="bulk-csv-textarea"
-              rows={5}
-              value={csvText}
-              onChange={(e) => {
-                setCsvText(e.target.value);
-                setBulkPreview(null);
-              }}
-              className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs font-mono text-text-primary"
-            />
-          </div>
+      <div>
+        <label
+          htmlFor="bulk-csv-textarea"
+          className="block text-xs font-bold text-text-primary mb-1"
+        >
+          CSV Data
+        </label>
+        <textarea
+          id="bulk-csv-textarea"
+          rows={5}
+          value={csvText}
+          onChange={(e) => {
+            setCsvText(e.target.value);
+            setBulkPreview(null);
+          }}
+          className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs font-mono text-text-primary"
+        />
+      </div>
 
-          {/* Preview Results Table */}
-          {bulkPreview && (
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-2xl bg-card-subtle border border-border-light text-xs">
-                <span className="font-bold text-text-primary">
-                  {bulkPreview.dryRun ? "Validation Preview:" : "Import Summary:"}{" "}
-                  {bulkPreview.dryRun
-                    ? `${bulkPreview.validCount ?? 0} valid, ${bulkPreview.invalidCount ?? 0} error(s)`
-                    : `${bulkPreview.importedCount ?? 0} imported, ${bulkPreview.failedCount ?? 0} failed`}
-                </span>
-                {bulkPreview.errorCsv && (
-                  <button
-                    type="button"
-                    onClick={handleDownloadErrorCsv}
-                    className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold cursor-pointer"
-                  >
-                    <Download className="w-3 h-3" />
-                    <span>Download Error CSV</span>
-                  </button>
-                )}
-              </div>
-
-              <div className="max-h-48 overflow-y-auto border border-border-light rounded-2xl">
-                <table className="w-full text-left text-[11px]">
-                  <thead className="bg-card-subtle border-b border-border-light text-text-tertiary uppercase font-bold">
-                    <tr>
-                      <th className="py-2 px-3">Row</th>
-                      <th className="py-2 px-3">Email</th>
-                      <th className="py-2 px-3">Name</th>
-                      <th className="py-2 px-3">Role</th>
-                      <th className="py-2 px-3">Validation</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border-light">
-                    {bulkPreview.rows.map((r) => (
-                      <tr key={r.rowNumber}>
-                        <td className="py-2 px-3 font-mono">{r.rowNumber}</td>
-                        <td className="py-2 px-3 font-medium">{r.email || "--"}</td>
-                        <td className="py-2 px-3">{r.fullName || "--"}</td>
-                        <td className="py-2 px-3 uppercase">{r.role}</td>
-                        <td className="py-2 px-3">
-                          {r.valid ? (
-                            <span className="inline-flex items-center gap-1 text-emerald-600 font-bold">
-                              <CheckCircle2 className="w-3 h-3" />
-                              Ready
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-rose-600 font-bold">
-                              <XCircle className="w-3 h-3 shrink-0" />
-                              {r.errors.join("; ")}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          <div className="flex flex-wrap justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setBulkModalOpen(false)}
-              className="px-4 py-2 rounded-xl bg-card-subtle text-text-secondary text-xs font-bold cursor-pointer"
-            >
-              Close
-            </button>
-            <button
-              type="button"
-              disabled={bulkLoading}
-              onClick={() => handleBulkPreviewOrCommit(true)}
-              className="px-4 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold cursor-pointer disabled:opacity-50"
-            >
-              {bulkLoading ? "Validating..." : "Validate Preview"}
-            </button>
-            {bulkPreview?.dryRun && (bulkPreview.validCount ?? 0) > 0 && (
+      {/* Preview Results Table */}
+      {bulkPreview && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-2xl bg-card-subtle border border-border-light text-xs">
+            <span className="font-bold text-text-primary">
+              {bulkPreview.dryRun ? "Validation Preview:" : "Import Summary:"}{" "}
+              {bulkPreview.dryRun
+                ? `${bulkPreview.validCount ?? 0} valid, ${bulkPreview.invalidCount ?? 0} error(s)`
+                : `${bulkPreview.importedCount ?? 0} imported, ${bulkPreview.failedCount ?? 0} failed`}
+            </span>
+            {bulkPreview.errorCsv && (
               <button
                 type="button"
-                disabled={bulkLoading}
-                onClick={() => handleBulkPreviewOrCommit(false)}
-                className="px-4 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold cursor-pointer disabled:opacity-50"
+                onClick={handleDownloadErrorCsv}
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold cursor-pointer"
               >
-                Import {bulkPreview.validCount} Employee(s)
+                <Download className="w-3 h-3" />
+                <span>Download Error CSV</span>
               </button>
             )}
           </div>
+
+          <div className="max-h-48 overflow-y-auto border border-border-light rounded-2xl">
+            <table className="w-full text-left text-[11px]">
+              <thead className="bg-card-subtle border-b border-border-light text-text-tertiary uppercase font-bold">
+                <tr>
+                  <th className="py-2 px-3">Row</th>
+                  <th className="py-2 px-3">Email</th>
+                  <th className="py-2 px-3">Name</th>
+                  <th className="py-2 px-3">Role</th>
+                  <th className="py-2 px-3">Validation</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-light">
+                {bulkPreview.rows.map((r) => (
+                  <tr key={r.rowNumber}>
+                    <td className="py-2 px-3 font-mono">{r.rowNumber}</td>
+                    <td className="py-2 px-3 font-medium">{r.email || "--"}</td>
+                    <td className="py-2 px-3">{r.fullName || "--"}</td>
+                    <td className="py-2 px-3 uppercase">{r.role}</td>
+                    <td className="py-2 px-3">
+                      {r.valid ? (
+                        <span className="inline-flex items-center gap-1 text-emerald-600 font-bold">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Ready
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-rose-600 font-bold">
+                          <XCircle className="w-3 h-3 shrink-0" />
+                          {r.errors.join("; ")}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
+      )}
+
+      <div className="flex flex-wrap justify-end gap-2 pt-2">
+        <button
+          type="button"
+          onClick={() => setBulkModalOpen(false)}
+          className="px-4 py-2 rounded-xl bg-card-subtle text-text-secondary text-xs font-bold cursor-pointer"
+        >
+          Close
+        </button>
+        <button
+          type="button"
+          disabled={bulkLoading}
+          onClick={() => handleBulkPreviewOrCommit(true)}
+          className="px-4 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold cursor-pointer disabled:opacity-50"
+        >
+          {bulkLoading ? "Validating..." : "Validate Preview"}
+        </button>
+        {bulkPreview?.dryRun && (bulkPreview.validCount ?? 0) > 0 && (
+          <button
+            type="button"
+            disabled={bulkLoading}
+            onClick={() => handleBulkPreviewOrCommit(false)}
+            className="px-4 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold cursor-pointer disabled:opacity-50"
+          >
+            Import {bulkPreview.validCount} Employee(s)
+          </button>
+        )}
+      </div>
+    </div>
       </Modal>
     </div>
   );

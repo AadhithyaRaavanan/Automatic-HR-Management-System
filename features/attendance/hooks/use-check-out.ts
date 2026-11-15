@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { formatDurationMinutes } from "@/lib/date/timezone";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 export function useCheckOut() {
   const queryClient = useQueryClient();
@@ -14,6 +15,12 @@ export function useCheckOut() {
       const { data, error } = await (supabase.rpc as any)("check_out");
 
       if (error) {
+        if (isDemoModeEnabled()) {
+          return {
+            duration_minutes: 480,
+            work_date: new Date().toISOString().slice(0, 10),
+          };
+        }
         throw new Error(error.message);
       }
       return data;

@@ -187,11 +187,50 @@ export default function ShiftsAdminPage() {
       toast.error("Please enter template name and code.");
       return;
     }
-    setIsSubmitting(true);
 
     const fmtStart = `${startTime}:00`;
     const fmtEnd = `${endTime}:00`;
 
+    if (isDemoModeEnabled()) {
+      if (editingShift) {
+        setShifts((prev) => {
+          const next = prev.map((s) =>
+            s.id === editingShift.id
+              ? { ...s, name, code, startTime: fmtStart, endTime: fmtEnd, breakMinutes, graceMinutes }
+              : s
+          );
+          if (typeof window !== "undefined") {
+            try { localStorage.setItem("remotehr_demo_shifts", JSON.stringify(next)); } catch {}
+          }
+          return next;
+        });
+        toast.success(`Shift template "${name}" updated!`);
+      } else {
+        setShifts((prev) => {
+          const next = [
+            ...prev,
+            {
+              id: `shift-${Date.now()}`,
+              name,
+              code,
+              startTime: fmtStart,
+              endTime: fmtEnd,
+              breakMinutes,
+              graceMinutes,
+            },
+          ];
+          if (typeof window !== "undefined") {
+            try { localStorage.setItem("remotehr_demo_shifts", JSON.stringify(next)); } catch {}
+          }
+          return next;
+        });
+        toast.success(`Shift template "${name}" created!`);
+      }
+      setShiftModalOpen(false);
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
       if (editingShift) {
         const { error } = await (supabase.rpc as any)("admin_update_shift_template", {
@@ -287,6 +326,19 @@ export default function ShiftsAdminPage() {
     if (!confirm(`Are you sure you want to delete shift ${shift.name}?`)) {
       return;
     }
+
+    if (isDemoModeEnabled()) {
+      setShifts((prev) => {
+        const next = prev.filter((s) => s.id !== shift.id);
+        if (typeof window !== "undefined") {
+          try { localStorage.setItem("remotehr_demo_shifts", JSON.stringify(next)); } catch {}
+        }
+        return next;
+      });
+      toast.success(`Shift ${shift.name} deleted.`);
+      return;
+    }
+
     try {
       const { error } = await (supabase.rpc as any)("admin_delete_shift_template", {
         p_shift_id: shift.id,
@@ -322,6 +374,13 @@ export default function ShiftsAdminPage() {
       toast.error("Please select an employee and shift template.");
       return;
     }
+
+    if (isDemoModeEnabled()) {
+      toast.success("Shift assigned successfully! (demo session)");
+      setAssignModalOpen(false);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const { error } = await (supabase.rpc as any)("admin_assign_shift", {

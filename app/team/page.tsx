@@ -26,6 +26,7 @@ import {
   Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 interface TeamMemberRosterItem {
   id: string;
@@ -118,9 +119,95 @@ function TeamPageContent() {
             };
           })
         );
+      } else if (isDemoModeEnabled()) {
+        setRoster([
+          {
+            id: "demo-member-1",
+            name: "Sarah Jenkins",
+            subtitle: "People Operations",
+            timezone: "America/New_York",
+            checkInTime: "09:05 AM",
+            loggedMinutes: 420,
+            status: "online",
+            dayStatus: "present",
+            isLate: false,
+            jobTitle: "HR Director",
+            department: "People Operations",
+          },
+          {
+            id: "demo-member-2",
+            name: "David Chen",
+            subtitle: "Engineering",
+            timezone: "America/Chicago",
+            checkInTime: "08:30 AM",
+            loggedMinutes: 480,
+            status: "online",
+            dayStatus: "present",
+            isLate: false,
+            jobTitle: "Engineering Manager",
+            department: "Engineering",
+          },
+          {
+            id: "demo-member-3",
+            name: "Maya Patel",
+            subtitle: "Design",
+            timezone: "Europe/London",
+            checkInTime: "09:12 AM",
+            loggedMinutes: 380,
+            status: "idle",
+            dayStatus: "present",
+            isLate: true,
+            jobTitle: "Senior Product Designer",
+            department: "Design",
+          },
+        ]);
       }
     } catch {
-      setRoster([]);
+      if (isDemoModeEnabled()) {
+        setRoster([
+          {
+            id: "demo-member-1",
+            name: "Sarah Jenkins",
+            subtitle: "People Operations",
+            timezone: "America/New_York",
+            checkInTime: "09:05 AM",
+            loggedMinutes: 420,
+            status: "online",
+            dayStatus: "present",
+            isLate: false,
+            jobTitle: "HR Director",
+            department: "People Operations",
+          },
+          {
+            id: "demo-member-2",
+            name: "David Chen",
+            subtitle: "Engineering",
+            timezone: "America/Chicago",
+            checkInTime: "08:30 AM",
+            loggedMinutes: 480,
+            status: "online",
+            dayStatus: "present",
+            isLate: false,
+            jobTitle: "Engineering Manager",
+            department: "Engineering",
+          },
+          {
+            id: "demo-member-3",
+            name: "Maya Patel",
+            subtitle: "Design",
+            timezone: "Europe/London",
+            checkInTime: "09:12 AM",
+            loggedMinutes: 380,
+            status: "idle",
+            dayStatus: "present",
+            isLate: true,
+            jobTitle: "Senior Product Designer",
+            department: "Design",
+          },
+        ]);
+      } else {
+        setRoster([]);
+      }
     } finally {
       setRosterLoading(false);
     }

@@ -145,8 +145,47 @@ export default function LocationsAdminPage() {
       toast.error("Please enter location name and code.");
       return;
     }
-    setIsSubmitting(true);
 
+    if (isDemoModeEnabled()) {
+      if (editingLoc) {
+        setLocations((prev) => {
+          const next = prev.map((l) =>
+            l.id === editingLoc.id
+              ? { ...l, name, code, address, timezone, workingHours }
+              : l
+          );
+          if (typeof window !== "undefined") {
+            try { localStorage.setItem("remotehr_demo_locations", JSON.stringify(next)); } catch {}
+          }
+          return next;
+        });
+        toast.success(`Location "${name}" updated!`);
+      } else {
+        setLocations((prev) => {
+          const next = [
+            ...prev,
+            {
+              id: `loc-${Date.now()}`,
+              name,
+              code,
+              address,
+              timezone,
+              workingHours,
+              weeklyOffDays: [0, 6],
+            },
+          ];
+          if (typeof window !== "undefined") {
+            try { localStorage.setItem("remotehr_demo_locations", JSON.stringify(next)); } catch {}
+          }
+          return next;
+        });
+        toast.success(`Location "${name}" created!`);
+      }
+      setModalOpen(false);
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
       if (editingLoc) {
         const { error } = await (supabase.rpc as any)("admin_update_location", {
@@ -242,6 +281,19 @@ export default function LocationsAdminPage() {
     if (!confirm(`Are you sure you want to delete ${loc.name}? Associated employees will have their primary location unlinked.`)) {
       return;
     }
+
+    if (isDemoModeEnabled()) {
+      setLocations((prev) => {
+        const next = prev.filter((l) => l.id !== loc.id);
+        if (typeof window !== "undefined") {
+          try { localStorage.setItem("remotehr_demo_locations", JSON.stringify(next)); } catch {}
+        }
+        return next;
+      });
+      toast.success(`Location ${loc.name} deleted.`);
+      return;
+    }
+
     try {
       const { error } = await (supabase.rpc as any)("admin_delete_location", {
         p_location_id: loc.id,

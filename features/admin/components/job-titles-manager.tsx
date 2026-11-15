@@ -77,6 +77,27 @@ export function JobTitlesManager({
       return;
     }
 
+    if (isDemoModeEnabled()) {
+      const newTitle: JobTitleItem = {
+        id: `jt-${Date.now()}`,
+        title_name: newTitleName.trim(),
+        description: newDescription.trim() || null,
+        created_at: new Date().toISOString(),
+      };
+      setTitles((prev) => {
+        const next = [newTitle, ...prev];
+        if (typeof window !== "undefined") {
+          try { localStorage.setItem("remotehr_demo_job_titles", JSON.stringify(next)); } catch {}
+        }
+        return next;
+      });
+      toast.success(`Job title '${newTitleName}' created successfully.`);
+      setNewTitleName("");
+      setNewDescription("");
+      onTitlesUpdated?.();
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await fetch("/api/admin/job-titles", {
@@ -140,6 +161,20 @@ export function JobTitlesManager({
       return;
     }
 
+    if (isDemoModeEnabled()) {
+      setTitles((prev) => {
+        const next = prev.map((t) => t.id === id ? { ...t, title_name: editTitleName.trim(), description: editDescription.trim() || null } : t);
+        if (typeof window !== "undefined") {
+          try { localStorage.setItem("remotehr_demo_job_titles", JSON.stringify(next)); } catch {}
+        }
+        return next;
+      });
+      toast.success("Job title updated successfully.");
+      handleCancelEdit();
+      onTitlesUpdated?.();
+      return;
+    }
+
     try {
       const res = await fetch("/api/admin/job-titles", {
         method: "PUT",
@@ -177,6 +212,19 @@ export function JobTitlesManager({
 
   const handleDelete = async (t: JobTitleItem) => {
     if (!confirm(`Are you sure you want to delete the job title '${t.title_name}'?`)) {
+      return;
+    }
+
+    if (isDemoModeEnabled()) {
+      setTitles((prev) => {
+        const next = prev.filter((item) => item.id !== t.id);
+        if (typeof window !== "undefined") {
+          try { localStorage.setItem("remotehr_demo_job_titles", JSON.stringify(next)); } catch {}
+        }
+        return next;
+      });
+      toast.success(`Job title '${t.title_name}' deleted.`);
+      onTitlesUpdated?.();
       return;
     }
 

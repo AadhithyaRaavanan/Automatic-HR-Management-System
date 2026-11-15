@@ -21,6 +21,7 @@ import {
   Briefcase,
 } from "lucide-react";
 import { toast } from "sonner";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 function ProfilePageContent() {
   const { userId, userRole, isLoaded } = useAppSession();
@@ -111,9 +112,29 @@ function ProfilePageContent() {
           if (data.avatar_url) {
             await resolveAvatarSignedUrl(data.avatar_url);
           }
+        } else if (isDemoModeEnabled()) {
+          setFullName("James Aathithyan");
+          setEmail("admin@remotehr.io");
+          setPhone("+1 (555) 019-2834");
+          setEmergencyContact("Elena Aathithyan (+1 555-019-9988)");
+          setTimezone("America/Los_Angeles");
+          setWorkMode("remote");
+          setWorkTargetMinutes(480);
+          setDepartmentName("Engineering");
+          setJobTitleName("Lead Systems Architect");
         }
       } catch {
-        // Ignore transient fetch errors
+        if (isDemoModeEnabled()) {
+          setFullName("James Aathithyan");
+          setEmail("admin@remotehr.io");
+          setPhone("+1 (555) 019-2834");
+          setEmergencyContact("Elena Aathithyan (+1 555-019-9988)");
+          setTimezone("America/Los_Angeles");
+          setWorkMode("remote");
+          setWorkTargetMinutes(480);
+          setDepartmentName("Engineering");
+          setJobTitleName("Lead Systems Architect");
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -128,6 +149,11 @@ function ProfilePageContent() {
     e.preventDefault();
     if (!fullName.trim()) {
       toast.error("Full name is required.");
+      return;
+    }
+
+    if (isDemoModeEnabled()) {
+      toast.success("Profile updated successfully. (demo session)");
       return;
     }
 
@@ -163,6 +189,13 @@ function ProfilePageContent() {
   const handleAvatarSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (isDemoModeEnabled()) {
+      const preview = URL.createObjectURL(file);
+      setAvatarSignedUrl(preview);
+      toast.success("Avatar updated successfully! (demo session)");
+      return;
+    }
 
     const uid =
       userId ||

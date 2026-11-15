@@ -22,6 +22,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 function SettingsPageContent() {
   const { userId, userRole } = useAppSession();
@@ -89,6 +90,13 @@ function SettingsPageContent() {
       return;
     }
 
+    if (isDemoModeEnabled()) {
+      toast.success("Your password has been updated successfully! (demo session)");
+      setNewPassword("");
+      setConfirmPassword("");
+      return;
+    }
+
     setIsChangingPassword(true);
     try {
       const { error } = await supabase.auth.updateUser({
@@ -132,6 +140,17 @@ function SettingsPageContent() {
   }, [supabase]);
 
   const handleToggleMfaPolicy = async () => {
+    if (isDemoModeEnabled()) {
+      const nextVal = !requireMfaPolicy;
+      setRequireMfaPolicy(nextVal);
+      toast.success(
+        nextVal
+          ? "Organization MFA policy updated: MFA is now mandatory for HR and Admins. (demo session)"
+          : "Organization MFA policy updated: MFA is now optional for privileged accounts. (demo session)"
+      );
+      return;
+    }
+
     setIsUpdatingPolicy(true);
     try {
       const nextVal = !requireMfaPolicy;

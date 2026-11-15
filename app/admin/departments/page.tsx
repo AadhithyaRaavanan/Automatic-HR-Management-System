@@ -156,8 +156,52 @@ export default function DepartmentsAdminPage() {
       toast.error("Please enter department name and code.");
       return;
     }
-    setIsSubmitting(true);
 
+    if (isDemoModeEnabled()) {
+      if (editingDept) {
+        setDepartments((prev) => {
+          const next = prev.map((d) =>
+            d.id === editingDept.id
+              ? {
+                  ...d,
+                  name,
+                  code,
+                  parentId: parentId || undefined,
+                  parentName: prev.find((p) => p.id === parentId)?.name,
+                }
+              : d
+          );
+          if (typeof window !== "undefined") {
+            try { localStorage.setItem("remotehr_demo_departments", JSON.stringify(next)); } catch {}
+          }
+          return next;
+        });
+        toast.success(`Department "${name}" updated!`);
+      } else {
+        setDepartments((prev) => {
+          const next = [
+            ...prev,
+            {
+              id: `dept-${Date.now()}`,
+              name,
+              code,
+              parentId: parentId || undefined,
+              parentName: prev.find((p) => p.id === parentId)?.name,
+              memberCount: 0,
+            },
+          ];
+          if (typeof window !== "undefined") {
+            try { localStorage.setItem("remotehr_demo_departments", JSON.stringify(next)); } catch {}
+          }
+          return next;
+        });
+        toast.success(`Department "${name}" created!`);
+      }
+      setModalOpen(false);
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
       if (editingDept) {
         const { error } = await (supabase.rpc as any)("admin_update_department", {
@@ -262,6 +306,19 @@ export default function DepartmentsAdminPage() {
     if (!confirm(`Are you sure you want to delete ${dept.name}? Employees will be unlinked.`)) {
       return;
     }
+
+    if (isDemoModeEnabled()) {
+      setDepartments((prev) => {
+        const next = prev.filter((d) => d.id !== dept.id);
+        if (typeof window !== "undefined") {
+          try { localStorage.setItem("remotehr_demo_departments", JSON.stringify(next)); } catch {}
+        }
+        return next;
+      });
+      toast.success(`Department ${dept.name} deleted.`);
+      return;
+    }
+
     try {
       const { error } = await (supabase.rpc as any)("admin_delete_department", {
         p_department_id: dept.id,

@@ -16,6 +16,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 interface TableHealthMetric {
   table_name: string;
@@ -197,6 +198,10 @@ export default function OrganizationSettingsAdminPage() {
 
   const handleSaveOrgSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isDemoModeEnabled()) {
+      toast.success("Organization profile updated with full audit diff! (demo session)");
+      return;
+    }
     setIsSavingOrg(true);
     try {
       const { error } = await (supabase.rpc as any)("admin_update_organization_settings", {
@@ -215,6 +220,10 @@ export default function OrganizationSettingsAdminPage() {
 
   const handleSavePolicy = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isDemoModeEnabled()) {
+      toast.success("Attendance policy updated with full audit diff! (demo session)");
+      return;
+    }
     setIsSavingPolicy(true);
     try {
       const { error } = await (supabase.rpc as any)("admin_update_attendance_policy", {
@@ -238,6 +247,11 @@ export default function OrganizationSettingsAdminPage() {
       return;
     }
 
+    if (isDemoModeEnabled()) {
+      toast.success("Retention policy saved and audited! (demo session)");
+      return;
+    }
+
     setIsSavingRetention(true);
     try {
       const { error } = await (supabase.rpc as any)("admin_update_retention_policy", {
@@ -256,6 +270,10 @@ export default function OrganizationSettingsAdminPage() {
   };
 
   const handleDryRunPreview = async () => {
+    if (isDemoModeEnabled()) {
+      toast.success("Dry-run retention preview refreshed (zero rows modified).");
+      return;
+    }
     setIsRunningDryRun(true);
     try {
       const res = await fetch("/api/admin/retention/run", {
@@ -275,6 +293,10 @@ export default function OrganizationSettingsAdminPage() {
   };
 
   const handleRunArchiveAndCleanup = async () => {
+    if (isDemoModeEnabled()) {
+      toast.success("Archive & cleanup complete (demo session): 0 sessions, 0 audit logs purged.");
+      return;
+    }
     setIsRunningCleanup(true);
     try {
       const res = await fetch("/api/admin/retention/run", {

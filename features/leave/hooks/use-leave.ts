@@ -49,6 +49,19 @@ export function useLeavePolicies() {
           leave_types:leave_type_id (*)
         `)
         .order("created_at");
+      if (error && isDemoModeEnabled()) {
+        return mockLeaveTypes.map((lt) => ({
+          id: `pol-${lt.id}`,
+          organization_id: lt.organization_id,
+          leave_type_id: lt.id,
+          yearly_quota: 15,
+          monthly_cap: 3,
+          carry_forward_max: 5,
+          probation_allowed: true,
+          effective_from: "2026-01-01",
+          leave_types: lt,
+        }));
+      }
       if (error) throw error;
       return (data || []) as LeavePolicy[];
     },
@@ -72,6 +85,49 @@ export function useLeaveBalances(employeeId?: string) {
       }
 
       const { data, error } = await query;
+      if ((error || !data || data.length === 0) && isDemoModeEnabled()) {
+        return [
+          {
+            id: "bal-1",
+            organization_id: "00000000-0000-0000-0000-000000000001",
+            employee_id: employeeId || "demo-emp",
+            leave_type_id: mockLeaveTypes[0].id,
+            allocated: 12,
+            used: 2,
+            carried_forward: 0,
+            adjusted: 0,
+            period_start: "2026-01-01",
+            period_end: "2026-12-31",
+            leave_types: mockLeaveTypes[0],
+          },
+          {
+            id: "bal-2",
+            organization_id: "00000000-0000-0000-0000-000000000001",
+            employee_id: employeeId || "demo-emp",
+            leave_type_id: mockLeaveTypes[1].id,
+            allocated: 10,
+            used: 1,
+            carried_forward: 0,
+            adjusted: 0,
+            period_start: "2026-01-01",
+            period_end: "2026-12-31",
+            leave_types: mockLeaveTypes[1],
+          },
+          {
+            id: "bal-3",
+            organization_id: "00000000-0000-0000-0000-000000000001",
+            employee_id: employeeId || "demo-emp",
+            leave_type_id: mockLeaveTypes[2].id,
+            allocated: 15,
+            used: 3,
+            carried_forward: 2,
+            adjusted: 0,
+            period_start: "2026-01-01",
+            period_end: "2026-12-31",
+            leave_types: mockLeaveTypes[2],
+          },
+        ] as LeaveBalance[];
+      }
       if (error) throw error;
       return (data || []) as LeaveBalance[];
     },
@@ -97,6 +153,44 @@ export function useLeaveRequests(status?: string) {
       }
 
       const { data, error } = await query;
+      if ((error || !data || data.length === 0) && isDemoModeEnabled()) {
+        const demoRequests: LeaveRequest[] = [
+          {
+            id: "lr-demo-1",
+            organization_id: "00000000-0000-0000-0000-000000000001",
+            employee_id: "demo-emp",
+            leave_type_id: mockLeaveTypes[0].id,
+            start_date: "2026-11-20",
+            end_date: "2026-11-21",
+            total_days: 2,
+            day_part: "full",
+            reason: "Family event and personal commitment",
+            status: "pending",
+            created_at: new Date().toISOString(),
+            leave_types: mockLeaveTypes[0],
+            employees: { id: "demo-emp", full_name: "James Aathithyan", email: "admin@remotehr.io", department_id: "dept-1" },
+          },
+          {
+            id: "lr-demo-2",
+            organization_id: "00000000-0000-0000-0000-000000000001",
+            employee_id: "demo-emp-2",
+            leave_type_id: mockLeaveTypes[1].id,
+            start_date: "2026-11-10",
+            end_date: "2026-11-10",
+            total_days: 0.5,
+            day_part: "first_half",
+            reason: "Doctor appointment in morning",
+            status: "approved",
+            created_at: "2026-11-09T08:00:00Z",
+            leave_types: mockLeaveTypes[1],
+            employees: { id: "demo-emp-2", full_name: "Maya Patel", email: "employee@remotehr.io", department_id: "dept-3" },
+          },
+        ];
+        if (status && status !== "all") {
+          return demoRequests.filter((r) => r.status === status);
+        }
+        return demoRequests;
+      }
       if (error) throw error;
       return (data || []) as LeaveRequest[];
     },
@@ -293,6 +387,9 @@ export function useHRAssignLeave() {
         p_reason: reason,
         p_override_balance: overrideBalance,
       });
+      if (error && isDemoModeEnabled()) {
+        return { success: true };
+      }
       if (error) throw error;
       return data;
     },
@@ -329,6 +426,9 @@ export function useHRAdjustBalance() {
         p_amount: amount,
         p_reason: reason,
       });
+      if (error && isDemoModeEnabled()) {
+        return { success: true };
+      }
       if (error) throw error;
       return data;
     },
@@ -361,6 +461,9 @@ export function useDeclareCompanyDayOff() {
         p_title: title,
         p_department_id: departmentId || undefined,
       });
+      if (error && isDemoModeEnabled()) {
+        return { success: true };
+      }
       if (error) throw error;
       return data;
     },
