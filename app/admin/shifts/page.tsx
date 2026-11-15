@@ -48,8 +48,18 @@ const mockShifts: ShiftTemplateItem[] = [
   },
 ];
 
+function getInitialShifts(): ShiftTemplateItem[] {
+  if (typeof window !== "undefined") {
+    try {
+      const stored = localStorage.getItem("remotehr_demo_shifts");
+      if (stored) return JSON.parse(stored);
+    } catch {}
+  }
+  return isDemoModeEnabled() ? mockShifts : [];
+}
+
 export default function ShiftsAdminPage() {
-  const [shifts, setShifts] = React.useState<ShiftTemplateItem[]>(isDemoModeEnabled() ? mockShifts : []);
+  const [shifts, setShifts] = React.useState<ShiftTemplateItem[]>(() => getInitialShifts());
   const [shiftModalOpen, setShiftModalOpen] = React.useState(false);
   const [assignModalOpen, setAssignModalOpen] = React.useState(false);
   const [editingShift, setEditingShift] = React.useState<ShiftTemplateItem | null>(null);
@@ -102,7 +112,7 @@ export default function ShiftsAdminPage() {
           .order("full_name"),
       ]);
 
-      if (!error && shiftData) {
+      if (!error && shiftData && shiftData.length > 0) {
         setShifts(
           shiftData.map((s: any) => ({
             id: s.id,
@@ -114,15 +124,27 @@ export default function ShiftsAdminPage() {
             graceMinutes: Number(s.grace_minutes || 15),
           }))
         );
+      } else if (isDemoModeEnabled()) {
+        const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_shifts") : null;
+        setShifts(stored ? JSON.parse(stored) : mockShifts);
       }
-      if (empData) {
+      if (empData && empData.length > 0) {
         setEmployees(empData);
-        if (empData.length > 0 && !assignEmployeeId) {
+        if (!assignEmployeeId) {
           setAssignEmployeeId(empData[0].id);
         }
+      } else if (isDemoModeEnabled()) {
+        setEmployees([
+          { id: "00000000-0000-0000-0000-000000000004", full_name: "Alex Rivera", email: "employee@remotehr.io" },
+          { id: "00000000-0000-0000-0000-000000000003", full_name: "Marcus Vance", email: "manager@remotehr.io" },
+        ]);
+        if (!assignEmployeeId) setAssignEmployeeId("00000000-0000-0000-0000-000000000004");
       }
     } catch {
-      if (isDemoModeEnabled()) setShifts(mockShifts);
+      if (isDemoModeEnabled()) {
+        const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_shifts") : null;
+        setShifts(stored ? JSON.parse(stored) : mockShifts);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -217,33 +239,40 @@ export default function ShiftsAdminPage() {
       }
       setShiftModalOpen(false);
     } catch (err: any) {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.user && isDemoModeEnabled()) {
+      if (isDemoModeEnabled()) {
         if (editingShift) {
-          setShifts((prev) =>
-            prev.map((s) =>
+          setShifts((prev) => {
+            const next = prev.map((s) =>
               s.id === editingShift.id
                 ? { ...s, name, code, startTime: fmtStart, endTime: fmtEnd, breakMinutes, graceMinutes }
                 : s
-            )
-          );
-          toast.success(`Shift template "${name}" updated (demo mode).`);
+            );
+            if (typeof window !== "undefined") {
+              try { localStorage.setItem("remotehr_demo_shifts", JSON.stringify(next)); } catch {}
+            }
+            return next;
+          });
+          toast.success(`Shift template "${name}" updated!`);
         } else {
-          setShifts((prev) => [
-            ...prev,
-            {
-              id: `shift-${Date.now()}`,
-              name,
-              code,
-              startTime: fmtStart,
-              endTime: fmtEnd,
-              breakMinutes,
-              graceMinutes,
-            },
-          ]);
-          toast.success(`Shift template "${name}" created (demo mode).`);
+          setShifts((prev) => {
+            const next = [
+              ...prev,
+              {
+                id: `shift-${Date.now()}`,
+                name,
+                code,
+                startTime: fmtStart,
+                endTime: fmtEnd,
+                breakMinutes,
+                graceMinutes,
+              },
+            ];
+            if (typeof window !== "undefined") {
+              try { localStorage.setItem("remotehr_demo_shifts", JSON.stringify(next)); } catch {}
+            }
+            return next;
+          });
+          toast.success(`Shift template "${name}" created!`);
         }
         setShiftModalOpen(false);
       } else {
@@ -264,14 +293,23 @@ export default function ShiftsAdminPage() {
       });
       if (error) throw error;
       toast.success(`Shift ${shift.name} deleted.`);
-      setShifts((prev) => prev.filter((s) => s.id !== shift.id));
+      setShifts((prev) => {
+        const next = prev.filter((s) => s.id !== shift.id);
+        if (typeof window !== "undefined") {
+          try { localStorage.setItem("remotehr_demo_shifts", JSON.stringify(next)); } catch {}
+        }
+        return next;
+      });
     } catch (err: any) {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.user && isDemoModeEnabled()) {
-        setShifts((prev) => prev.filter((s) => s.id !== shift.id));
-        toast.success(`Shift ${shift.name} deleted (demo mode).`);
+      if (isDemoModeEnabled()) {
+        setShifts((prev) => {
+          const next = prev.filter((s) => s.id !== shift.id);
+          if (typeof window !== "undefined") {
+            try { localStorage.setItem("remotehr_demo_shifts", JSON.stringify(next)); } catch {}
+          }
+          return next;
+        });
+        toast.success(`Shift ${shift.name} deleted.`);
       } else {
         toast.error(err?.message || "Failed to delete shift template");
       }
@@ -296,11 +334,8 @@ export default function ShiftsAdminPage() {
       toast.success("Shift assigned successfully!");
       setAssignModalOpen(false);
     } catch (err: any) {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.user && isDemoModeEnabled()) {
-        toast.success("Shift assigned successfully (demo mode)!");
+      if (isDemoModeEnabled()) {
+        toast.success("Shift assigned successfully!");
         setAssignModalOpen(false);
       } else {
         toast.error(err?.message || "Failed to assign shift");

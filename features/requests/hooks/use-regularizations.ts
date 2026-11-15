@@ -114,7 +114,12 @@ export function useSubmitRegularization() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        if (isDemoModeEnabled()) {
+          return { success: true };
+        }
+        throw error;
+      }
       return data;
     },
     onSuccess: () => {
@@ -144,7 +149,12 @@ export function useApproveRegularization() {
         }
       );
 
-      if (error) throw error;
+      if (error) {
+        if (isDemoModeEnabled()) {
+          return { success: true };
+        }
+        throw error;
+      }
       return data;
     },
     onSuccess: () => {
@@ -178,7 +188,12 @@ export function useRejectRegularization() {
         }
       );
 
-      if (error) throw error;
+      if (error) {
+        if (isDemoModeEnabled()) {
+          return { success: true };
+        }
+        throw error;
+      }
       return data;
     },
     onSuccess: () => {

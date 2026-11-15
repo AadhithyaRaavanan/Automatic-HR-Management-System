@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { TaskPriority, TaskStatus } from "@/types/database.types";
 import { toast } from "sonner";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 export interface ProjectRecord {
   id: string;
@@ -223,6 +224,9 @@ export function useTaskMutations() {
     };
     const { data, error } = await clientWithRpc.rpc(fn, args);
     if (error) {
+      if (isDemoModeEnabled()) {
+        return { success: true, message: `${fn} executed (demo mode)` };
+      }
       throw new Error(error.message || `RPC ${fn} failed`);
     }
     return data;

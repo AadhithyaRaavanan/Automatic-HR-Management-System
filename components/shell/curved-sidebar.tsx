@@ -28,6 +28,7 @@ import {
   Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 export interface NavItem {
   label: string;
@@ -94,9 +95,8 @@ export function CurvedSidebar({
   const privilegedRoles = ["admin", "hr", "manager"];
   const effectiveRole =
     (propRole && privilegedRoles.includes(propRole) ? propRole : null) ||
-    cachedRole ||
-    propRole ||
-    "employee";
+    (cachedRole && privilegedRoles.includes(cachedRole) ? cachedRole : null) ||
+    (isDemoModeEnabled() ? (cachedRole || "admin") : (cachedRole || propRole || "employee"));
 
   const navItems = React.useMemo(() => {
     return baseNavItems.filter((item) => {
@@ -108,16 +108,16 @@ export function CurvedSidebar({
   return (
     <aside
       className={cn(
-        "sticky top-0 left-0 hidden md:flex flex-col items-center justify-between py-4 px-2 w-[76px] lg:w-[82px] h-screen max-h-screen bg-brand-purple text-white shadow-float select-none shrink-0 z-40 rounded-r-[28px] lg:rounded-r-[32px] transition-all overflow-hidden",
+        "sticky top-0 left-0 hidden md:flex flex-col items-center justify-between py-3 px-2 w-[72px] lg:w-[78px] h-screen max-h-screen bg-brand-purple text-white shadow-float select-none shrink-0 z-40 rounded-r-[28px] lg:rounded-r-[32px] transition-all overflow-hidden",
         className
       )}
       aria-label="Sidebar navigation"
     >
       {/* Top Brand Logo / Icon */}
-      <div className="shrink-0 mb-2">
+      <div className="shrink-0 mb-1">
         <Link
           href="/"
-          className="w-10 h-10 rounded-2xl bg-white/20 hover:bg-white/30 backdrop-blur-md flex items-center justify-center text-white transition-all shadow-inner"
+          className="w-9 h-9 rounded-2xl bg-white/20 hover:bg-white/30 backdrop-blur-md flex items-center justify-center text-white transition-all shadow-inner"
           title="RemoteHR Home"
         >
           <div className="grid grid-cols-2 gap-1 p-1">
@@ -130,7 +130,10 @@ export function CurvedSidebar({
       </div>
 
       {/* Navigation Item Stack - Scrollable without visible scrollbars */}
-      <nav className="flex-1 w-full overflow-y-auto overflow-x-hidden no-scrollbar flex flex-col items-center gap-2 py-1">
+      <nav
+        className="flex-1 w-full overflow-y-auto overflow-x-hidden no-scrollbar flex flex-col items-center gap-1.5 py-1"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+      >
         {navItems.map((item) => {
           const isActive =
             item.href === "/"
@@ -143,14 +146,14 @@ export function CurvedSidebar({
               <Link
                 href={item.href}
                 className={cn(
-                  "relative flex items-center justify-center w-10 h-10 lg:w-11 lg:h-11 rounded-2xl transition-all duration-200",
+                  "relative flex items-center justify-center w-9 h-9 lg:w-10 lg:h-10 rounded-2xl transition-all duration-150",
                   isActive
                     ? "bg-white text-brand-purple shadow-md scale-105"
                     : "text-white/80 hover:text-white hover:bg-white/15"
                 )}
                 title={item.label}
               >
-                <Icon className="w-4 h-4 lg:w-5 lg:h-5 shrink-0" />
+                <Icon className="w-4 h-4 lg:w-4.5 lg:h-4.5 shrink-0" />
 
                 {/* Badge */}
                 {item.badge && (
@@ -179,37 +182,37 @@ export function CurvedSidebar({
       </nav>
 
       {/* Bottom Profile / Quick Action */}
-      <div className="shrink-0 pt-2 border-t border-white/15 flex flex-col items-center gap-2">
+      <div className="shrink-0 pt-2 border-t border-white/15 flex flex-col items-center gap-1.5">
         <Link
           href="/profile"
           className={cn(
-            "w-9 h-9 lg:w-10 lg:h-10 rounded-2xl flex items-center justify-center text-white transition-colors",
+            "w-8 h-8 lg:w-9 lg:h-9 rounded-xl flex items-center justify-center text-white transition-colors",
             pathname.startsWith("/profile") ? "bg-white text-brand-purple shadow-sm" : "bg-white/10 hover:bg-white/20"
           )}
           title="My Profile"
           aria-label="My Profile"
         >
-          <UserCircle className="w-4 h-4 lg:w-5 lg:h-5" />
+          <UserCircle className="w-4 h-4 lg:w-4.5 lg:h-4.5" />
         </Link>
         <Link
           href="/settings"
           className={cn(
-            "w-9 h-9 lg:w-10 lg:h-10 rounded-2xl flex items-center justify-center text-white transition-colors",
+            "w-8 h-8 lg:w-9 lg:h-9 rounded-xl flex items-center justify-center text-white transition-colors",
             pathname.startsWith("/settings") ? "bg-white text-brand-purple shadow-sm" : "bg-white/10 hover:bg-white/20"
           )}
           title="Account Settings"
           aria-label="Account Settings"
         >
-          <Settings className="w-4 h-4 lg:w-5 lg:h-5" />
+          <Settings className="w-4 h-4 lg:w-4.5 lg:h-4.5" />
         </Link>
         <button
           type="button"
           onClick={handleSignOut}
-          className="w-9 h-9 lg:w-10 lg:h-10 rounded-2xl bg-white/10 hover:bg-red-500/80 flex items-center justify-center text-white transition-colors cursor-pointer"
+          className="w-8 h-8 lg:w-9 lg:h-9 rounded-xl bg-white/10 hover:bg-red-500/80 flex items-center justify-center text-white transition-colors cursor-pointer"
           title="Sign Out"
           aria-label="Sign Out"
         >
-          <LogOut className="w-4 h-4 lg:w-5 lg:h-5" />
+          <LogOut className="w-4 h-4 lg:w-4.5 lg:h-4.5" />
         </button>
       </div>
     </aside>

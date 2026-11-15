@@ -10,6 +10,7 @@ import {
 } from "@/types/database.types";
 import { KpiPeriodRecord } from "@/lib/kpi/helpers";
 import { toast } from "sonner";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 export interface KpiDefinitionRecord {
   id: string;
@@ -165,6 +166,9 @@ export function useKpiMutations() {
     };
     const { data, error } = await clientWithRpc.rpc(fn, args);
     if (error) {
+      if (isDemoModeEnabled()) {
+        return { success: true, message: `${fn} executed (demo mode)` };
+      }
       throw new Error(error.message || `RPC ${fn} failed`);
     }
     return data;

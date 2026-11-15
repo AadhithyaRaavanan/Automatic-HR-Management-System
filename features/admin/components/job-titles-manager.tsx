@@ -4,6 +4,7 @@ import * as React from "react";
 import { Briefcase, Plus, Edit2, Trash2, Check, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/modal";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 export interface JobTitleItem {
   id: string;
@@ -11,6 +12,13 @@ export interface JobTitleItem {
   description: string | null;
   created_at: string;
 }
+
+const defaultMockJobTitles: JobTitleItem[] = [
+  { id: "jt-1", title_name: "Staff Software Engineer", description: "Technical leader", created_at: "2026-01-01" },
+  { id: "jt-2", title_name: "Frontend Engineer", description: "UI/UX implementation", created_at: "2026-01-01" },
+  { id: "jt-3", title_name: "HR Operations Specialist", description: "People operations", created_at: "2026-01-01" },
+  { id: "jt-4", title_name: "Product Manager", description: "Product roadmap", created_at: "2026-01-01" },
+];
 
 interface JobTitlesManagerProps {
   open: boolean;
@@ -42,9 +50,15 @@ export function JobTitlesManager({
       const res = await fetch("/api/admin/job-titles");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load job titles");
-      setTitles(data.titles || []);
+      const loaded = data.titles && data.titles.length > 0 ? data.titles : (isDemoModeEnabled() ? defaultMockJobTitles : []);
+      setTitles(loaded);
     } catch (err: any) {
-      toast.error(err.message || "Failed to load job titles");
+      if (isDemoModeEnabled()) {
+        const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_job_titles") : null;
+        setTitles(stored ? JSON.parse(stored) : defaultMockJobTitles);
+      } else {
+        toast.error(err.message || "Failed to load job titles");
+      }
     } finally {
       setLoading(false);
     }
@@ -82,7 +96,27 @@ export function JobTitlesManager({
       await loadTitles();
       onTitlesUpdated?.();
     } catch (err: any) {
-      toast.error(err.message || "Failed to create job title");
+      if (isDemoModeEnabled()) {
+        const newTitle: JobTitleItem = {
+          id: `jt-${Date.now()}`,
+          title_name: newTitleName.trim(),
+          description: newDescription.trim() || null,
+          created_at: new Date().toISOString(),
+        };
+        setTitles((prev) => {
+          const next = [newTitle, ...prev];
+          if (typeof window !== "undefined") {
+            try { localStorage.setItem("remotehr_demo_job_titles", JSON.stringify(next)); } catch {}
+          }
+          return next;
+        });
+        toast.success(`Job title '${newTitleName}' created successfully.`);
+        setNewTitleName("");
+        setNewDescription("");
+        onTitlesUpdated?.();
+      } else {
+        toast.error(err.message || "Failed to create job title");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -124,7 +158,20 @@ export function JobTitlesManager({
       await loadTitles();
       onTitlesUpdated?.();
     } catch (err: any) {
-      toast.error(err.message || "Failed to update job title");
+      if (isDemoModeEnabled()) {
+        setTitles((prev) => {
+          const next = prev.map((t) => t.id === id ? { ...t, title_name: editTitleName.trim(), description: editDescription.trim() || null } : t);
+          if (typeof window !== "undefined") {
+            try { localStorage.setItem("remotehr_demo_job_titles", JSON.stringify(next)); } catch {}
+          }
+          return next;
+        });
+        toast.success("Job title updated successfully.");
+        handleCancelEdit();
+        onTitlesUpdated?.();
+      } else {
+        toast.error(err.message || "Failed to update job title");
+      }
     }
   };
 
@@ -144,7 +191,19 @@ export function JobTitlesManager({
       await loadTitles();
       onTitlesUpdated?.();
     } catch (err: any) {
-      toast.error(err.message || "Failed to delete job title");
+      if (isDemoModeEnabled()) {
+        setTitles((prev) => {
+          const next = prev.filter((item) => item.id !== t.id);
+          if (typeof window !== "undefined") {
+            try { localStorage.setItem("remotehr_demo_job_titles", JSON.stringify(next)); } catch {}
+          }
+          return next;
+        });
+        toast.success(`Job title '${t.title_name}' deleted.`);
+        onTitlesUpdated?.();
+      } else {
+        toast.error(err.message || "Failed to delete job title");
+      }
     }
   };
 

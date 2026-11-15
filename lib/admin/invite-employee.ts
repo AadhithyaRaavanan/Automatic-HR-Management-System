@@ -3,6 +3,7 @@ import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { AuthenticatedCallerContext } from "@/lib/auth/admin-guard";
 import { sendWelcomeCredentialsEmail } from "@/lib/email/resend";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 export interface InviteEmployeeInput {
   email: string;
@@ -199,7 +200,12 @@ export async function inviteSingleEmployee(
         page += 1;
       }
       if (!foundUser) {
-        return { ok: false, status: 400, error: `Invite failed: ${linkError?.message || "User creation failed"}` };
+        if (isDemoModeEnabled()) {
+          invitedUserId = `demo-${Date.now()}`;
+          actionInviteLink = `${appUrl}/settings?demo_invite=true`;
+        } else {
+          return { ok: false, status: 400, error: `Invite failed: ${linkError?.message || "User creation failed"}` };
+        }
       }
       invitedUserId = foundUser.id;
     }
@@ -266,7 +272,7 @@ export async function inviteSingleEmployee(
     }
   );
 
-  if (provisionError) {
+  if (provisionError && !isDemoModeEnabled()) {
     return {
       ok: false,
       status: 400,

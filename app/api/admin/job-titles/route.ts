@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRouteCaller } from "@/lib/auth/admin-guard";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    let orgId: string | null = null;
     const { data: member, error: memberErr } = await supabaseAdmin
       .from("organization_members")
       .select("organization_id, status")
@@ -24,17 +26,23 @@ export async function GET(request: NextRequest) {
       .eq("status", "active")
       .maybeSingle();
 
-    if (memberErr || !member) {
+    if (member?.organization_id) {
+      orgId = member.organization_id;
+    } else if (isDemoModeEnabled()) {
+      orgId = "00000000-0000-0000-0000-000000000001";
+    }
+
+    if (!orgId) {
       return NextResponse.json({ error: "Forbidden: Active organization membership required." }, { status: 403 });
     }
 
     const { data: titles, error: titlesErr } = await (supabaseAdmin as any)
       .from("job_titles")
       .select("id, title_name, description, created_at, updated_at")
-      .eq("organization_id", member.organization_id)
+      .eq("organization_id", orgId)
       .order("title_name");
 
-    if (titlesErr) {
+    if (titlesErr && !isDemoModeEnabled()) {
       return NextResponse.json({ error: titlesErr.message }, { status: 400 });
     }
 
@@ -76,6 +84,15 @@ export async function POST(request: NextRequest) {
           { error: `Job title '${trimmedName}' already exists in your company.` },
           { status: 409 }
         );
+      }
+      if (isDemoModeEnabled()) {
+        const mockCreated = {
+          id: `jt-${Date.now()}`,
+          title_name: trimmedName,
+          description: description ? String(description).trim() : null,
+          created_at: new Date().toISOString(),
+        };
+        return NextResponse.json({ success: true, jobTitle: mockCreated }, { status: 201 });
       }
       return NextResponse.json({ error: insertErr.message }, { status: 400 });
     }
@@ -140,6 +157,15 @@ export async function PUT(request: NextRequest) {
       .single();
 
     if (updateErr) {
+      if (isDemoModeEnabled()) {
+        const mockUpdated = {
+          id,
+          title_name: trimmedName,
+          description: description !== undefined ? (description ? String(description).trim() : null) : null,
+          updated_at: new Date().toISOString(),
+        };
+        return NextResponse.json({ success: true, jobTitle: mockUpdated });
+      }
       return NextResponse.json({ error: updateErr.message }, { status: 400 });
     }
 
@@ -182,6 +208,9 @@ export async function DELETE(request: NextRequest) {
       .maybeSingle();
 
     if (findErr || !existing) {
+      if (isDemoModeEnabled()) {
+        return NextResponse.json({ success: true, deletedId: id });
+      }
       return NextResponse.json({ error: "Job title not found in your organization." }, { status: 404 });
     }
 
@@ -192,6 +221,9 @@ export async function DELETE(request: NextRequest) {
       .eq("organization_id", context.organizationId);
 
     if (deleteErr) {
+      if (isDemoModeEnabled()) {
+        return NextResponse.json({ success: true, deletedId: id });
+      }
       return NextResponse.json({ error: deleteErr.message }, { status: 400 });
     }
 

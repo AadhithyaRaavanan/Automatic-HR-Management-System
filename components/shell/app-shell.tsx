@@ -9,6 +9,7 @@ import { BottomTabBar } from "@/components/shell/bottom-tab-bar";
 import { OnboardingTour } from "@/components/shared/onboarding-tour";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 export type AppUserRole = "employee" | "manager" | "hr" | "admin";
 
@@ -113,13 +114,14 @@ function getInitialSession(propRole?: AppUserRole): AppSessionState {
       }
     } catch {}
   }
+  const defaultRole: AppUserRole = isDemoModeEnabled() ? "admin" : "employee";
   return {
     userId: null,
     organizationId: null,
-    userRole: "employee",
+    userRole: defaultRole,
     fullName: null,
     timezone: "UTC",
-    isLoaded: false,
+    isLoaded: isDemoModeEnabled(),
     departmentName: null,
     jobTitleName: null,
     requireMfaForPrivileged: true,
@@ -150,7 +152,7 @@ export function AppShell({
         (typeof window !== "undefined"
           ? (localStorage.getItem("remotehr_cached_role") as AppUserRole)
           : null) ||
-        "employee";
+        (isDemoModeEnabled() ? "admin" : "employee");
       let resolvedUserId: string | null = null;
       let resolvedOrgId: string | null = null;
       let resolvedName: string | null = null;
@@ -236,6 +238,18 @@ export function AppShell({
         }
       } catch {
         // Keep safe fallback
+      }
+
+      if (isDemoModeEnabled()) {
+        const storedRole =
+          (typeof window !== "undefined"
+            ? (localStorage.getItem("remotehr_cached_role") as AppUserRole)
+            : null) || getCookieRole();
+        if (storedRole && ["employee", "manager", "hr", "admin"].includes(storedRole)) {
+          resolvedRole = storedRole;
+        } else if (!resolvedRole || resolvedRole === "employee") {
+          resolvedRole = "admin";
+        }
       }
 
       if (!active) return;

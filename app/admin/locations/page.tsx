@@ -48,8 +48,18 @@ const mockLocations: LocationItem[] = [
   },
 ];
 
+function getInitialLocations(): LocationItem[] {
+  if (typeof window !== "undefined") {
+    try {
+      const stored = localStorage.getItem("remotehr_demo_locations");
+      if (stored) return JSON.parse(stored);
+    } catch {}
+  }
+  return isDemoModeEnabled() ? mockLocations : [];
+}
+
 export default function LocationsAdminPage() {
-  const [locations, setLocations] = React.useState<LocationItem[]>(isDemoModeEnabled() ? mockLocations : []);
+  const [locations, setLocations] = React.useState<LocationItem[]>(() => getInitialLocations());
   const [modalOpen, setModalOpen] = React.useState(false);
   const [editingLoc, setEditingLoc] = React.useState<LocationItem | null>(null);
 
@@ -79,7 +89,7 @@ export default function LocationsAdminPage() {
         .select("id, name, code, address, timezone, working_hours, weekly_off_days")
         .order("name");
 
-      if (!error && data) {
+      if (!error && data && data.length > 0) {
         setLocations(
           data.map((l: any) => ({
             id: l.id,
@@ -91,9 +101,15 @@ export default function LocationsAdminPage() {
             weeklyOffDays: Array.isArray(l.weekly_off_days) ? l.weekly_off_days : [0, 6],
           }))
         );
+      } else if (isDemoModeEnabled()) {
+        const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_locations") : null;
+        setLocations(stored ? JSON.parse(stored) : mockLocations);
       }
     } catch {
-      if (isDemoModeEnabled()) setLocations(mockLocations);
+      if (isDemoModeEnabled()) {
+        const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_locations") : null;
+        setLocations(stored ? JSON.parse(stored) : mockLocations);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -178,33 +194,40 @@ export default function LocationsAdminPage() {
       }
       setModalOpen(false);
     } catch (err: any) {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.user && isDemoModeEnabled()) {
+      if (isDemoModeEnabled()) {
         if (editingLoc) {
-          setLocations((prev) =>
-            prev.map((l) =>
+          setLocations((prev) => {
+            const next = prev.map((l) =>
               l.id === editingLoc.id
                 ? { ...l, name, code, address, timezone, workingHours }
                 : l
-            )
-          );
-          toast.success(`Location "${name}" updated (demo mode).`);
+            );
+            if (typeof window !== "undefined") {
+              try { localStorage.setItem("remotehr_demo_locations", JSON.stringify(next)); } catch {}
+            }
+            return next;
+          });
+          toast.success(`Location "${name}" updated!`);
         } else {
-          setLocations((prev) => [
-            ...prev,
-            {
-              id: `loc-${Date.now()}`,
-              name,
-              code,
-              address,
-              timezone,
-              workingHours,
-              weeklyOffDays: [0, 6],
-            },
-          ]);
-          toast.success(`Location "${name}" created (demo mode).`);
+          setLocations((prev) => {
+            const next = [
+              ...prev,
+              {
+                id: `loc-${Date.now()}`,
+                name,
+                code,
+                address,
+                timezone,
+                workingHours,
+                weeklyOffDays: [0, 6],
+              },
+            ];
+            if (typeof window !== "undefined") {
+              try { localStorage.setItem("remotehr_demo_locations", JSON.stringify(next)); } catch {}
+            }
+            return next;
+          });
+          toast.success(`Location "${name}" created!`);
         }
         setModalOpen(false);
       } else {
@@ -225,14 +248,23 @@ export default function LocationsAdminPage() {
       });
       if (error) throw error;
       toast.success(`Location ${loc.name} deleted.`);
-      setLocations((prev) => prev.filter((l) => l.id !== loc.id));
+      setLocations((prev) => {
+        const next = prev.filter((l) => l.id !== loc.id);
+        if (typeof window !== "undefined") {
+          try { localStorage.setItem("remotehr_demo_locations", JSON.stringify(next)); } catch {}
+        }
+        return next;
+      });
     } catch (err: any) {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.user && isDemoModeEnabled()) {
-        setLocations((prev) => prev.filter((l) => l.id !== loc.id));
-        toast.success(`Location ${loc.name} deleted (demo mode).`);
+      if (isDemoModeEnabled()) {
+        setLocations((prev) => {
+          const next = prev.filter((l) => l.id !== loc.id);
+          if (typeof window !== "undefined") {
+            try { localStorage.setItem("remotehr_demo_locations", JSON.stringify(next)); } catch {}
+          }
+          return next;
+        });
+        toast.success(`Location ${loc.name} deleted.`);
       } else {
         toast.error(err?.message || "Failed to delete location");
       }

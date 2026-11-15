@@ -11,6 +11,13 @@ import {
   CompanyDayOff,
 } from "../types";
 import { toast } from "sonner";
+import { isDemoModeEnabled } from "@/lib/config/demo";
+
+const mockLeaveTypes: LeaveType[] = [
+  { id: "00000000-0000-0000-0000-000000000001", organization_id: "00000000-0000-0000-0000-000000000001", name: "Casual Leave", code: "CL", is_paid: true, is_active: true },
+  { id: "00000000-0000-0000-0000-000000000002", organization_id: "00000000-0000-0000-0000-000000000001", name: "Sick Leave", code: "SL", is_paid: true, is_active: true },
+  { id: "00000000-0000-0000-0000-000000000003", organization_id: "00000000-0000-0000-0000-000000000001", name: "Privilege Leave", code: "PL", is_paid: true, is_active: true },
+];
 
 export function useLeaveTypes() {
   const supabase = createClient();
@@ -22,8 +29,10 @@ export function useLeaveTypes() {
         .select("*")
         .eq("is_active", true)
         .order("name");
+      if (error && isDemoModeEnabled()) return mockLeaveTypes;
       if (error) throw error;
-      return (data || []) as LeaveType[];
+      const list = (data || []) as LeaveType[];
+      return list.length > 0 ? list : (isDemoModeEnabled() ? mockLeaveTypes : []);
     },
   });
 }
@@ -137,6 +146,9 @@ export function useRequestLeave() {
         p_day_part: dayPart,
         p_reason: reason,
       });
+      if (error && isDemoModeEnabled()) {
+        return { success: true, message: "Leave applied successfully (demo)" };
+      }
       if (error) throw error;
       return data;
     },
@@ -167,6 +179,9 @@ export function useApproveLeave() {
         p_request_id: requestId,
         p_review_note: reviewNote,
       });
+      if (error && isDemoModeEnabled()) {
+        return { success: true, message: "Leave approved successfully (demo)" };
+      }
       if (error) throw error;
       return data;
     },
@@ -197,6 +212,9 @@ export function useRejectLeave() {
         p_request_id: requestId,
         p_review_note: reviewNote,
       });
+      if (error && isDemoModeEnabled()) {
+        return { success: true, message: "Leave rejected successfully (demo)" };
+      }
       if (error) throw error;
       return data;
     },
@@ -227,6 +245,9 @@ export function useCancelLeave() {
         p_request_id: requestId,
         p_reason: reason,
       });
+      if (error && isDemoModeEnabled()) {
+        return { success: true, message: "Leave cancelled successfully (demo)" };
+      }
       if (error) throw error;
       return data;
     },

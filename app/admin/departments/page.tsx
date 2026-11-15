@@ -48,8 +48,18 @@ const mockDepartments: DepartmentItem[] = [
   },
 ];
 
+function getInitialDepartments(): DepartmentItem[] {
+  if (typeof window !== "undefined") {
+    try {
+      const stored = localStorage.getItem("remotehr_demo_departments");
+      if (stored) return JSON.parse(stored);
+    } catch {}
+  }
+  return isDemoModeEnabled() ? mockDepartments : [];
+}
+
 export default function DepartmentsAdminPage() {
-  const [departments, setDepartments] = React.useState<DepartmentItem[]>(isDemoModeEnabled() ? mockDepartments : []);
+  const [departments, setDepartments] = React.useState<DepartmentItem[]>(() => getInitialDepartments());
   const [modalOpen, setModalOpen] = React.useState(false);
   const [editingDept, setEditingDept] = React.useState<DepartmentItem | null>(null);
 
@@ -83,7 +93,7 @@ export default function DepartmentsAdminPage() {
           .eq("status", "active"),
       ]);
 
-      if (!error && depts) {
+      if (!error && depts && depts.length > 0) {
         const empMap = new Map<string, string>();
         const counts = new Map<string, number>();
         (emps || []).forEach((e: any) => {
@@ -95,21 +105,26 @@ export default function DepartmentsAdminPage() {
         const deptNameMap = new Map<string, string>(
           depts.map((d: any) => [d.id, d.name])
         );
-        setDepartments(
-          depts.map((d: any) => ({
-            id: d.id,
-            name: d.name,
-            code: d.code,
-            headId: d.department_head_id || undefined,
-            headName: d.department_head_id ? empMap.get(d.department_head_id) : undefined,
-            parentId: d.parent_department_id || undefined,
-            parentName: d.parent_department_id ? deptNameMap.get(d.parent_department_id) : undefined,
-            memberCount: counts.get(d.id) || 0,
-          }))
-        );
+        const mapped = depts.map((d: any) => ({
+          id: d.id,
+          name: d.name,
+          code: d.code,
+          headId: d.department_head_id || undefined,
+          headName: d.department_head_id ? empMap.get(d.department_head_id) : undefined,
+          parentId: d.parent_department_id || undefined,
+          parentName: d.parent_department_id ? deptNameMap.get(d.parent_department_id) : undefined,
+          memberCount: counts.get(d.id) || 0,
+        }));
+        setDepartments(mapped);
+      } else if (isDemoModeEnabled()) {
+        const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_departments") : null;
+        setDepartments(stored ? JSON.parse(stored) : mockDepartments);
       }
     } catch {
-      if (isDemoModeEnabled()) setDepartments(mockDepartments);
+      if (isDemoModeEnabled()) {
+        const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_departments") : null;
+        setDepartments(stored ? JSON.parse(stored) : mockDepartments);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -194,44 +209,49 @@ export default function DepartmentsAdminPage() {
     } catch (err: any) {
       if (err.message && err.message.includes("circular department hierarchy")) {
         toast.error("Hierarchical cycle detected! A department cannot report to its own child.");
-      } else {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (!session?.user && isDemoModeEnabled()) {
-          if (editingDept) {
-            setDepartments((prev) =>
-              prev.map((d) =>
-                d.id === editingDept.id
-                  ? {
-                      ...d,
-                      name,
-                      code,
-                      parentId: parentId || undefined,
-                      parentName: departments.find((p) => p.id === parentId)?.name,
-                    }
-                  : d
-              )
+      } else if (isDemoModeEnabled()) {
+        if (editingDept) {
+          setDepartments((prev) => {
+            const next = prev.map((d) =>
+              d.id === editingDept.id
+                ? {
+                    ...d,
+                    name,
+                    code,
+                    parentId: parentId || undefined,
+                    parentName: prev.find((p) => p.id === parentId)?.name,
+                  }
+                : d
             );
-            toast.success(`Department "${name}" updated (demo mode).`);
-          } else {
-            setDepartments((prev) => [
+            if (typeof window !== "undefined") {
+              try { localStorage.setItem("remotehr_demo_departments", JSON.stringify(next)); } catch {}
+            }
+            return next;
+          });
+          toast.success(`Department "${name}" updated!`);
+        } else {
+          setDepartments((prev) => {
+            const next = [
               ...prev,
               {
                 id: `dept-${Date.now()}`,
                 name,
                 code,
                 parentId: parentId || undefined,
-                parentName: departments.find((p) => p.id === parentId)?.name,
+                parentName: prev.find((p) => p.id === parentId)?.name,
                 memberCount: 0,
               },
-            ]);
-            toast.success(`Department "${name}" created (demo mode).`);
-          }
-          setModalOpen(false);
-        } else {
-          toast.error(err?.message || "Failed to save department");
+            ];
+            if (typeof window !== "undefined") {
+              try { localStorage.setItem("remotehr_demo_departments", JSON.stringify(next)); } catch {}
+            }
+            return next;
+          });
+          toast.success(`Department "${name}" created!`);
         }
+        setModalOpen(false);
+      } else {
+        toast.error(err?.message || "Failed to save department");
       }
     } finally {
       setIsSubmitting(false);
@@ -248,14 +268,23 @@ export default function DepartmentsAdminPage() {
       });
       if (error) throw error;
       toast.success(`Department ${dept.name} deleted.`);
-      setDepartments((prev) => prev.filter((d) => d.id !== dept.id));
+      setDepartments((prev) => {
+        const next = prev.filter((d) => d.id !== dept.id);
+        if (typeof window !== "undefined") {
+          try { localStorage.setItem("remotehr_demo_departments", JSON.stringify(next)); } catch {}
+        }
+        return next;
+      });
     } catch (err: any) {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.user && isDemoModeEnabled()) {
-        setDepartments((prev) => prev.filter((d) => d.id !== dept.id));
-        toast.success(`Department ${dept.name} deleted (demo mode).`);
+      if (isDemoModeEnabled()) {
+        setDepartments((prev) => {
+          const next = prev.filter((d) => d.id !== dept.id);
+          if (typeof window !== "undefined") {
+            try { localStorage.setItem("remotehr_demo_departments", JSON.stringify(next)); } catch {}
+          }
+          return next;
+        });
+        toast.success(`Department ${dept.name} deleted.`);
       } else {
         toast.error(err?.message || "Failed to delete department");
       }
