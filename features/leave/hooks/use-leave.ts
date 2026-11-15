@@ -88,6 +88,13 @@ export function useLeaveBalances(employeeId?: string) {
       const { data, error } = await query;
       if ((error || !data || data.length === 0) && isDemoModeEnabled()) {
         const curYear = new Date().getFullYear();
+        const storedRequests = getDemoRequests();
+        const usedByType = new Map<string, number>();
+        for (const req of storedRequests) {
+          if (req.status === "approved") {
+            usedByType.set(req.leave_type_id, (usedByType.get(req.leave_type_id) || 0) + req.total_days);
+          }
+        }
         return [
           {
             id: "bal-1",
@@ -95,7 +102,7 @@ export function useLeaveBalances(employeeId?: string) {
             employee_id: employeeId || "demo-emp",
             leave_type_id: mockLeaveTypes[0].id,
             allocated: 12,
-            used: 2,
+            used: usedByType.get(mockLeaveTypes[0].id) || 0,
             carried_forward: 0,
             adjusted: 0,
             period_start: `${curYear}-01-01`,
@@ -108,7 +115,7 @@ export function useLeaveBalances(employeeId?: string) {
             employee_id: employeeId || "demo-emp",
             leave_type_id: mockLeaveTypes[1].id,
             allocated: 10,
-            used: 1,
+            used: usedByType.get(mockLeaveTypes[1].id) || 0,
             carried_forward: 0,
             adjusted: 0,
             period_start: `${curYear}-01-01`,
@@ -121,8 +128,8 @@ export function useLeaveBalances(employeeId?: string) {
             employee_id: employeeId || "demo-emp",
             leave_type_id: mockLeaveTypes[2].id,
             allocated: 15,
-            used: 3,
-            carried_forward: 2,
+            used: usedByType.get(mockLeaveTypes[2].id) || 0,
+            carried_forward: 0,
             adjusted: 0,
             period_start: `${curYear}-01-01`,
             period_end: `${curYear}-12-31`,

@@ -24,6 +24,10 @@ import {
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  getStoredAttendanceSessions,
+  getStoredAttendanceDays,
+} from "@/lib/storage/demo-store";
 
 interface CalendarDayRow {
   dateKey: string;
@@ -130,6 +134,23 @@ function AttendanceCalendarContent() {
       // keep clean empty day scaffold
     }
 
+    // Merge stored demo sessions & days
+    const storedSessions = getStoredAttendanceSessions();
+    const storedDays = getStoredAttendanceDays();
+
+    for (const d of storedDays) {
+      if (!daysMap.has(d.work_date)) {
+        daysMap.set(d.work_date, d);
+      }
+    }
+    for (const s of storedSessions) {
+      const list = sessByDate.get(s.work_date) || [];
+      if (!list.some((existing) => existing.id === s.id)) {
+        list.push(s);
+        sessByDate.set(s.work_date, list);
+      }
+    }
+
     const built: CalendarDayRow[] = [];
     for (let i = 1; i <= daysInMonth; i++) {
       const d = new Date(selectedYear, selectedMonth - 1, i);
@@ -187,6 +208,11 @@ function AttendanceCalendarContent() {
 
   React.useEffect(() => {
     loadMonthData();
+    const handleStorageChange = () => loadMonthData();
+    window.addEventListener("remotehr_storage_change", handleStorageChange);
+    return () => {
+      window.removeEventListener("remotehr_storage_change", handleStorageChange);
+    };
   }, [loadMonthData]);
 
   const selectedDay =

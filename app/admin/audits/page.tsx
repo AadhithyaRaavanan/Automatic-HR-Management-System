@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import { EmptyState } from "@/components/shared/empty-state";
+import { getStoredAudits } from "@/lib/storage/demo-store";
 
 interface AuditEntry {
   id: string;
@@ -27,55 +28,12 @@ interface AuditEntry {
   action: string;
   table_name: string;
   record_id: string;
-  old_data: any;
-  new_data: any;
+  old_data?: any;
+  new_data?: any;
 }
 
-const mockAudits: AuditEntry[] = [
-  {
-    id: "aud-001",
-    created_at: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-    actor_name: "System Administrator",
-    action: "POLICY_UPDATED",
-    table_name: "attendance_policies",
-    record_id: "00000000-0000-0000-0000-000000000001",
-    old_data: { grace_minutes: 10, half_day_minutes: 240, auto_checkout_time: "19:00:00" },
-    new_data: { grace_minutes: 20, half_day_minutes: 240, auto_checkout_time: "20:00:00" },
-  },
-  {
-    id: "aud-002",
-    created_at: new Date(Date.now() - 1000 * 60 * 65).toISOString(),
-    actor_name: "Sarah Jenkins",
-    action: "EMPLOYEE_UPDATED",
-    table_name: "employees",
-    record_id: "00000000-0000-0000-0000-000000000004",
-    old_data: { work_mode: "office", timezone: "America/New_York" },
-    new_data: { work_mode: "remote", timezone: "Asia/Kolkata" },
-  },
-  {
-    id: "aud-003",
-    created_at: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
-    actor_name: "System Administrator",
-    action: "LOCATION_CREATED",
-    table_name: "locations",
-    record_id: "00000000-0000-0000-0000-000000000020",
-    old_data: null,
-    new_data: { name: "Bangalore HQ", code: "BLR-01", timezone: "Asia/Kolkata", working_hours: 480 },
-  },
-  {
-    id: "aud-004",
-    created_at: new Date(Date.now() - 1000 * 60 * 320).toISOString(),
-    actor_name: "System Administrator",
-    action: "MEMBER_DEACTIVATED",
-    table_name: "organization_members",
-    record_id: "00000000-0000-0000-0000-000000000099",
-    old_data: { status: "active" },
-    new_data: { status: "suspended" },
-  },
-];
-
 export default function AuditsAdminPage() {
-  const [audits, setAudits] = React.useState<AuditEntry[]>(isDemoModeEnabled() ? mockAudits : []);
+  const [audits, setAudits] = React.useState<AuditEntry[]>(() => getStoredAudits());
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [searchTerm, setSearchTerm] = React.useState("");
   const [actionFilter, setActionFilter] = React.useState("ALL");
@@ -87,44 +45,46 @@ export default function AuditsAdminPage() {
     let active = true;
     async function loadAudits() {
       setIsLoading(true);
+      const stored = getStoredAudits();
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (!session?.user) {
-          if (active && isDemoModeEnabled()) setAudits(mockAudits);
-          return;
-        }
         const { data, error } = await supabase
           .from("audit_logs")
           .select("id, created_at, actor_id, action, table_name, record_id, old_data, new_data")
           .order("created_at", { ascending: false })
           .limit(100);
-        if (!error && data && active) {
-          setAudits(
-            data.map((r: any) => ({
-              id: r.id,
-              created_at: r.created_at,
-              actor_name: r.actor_id || "System",
-              action: r.action,
-              table_name: r.table_name,
-              record_id: r.record_id,
-              old_data: r.old_data,
-              new_data: r.new_data,
-            }))
-          );
+        if (!error && data && data.length > 0 && active) {
+          const merged = [...stored];
+          for (const d of data as any[]) {
+            if (!merged.some((m) => m.id === d.id)) {
+              merged.push({
+                id: d.id,
+                created_at: d.created_at,
+                actor_name: d.actor_id || "System",
+                action: d.action,
+                table_name: d.table_name,
+                record_id: d.record_id,
+                old_data: d.old_data,
+                new_data: d.new_data,
+              });
+            }
+          }
+          setAudits(merged);
+        } else if (active) {
+          setAudits(stored);
         }
       } catch {
-        if (active && isDemoModeEnabled()) {
-          setAudits(mockAudits);
-        }
+        if (active) setAudits(stored);
       } finally {
         if (active) setIsLoading(false);
       }
     }
     loadAudits();
+
+    const handleStorageChange = () => setAudits(getStoredAudits());
+    window.addEventListener("remotehr_storage_change", handleStorageChange);
     return () => {
       active = false;
+      window.removeEventListener("remotehr_storage_change", handleStorageChange);
     };
   }, [supabase]);
 

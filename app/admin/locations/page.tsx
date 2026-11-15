@@ -153,15 +153,17 @@ export default function LocationsAdminPage() {
     if (!confirm(`Are you sure you want to delete ${loc.name}? Associated employees will have their primary location unlinked.`)) {
       return;
     }
+    deleteStoredLocation(loc.id);
     const nextList = locations.filter((l) => l.id !== loc.id);
     setLocations(nextList);
-    saveStoredLocations(nextList);
     toast.success(`Location ${loc.name} deleted.`);
 
     try {
+      await (supabase.from("employees") as any).update({ primary_location_id: null }).eq("primary_location_id", loc.id);
       await (supabase.rpc as any)("admin_delete_location", {
         p_location_id: loc.id,
       });
+      await (supabase.from("locations") as any).delete().eq("id", loc.id);
     } catch {}
   };
 

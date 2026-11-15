@@ -184,11 +184,13 @@ export function useTasksData(enabled = true) {
       const storedEmployees = getStoredUsers();
       const storedTasks = getStoredTasks();
 
-      // Merge departments
-      const mergedDepts = [...storedDepts.map((d) => ({ id: d.id, name: d.name, code: d.code }))];
-      for (const d of departmentsData) {
-        if (!mergedDepts.some((md) => md.id === d.id || md.name === d.name)) {
-          mergedDepts.push(d);
+      // Active departments (prioritizes user-created demo store to honor deletions)
+      let mergedDepts: DepartmentOption[] = storedDepts.map((d) => ({ id: d.id, name: d.name, code: d.code }));
+      if (!isDemoModeEnabled() || storedDepts.length === 0) {
+        for (const d of departmentsData) {
+          if (!mergedDepts.some((md) => md.id === d.id || md.name === d.name)) {
+            mergedDepts.push(d);
+          }
         }
       }
 

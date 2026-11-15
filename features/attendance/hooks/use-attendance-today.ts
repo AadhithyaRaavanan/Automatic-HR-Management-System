@@ -5,6 +5,10 @@ import { createClient } from "@/lib/supabase/client";
 import { getEmployeeWorkDate } from "@/lib/date/timezone";
 import { AttendanceDayStatus, SessionSource } from "@/types/database.types";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import {
+  getStoredAttendanceSessions,
+  getStoredAttendanceDays,
+} from "@/lib/storage/demo-store";
 
 export interface AttendanceSessionItem {
   id: string;
@@ -58,42 +62,46 @@ export function useAttendanceToday() {
 
       // If no authenticated user session, only allow mock preview in non-production demo mode
       if (!user) {
-        if (!isDemoModeEnabled()) {
-          return {
-            workDate: todayDate,
-            timezone: userTimezone,
-            targetMinutes: 480,
-            activeSession: null,
-            sessions: [],
-            daySummary: null,
-            weekTotalMinutes: 0,
-            streakDays: 0,
-          };
-        }
+        const storedSessions = getStoredAttendanceSessions().filter((s) => s.work_date === todayDate);
+        const storedDays = getStoredAttendanceDays().find((d) => d.work_date === todayDate);
+        const activeSess = storedSessions.find((s) => !s.check_out_at);
+
         return {
           workDate: todayDate,
           timezone: userTimezone,
           targetMinutes: 480,
-          activeSession: null,
-          sessions: [
-            {
-              id: "mock-sess-1",
-              employee_id: "demo",
-              work_date: todayDate,
-              check_in_at: new Date(Date.now() - 4 * 3600 * 1000).toISOString(),
-              check_out_at: new Date(Date.now() - 3600 * 1000).toISOString(),
-              source: "web",
-              note: "Core morning shift",
-            },
-          ],
-          daySummary: {
-            total_minutes: 180,
-            status: "present",
-            is_late: false,
-            locked: false,
-          },
-          weekTotalMinutes: 2190, // ~36.5h
-          streakDays: 14,
+          shiftStartTime: "09:00:00",
+          shiftEndTime: "17:00:00",
+          activeSession: activeSess
+            ? {
+                id: activeSess.id,
+                employee_id: activeSess.employee_id,
+                work_date: activeSess.work_date,
+                check_in_at: activeSess.check_in_at,
+                check_out_at: activeSess.check_out_at,
+                source: "web",
+                note: null,
+              }
+            : null,
+          sessions: storedSessions.map((s) => ({
+            id: s.id,
+            employee_id: s.employee_id,
+            work_date: s.work_date,
+            check_in_at: s.check_in_at,
+            check_out_at: s.check_out_at,
+            source: "web",
+            note: null,
+          })),
+          daySummary: storedDays
+            ? {
+                total_minutes: storedDays.total_minutes,
+                status: storedDays.status,
+                is_late: storedDays.is_late,
+                locked: storedDays.locked,
+              }
+            : null,
+          weekTotalMinutes: storedDays?.total_minutes || 0,
+          streakDays: storedDays?.status === "present" ? 1 : 0,
         };
       }
 

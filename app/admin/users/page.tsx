@@ -35,6 +35,7 @@ import { isDemoModeEnabled } from "@/lib/config/demo";
 import {
   getStoredDepartments,
   getStoredJobTitles,
+  getStoredLocations,
   getStoredUsers,
   addStoredUser,
   updateStoredUser,
@@ -149,19 +150,21 @@ function UsersDirectoryContent() {
     try {
       const storedTitles = getStoredJobTitles();
       const storedDepts = getStoredDepartments();
+      const storedLocations = getStoredLocations();
       const storedUsers = getStoredUsers();
 
       let emps: any = null;
       let members: any = null;
       let jobTitlesData: any = null;
       let deptsData: any = null;
+      let locsData: any = null;
 
       try {
         const results = await Promise.all([
           (supabase as any)
             .from("employees")
             .select(
-              "id, full_name, email, work_mode, status, timezone, shift_start_time, shift_end_time, department_id, job_title_id, departments:department_id(id, name), job_titles:job_title_id(id, title_name), locations:primary_location_id(name)"
+              "id, full_name, email, work_mode, status, timezone, shift_start_time, shift_end_time, department_id, job_title_id, primary_location_id, departments:department_id(id, name), job_titles:job_title_id(id, title_name), locations:primary_location_id(id, name)"
             )
             .order("full_name"),
           (supabase as any)
@@ -175,11 +178,16 @@ function UsersDirectoryContent() {
             .from("departments")
             .select("id, name")
             .order("name"),
+          (supabase as any)
+            .from("locations")
+            .select("id, name")
+            .order("name"),
         ]);
         emps = results[0]?.data;
         members = results[1]?.data;
         jobTitlesData = results[2]?.data;
         deptsData = results[3]?.data;
+        locsData = results[4]?.data;
       } catch {
         // Supabase not running, continue with stored
       }
@@ -207,6 +215,24 @@ function UsersDirectoryContent() {
         }
       }
       setDepartmentsList(mergedDepts);
+
+      // Merge stored locations with database
+      const mergedLocations: { id: string; name: string }[] = storedLocations.map((l) => ({
+        id: l.id,
+        name: l.name,
+      }));
+      for (const l of locsData || []) {
+        if (!mergedLocations.some((ml) => ml.id === l.id || ml.name === l.name)) {
+          mergedLocations.push({ id: l.id, name: l.name });
+        }
+      }
+
+      const validDeptNames = new Set(mergedDepts.map((d) => d.name));
+      const validDeptIds = new Set(mergedDepts.map((d) => d.id));
+      const validTitleNames = new Set(mergedTitles.map((t) => t.title_name));
+      const validTitleIds = new Set(mergedTitles.map((t) => t.id));
+      const validLocNames = new Set(mergedLocations.map((l) => l.name));
+      const validLocIds = new Set(mergedLocations.map((l) => l.id));
 
       if (emps && emps.length > 0) {
         const memberMap = new Map<
@@ -239,17 +265,32 @@ function UsersDirectoryContent() {
                 : e.status === "inactive"
                   ? "inactive"
                   : "active";
+            const deptName = e.departments?.name;
+            const hasValidDept =
+              (e.department_id && validDeptIds.has(e.department_id)) ||
+              (deptName && validDeptNames.has(deptName));
+
+            const titleName = e.job_titles?.title_name;
+            const hasValidTitle =
+              (e.job_title_id && validTitleIds.has(e.job_title_id)) ||
+              (titleName && validTitleNames.has(titleName));
+
+            const locName = e.locations?.name;
+            const hasValidLoc =
+              (e.primary_location_id && validLocIds.has(e.primary_location_id)) ||
+              (locName && validLocNames.has(locName));
+
             return {
               id: e.id,
               name: e.full_name,
               email: e.email,
               role: (mem?.role || "employee") as EmployeeUser["role"],
               workMode: e.work_mode || "remote",
-              department: e.departments?.name || "Unassigned",
-              departmentId: e.department_id || mem?.departmentId || "",
-              jobTitle: e.job_titles?.title_name || "",
-              jobTitleId: e.job_title_id || mem?.jobTitleId || "",
-              location: e.locations?.name || "Remote",
+              department: hasValidDept ? (deptName || "Unassigned") : "Unassigned",
+              departmentId: hasValidDept ? (e.department_id || mem?.departmentId || "") : "",
+              jobTitle: hasValidTitle ? (titleName || "") : "",
+              jobTitleId: hasValidTitle ? (e.job_title_id || mem?.jobTitleId || "") : "",
+              location: hasValidLoc ? (locName || "Unassigned") : "Unassigned",
               status: effectiveStatus,
               timezone: e.timezone || "UTC",
               shiftStartTime: mem?.shiftStartTime || (e.shift_start_time || "09:00:00").slice(0, 5),
@@ -259,22 +300,36 @@ function UsersDirectoryContent() {
         );
       } else {
         setUsers(
-          storedUsers.map((u) => ({
-            id: u.id,
-            name: u.name,
-            email: u.email,
-            role: u.role,
-            workMode: u.workMode || "remote",
-            department: u.department || "Unassigned",
-            departmentId: u.departmentId || "",
-            jobTitle: u.jobTitle || "",
-            jobTitleId: u.jobTitleId || "",
-            location: u.location || "Remote",
-            status: u.status === "inactive" ? ("inactive" as const) : ("active" as const),
-            timezone: u.timezone || "UTC",
-            shiftStartTime: u.shiftStartTime || "09:00",
-            shiftEndTime: u.shiftEndTime || "17:00",
-          }))
+          storedUsers.map((u) => {
+            const hasValidDept =
+              u.department &&
+              u.department !== "Unassigned" &&
+              (validDeptNames.has(u.department) || (u.departmentId && validDeptIds.has(u.departmentId)));
+            const hasValidTitle =
+              u.jobTitle &&
+              u.jobTitle !== "Unassigned" &&
+              (validTitleNames.has(u.jobTitle) || (u.jobTitleId && validTitleIds.has(u.jobTitleId)));
+            const hasValidLoc =
+              u.location &&
+              u.location !== "Unassigned" &&
+              validLocNames.has(u.location);
+            return {
+              id: u.id,
+              name: u.name,
+              email: u.email,
+              role: u.role,
+              workMode: u.workMode || "remote",
+              department: hasValidDept ? u.department : "Unassigned",
+              departmentId: hasValidDept ? (u.departmentId || "") : "",
+              jobTitle: hasValidTitle ? (u.jobTitle || "") : "",
+              jobTitleId: hasValidTitle ? (u.jobTitleId || "") : "",
+              location: hasValidLoc ? u.location : "Unassigned",
+              status: u.status === "inactive" ? ("inactive" as const) : ("active" as const),
+              timezone: u.timezone || "UTC",
+              shiftStartTime: u.shiftStartTime || "09:00",
+              shiftEndTime: u.shiftEndTime || "17:00",
+            };
+          })
         );
       }
     } catch {
@@ -811,7 +866,11 @@ function UsersDirectoryContent() {
                         )}
                       </td>
                       <td className="py-4 px-4 text-xs text-text-secondary font-medium">
-                        {u.location} ({u.workMode})
+                        {u.location && u.location !== "Unassigned" ? (
+                          `${u.location} (${u.workMode})`
+                        ) : (
+                          <span className="text-text-tertiary text-xs italic">Unassigned</span>
+                        )}
                       </td>
                       <td className="py-4 px-4 text-xs font-mono text-text-tertiary">
                         {u.timezone}

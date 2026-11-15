@@ -13,6 +13,7 @@ import {
   saveStoredDepartments,
   addStoredDepartment,
   deleteStoredDepartment,
+  getStoredUsers,
   type DemoDepartment,
 } from "@/lib/storage/demo-store";
 
@@ -26,6 +27,8 @@ export default function DepartmentsAdminPage() {
   const [name, setName] = React.useState("");
   const [code, setCode] = React.useState("");
   const [parentId, setParentId] = React.useState("");
+  const [headId, setHeadId] = React.useState("");
+  const [workforceUsers, setWorkforceUsers] = React.useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
 
@@ -33,6 +36,7 @@ export default function DepartmentsAdminPage() {
 
   const loadDepartments = React.useCallback(async () => {
     setIsLoading(true);
+    setWorkforceUsers(getStoredUsers());
     try {
       const [{ data: depts, error }, { data: emps }] = await Promise.all([
         (supabase as any)
@@ -81,6 +85,14 @@ export default function DepartmentsAdminPage() {
 
   React.useEffect(() => {
     loadDepartments();
+    const handleStorageChange = () => {
+      setDepartments(getStoredDepartments());
+      setWorkforceUsers(getStoredUsers());
+    };
+    window.addEventListener("remotehr_storage_change", handleStorageChange);
+    return () => {
+      window.removeEventListener("remotehr_storage_change", handleStorageChange);
+    };
   }, [loadDepartments]);
 
   const handleOpenAdd = () => {
@@ -88,6 +100,7 @@ export default function DepartmentsAdminPage() {
     setName("");
     setCode("");
     setParentId("");
+    setHeadId("");
     setModalOpen(true);
   };
 
@@ -96,6 +109,7 @@ export default function DepartmentsAdminPage() {
     setName(dept.name);
     setCode(dept.code);
     setParentId(dept.parentId || "");
+    setHeadId(dept.headId || "");
     setModalOpen(true);
   };
 
@@ -116,6 +130,7 @@ export default function DepartmentsAdminPage() {
 
     setIsSubmitting(true);
     let nextList: DepartmentItem[];
+    const selectedHead = workforceUsers.find((u) => u.id === headId);
 
     if (editingDept) {
       nextList = departments.map((d) =>
@@ -124,6 +139,8 @@ export default function DepartmentsAdminPage() {
               ...d,
               name: trimmedName,
               code: trimmedCode,
+              headId: headId || undefined,
+              headName: selectedHead ? selectedHead.name : undefined,
               parentId: parentId || undefined,
               parentName: departments.find((p) => p.id === parentId)?.name,
             }
@@ -135,6 +152,8 @@ export default function DepartmentsAdminPage() {
         id: `dept-${Date.now()}`,
         name: trimmedName,
         code: trimmedCode,
+        headId: headId || undefined,
+        headName: selectedHead ? selectedHead.name : undefined,
         parentId: parentId || undefined,
         parentName: departments.find((p) => p.id === parentId)?.name,
         memberCount: 0,
@@ -172,15 +191,19 @@ export default function DepartmentsAdminPage() {
     if (!confirm(`Are you sure you want to delete ${dept.name}? Employees will be unlinked.`)) {
       return;
     }
+    deleteStoredDepartment(dept.id);
     const nextList = departments.filter((d) => d.id !== dept.id);
     setDepartments(nextList);
-    saveStoredDepartments(nextList);
     toast.success(`Department ${dept.name} deleted.`);
 
     try {
-      await (supabase.rpc as any)("admin_delete_department", {
-        p_department_id: dept.id,
-      });
+      // 1. Unlink employees and members referencing this department
+      await (supabase.from("employees") as any).update({ department_id: null }).eq("department_id", dept.id);
+      await (supabase.from("organization_members") as any).update({ department_id: null }).eq("department_id", dept.id);
+      // 2. Unlink any sub-departments
+      await (supabase.from("departments") as any).update({ parent_department_id: null }).eq("parent_department_id", dept.id);
+      // 3. Delete department
+      await (supabase.from("departments") as any).delete().eq("id", dept.id);
     } catch {}
   };
 
@@ -348,6 +371,24 @@ export default function DepartmentsAdminPage() {
                     placeholder="e.g. PLAT-ENG"
                     className="w-full px-3.5 py-2 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm font-mono text-text-primary dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-purple"
                   />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1">
+                    Department Head (Manager)
+                  </label>
+                  <select
+                    value={headId}
+                    onChange={(e) => setHeadId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm text-text-primary dark:text-white"
+                  >
+                    <option value="">None / Unassigned</option>
+                    {workforceUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.role.toUpperCase()})
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
