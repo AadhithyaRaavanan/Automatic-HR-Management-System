@@ -219,16 +219,46 @@ export async function POST(request: NextRequest) {
       } catch {}
     }
 
-    // Direct database query fallback to guarantee authoritative role resolution
+    // Direct database query fallback to guarantee authoritative role resolution (uses admin client to bypass RLS)
     if (!userRole) {
-      const { data: memberRow } = await (supabase as any)
-        .from("organization_members")
-        .select("role")
-        .eq("user_id", authData.user.id)
-        .eq("status", "active")
-        .maybeSingle();
-      if ((memberRow as any)?.role) {
-        userRole = (memberRow as any).role as EmployeeRole;
+      try {
+        const { getAdminClient } = await import("@/lib/supabase/admin");
+        const adminClient = getAdminClient();
+        const { data: memberRow } = await adminClient
+          .from("organization_members")
+          .select("role")
+          .eq("user_id", authData.user.id)
+          .eq("status", "active")
+          .maybeSingle();
+        if ((memberRow as any)?.role) {
+          userRole = (memberRow as any).role as EmployeeRole;
+        }
+      } catch (err) {
+        console.warn("[Login API] Failed to resolve role from admin client:", err);
+      }
+    }
+
+    // In demo mode: fallback to preset role from DEMO_ACCOUNTS
+    if (!userRole && isDemoModeEnabled()) {
+      const { DEMO_ACCOUNTS } = await import("@/lib/auth/demo-provisioner");
+      const demoAccount = DEMO_ACCOUNTS[email.toLowerCase().trim()];
+      if (demoAccount) {
+        userRole = demoAccount.role;
+      }
+    }
+
+    // Ensure user_role is stored on app_metadata so JWTs carry the role claim
+    if (userRole && authData.user?.id) {
+      try {
+        const { getAdminClient } = await import("@/lib/supabase/admin");
+        await getAdminClient().auth.admin.updateUserById(authData.user.id, {
+          app_metadata: {
+            ...authData.user.app_metadata,
+            user_role: userRole,
+          },
+        });
+      } catch (err) {
+        console.warn("[Login API] Failed to sync user_role to app_metadata:", err);
       }
     }
 

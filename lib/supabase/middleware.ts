@@ -82,7 +82,18 @@ export async function updateSession(request: NextRequest) {
   const claims = await getVerifiedJwtClaims();
   const isTokenValid = !!claims && (!claims.exp || claims.exp * 1000 > Date.now());
   const aal = claims?.aal || "aal1";
-  const userRole = (claims?.user_role || claims?.app_metadata?.user_role || "employee") as EmployeeRole;
+  const userEmail = (claims?.email || "") as string;
+  let userRole = (claims?.user_role || claims?.app_metadata?.user_role) as EmployeeRole | undefined;
+
+  // In demo mode: if role claim is missing from JWT, resolve dynamically from demo preset email
+  if (!userRole && isDemoModeEnabled() && userEmail) {
+    const emailLower = userEmail.toLowerCase();
+    if (emailLower.includes("admin")) userRole = "admin";
+    else if (emailLower.includes("hr")) userRole = "hr";
+    else if (emailLower.includes("manager")) userRole = "manager";
+    else userRole = "employee";
+  }
+  userRole = userRole || "employee";
 
   const isPublicPath =
     pathname.startsWith("/login") ||
@@ -173,7 +184,7 @@ export async function updateSession(request: NextRequest) {
           return NextResponse.redirect(url);
         }
       } else if (userRole === "hr" || userRole === "admin") {
-        let reqMfa = true;
+        let reqMfa = !isDemoModeEnabled();
         try {
           const orgId = claims?.organization_id || claims?.app_metadata?.organization_id;
           if (orgId) {
