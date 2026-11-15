@@ -14,6 +14,7 @@ const DOC_FILES = [
   "docs/ADMIN_RECOVERY.md",
   "docs/OPERATIONS.md",
   "docs/ROADMAP.md",
+  "docs/GO_LIVE_CHECKLIST.md",
 ].map((f) => path.resolve(rootDir, f)).filter((f) => fs.existsSync(f));
 
 // 1. Gather all SQL routines and tables from migrations
@@ -54,6 +55,28 @@ function scanApiRoutes(dir, routePrefix = "/api") {
   }
 }
 scanApiRoutes(apiDir);
+
+// 2b. Gather all Application routes (pages & route handlers) from app/
+const allAppRoutes = new Set(existingApiRoutes);
+
+function scanPageRoutes(dir, currentPath = "") {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      const segment = entry.name;
+      // Skip Next.js route groups like (auth) in the public URL path
+      const nextSegment = segment.startsWith("(") && segment.endsWith(")") ? "" : `/${segment}`;
+      scanPageRoutes(path.join(dir, entry.name), `${currentPath}${nextSegment}`);
+    } else if (entry.name === "page.tsx" || entry.name === "page.jsx" || entry.name === "page.js") {
+      const pagePath = currentPath === "" ? "/" : currentPath;
+      allAppRoutes.add(pagePath);
+    } else if (entry.name === "route.ts" || entry.name === "route.js") {
+      const routePath = currentPath === "" ? "/" : currentPath;
+      allAppRoutes.add(routePath);
+    }
+  }
+}
+scanPageRoutes(path.resolve(rootDir, "app"));
 
 // 3. Gather all Environment Variables from .env.example
 const envExampleContent = fs.readFileSync(path.resolve(rootDir, ".env.example"), "utf8");
@@ -98,6 +121,22 @@ for (const docFile of DOC_FILES) {
     if (!existingApiRoutes.has(cleanRoute)) {
       console.error(`❌ [${relativeName}] API route "${cleanRoute}" mentioned in doc does not exist under app/api/`);
       errors++;
+    }
+  }
+
+  // Check Redirect URLs in GO_LIVE_CHECKLIST.md
+  if (relativeName.includes("GO_LIVE_CHECKLIST.md")) {
+    const redirectSectionMatch = content.match(/Redirect URLs[\s\S]*?(?=\n\n|\n-|$)/i);
+    if (redirectSectionMatch) {
+      const redirectUrls = redirectSectionMatch[0].match(/https?:\/\/[a-zA-Z0-9.\-]+(\/[a-zA-Z0-9_\-\/]+)/g) || [];
+      for (const url of redirectUrls) {
+        const urlObj = new URL(url);
+        const redirectPath = urlObj.pathname.replace(/\/$/, "");
+        if (!allAppRoutes.has(redirectPath)) {
+          console.error(`❌ [${relativeName}] Documented redirect URL path "${redirectPath}" does not exist as an application route under app/`);
+          errors++;
+        }
+      }
     }
   }
 }
