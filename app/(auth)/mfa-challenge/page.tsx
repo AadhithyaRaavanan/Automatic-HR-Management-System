@@ -46,7 +46,7 @@ function MfaChallengeForm() {
       }
     }
     loadFactors();
-  }, [supabase]);
+  }, [supabase, redirectPath, router]);
 
   const handleVerifyTotp = async (e: React.FormEvent) => {
     e.preventDefault();

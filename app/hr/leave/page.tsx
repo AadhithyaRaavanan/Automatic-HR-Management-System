@@ -275,7 +275,7 @@ export default function HRLeavePage() {
                         </p>
 
                         <p className="text-xs text-text-tertiary italic">
-                          "{req.reason}"
+                          &quot;{req.reason}&quot;
                         </p>
                       </div>
 

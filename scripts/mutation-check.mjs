@@ -144,6 +144,8 @@ async function main() {
       },
       revert: async () => {
         await client.query(origMemberRoleDef);
+        await client.query("GRANT EXECUTE ON FUNCTION public.admin_update_org_member_role(UUID, UUID, TEXT) TO authenticated;");
+        await client.query("UPDATE public.organization_members SET role = 'admin' WHERE organization_id = '00000000-0000-0000-0000-000000000001' AND user_id = '00000000-0000-0000-0000-000000000001';");
       },
     },
 

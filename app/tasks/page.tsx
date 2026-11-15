@@ -137,10 +137,10 @@ function TasksWorkspaceContent() {
     }
   }, [userRole]);
 
-  const tasks = data?.tasks || [];
-  const projects = data?.projects || [];
-  const employees = data?.employees || [];
-  const departments = data?.departments || [];
+  const tasks = React.useMemo(() => data?.tasks || [], [data?.tasks]);
+  const projects = React.useMemo(() => data?.projects || [], [data?.projects]);
+  const employees = React.useMemo(() => data?.employees || [], [data?.employees]);
+  const departments = React.useMemo(() => data?.departments || [], [data?.departments]);
 
   const employeeNameMap = React.useMemo(() => {
     const map = new Map<string, string>();

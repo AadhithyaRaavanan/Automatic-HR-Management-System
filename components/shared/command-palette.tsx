@@ -148,7 +148,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-text-primary hover:bg-brand-purple-light/50 hover:text-brand-purple cursor-pointer transition-colors"
               >
                 <UserCheck className="w-4 h-4 text-brand-purple" />
-                <span>Manager View: Who's Online Now</span>
+                <span>Manager View: Who&apos;s Online Now</span>
               </Command.Item>
 
               {isDemoModeEnabled() && (

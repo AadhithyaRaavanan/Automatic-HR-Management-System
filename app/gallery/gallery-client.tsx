@@ -172,7 +172,7 @@ export default function GalleryPage() {
         {/* 4. Session Breakdown & Circular Progress Rings */}
         <section className="space-y-4">
           <h2 className="text-lg font-bold text-text-primary">
-            4. Today's Sessions, Progress Rings & Highlight Card
+            4. Today&apos;s Sessions, Progress Rings & Highlight Card
           </h2>
           <BentoGrid>
             {/* Today's Sessions List */}
