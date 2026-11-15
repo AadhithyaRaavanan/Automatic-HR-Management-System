@@ -134,11 +134,30 @@ export async function POST(request: NextRequest) {
     );
 
     // Pass captchaToken to Supabase options for native Supabase bot protection
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    let { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
       options: captchaToken ? { captchaToken } : undefined,
     });
+
+    // In Demo Mode: if demo account doesn't exist yet on remote Supabase, auto-provision it via admin client
+    if (authError && isDemoModeEnabled() && password === "DemoPassword123!") {
+      try {
+        const { ensureDemoAccount } = await import("@/lib/auth/demo-provisioner");
+        const provisioned = await ensureDemoAccount(email);
+        if (provisioned) {
+          const retryResult = await supabase.auth.signInWithPassword({
+            email,
+            password,
+            options: captchaToken ? { captchaToken } : undefined,
+          });
+          authData = retryResult.data;
+          authError = retryResult.error;
+        }
+      } catch (provisionErr) {
+        console.error("[DemoProvisioner] Failed to auto-provision demo account:", provisionErr);
+      }
+    }
 
     if (authError || !authData.user) {
       // Record failure on both IP+Email AND Email-only rate limit stores
