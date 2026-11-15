@@ -125,7 +125,6 @@ body {
 }
 
 /* Utility to hide scrollbars cleanly while preserving scroll capability */
-aside nav,
 aside nav::-webkit-scrollbar,
 aside nav *::-webkit-scrollbar,
 .no-scrollbar::-webkit-scrollbar,
