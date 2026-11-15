@@ -23,19 +23,19 @@ export interface InviteEmployeeInput {
 
 export type InviteEmployeeResult =
   | {
-      ok: true;
-      userId: string;
-      inviteLink?: string;
-      temporaryPassword?: string;
-      message: string;
-      emailSent: boolean;
-      data: any;
-    }
+    ok: true;
+    userId: string;
+    inviteLink?: string;
+    temporaryPassword?: string;
+    message: string;
+    emailSent: boolean;
+    data: any;
+  }
   | {
-      ok: false;
-      status: number;
-      error: string;
-    };
+    ok: false;
+    status: number;
+    error: string;
+  };
 
 export async function inviteSingleEmployee(
   context: AuthenticatedCallerContext,

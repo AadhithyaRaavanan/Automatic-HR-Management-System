@@ -236,6 +236,7 @@ describe("Section 4: Shift Management & Night Shift Engine", () => {
     const testSessionId = "00000000-0000-0000-0000-000000000401";
     await client.query("DELETE FROM public.attendance_sessions WHERE id = $1;", [testSessionId]);
     await client.query("UPDATE public.attendance_sessions SET check_out_at = now() WHERE employee_id = $1 AND check_out_at IS NULL;", [ORG_1_EMPLOYEE]);
+    await client.query("DELETE FROM public.attendance_days WHERE employee_id = $1 AND work_date = '2026-11-14';", [ORG_1_EMPLOYEE]);
 
     await client.query(`
       INSERT INTO public.attendance_sessions (id, organization_id, employee_id, check_in_at, work_date, source)

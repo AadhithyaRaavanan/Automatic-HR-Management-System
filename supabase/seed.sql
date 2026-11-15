@@ -165,6 +165,36 @@ EXCEPTION WHEN OTHERS THEN
     NULL;
 END $$;
 
+-- Enrolled TOTP Factors for Admin & HR Demo Users
+DO $$
+BEGIN
+    INSERT INTO auth.mfa_factors (
+        id, user_id, friendly_name, factor_type, status, secret, created_at, updated_at
+    ) VALUES 
+    (
+        '00000000-0000-0000-0000-0000000000f1',
+        '00000000-0000-0000-0000-000000000001',
+        'Primary Authenticator',
+        'totp',
+        'verified',
+        'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP',
+        NOW(),
+        NOW()
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000f2',
+        '00000000-0000-0000-0000-000000000002',
+        'Primary Authenticator',
+        'totp',
+        'verified',
+        'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP',
+        NOW(),
+        NOW()
+    ) ON CONFLICT (id) DO NOTHING;
+EXCEPTION WHEN OTHERS THEN
+    NULL;
+END $$;
+
 -- ============================================================================
 -- 2. USER ROLES (RBAC)
 -- ============================================================================

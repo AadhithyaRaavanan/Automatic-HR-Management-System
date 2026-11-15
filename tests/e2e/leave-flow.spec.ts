@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { generateSync } from "otplib";
 
 test.describe("Leave Management Module - E2E Flows", () => {
   test("Employee views leave balances and submits leave request with live validation", async ({
@@ -95,10 +96,16 @@ test.describe("Leave Management Module - E2E Flows", () => {
     await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 15000 });
     if (page.url().includes("/mfa-challenge") || page.url().includes("/mfa-setup")) {
       const demoBtn = page.getByRole("button", { name: /1-Click/i });
-      if (await demoBtn.isVisible().catch(() => false)) {
+      if (await demoBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
         await demoBtn.click();
-        await page.waitForURL((url) => !url.pathname.includes("/mfa"), { timeout: 15000 });
+      } else {
+        const code = generateSync({ secret: "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP" });
+        const input = page.locator('input[type="text"]');
+        await input.fill(code);
+        await input.press("Enter");
+        await page.getByRole("button", { name: /Verify & Continue/i }).click().catch(() => {});
       }
+      await page.waitForURL((url) => !url.pathname.includes("/mfa"), { timeout: 30000 });
     }
 
     // 2. Navigate to /hr/leave

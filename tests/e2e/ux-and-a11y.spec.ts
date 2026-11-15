@@ -1,5 +1,33 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { generateSync } from "otplib";
+
+async function passMfaIfPresent(page: any) {
+  if (page.url().includes("/mfa-setup")) {
+    const secretLocator = page.getByTestId("mfa-secret");
+    if (await secretLocator.isVisible({ timeout: 5000 }).catch(() => false)) {
+      const secret = (await secretLocator.textContent())?.trim().replace(/\s+/g, "") || "";
+      const code = generateSync({ secret });
+      const input = page.locator('input[type="text"]');
+      await input.fill(code);
+      await input.press("Enter");
+      await page.getByRole("button", { name: /Confirm & Complete Enrollment/i }).click().catch(() => {});
+      await page.waitForURL((url: any) => !url.pathname.includes("/mfa"), { timeout: 30000 });
+    }
+  } else if (page.url().includes("/mfa-challenge")) {
+    const demoBtn = page.getByRole("button", { name: /1-Click/i });
+    if (await demoBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await demoBtn.click();
+    } else {
+      const code = generateSync({ secret: "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP" });
+      const input = page.locator('input[type="text"]');
+      await input.fill(code);
+      await input.press("Enter");
+      await page.getByRole("button", { name: /Verify & Continue/i }).click().catch(() => {});
+    }
+    await page.waitForURL((url: any) => !url.pathname.includes("/mfa"), { timeout: 30000 });
+  }
+}
 
 test.describe("UX Refinements, Responsive Layouts, and Accessibility Suite", () => {
   // 1. Login loading overlay and double submit protection
@@ -120,14 +148,7 @@ test.describe("UX Refinements, Responsive Layouts, and Accessibility Suite", () 
     await page.locator('input[type="password"]').fill("DemoPassword123!");
     await page.locator('button[type="submit"]').click();
     await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 30000 });
-
-    if (page.url().includes("/mfa-challenge") || page.url().includes("/mfa-setup")) {
-      const demoBtn = page.getByRole("button", { name: /1-Click/i });
-      if (await demoBtn.isVisible().catch(() => false)) {
-        await demoBtn.click();
-        await page.waitForURL((url) => !url.pathname.includes("/mfa"), { timeout: 30000 });
-      }
-    }
+    await passMfaIfPresent(page);
 
     await page.goto("/admin/users");
     await expect(page.getByText(/Workforce Directory/i)).toBeVisible();
@@ -144,6 +165,7 @@ test.describe("UX Refinements, Responsive Layouts, and Accessibility Suite", () 
     await page.locator('input[type="password"]').fill("DemoPassword123!");
     await page.getByRole("button", { name: /sign in/i }).click();
     await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 30000 });
+    await passMfaIfPresent(page);
 
     await page.goto("/admin/users");
     const inviteBtn = page.getByRole("button", { name: /invite member/i }).first();

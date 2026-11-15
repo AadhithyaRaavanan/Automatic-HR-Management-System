@@ -49,3 +49,7 @@ next-env.d.ts
 /scripts/*
 !/scripts/mutation-check.mjs
 !/scripts/generate-traceability.mjs
+!/scripts/scan-secrets.mjs
+!/scripts/verify-docs.mjs
+!/scripts/verify-release.mjs
+!/scripts/bootstrap-production.ts

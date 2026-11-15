@@ -610,28 +610,28 @@ describe("Item 2 & Section 0d: Live pg_proc Security Matrix & Function Reconcili
   let org1LeaveTypeId: string;
 
   async function cleanupFixtures() {
-    await client.query("ROLLBACK;").catch(() => {});
-    await client.query("RESET ROLE;").catch(() => {});
-    await client.query(`DELETE FROM public.notifications WHERE organization_id = $1;`, [FIX.org2Id]).catch(() => {});
-    await client.query(`DELETE FROM public.audit_logs WHERE organization_id = $1;`, [FIX.org2Id]).catch(() => {});
-    await client.query(`DELETE FROM public.tasks WHERE id = $1;`, [FIX.org1Task]).catch(() => {});
-    await client.query(`DELETE FROM public.kpi_periods WHERE id = $1;`, [FIX.org1KpiPeriod]).catch(() => {});
-    await client.query(`DELETE FROM public.kpi_definitions WHERE id = $1;`, [FIX.org1KpiDef]).catch(() => {});
-    await client.query(`DELETE FROM public.approval_delegations WHERE id = $1;`, [FIX.org1Delegation]).catch(() => {});
-    await client.query(`DELETE FROM public.holidays WHERE id = $1;`, [FIX.org1Holiday]).catch(() => {});
-    await client.query(`DELETE FROM public.regularization_requests WHERE id = $1;`, [FIX.org1RegReq]).catch(() => {});
-    await client.query(`DELETE FROM public.leave_requests WHERE id = $1;`, [FIX.org1LeaveReq]).catch(() => {});
-    await client.query(`DELETE FROM public.shift_templates WHERE id = $1;`, [FIX.org1Shift]).catch(() => {});
-    await client.query(`DELETE FROM public.locations WHERE id = $1;`, [FIX.org1Loc]).catch(() => {});
-    await client.query(`DELETE FROM public.departments WHERE id = $1;`, [FIX.org1Dept]).catch(() => {});
-    await client.query(`DELETE FROM public.retention_policies WHERE organization_id = $1;`, [FIX.org2Id]).catch(() => {});
+    await client.query("ROLLBACK;").catch(() => { });
+    await client.query("RESET ROLE;").catch(() => { });
+    await client.query(`DELETE FROM public.notifications WHERE organization_id = $1;`, [FIX.org2Id]).catch(() => { });
+    await client.query(`DELETE FROM public.audit_logs WHERE organization_id = $1;`, [FIX.org2Id]).catch(() => { });
+    await client.query(`DELETE FROM public.tasks WHERE id = $1;`, [FIX.org1Task]).catch(() => { });
+    await client.query(`DELETE FROM public.kpi_periods WHERE id = $1;`, [FIX.org1KpiPeriod]).catch(() => { });
+    await client.query(`DELETE FROM public.kpi_definitions WHERE id = $1;`, [FIX.org1KpiDef]).catch(() => { });
+    await client.query(`DELETE FROM public.approval_delegations WHERE id = $1;`, [FIX.org1Delegation]).catch(() => { });
+    await client.query(`DELETE FROM public.holidays WHERE id = $1;`, [FIX.org1Holiday]).catch(() => { });
+    await client.query(`DELETE FROM public.regularization_requests WHERE id = $1;`, [FIX.org1RegReq]).catch(() => { });
+    await client.query(`DELETE FROM public.leave_requests WHERE id = $1;`, [FIX.org1LeaveReq]).catch(() => { });
+    await client.query(`DELETE FROM public.shift_templates WHERE id = $1;`, [FIX.org1Shift]).catch(() => { });
+    await client.query(`DELETE FROM public.locations WHERE id = $1;`, [FIX.org1Loc]).catch(() => { });
+    await client.query(`DELETE FROM public.departments WHERE id = $1;`, [FIX.org1Dept]).catch(() => { });
+    await client.query(`DELETE FROM public.retention_policies WHERE organization_id = $1;`, [FIX.org2Id]).catch(() => { });
 
     for (const uid of [FIX.org2Admin, FIX.org2Employee, FIX.org1SuspendedAdmin, FIX.org1OtherEmp]) {
-      await client.query(`DELETE FROM public.organization_members WHERE user_id = $1;`, [uid]).catch(() => {});
-      await client.query(`DELETE FROM public.employees WHERE id = $1;`, [uid]).catch(() => {});
-      await client.query(`DELETE FROM auth.users WHERE id = $1;`, [uid]).catch(() => {});
+      await client.query(`DELETE FROM public.organization_members WHERE user_id = $1;`, [uid]).catch(() => { });
+      await client.query(`DELETE FROM public.employees WHERE id = $1;`, [uid]).catch(() => { });
+      await client.query(`DELETE FROM auth.users WHERE id = $1;`, [uid]).catch(() => { });
     }
-    await client.query(`DELETE FROM public.organizations WHERE id = $1;`, [FIX.org2Id]).catch(() => {});
+    await client.query(`DELETE FROM public.organizations WHERE id = $1;`, [FIX.org2Id]).catch(() => { });
   }
 
   beforeAll(async () => {
@@ -784,8 +784,8 @@ describe("Item 2 & Section 0d: Live pg_proc Security Matrix & Function Reconcili
         await client.query("SET LOCAL ROLE authenticated;");
         await expect(client.query(cronSql)).rejects.toThrow(/permission denied/i);
       } finally {
-        await client.query("ROLLBACK;").catch(() => {});
-        await client.query("RESET ROLE;").catch(() => {});
+        await client.query("ROLLBACK;").catch(() => { });
+        await client.query("RESET ROLE;").catch(() => { });
       }
     }
   });
@@ -854,8 +854,8 @@ describe("Item 2 & Section 0d: Live pg_proc Security Matrix & Function Reconcili
       } catch (e) {
         caught = e;
       } finally {
-        await client.query("ROLLBACK;").catch(() => {});
-        await client.query("RESET ROLE;").catch(() => {});
+        await client.query("ROLLBACK;").catch(() => { });
+        await client.query("RESET ROLE;").catch(() => { });
       }
 
       if (cell.expected === "throws") {
@@ -911,7 +911,7 @@ describe("Item 2 & Section 0d: Live pg_proc Security Matrix & Function Reconcili
 
     console.log(
       `[pg_proc 4-Cell Security Matrix] Tested ${summaryRows.length} authenticated SECURITY DEFINER functions; ` +
-        `4/4 covered=${summaryRows.length - missingCells.length}, partial(with explicit N/A)=${missingCells.length}`
+      `4/4 covered=${summaryRows.length - missingCells.length}, partial(with explicit N/A)=${missingCells.length}`
     );
     for (const m of missingCells) {
       console.log(`  N/A cell(s) -> ${m.sig}: ${m.missing.join(" | ")}`);
@@ -954,10 +954,10 @@ describe("Item 2 & Section 0d: Live pg_proc Security Matrix & Function Reconcili
         await client.query("ROLLBACK;");
         return r.rows[0].role;
       } catch (err) {
-        await client.query("ROLLBACK;").catch(() => {});
+        await client.query("ROLLBACK;").catch(() => { });
         throw err;
       } finally {
-        await client.query("RESET ROLE;").catch(() => {});
+        await client.query("RESET ROLE;").catch(() => { });
       }
     };
 

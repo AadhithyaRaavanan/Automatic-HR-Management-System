@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { generateSync } from "otplib";
 
 test.describe("Phase 3: Organization Admin Role-Based Access Control E2E", () => {
   const allAdminRoutes = [
@@ -35,11 +36,16 @@ test.describe("Phase 3: Organization Admin Role-Based Access Control E2E", () =>
     await page.waitForTimeout(1000);
     if (page.url().includes("/mfa")) {
       const demoBtn = page.getByRole("button", { name: /1-Click/i });
-      await demoBtn.waitFor({ state: "visible", timeout: 10000 }).catch(() => {});
-      if (await demoBtn.isVisible().catch(() => false)) {
+      if (await demoBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
         await demoBtn.click();
-        await page.waitForURL((url) => !url.pathname.includes("/mfa"), { timeout: 30000 });
+      } else {
+        const code = generateSync({ secret: "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP" });
+        const input = page.locator('input[type="text"]');
+        await input.fill(code);
+        await input.press("Enter");
+        await page.getByRole("button", { name: /Verify & Continue/i }).click().catch(() => {});
       }
+      await page.waitForURL((url) => !url.pathname.includes("/mfa"), { timeout: 30000 });
     }
 
     // HR permitted on /admin/users
@@ -73,11 +79,16 @@ test.describe("Phase 3: Organization Admin Role-Based Access Control E2E", () =>
     await page.waitForTimeout(1000);
     if (page.url().includes("/mfa")) {
       const demoBtn = page.getByRole("button", { name: /1-Click/i });
-      await demoBtn.waitFor({ state: "visible", timeout: 10000 }).catch(() => {});
-      if (await demoBtn.isVisible().catch(() => false)) {
+      if (await demoBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
         await demoBtn.click();
-        await page.waitForURL((url) => !url.pathname.includes("/mfa"), { timeout: 30000 });
+      } else {
+        const code = generateSync({ secret: "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP" });
+        const input = page.locator('input[type="text"]');
+        await input.fill(code);
+        await input.press("Enter");
+        await page.getByRole("button", { name: /Verify & Continue/i }).click().catch(() => {});
       }
+      await page.waitForURL((url) => !url.pathname.includes("/mfa"), { timeout: 30000 });
     }
 
     // 1. /admin/users
@@ -95,7 +106,7 @@ test.describe("Phase 3: Organization Admin Role-Based Access Control E2E", () =>
 
     // 4. /admin/shifts
     await page.goto("/admin/shifts", { waitUntil: "domcontentloaded" });
-    await expect(page.getByText(/Shift Templates/i)).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Work Schedules & Shift Templates/i })).toBeVisible();
 
     // 5. /admin/settings
     await page.goto("/admin/settings", { waitUntil: "domcontentloaded" });

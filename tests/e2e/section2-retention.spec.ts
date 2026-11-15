@@ -59,7 +59,7 @@ async function signInWithMfaIfNeeded(
       }
       const code = generateSync({ secret });
       await page.locator('input[type="text"]').fill(code);
-      await page.getByRole("button", { name: /Verify Authenticator Code/i }).click();
+      await page.getByRole("button", { name: /Verify & Continue|Verify Authenticator Code/i }).click();
     }
     await page.waitForURL((url) => !url.pathname.includes("/mfa"), { timeout: 30000 });
   }

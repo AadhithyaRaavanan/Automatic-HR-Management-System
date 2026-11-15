@@ -6,17 +6,19 @@ function resolveDemoModeFlag(): string | undefined {
   if (process.env.NEXT_PUBLIC_DEMO_MODE !== undefined) {
     return process.env.NEXT_PUBLIC_DEMO_MODE;
   }
-  const envLocalPath = path.resolve(process.cwd(), ".env.local");
-  if (fs.existsSync(envLocalPath)) {
-    const content = fs.readFileSync(envLocalPath, "utf-8");
-    const match = content
-      .split(/\r?\n/)
-      .find((line) => line.trim().startsWith("NEXT_PUBLIC_DEMO_MODE="));
-    if (match) {
-      return match.split("=").slice(1).join("=").trim().replace(/^["']|["']$/g, "");
+  for (const file of [".env.staging", ".env.local"]) {
+    const envPath = path.resolve(process.cwd(), file);
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, "utf-8");
+      const match = content
+        .split(/\r?\n/)
+        .find((line) => line.trim().startsWith("NEXT_PUBLIC_DEMO_MODE="));
+      if (match) {
+        return match.split("=").slice(1).join("=").trim().replace(/^["']|["']$/g, "");
+      }
     }
   }
-  return undefined;
+  return "false";
 }
 
 test.describe("Attendance Management System - E2E Flows", () => {
