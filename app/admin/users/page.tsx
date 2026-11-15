@@ -26,11 +26,20 @@ import {
   ShieldCheck,
   Briefcase,
   Building2,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { JobTitlesManager } from "@/features/admin/components/job-titles-manager";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import {
+  getStoredDepartments,
+  getStoredJobTitles,
+  getStoredUsers,
+  addStoredUser,
+  updateStoredUser,
+  deleteStoredUser,
+} from "@/lib/storage/demo-store";
 
 interface EmployeeUser {
   id: string;
@@ -138,52 +147,89 @@ function UsersDirectoryContent() {
   const loadDirectory = React.useCallback(async () => {
     setLoading(true);
     try {
-      const [{ data: emps }, { data: members }, { data: jobTitlesData }, { data: deptsData }] = await Promise.all([
-        (supabase as any)
-          .from("employees")
-          .select(
-            "id, full_name, email, work_mode, status, timezone, shift_start_time, shift_end_time, department_id, job_title_id, departments:department_id(id, name), job_titles:job_title_id(id, title_name), locations:primary_location_id(name)"
-          )
-          .order("full_name"),
-        (supabase as any)
-          .from("organization_members")
-          .select("user_id, role, status, shift_start_time, shift_end_time, department_id, job_title_id"),
-        (supabase as any)
-          .from("job_titles")
-          .select("id, title_name")
-          .order("title_name"),
-        (supabase as any)
-          .from("departments")
-          .select("id, name")
-          .order("name"),
-      ]);
+      const storedTitles = getStoredJobTitles();
+      const storedDepts = getStoredDepartments();
+      const storedUsers = getStoredUsers();
 
-      if (jobTitlesData) setJobTitlesList(jobTitlesData);
-      if (deptsData) setDepartmentsList(deptsData);
+      let emps: any = null;
+      let members: any = null;
+      let jobTitlesData: any = null;
+      let deptsData: any = null;
 
-      const memberMap = new Map<
-        string,
-        {
-          role: string;
-          status: string;
-          shiftStartTime: string;
-          shiftEndTime: string;
-          departmentId?: string;
-          jobTitleId?: string;
-        }
-      >();
-      for (const m of members || []) {
-        memberMap.set(m.user_id, {
-          role: m.role,
-          status: m.status,
-          shiftStartTime: (m.shift_start_time || "09:00:00").slice(0, 5),
-          shiftEndTime: (m.shift_end_time || "17:00:00").slice(0, 5),
-          departmentId: m.department_id,
-          jobTitleId: m.job_title_id,
-        });
+      try {
+        const results = await Promise.all([
+          (supabase as any)
+            .from("employees")
+            .select(
+              "id, full_name, email, work_mode, status, timezone, shift_start_time, shift_end_time, department_id, job_title_id, departments:department_id(id, name), job_titles:job_title_id(id, title_name), locations:primary_location_id(name)"
+            )
+            .order("full_name"),
+          (supabase as any)
+            .from("organization_members")
+            .select("user_id, role, status, shift_start_time, shift_end_time, department_id, job_title_id"),
+          (supabase as any)
+            .from("job_titles")
+            .select("id, title_name")
+            .order("title_name"),
+          (supabase as any)
+            .from("departments")
+            .select("id, name")
+            .order("name"),
+        ]);
+        emps = results[0]?.data;
+        members = results[1]?.data;
+        jobTitlesData = results[2]?.data;
+        deptsData = results[3]?.data;
+      } catch {
+        // Supabase not running, continue with stored
       }
 
+      // Merge stored job titles with database
+      const mergedTitles: { id: string; title_name: string }[] = storedTitles.map((t) => ({
+        id: t.id,
+        title_name: t.title_name,
+      }));
+      for (const jt of jobTitlesData || []) {
+        if (!mergedTitles.some((t) => t.id === jt.id || t.title_name === jt.title_name)) {
+          mergedTitles.push({ id: jt.id, title_name: jt.title_name });
+        }
+      }
+      setJobTitlesList(mergedTitles);
+
+      // Merge stored departments with database
+      const mergedDepts: { id: string; name: string }[] = storedDepts.map((d) => ({
+        id: d.id,
+        name: d.name,
+      }));
+      for (const d of deptsData || []) {
+        if (!mergedDepts.some((md) => md.id === d.id || md.name === d.name)) {
+          mergedDepts.push({ id: d.id, name: d.name });
+        }
+      }
+      setDepartmentsList(mergedDepts);
+
       if (emps && emps.length > 0) {
+        const memberMap = new Map<
+          string,
+          {
+            role: string;
+            status: string;
+            shiftStartTime: string;
+            shiftEndTime: string;
+            departmentId?: string;
+            jobTitleId?: string;
+          }
+        >();
+        for (const m of members || []) {
+          memberMap.set(m.user_id, {
+            role: m.role,
+            status: m.status,
+            shiftStartTime: (m.shift_start_time || "09:00:00").slice(0, 5),
+            shiftEndTime: (m.shift_end_time || "17:00:00").slice(0, 5),
+            departmentId: m.department_id,
+            jobTitleId: m.job_title_id,
+          });
+        }
         setUsers(
           emps.map((e: any) => {
             const mem = memberMap.get(e.id);
@@ -211,84 +257,25 @@ function UsersDirectoryContent() {
             };
           })
         );
-      } else if (isDemoModeEnabled()) {
-        const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_users") : null;
-        if (stored) {
-          try {
-            setUsers(JSON.parse(stored));
-            return;
-          } catch {}
-        }
-        const defaultDemoUsers: EmployeeUser[] = [
-          {
-            id: "demo-user-1",
-            name: "James Aathithyan",
-            email: "admin@remotehr.io",
-            role: "admin",
-            workMode: "remote",
-            department: "Engineering",
-            departmentId: "dept-1",
-            jobTitle: "Lead Systems Architect",
-            jobTitleId: "jt-1",
-            location: "San Francisco HQ",
-            status: "active",
-            timezone: "America/Los_Angeles",
-            shiftStartTime: "09:00",
-            shiftEndTime: "17:00",
-          },
-          {
-            id: "demo-user-2",
-            name: "Sarah Jenkins",
-            email: "hr@remotehr.io",
-            role: "hr",
-            workMode: "hybrid",
-            department: "People Operations",
-            departmentId: "dept-2",
-            jobTitle: "HR Director",
-            jobTitleId: "jt-2",
-            location: "New York Hub",
-            status: "active",
-            timezone: "America/New_York",
-            shiftStartTime: "09:00",
-            shiftEndTime: "17:00",
-          },
-          {
-            id: "demo-user-3",
-            name: "David Chen",
-            email: "manager@remotehr.io",
-            role: "manager",
-            workMode: "remote",
-            department: "Engineering",
-            departmentId: "dept-1",
-            jobTitle: "Engineering Manager",
-            jobTitleId: "jt-3",
-            location: "Remote",
-            status: "active",
-            timezone: "America/Chicago",
-            shiftStartTime: "08:30",
-            shiftEndTime: "16:30",
-          },
-          {
-            id: "demo-user-4",
-            name: "Maya Patel",
-            email: "employee@remotehr.io",
-            role: "employee",
-            workMode: "remote",
-            department: "Design",
-            departmentId: "dept-3",
-            jobTitle: "Senior Product Designer",
-            jobTitleId: "jt-4",
-            location: "Remote",
-            status: "active",
-            timezone: "Europe/London",
-            shiftStartTime: "09:00",
-            shiftEndTime: "17:00",
-          },
-        ];
-        setUsers(defaultDemoUsers);
-        if (typeof window !== "undefined") {
-          try { localStorage.setItem("remotehr_demo_users", JSON.stringify(defaultDemoUsers)); } catch {}
-        }
+      } else {
+        setUsers(
+          storedUsers.map((u) => ({
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            role: u.role,
+            workMode: u.workMode || "remote",
+            department: u.department || "Unassigned",
+            departmentId: u.departmentId || "",
+            jobTitle: u.jobTitle || "",
+            jobTitleId: u.jobTitleId || "",
+            location: u.location || "Remote",
+            status: u.status === "inactive" ? ("inactive" as const) : ("active" as const),
+            timezone: u.timezone || "UTC",
+            shiftStartTime: u.shiftStartTime || "09:00",
+            shiftEndTime: u.shiftEndTime || "17:00",
+          }))
+        );
       }
     } catch {
       // Keep UI clean
@@ -299,6 +286,11 @@ function UsersDirectoryContent() {
 
   React.useEffect(() => {
     loadDirectory();
+    const handleStorageChange = () => loadDirectory();
+    window.addEventListener("remotehr_storage_change", handleStorageChange);
+    return () => {
+      window.removeEventListener("remotehr_storage_change", handleStorageChange);
+    };
   }, [loadDirectory]);
 
   const handleOpenInvite = () => {
@@ -324,31 +316,23 @@ function UsersDirectoryContent() {
     if (isDemoModeEnabled()) {
       const selectedJobTitleObj = jobTitlesList.find((j) => j.id === inviteJobTitleId);
       const selectedDeptObj = departmentsList.find((d) => d.id === inviteDepartmentId);
-      const newUser: EmployeeUser = {
-        id: `user-${Date.now()}`,
+      const newUser = addStoredUser({
         name: inviteName,
         email: inviteEmail,
         role: inviteRole,
-        workMode: inviteWorkMode,
-        department: selectedDeptObj?.name || "Engineering",
-        departmentId: inviteDepartmentId || "dept-1",
+        workMode: inviteWorkMode as any,
+        department: selectedDeptObj?.name || "Unassigned",
+        departmentId: inviteDepartmentId || "",
         jobTitle: selectedJobTitleObj?.title_name || "Specialist",
-        jobTitleId: inviteJobTitleId || "jt-1",
+        jobTitleId: inviteJobTitleId || "",
         location: "Remote",
         status: "active",
         timezone: inviteTimezone,
         shiftStartTime: inviteShiftStart,
         shiftEndTime: inviteShiftEnd,
-      };
-
-      setUsers((prev) => {
-        const next = [newUser, ...prev];
-        if (typeof window !== "undefined") {
-          try { localStorage.setItem("remotehr_demo_users", JSON.stringify(next)); } catch {}
-        }
-        return next;
       });
 
+      setUsers(getStoredUsers() as any);
       toast.success(`User ${inviteEmail} invited successfully! (demo session)`);
       setInviteModalOpen(false);
       setCreatedCredentials({
@@ -435,28 +419,23 @@ function UsersDirectoryContent() {
     if (isDemoModeEnabled()) {
       const selectedJobTitleObj = jobTitlesList.find((j) => j.id === govJobTitleId);
       const selectedDeptObj = departmentsList.find((d) => d.id === govDepartmentId);
-      setUsers((prev) => {
-        const next = prev.map((u) =>
-          u.id === selectedUser.id
-            ? {
-                ...u,
-                workMode: govWorkMode,
-                timezone: govTimezone,
-                status: govStatus === "active" ? ("active" as const) : ("inactive" as const),
-                shiftStartTime: govShiftStart,
-                shiftEndTime: govShiftEnd,
-                departmentId: govDepartmentId,
-                department: selectedDeptObj?.name || u.department,
-                jobTitleId: govJobTitleId,
-                jobTitle: selectedJobTitleObj?.title_name || u.jobTitle,
-              }
-            : u
-        );
-        if (typeof window !== "undefined") {
-          try { localStorage.setItem("remotehr_demo_users", JSON.stringify(next)); } catch {}
-        }
-        return next;
+      updateStoredUser({
+        id: selectedUser.id,
+        name: selectedUser.name,
+        email: selectedUser.email,
+        role: selectedUser.role,
+        workMode: govWorkMode as any,
+        timezone: govTimezone,
+        status: govStatus === "active" ? "active" : "inactive",
+        shiftStartTime: govShiftStart,
+        shiftEndTime: govShiftEnd,
+        departmentId: govDepartmentId,
+        department: selectedDeptObj?.name || selectedUser.department,
+        jobTitleId: govJobTitleId,
+        jobTitle: selectedJobTitleObj?.title_name || selectedUser.jobTitle || "",
+        location: selectedUser.location,
       });
+      setUsers(getStoredUsers() as any);
       toast.success("Governance & shift schedule updated successfully.");
       setGovernanceModalOpen(false);
       return;
@@ -517,13 +496,12 @@ function UsersDirectoryContent() {
     newRole: "employee" | "manager" | "hr" | "admin"
   ) => {
     if (isDemoModeEnabled()) {
-      setUsers((prev) => {
-        const next = prev.map((u) => (u.id === targetUserId ? { ...u, role: newRole } : u));
-        if (typeof window !== "undefined") {
-          try { localStorage.setItem("remotehr_demo_users", JSON.stringify(next)); } catch {}
-        }
-        return next;
-      });
+      const current = getStoredUsers();
+      const target = current.find((u) => u.id === targetUserId);
+      if (target) {
+        updateStoredUser({ ...target, role: newRole });
+        setUsers(getStoredUsers() as any);
+      }
       toast.success(`Role updated to ${newRole}.`);
       return;
     }
@@ -556,17 +534,15 @@ function UsersDirectoryContent() {
     }
 
     if (isDemoModeEnabled()) {
-      setUsers((prev) => {
-        const next = prev.map((u) =>
-          u.id === user.id
-            ? { ...u, status: u.status === "active" ? ("inactive" as const) : ("active" as const) }
-            : u
-        );
-        if (typeof window !== "undefined") {
-          try { localStorage.setItem("remotehr_demo_users", JSON.stringify(next)); } catch {}
-        }
-        return next;
-      });
+      const current = getStoredUsers();
+      const target = current.find((u) => u.id === user.id);
+      if (target) {
+        updateStoredUser({
+          ...target,
+          status: target.status === "active" ? "inactive" : "active",
+        });
+        setUsers(getStoredUsers() as any);
+      }
       toast.success(`${user.name} status updated.`);
       return;
     }
@@ -585,6 +561,25 @@ function UsersDirectoryContent() {
     } catch (err: any) {
       toast.error(err.message || "Failed to deactivate");
     }
+  };
+
+  const handleDeleteUser = async (user: EmployeeUser) => {
+    if (
+      !confirm(
+        `Are you sure you want to permanently delete ${user.name}? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    deleteStoredUser(user.id);
+    try {
+      await (supabase.from("employees") as any).delete().eq("id", user.id);
+      await (supabase.from("organization_members") as any).delete().eq("user_id", user.id);
+    } catch {}
+
+    setUsers(getStoredUsers() as any);
+    toast.success(`${user.name} deleted successfully.`);
   };
 
   const handleResetMFA = async (user: EmployeeUser) => {
@@ -872,15 +867,26 @@ function UsersDirectoryContent() {
                             <LogOut className="w-4 h-4" />
                           </button>
                           {!isSelf && (
-                            <button
-                              type="button"
-                              onClick={() => handleDeactivate(u)}
-                              title={`Deactivate ${u.name}`}
-                              aria-label={`Deactivate ${u.name}`}
-                              className="p-1.5 rounded-xl hover:bg-status-danger-bg text-text-secondary hover:text-status-danger-text transition-colors cursor-pointer"
-                            >
-                              <UserX className="w-4 h-4" />
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleDeactivate(u)}
+                                title={`Deactivate ${u.name}`}
+                                aria-label={`Deactivate ${u.name}`}
+                                className="p-1.5 rounded-xl hover:bg-status-danger-bg text-text-secondary hover:text-status-danger-text transition-colors cursor-pointer"
+                              >
+                                <UserX className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteUser(u)}
+                                title={`Delete ${u.name}`}
+                                aria-label={`Delete ${u.name}`}
+                                className="p-1.5 rounded-xl hover:bg-status-danger-bg text-text-secondary hover:text-red-600 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
                           )}
                         </td>
                       )}
@@ -1342,7 +1348,7 @@ function UsersDirectoryContent() {
                     type="button"
                     data-testid="copy-invite-link"
                     onClick={() => {
-                      const link = createdCredentials?.inviteLink || (typeof window !== "undefined" ? `${window.location.origin}/login` : "/login");
+                      const link = createdCredentials?.inviteLink || `${window.location.origin}/login`;
                       navigator.clipboard.writeText(link);
                       setHasCopied(true);
                       toast.success("Invite link copied to clipboard!");
@@ -1422,12 +1428,12 @@ function UsersDirectoryContent() {
         </div>
       </Modal>
 
-      {/* Admin Custom Company Job Titles Manager Modal */}
-      <JobTitlesManager
-        open={jobTitlesManagerOpen}
-        onOpenChange={setJobTitlesManagerOpen}
-        onTitlesUpdated={loadDirectory}
-      />
+    {/* Admin Custom Company Job Titles Manager Modal */ }
+    < JobTitlesManager
+  open = { jobTitlesManagerOpen }
+  onOpenChange = { setJobTitlesManagerOpen }
+  onTitlesUpdated = { loadDirectory }
+    />
 
     {/* Bulk CSV Import Modal */ }
     < Modal
@@ -1574,8 +1580,8 @@ function UsersDirectoryContent() {
         )}
       </div>
     </div>
-      </Modal>
-    </div>
+      </Modal >
+    </div >
   );
 }
 

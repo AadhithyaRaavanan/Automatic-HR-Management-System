@@ -7,6 +7,7 @@ import { useDeclareCompanyDayOff } from "../hooks/use-leave";
 import { createClient } from "@/lib/supabase/client";
 import { format } from "date-fns";
 import { Building2, Calendar } from "lucide-react";
+import { getStoredDepartments } from "@/lib/storage/demo-store";
 
 interface CompanyDayOffModalProps {
   open: boolean;
@@ -24,13 +25,23 @@ export function CompanyDayOffModal({ open, onOpenChange }: CompanyDayOffModalPro
 
   React.useEffect(() => {
     async function loadDepts() {
-      const { data } = await supabase.from("departments").select("id, name").order("name");
-      if (data) setDepartments(data);
+      const depts: Array<{ id: string; name: string }> = getStoredDepartments().map((d) => ({ id: d.id, name: d.name }));
+      try {
+        const { data } = await supabase.from("departments").select("id, name").order("name");
+        if (data && (data as any[]).length > 0) {
+          for (const d of (data as any[])) {
+            if (!depts.some((item) => item.id === d.id || item.name === d.name)) {
+              depts.push({ id: d.id, name: d.name });
+            }
+          }
+        }
+      } catch {}
+      setDepartments(depts);
     }
     if (open) {
       loadDepts();
     }
-  }, [open]);
+  }, [open, supabase]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import { getStoredUsers } from "@/lib/storage/demo-store";
 
 interface TeamMemberRosterItem {
   id: string;
@@ -119,95 +120,43 @@ function TeamPageContent() {
             };
           })
         );
-      } else if (isDemoModeEnabled()) {
-        setRoster([
-          {
-            id: "demo-member-1",
-            name: "Sarah Jenkins",
-            subtitle: "People Operations",
-            timezone: "America/New_York",
-            checkInTime: "09:05 AM",
-            loggedMinutes: 420,
-            status: "online",
-            dayStatus: "present",
-            isLate: false,
-            jobTitle: "HR Director",
-            department: "People Operations",
-          },
-          {
-            id: "demo-member-2",
-            name: "David Chen",
-            subtitle: "Engineering",
-            timezone: "America/Chicago",
-            checkInTime: "08:30 AM",
+      } else {
+        const storedUsers = getStoredUsers();
+        const visibleStored = storedUsers.filter((u) => !userId || u.id !== userId);
+        setRoster(
+          visibleStored.map((u) => ({
+            id: u.id,
+            name: u.name,
+            subtitle: u.department || u.jobTitle || "Team Member",
+            timezone: u.timezone || "UTC",
+            checkInTime: u.shiftStartTime ? `${u.shiftStartTime} AM` : "09:00 AM",
             loggedMinutes: 480,
-            status: "online",
-            dayStatus: "present",
+            status: u.status === "inactive" ? "offline" : "online",
+            dayStatus: "present" as AttendanceDayStatus,
             isLate: false,
-            jobTitle: "Engineering Manager",
-            department: "Engineering",
-          },
-          {
-            id: "demo-member-3",
-            name: "Maya Patel",
-            subtitle: "Design",
-            timezone: "Europe/London",
-            checkInTime: "09:12 AM",
-            loggedMinutes: 380,
-            status: "idle",
-            dayStatus: "present",
-            isLate: true,
-            jobTitle: "Senior Product Designer",
-            department: "Design",
-          },
-        ]);
+            jobTitle: u.jobTitle || "Specialist",
+            department: u.department || "General",
+          }))
+        );
       }
     } catch {
-      if (isDemoModeEnabled()) {
-        setRoster([
-          {
-            id: "demo-member-1",
-            name: "Sarah Jenkins",
-            subtitle: "People Operations",
-            timezone: "America/New_York",
-            checkInTime: "09:05 AM",
-            loggedMinutes: 420,
-            status: "online",
-            dayStatus: "present",
-            isLate: false,
-            jobTitle: "HR Director",
-            department: "People Operations",
-          },
-          {
-            id: "demo-member-2",
-            name: "David Chen",
-            subtitle: "Engineering",
-            timezone: "America/Chicago",
-            checkInTime: "08:30 AM",
-            loggedMinutes: 480,
-            status: "online",
-            dayStatus: "present",
-            isLate: false,
-            jobTitle: "Engineering Manager",
-            department: "Engineering",
-          },
-          {
-            id: "demo-member-3",
-            name: "Maya Patel",
-            subtitle: "Design",
-            timezone: "Europe/London",
-            checkInTime: "09:12 AM",
-            loggedMinutes: 380,
-            status: "idle",
-            dayStatus: "present",
-            isLate: true,
-            jobTitle: "Senior Product Designer",
-            department: "Design",
-          },
-        ]);
-      } else {
-        setRoster([]);
-      }
+      const storedUsers = getStoredUsers();
+      const visibleStored = storedUsers.filter((u) => !userId || u.id !== userId);
+      setRoster(
+        visibleStored.map((u) => ({
+          id: u.id,
+          name: u.name,
+          subtitle: u.department || u.jobTitle || "Team Member",
+          timezone: u.timezone || "UTC",
+          checkInTime: u.shiftStartTime ? `${u.shiftStartTime} AM` : "09:00 AM",
+          loggedMinutes: 480,
+          status: u.status === "inactive" ? "offline" : "online",
+          dayStatus: "present" as AttendanceDayStatus,
+          isLate: false,
+          jobTitle: u.jobTitle || "Specialist",
+          department: u.department || "General",
+        }))
+      );
     } finally {
       setRosterLoading(false);
     }
@@ -215,6 +164,11 @@ function TeamPageContent() {
 
   React.useEffect(() => {
     loadRoster();
+    const handleStorageChange = () => loadRoster();
+    window.addEventListener("remotehr_storage_change", handleStorageChange);
+    return () => {
+      window.removeEventListener("remotehr_storage_change", handleStorageChange);
+    };
   }, [loadRoster]);
 
   // Exclude self requests from approval queue (separation of duties)

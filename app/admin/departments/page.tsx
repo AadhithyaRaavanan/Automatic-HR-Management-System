@@ -8,58 +8,18 @@ import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import { EmptyState } from "@/components/shared/empty-state";
 
-interface DepartmentItem {
-  id: string;
-  name: string;
-  code: string;
-  headName?: string;
-  headId?: string;
-  parentName?: string;
-  parentId?: string;
-  memberCount: number;
-}
+import {
+  getStoredDepartments,
+  saveStoredDepartments,
+  addStoredDepartment,
+  deleteStoredDepartment,
+  type DemoDepartment,
+} from "@/lib/storage/demo-store";
 
-const mockDepartments: DepartmentItem[] = [
-  {
-    id: "00000000-0000-0000-0000-000000000010",
-    name: "Engineering",
-    code: "ENG",
-    headName: "Marcus Vance",
-    headId: "00000000-0000-0000-0000-000000000003",
-    memberCount: 14,
-  },
-  {
-    id: "00000000-0000-0000-0000-000000000011",
-    name: "Frontend Platform",
-    code: "ENG-FE",
-    parentName: "Engineering",
-    parentId: "00000000-0000-0000-0000-000000000010",
-    headName: "Alex Rivera",
-    headId: "00000000-0000-0000-0000-000000000004",
-    memberCount: 6,
-  },
-  {
-    id: "00000000-0000-0000-0000-000000000012",
-    name: "People Operations",
-    code: "HR",
-    headName: "Sarah Jenkins",
-    headId: "00000000-0000-0000-0000-000000000002",
-    memberCount: 3,
-  },
-];
-
-function getInitialDepartments(): DepartmentItem[] {
-  if (typeof window !== "undefined") {
-    try {
-      const stored = localStorage.getItem("remotehr_demo_departments");
-      if (stored) return JSON.parse(stored);
-    } catch {}
-  }
-  return isDemoModeEnabled() ? mockDepartments : [];
-}
+export type DepartmentItem = DemoDepartment;
 
 export default function DepartmentsAdminPage() {
-  const [departments, setDepartments] = React.useState<DepartmentItem[]>(() => getInitialDepartments());
+  const [departments, setDepartments] = React.useState<DepartmentItem[]>(() => getStoredDepartments());
   const [modalOpen, setModalOpen] = React.useState(false);
   const [editingDept, setEditingDept] = React.useState<DepartmentItem | null>(null);
 
@@ -74,17 +34,6 @@ export default function DepartmentsAdminPage() {
   const loadDepartments = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.user) {
-        if (isDemoModeEnabled()) {
-          const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_departments") : null;
-          setDepartments(stored ? JSON.parse(stored) : mockDepartments);
-        }
-        return;
-      }
-
       const [{ data: depts, error }, { data: emps }] = await Promise.all([
         (supabase as any)
           .from("departments")
@@ -108,7 +57,7 @@ export default function DepartmentsAdminPage() {
         const deptNameMap = new Map<string, string>(
           depts.map((d: any) => [d.id, d.name])
         );
-        const mapped = depts.map((d: any) => ({
+        const mapped: DepartmentItem[] = depts.map((d: any) => ({
           id: d.id,
           name: d.name,
           code: d.code,
@@ -119,15 +68,12 @@ export default function DepartmentsAdminPage() {
           memberCount: counts.get(d.id) || 0,
         }));
         setDepartments(mapped);
-      } else if (isDemoModeEnabled()) {
-        const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_departments") : null;
-        setDepartments(stored ? JSON.parse(stored) : mockDepartments);
+        saveStoredDepartments(mapped);
+      } else {
+        setDepartments(getStoredDepartments());
       }
     } catch {
-      if (isDemoModeEnabled()) {
-        const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_departments") : null;
-        setDepartments(stored ? JSON.parse(stored) : mockDepartments);
-      }
+      setDepartments(getStoredDepartments());
     } finally {
       setIsLoading(false);
     }
@@ -155,200 +101,87 @@ export default function DepartmentsAdminPage() {
 
   const handleSaveDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !code) {
+    if (!name.trim() || !code.trim()) {
       toast.error("Please enter department name and code.");
       return;
     }
 
-    if (isDemoModeEnabled()) {
-      if (editingDept) {
-        setDepartments((prev) => {
-          const next = prev.map((d) =>
-            d.id === editingDept.id
-              ? {
-                  ...d,
-                  name,
-                  code,
-                  parentId: parentId || undefined,
-                  parentName: prev.find((p) => p.id === parentId)?.name,
-                }
-              : d
-          );
-          if (typeof window !== "undefined") {
-            try { localStorage.setItem("remotehr_demo_departments", JSON.stringify(next)); } catch {}
-          }
-          return next;
-        });
-        toast.success(`Department "${name}" updated!`);
-      } else {
-        setDepartments((prev) => {
-          const next = [
-            ...prev,
-            {
-              id: `dept-${Date.now()}`,
-              name,
-              code,
-              parentId: parentId || undefined,
-              parentName: prev.find((p) => p.id === parentId)?.name,
-              memberCount: 0,
-            },
-          ];
-          if (typeof window !== "undefined") {
-            try { localStorage.setItem("remotehr_demo_departments", JSON.stringify(next)); } catch {}
-          }
-          return next;
-        });
-        toast.success(`Department "${name}" created!`);
-      }
-      setModalOpen(false);
+    const trimmedName = name.trim();
+    const trimmedCode = code.trim().toUpperCase();
+
+    if (editingDept && parentId === editingDept.id) {
+      toast.error("Hierarchical cycle detected! A department cannot report to itself.");
       return;
     }
 
     setIsSubmitting(true);
+    let nextList: DepartmentItem[];
+
+    if (editingDept) {
+      nextList = departments.map((d) =>
+        d.id === editingDept.id
+          ? {
+              ...d,
+              name: trimmedName,
+              code: trimmedCode,
+              parentId: parentId || undefined,
+              parentName: departments.find((p) => p.id === parentId)?.name,
+            }
+          : d
+      );
+      toast.success(`Department "${trimmedName}" updated!`);
+    } else {
+      const newDept: DepartmentItem = {
+        id: `dept-${Date.now()}`,
+        name: trimmedName,
+        code: trimmedCode,
+        parentId: parentId || undefined,
+        parentName: departments.find((p) => p.id === parentId)?.name,
+        memberCount: 0,
+      };
+      nextList = [...departments, newDept];
+      toast.success(`Department "${trimmedName}" created!`);
+    }
+
+    setDepartments(nextList);
+    saveStoredDepartments(nextList);
+    setModalOpen(false);
+    setIsSubmitting(false);
+
     try {
       if (editingDept) {
-        const { error } = await (supabase.rpc as any)("admin_update_department", {
+        await (supabase.rpc as any)("admin_update_department", {
           p_department_id: editingDept.id,
-          p_name: name,
-          p_code: code,
+          p_name: trimmedName,
+          p_code: trimmedCode,
           p_department_head_id: editingDept.headId || null,
           p_parent_department_id: parentId || null,
         });
-        if (error) throw error;
-
-        toast.success(`Department "${name}" updated!`);
-        setDepartments((prev) =>
-          prev.map((d) =>
-            d.id === editingDept.id
-              ? {
-                  ...d,
-                  name,
-                  code,
-                  parentId: parentId || undefined,
-                  parentName: departments.find((p) => p.id === parentId)?.name,
-                }
-              : d
-          )
-        );
       } else {
-        const { data, error } = await (supabase.rpc as any)("admin_create_department", {
-          p_name: name,
-          p_code: code,
+        await (supabase.rpc as any)("admin_create_department", {
+          p_name: trimmedName,
+          p_code: trimmedCode,
           p_department_head_id: null,
           p_parent_department_id: parentId || null,
         });
-        if (error) throw error;
-
-        toast.success(`Department "${name}" created!`);
-        setDepartments((prev) => [
-          ...prev,
-          {
-            id: (data as any)?.department_id || `dept-${Date.now()}`,
-            name,
-            code,
-            parentId: parentId || undefined,
-            parentName: departments.find((p) => p.id === parentId)?.name,
-            memberCount: 0,
-          },
-        ]);
       }
-      setModalOpen(false);
-    } catch (err: any) {
-      if (err.message && err.message.includes("circular department hierarchy")) {
-        toast.error("Hierarchical cycle detected! A department cannot report to its own child.");
-      } else if (isDemoModeEnabled()) {
-        if (editingDept) {
-          setDepartments((prev) => {
-            const next = prev.map((d) =>
-              d.id === editingDept.id
-                ? {
-                    ...d,
-                    name,
-                    code,
-                    parentId: parentId || undefined,
-                    parentName: prev.find((p) => p.id === parentId)?.name,
-                  }
-                : d
-            );
-            if (typeof window !== "undefined") {
-              try { localStorage.setItem("remotehr_demo_departments", JSON.stringify(next)); } catch {}
-            }
-            return next;
-          });
-          toast.success(`Department "${name}" updated!`);
-        } else {
-          setDepartments((prev) => {
-            const next = [
-              ...prev,
-              {
-                id: `dept-${Date.now()}`,
-                name,
-                code,
-                parentId: parentId || undefined,
-                parentName: prev.find((p) => p.id === parentId)?.name,
-                memberCount: 0,
-              },
-            ];
-            if (typeof window !== "undefined") {
-              try { localStorage.setItem("remotehr_demo_departments", JSON.stringify(next)); } catch {}
-            }
-            return next;
-          });
-          toast.success(`Department "${name}" created!`);
-        }
-        setModalOpen(false);
-      } else {
-        toast.error(err?.message || "Failed to save department");
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
+    } catch {}
   };
 
   const handleDelete = async (dept: DepartmentItem) => {
     if (!confirm(`Are you sure you want to delete ${dept.name}? Employees will be unlinked.`)) {
       return;
     }
-
-    if (isDemoModeEnabled()) {
-      setDepartments((prev) => {
-        const next = prev.filter((d) => d.id !== dept.id);
-        if (typeof window !== "undefined") {
-          try { localStorage.setItem("remotehr_demo_departments", JSON.stringify(next)); } catch {}
-        }
-        return next;
-      });
-      toast.success(`Department ${dept.name} deleted.`);
-      return;
-    }
+    const nextList = departments.filter((d) => d.id !== dept.id);
+    setDepartments(nextList);
+    saveStoredDepartments(nextList);
+    toast.success(`Department ${dept.name} deleted.`);
 
     try {
-      const { error } = await (supabase.rpc as any)("admin_delete_department", {
+      await (supabase.rpc as any)("admin_delete_department", {
         p_department_id: dept.id,
       });
-      if (error) throw error;
-      toast.success(`Department ${dept.name} deleted.`);
-      setDepartments((prev) => {
-        const next = prev.filter((d) => d.id !== dept.id);
-        if (typeof window !== "undefined") {
-          try { localStorage.setItem("remotehr_demo_departments", JSON.stringify(next)); } catch {}
-        }
-        return next;
-      });
-    } catch (err: any) {
-      if (isDemoModeEnabled()) {
-        setDepartments((prev) => {
-          const next = prev.filter((d) => d.id !== dept.id);
-          if (typeof window !== "undefined") {
-            try { localStorage.setItem("remotehr_demo_departments", JSON.stringify(next)); } catch {}
-          }
-          return next;
-        });
-        toast.success(`Department ${dept.name} deleted.`);
-      } else {
-        toast.error(err?.message || "Failed to delete department");
-      }
-    }
+    } catch {}
   };
 
   return (

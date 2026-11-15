@@ -11,6 +11,7 @@ import {
 import { KpiPeriodRecord } from "@/lib/kpi/helpers";
 import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import { getStoredDepartments, getStoredUsers } from "@/lib/storage/demo-store";
 
 export interface KpiDefinitionRecord {
   id: string;
@@ -70,6 +71,18 @@ export interface KpiDepartmentOption {
 
 export function useKpiData(enabled = true) {
   const supabase = React.useMemo(() => createClient(), []);
+  const queryClient = useQueryClient();
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleStorageChange = () => {
+      queryClient.invalidateQueries({ queryKey: ["kpi-workspace"] });
+    };
+    window.addEventListener("remotehr_storage_change", handleStorageChange);
+    return () => {
+      window.removeEventListener("remotehr_storage_change", handleStorageChange);
+    };
+  }, [queryClient]);
 
   return useQuery<{
     definitions: KpiDefinitionRecord[];
@@ -82,67 +95,106 @@ export function useKpiData(enabled = true) {
     queryKey: ["kpi-workspace"],
     enabled,
     queryFn: async () => {
-      const [defsRes, periodsRes, scoresRes, reviewsRes, employeesRes, deptsRes] =
-        await Promise.all([
-          supabase
-            .from("kpi_definitions")
-            .select(
-              "id, organization_id, name, description, source_metric, target_value, direction, weight, applies_to_role, applies_to_department_id, is_active, created_by, created_at, updated_at"
-            )
-            .order("name", { ascending: true }),
-          supabase
-            .from("kpi_periods")
-            .select(
-              "id, organization_id, name, period_type, start_date, end_date, status, closed_at, closed_by, created_by, created_at"
-            )
-            .order("start_date", { ascending: false }),
-          supabase
-            .from("kpi_scores")
-            .select(
-              "id, organization_id, period_id, employee_id, kpi_definition_id, actual_value, target_value, score, computed_at"
-            )
-            .order("computed_at", { ascending: false }),
-          supabase
-            .from("kpi_reviews")
-            .select(
-              "id, organization_id, period_id, employee_id, reviewer_id, rating, comment, created_at, updated_at"
-            )
-            .order("updated_at", { ascending: false }),
-          supabase
-            .from("employees")
-            .select("id, full_name, email, manager_id, department_id, status")
-            .eq("status", "active")
-            .order("full_name", { ascending: true }),
-          supabase
-            .from("departments")
-            .select("id, name, code")
-            .order("name", { ascending: true }),
-        ]);
+      let defsData: any[] = [];
+      let periodsData: any[] = [];
+      let scoresData: any[] = [];
+      let reviewsData: any[] = [];
+      let employeesData: any[] = [];
+      let deptsData: any[] = [];
 
-      if (defsRes.error) throw defsRes.error;
-      if (periodsRes.error) throw periodsRes.error;
-      if (scoresRes.error) throw scoresRes.error;
-      if (reviewsRes.error) throw reviewsRes.error;
+      try {
+        const [defsRes, periodsRes, scoresRes, reviewsRes, employeesRes, deptsResResult] =
+          await Promise.all([
+            supabase
+              .from("kpi_definitions")
+              .select(
+                "id, organization_id, name, description, source_metric, target_value, direction, weight, applies_to_role, applies_to_department_id, is_active, created_by, created_at, updated_at"
+              )
+              .order("name", { ascending: true }),
+            supabase
+              .from("kpi_periods")
+              .select(
+                "id, organization_id, name, period_type, start_date, end_date, status, closed_at, closed_by, created_by, created_at"
+              )
+              .order("start_date", { ascending: false }),
+            supabase
+              .from("kpi_scores")
+              .select(
+                "id, organization_id, period_id, employee_id, kpi_definition_id, actual_value, target_value, score, computed_at"
+              )
+              .order("computed_at", { ascending: false }),
+            supabase
+              .from("kpi_reviews")
+              .select(
+                "id, organization_id, period_id, employee_id, reviewer_id, rating, comment, created_at, updated_at"
+              )
+              .order("updated_at", { ascending: false }),
+            supabase
+              .from("employees")
+              .select("id, full_name, email, manager_id, department_id, status")
+              .eq("status", "active")
+              .order("full_name", { ascending: true }),
+            supabase
+              .from("departments")
+              .select("id, name, code")
+              .order("name", { ascending: true }),
+          ]);
+
+        if (defsRes?.data) defsData = defsRes.data;
+        if (periodsRes?.data) periodsData = periodsRes.data;
+        if (scoresRes?.data) scoresData = scoresRes.data;
+        if (reviewsRes?.data) reviewsData = reviewsRes.data;
+        if (employeesRes?.data) employeesData = employeesRes.data;
+        if (deptsResResult?.data) deptsData = deptsResResult.data;
+      } catch {
+        // Fallback gracefully
+      }
+
+      const storedDepts = getStoredDepartments();
+      const storedEmployees = getStoredUsers();
+
+      const mergedDepts: KpiDepartmentOption[] = [...storedDepts.map((d) => ({ id: d.id, name: d.name, code: d.code }))];
+      for (const d of deptsData) {
+        if (!mergedDepts.some((md) => md.id === d.id || md.name === d.name)) {
+          mergedDepts.push(d);
+        }
+      }
+
+      const mergedEmployees: KpiEmployeeOption[] = [
+        ...storedEmployees.map((u) => ({
+          id: u.id,
+          full_name: u.name,
+          email: u.email,
+          manager_id: null,
+          department_id: u.departmentId || null,
+          status: u.status,
+        })),
+      ];
+      for (const e of employeesData) {
+        if (!mergedEmployees.some((me) => me.id === e.id)) {
+          mergedEmployees.push(e);
+        }
+      }
 
       return {
-        definitions: (defsRes.data || []).map((d: any) => ({
+        definitions: defsData.map((d: any) => ({
           ...d,
           target_value: Number(d.target_value),
           weight: Number(d.weight),
         })) as KpiDefinitionRecord[],
-        periods: (periodsRes.data || []) as KpiPeriodRecord[],
-        scores: (scoresRes.data || []).map((s: any) => ({
+        periods: periodsData as KpiPeriodRecord[],
+        scores: scoresData.map((s: any) => ({
           ...s,
           actual_value: s.actual_value === null || s.actual_value === undefined ? null : Number(s.actual_value),
           target_value: Number(s.target_value),
           score: s.score === null || s.score === undefined ? null : Number(s.score),
         })) as KpiScoreRecord[],
-        reviews: (reviewsRes.data || []).map((r: any) => ({
+        reviews: reviewsData.map((r: any) => ({
           ...r,
           rating: Number(r.rating),
         })) as KpiReviewRecord[],
-        employees: (employeesRes.data || []) as KpiEmployeeOption[],
-        departments: (deptsRes.data || []) as KpiDepartmentOption[],
+        employees: mergedEmployees,
+        departments: mergedDepts,
       };
     },
   });

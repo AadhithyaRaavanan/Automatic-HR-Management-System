@@ -6,6 +6,16 @@ import { createClient } from "@/lib/supabase/client";
 import { TaskPriority, TaskStatus } from "@/types/database.types";
 import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import {
+  getStoredDepartments,
+  getStoredProjects,
+  getStoredTasks,
+  getStoredUsers,
+  addStoredProject,
+  addStoredTask,
+  updateStoredTask,
+  deleteStoredTask,
+} from "@/lib/storage/demo-store";
 
 export interface ProjectRecord {
   id: string;
@@ -111,6 +121,18 @@ export function getTaskDueState(
 
 export function useTasksData(enabled = true) {
   const supabase = React.useMemo(() => createClient(), []);
+  const queryClient = useQueryClient();
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleStorageChange = () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks-workspace"] });
+    };
+    window.addEventListener("remotehr_storage_change", handleStorageChange);
+    return () => {
+      window.removeEventListener("remotehr_storage_change", handleStorageChange);
+    };
+  }, [queryClient]);
 
   return useQuery<{
     tasks: TaskRecord[];
@@ -121,35 +143,124 @@ export function useTasksData(enabled = true) {
     queryKey: ["tasks-workspace"],
     enabled,
     queryFn: async () => {
-      const [tasksRes, projectsRes, employeesRes, departmentsRes] = await Promise.all([
-        supabase
-          .from("tasks")
-          .select(
-            "id, organization_id, project_id, parent_task_id, title, description, creator_id, assignee_id, status, priority, due_date, estimated_minutes, started_at, completed_at, cancelled_at, created_at, updated_at"
-          )
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("projects")
-          .select("id, organization_id, department_id, name, code, description, status, created_by, created_at")
-          .order("name", { ascending: true }),
-        supabase
-          .from("employees")
-          .select("id, full_name, email, manager_id, status")
-          .eq("status", "active")
-          .order("full_name", { ascending: true }),
-        supabase
-          .from("departments")
-          .select("id, name, code")
-          .order("name", { ascending: true }),
-      ]);
+      let tasksData: any[] = [];
+      let projectsData: any[] = [];
+      let employeesData: any[] = [];
+      let departmentsData: any[] = [];
 
-      if (tasksRes.error) throw tasksRes.error;
+      try {
+        const [tasksRes, projectsRes, employeesRes, departmentsRes] = await Promise.all([
+          supabase
+            .from("tasks")
+            .select(
+              "id, organization_id, project_id, parent_task_id, title, description, creator_id, assignee_id, status, priority, due_date, estimated_minutes, started_at, completed_at, cancelled_at, created_at, updated_at"
+            )
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("projects")
+            .select("id, organization_id, department_id, name, code, description, status, created_by, created_at")
+            .order("name", { ascending: true }),
+          supabase
+            .from("employees")
+            .select("id, full_name, email, manager_id, status")
+            .eq("status", "active")
+            .order("full_name", { ascending: true }),
+          supabase
+            .from("departments")
+            .select("id, name, code")
+            .order("name", { ascending: true }),
+        ]);
+
+        if (tasksRes?.data) tasksData = tasksRes.data;
+        if (projectsRes?.data) projectsData = projectsRes.data;
+        if (employeesRes?.data) employeesData = employeesRes.data;
+        if (departmentsRes?.data) departmentsData = departmentsRes.data;
+      } catch {
+        // Fallback gracefully
+      }
+
+      const storedDepts = getStoredDepartments();
+      const storedProjects = getStoredProjects();
+      const storedEmployees = getStoredUsers();
+      const storedTasks = getStoredTasks();
+
+      // Merge departments
+      const mergedDepts = [...storedDepts.map((d) => ({ id: d.id, name: d.name, code: d.code }))];
+      for (const d of departmentsData) {
+        if (!mergedDepts.some((md) => md.id === d.id || md.name === d.name)) {
+          mergedDepts.push(d);
+        }
+      }
+
+      // Merge projects
+      const mergedProjects: ProjectRecord[] = [
+        ...storedProjects.map((p) => ({
+          id: p.id,
+          organization_id: "",
+          department_id: p.department_id || null,
+          name: p.name,
+          code: p.code,
+          description: p.description || null,
+          status: p.status || "active",
+          created_by: "",
+          created_at: p.created_at || new Date().toISOString(),
+        })),
+      ];
+      for (const p of projectsData) {
+        if (!mergedProjects.some((mp) => mp.id === p.id)) {
+          mergedProjects.push(p);
+        }
+      }
+
+      // Merge employees
+      const mergedEmployees: VisibleEmployeeOption[] = [
+        ...storedEmployees.map((u) => ({
+          id: u.id,
+          full_name: u.name,
+          email: u.email,
+          manager_id: null,
+          status: u.status,
+        })),
+      ];
+      for (const e of employeesData) {
+        if (!mergedEmployees.some((me) => me.id === e.id)) {
+          mergedEmployees.push(e);
+        }
+      }
+
+      // Merge tasks
+      const mergedTasks: TaskRecord[] = [
+        ...storedTasks.map((t) => ({
+          id: t.id,
+          organization_id: "",
+          project_id: t.project_id || null,
+          parent_task_id: t.parent_task_id || null,
+          title: t.title,
+          description: t.description || null,
+          creator_id: t.creator_id || "",
+          assignee_id: t.assignee_id || null,
+          status: t.status as TaskStatus,
+          priority: t.priority as TaskPriority,
+          due_date: t.due_date || null,
+          estimated_minutes: t.estimated_minutes || null,
+          started_at: t.started_at || null,
+          completed_at: t.completed_at || null,
+          cancelled_at: t.cancelled_at || null,
+          created_at: t.created_at,
+          updated_at: t.updated_at || t.created_at,
+        })),
+      ];
+      for (const t of tasksData) {
+        if (!mergedTasks.some((mt) => mt.id === t.id)) {
+          mergedTasks.push(t);
+        }
+      }
 
       return {
-        tasks: (tasksRes.data || []) as TaskRecord[],
-        projects: (projectsRes.data || []) as ProjectRecord[],
-        employees: (employeesRes.data || []) as VisibleEmployeeOption[],
-        departments: (departmentsRes.data || []) as DepartmentOption[],
+        tasks: mergedTasks,
+        projects: mergedProjects,
+        employees: mergedEmployees,
+        departments: mergedDepts,
       };
     },
   });
@@ -239,6 +350,12 @@ export function useTaskMutations() {
       description?: string | null;
       code?: string | null;
     }) => {
+      addStoredProject({
+        name: input.name,
+        department_id: input.departmentId || null,
+        description: input.description || null,
+        code: input.code || input.name.slice(0, 4).toUpperCase(),
+      });
       return rpcCall("create_project", {
         p_name: input.name,
         p_department_id: input.departmentId || null,
@@ -266,6 +383,18 @@ export function useTaskMutations() {
       projectId?: string | null;
       parentTaskId?: string | null;
     }) => {
+      addStoredTask({
+        title: input.title,
+        description: input.description || null,
+        assignee_id: input.assigneeId || null,
+        priority: input.priority || "medium",
+        due_date: input.dueDate || null,
+        estimated_minutes:
+          typeof input.estimatedMinutes === "number" ? input.estimatedMinutes : null,
+        project_id: input.projectId || null,
+        parent_task_id: input.parentTaskId || null,
+        status: "todo",
+      });
       return rpcCall("create_task", {
         p_title: input.title,
         p_description: input.description || null,
@@ -289,6 +418,14 @@ export function useTaskMutations() {
 
   const assignTask = useMutation({
     mutationFn: async (input: { taskId: string; assigneeId: string | null }) => {
+      const current = getStoredTasks();
+      const target = current.find((t) => t.id === input.taskId);
+      if (target) {
+        updateStoredTask({
+          ...target,
+          assignee_id: input.assigneeId || null,
+        });
+      }
       return rpcCall("assign_task", {
         p_task_id: input.taskId,
         p_assignee_id: input.assigneeId || null,
@@ -309,6 +446,16 @@ export function useTaskMutations() {
       status: TaskStatus;
       note?: string;
     }) => {
+      const current = getStoredTasks();
+      const target = current.find((t) => t.id === input.taskId);
+      if (target) {
+        updateStoredTask({
+          ...target,
+          status: input.status,
+          completed_at: input.status === "done" ? new Date().toISOString() : target.completed_at,
+          cancelled_at: input.status === "cancelled" ? new Date().toISOString() : target.cancelled_at,
+        });
+      }
       if (input.status === "done") {
         return rpcCall("complete_task", {
           p_task_id: input.taskId,
@@ -333,6 +480,23 @@ export function useTaskMutations() {
     },
     onError: (err: Error) => {
       toast.error(err.message || "Failed to update task status");
+    },
+  });
+
+  const deleteTask = useMutation({
+    mutationFn: async (taskId: string) => {
+      deleteStoredTask(taskId);
+      try {
+        await supabase.from("tasks").delete().eq("id", taskId);
+      } catch {}
+      return { success: true };
+    },
+    onSuccess: () => {
+      toast.success("Task deleted");
+      invalidateAll();
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to delete task");
     },
   });
 
@@ -380,6 +544,7 @@ export function useTaskMutations() {
     createTask,
     assignTask,
     updateTaskStatus,
+    deleteTask,
     addComment,
     logTime,
   };

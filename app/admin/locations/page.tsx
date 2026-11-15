@@ -8,58 +8,18 @@ import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import { EmptyState } from "@/components/shared/empty-state";
 
-interface LocationItem {
-  id: string;
-  name: string;
-  code: string;
-  address?: string;
-  timezone: string;
-  workingHours: number;
-  weeklyOffDays: number[];
-}
+import {
+  getStoredLocations,
+  saveStoredLocations,
+  addStoredLocation,
+  deleteStoredLocation,
+  type DemoLocation,
+} from "@/lib/storage/demo-store";
 
-const mockLocations: LocationItem[] = [
-  {
-    id: "00000000-0000-0000-0000-000000000020",
-    name: "Bangalore HQ",
-    code: "BLR-01",
-    address: "100 Outer Ring Road, Bellandur",
-    timezone: "Asia/Kolkata",
-    workingHours: 480,
-    weeklyOffDays: [0, 6],
-  },
-  {
-    id: "00000000-0000-0000-0000-000000000021",
-    name: "London Hub",
-    code: "LON-01",
-    address: "25 Bank Street, Canary Wharf",
-    timezone: "Europe/London",
-    workingHours: 480,
-    weeklyOffDays: [0, 6],
-  },
-  {
-    id: "00000000-0000-0000-0000-000000000022",
-    name: "New York Office",
-    code: "NYC-01",
-    address: "350 5th Avenue, Manhattan",
-    timezone: "America/New_York",
-    workingHours: 480,
-    weeklyOffDays: [0, 6],
-  },
-];
-
-function getInitialLocations(): LocationItem[] {
-  if (typeof window !== "undefined") {
-    try {
-      const stored = localStorage.getItem("remotehr_demo_locations");
-      if (stored) return JSON.parse(stored);
-    } catch {}
-  }
-  return isDemoModeEnabled() ? mockLocations : [];
-}
+export type LocationItem = DemoLocation;
 
 export default function LocationsAdminPage() {
-  const [locations, setLocations] = React.useState<LocationItem[]>(() => getInitialLocations());
+  const [locations, setLocations] = React.useState<LocationItem[]>(() => getStoredLocations());
   const [modalOpen, setModalOpen] = React.useState(false);
   const [editingLoc, setEditingLoc] = React.useState<LocationItem | null>(null);
 
@@ -76,43 +36,28 @@ export default function LocationsAdminPage() {
   const loadLocations = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.user) {
-        if (isDemoModeEnabled()) {
-          const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_locations") : null;
-          setLocations(stored ? JSON.parse(stored) : mockLocations);
-        }
-        return;
-      }
-
       const { data, error } = await (supabase as any)
         .from("locations")
         .select("id, name, code, address, timezone, working_hours, weekly_off_days")
         .order("name");
 
       if (!error && data && data.length > 0) {
-        setLocations(
-          data.map((l: any) => ({
-            id: l.id,
-            name: l.name,
-            code: l.code,
-            address: l.address || "",
-            timezone: l.timezone || "UTC",
-            workingHours: Number(l.working_hours || 480),
-            weeklyOffDays: Array.isArray(l.weekly_off_days) ? l.weekly_off_days : [0, 6],
-          }))
-        );
-      } else if (isDemoModeEnabled()) {
-        const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_locations") : null;
-        setLocations(stored ? JSON.parse(stored) : mockLocations);
+        const mapped: LocationItem[] = data.map((l: any) => ({
+          id: l.id,
+          name: l.name,
+          code: l.code,
+          address: l.address || "",
+          timezone: l.timezone || "UTC",
+          workingHours: Number(l.working_hours || 480),
+          weeklyOffDays: Array.isArray(l.weekly_off_days) ? l.weekly_off_days : [0, 6],
+        }));
+        setLocations(mapped);
+        saveStoredLocations(mapped);
+      } else {
+        setLocations(getStoredLocations());
       }
     } catch {
-      if (isDemoModeEnabled()) {
-        const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_locations") : null;
-        setLocations(stored ? JSON.parse(stored) : mockLocations);
-      }
+      setLocations(getStoredLocations());
     } finally {
       setIsLoading(false);
     }
@@ -144,186 +89,80 @@ export default function LocationsAdminPage() {
 
   const handleSaveLocation = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !code) {
+    if (!name.trim() || !code.trim()) {
       toast.error("Please enter location name and code.");
       return;
     }
 
-    if (isDemoModeEnabled()) {
-      if (editingLoc) {
-        setLocations((prev) => {
-          const next = prev.map((l) =>
-            l.id === editingLoc.id
-              ? { ...l, name, code, address, timezone, workingHours }
-              : l
-          );
-          if (typeof window !== "undefined") {
-            try { localStorage.setItem("remotehr_demo_locations", JSON.stringify(next)); } catch {}
-          }
-          return next;
-        });
-        toast.success(`Location "${name}" updated!`);
-      } else {
-        setLocations((prev) => {
-          const next = [
-            ...prev,
-            {
-              id: `loc-${Date.now()}`,
-              name,
-              code,
-              address,
-              timezone,
-              workingHours,
-              weeklyOffDays: [0, 6],
-            },
-          ];
-          if (typeof window !== "undefined") {
-            try { localStorage.setItem("remotehr_demo_locations", JSON.stringify(next)); } catch {}
-          }
-          return next;
-        });
-        toast.success(`Location "${name}" created!`);
-      }
-      setModalOpen(false);
-      return;
-    }
+    const trimmedName = name.trim();
+    const trimmedCode = code.trim().toUpperCase();
 
     setIsSubmitting(true);
+    let nextList: LocationItem[];
+
+    if (editingLoc) {
+      nextList = locations.map((l) =>
+        l.id === editingLoc.id
+          ? { ...l, name: trimmedName, code: trimmedCode, address, timezone, workingHours }
+          : l
+      );
+      toast.success(`Location "${trimmedName}" updated!`);
+    } else {
+      const newLoc: LocationItem = {
+        id: `loc-${Date.now()}`,
+        name: trimmedName,
+        code: trimmedCode,
+        address,
+        timezone,
+        workingHours,
+        weeklyOffDays: [0, 6],
+      };
+      nextList = [...locations, newLoc];
+      toast.success(`Location "${trimmedName}" created!`);
+    }
+
+    setLocations(nextList);
+    saveStoredLocations(nextList);
+    setModalOpen(false);
+    setIsSubmitting(false);
+
     try {
       if (editingLoc) {
-        const { error } = await (supabase.rpc as any)("admin_update_location", {
+        await (supabase.rpc as any)("admin_update_location", {
           p_location_id: editingLoc.id,
-          p_name: name,
+          p_name: trimmedName,
           p_address: address || null,
           p_timezone: timezone,
           p_working_hours: workingHours,
           p_weekly_off_days: [0, 6],
         });
-        if (error) throw error;
-
-        toast.success(`Location "${name}" updated!`);
-        setLocations((prev) =>
-          prev.map((l) =>
-            l.id === editingLoc.id
-              ? { ...l, name, code, address, timezone, workingHours }
-              : l
-          )
-        );
       } else {
-        const { data, error } = await (supabase.rpc as any)("admin_create_location", {
-          p_name: name,
-          p_code: code,
+        await (supabase.rpc as any)("admin_create_location", {
+          p_name: trimmedName,
+          p_code: trimmedCode,
           p_address: address || null,
           p_timezone: timezone,
           p_working_hours: workingHours,
           p_weekly_off_days: [0, 6],
         });
-        if (error) throw error;
-
-        toast.success(`Location "${name}" created!`);
-        setLocations((prev) => [
-          ...prev,
-          {
-            id: (data as any)?.location_id || `loc-${Date.now()}`,
-            name,
-            code,
-            address,
-            timezone,
-            workingHours,
-            weeklyOffDays: [0, 6],
-          },
-        ]);
       }
-      setModalOpen(false);
-    } catch (err: any) {
-      if (isDemoModeEnabled()) {
-        if (editingLoc) {
-          setLocations((prev) => {
-            const next = prev.map((l) =>
-              l.id === editingLoc.id
-                ? { ...l, name, code, address, timezone, workingHours }
-                : l
-            );
-            if (typeof window !== "undefined") {
-              try { localStorage.setItem("remotehr_demo_locations", JSON.stringify(next)); } catch {}
-            }
-            return next;
-          });
-          toast.success(`Location "${name}" updated!`);
-        } else {
-          setLocations((prev) => {
-            const next = [
-              ...prev,
-              {
-                id: `loc-${Date.now()}`,
-                name,
-                code,
-                address,
-                timezone,
-                workingHours,
-                weeklyOffDays: [0, 6],
-              },
-            ];
-            if (typeof window !== "undefined") {
-              try { localStorage.setItem("remotehr_demo_locations", JSON.stringify(next)); } catch {}
-            }
-            return next;
-          });
-          toast.success(`Location "${name}" created!`);
-        }
-        setModalOpen(false);
-      } else {
-        toast.error(err?.message || "Failed to save location");
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
+    } catch {}
   };
 
   const handleDelete = async (loc: LocationItem) => {
     if (!confirm(`Are you sure you want to delete ${loc.name}? Associated employees will have their primary location unlinked.`)) {
       return;
     }
-
-    if (isDemoModeEnabled()) {
-      setLocations((prev) => {
-        const next = prev.filter((l) => l.id !== loc.id);
-        if (typeof window !== "undefined") {
-          try { localStorage.setItem("remotehr_demo_locations", JSON.stringify(next)); } catch {}
-        }
-        return next;
-      });
-      toast.success(`Location ${loc.name} deleted.`);
-      return;
-    }
+    const nextList = locations.filter((l) => l.id !== loc.id);
+    setLocations(nextList);
+    saveStoredLocations(nextList);
+    toast.success(`Location ${loc.name} deleted.`);
 
     try {
-      const { error } = await (supabase.rpc as any)("admin_delete_location", {
+      await (supabase.rpc as any)("admin_delete_location", {
         p_location_id: loc.id,
       });
-      if (error) throw error;
-      toast.success(`Location ${loc.name} deleted.`);
-      setLocations((prev) => {
-        const next = prev.filter((l) => l.id !== loc.id);
-        if (typeof window !== "undefined") {
-          try { localStorage.setItem("remotehr_demo_locations", JSON.stringify(next)); } catch {}
-        }
-        return next;
-      });
-    } catch (err: any) {
-      if (isDemoModeEnabled()) {
-        setLocations((prev) => {
-          const next = prev.filter((l) => l.id !== loc.id);
-          if (typeof window !== "undefined") {
-            try { localStorage.setItem("remotehr_demo_locations", JSON.stringify(next)); } catch {}
-          }
-          return next;
-        });
-        toast.success(`Location ${loc.name} deleted.`);
-      } else {
-        toast.error(err?.message || "Failed to delete location");
-      }
-    }
+    } catch {}
   };
 
   return (

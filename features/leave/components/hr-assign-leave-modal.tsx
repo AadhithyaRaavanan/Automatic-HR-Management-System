@@ -7,6 +7,7 @@ import { useLeaveTypes, useHRAssignLeave } from "../hooks/use-leave";
 import { createClient } from "@/lib/supabase/client";
 import { format } from "date-fns";
 import { AlertCircle, UserPlus, Users } from "lucide-react";
+import { getStoredUsers } from "@/lib/storage/demo-store";
 
 interface HRAssignLeaveModalProps {
   open: boolean;
@@ -30,17 +31,27 @@ export function HRAssignLeaveModal({ open, onOpenChange }: HRAssignLeaveModalPro
   // Load active employees
   React.useEffect(() => {
     async function loadEmps() {
-      const { data } = await supabase
-        .from("employees")
-        .select("id, full_name, email")
-        .eq("status", "active")
-        .order("full_name");
-      if (data) setEmployees(data);
+      const stored: Array<{ id: string; full_name: string; email: string }> = getStoredUsers().map((u) => ({ id: u.id, full_name: u.name, email: u.email }));
+      try {
+        const { data } = await supabase
+          .from("employees")
+          .select("id, full_name, email")
+          .eq("status", "active")
+          .order("full_name");
+        if (data && (data as any[]).length > 0) {
+          for (const d of (data as any[])) {
+            if (!stored.some((s) => s.id === d.id)) {
+              stored.push({ id: d.id, full_name: d.full_name, email: d.email });
+            }
+          }
+        }
+      } catch {}
+      setEmployees(stored);
     }
     if (open) {
       loadEmps();
     }
-  }, [open]);
+  }, [open, supabase]);
 
   // Set default leave type
   React.useEffect(() => {

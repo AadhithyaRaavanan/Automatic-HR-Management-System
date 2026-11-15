@@ -26,6 +26,12 @@ import { getTamilMonthInfo } from "@/lib/date/holidays-tn";
 import { createClient } from "@/lib/supabase/client";
 import { HolidayType } from "@/types/database.types";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import {
+  getStoredHolidays,
+  addStoredHoliday,
+  deleteStoredHoliday,
+  DemoHoliday,
+} from "@/lib/storage/demo-store";
 
 interface HolidayDisplayItem {
   id: string;
@@ -119,7 +125,8 @@ function HolidaysPageContent() {
           .maybeSingle(),
       ]);
 
-      if (!holRes.error && holRes.data) {
+      const storedHols = getStoredHolidays();
+      if (!holRes.error && holRes.data && holRes.data.length > 0) {
         setHolidays(
           holRes.data.map((item: any) => ({
             id: item.id,
@@ -129,6 +136,18 @@ function HolidaysPageContent() {
             region: item.region || "GLOBAL",
             holiday_type: (item.holiday_type || "public") as HolidayType,
             is_active: item.is_active !== false,
+          }))
+        );
+      } else {
+        setHolidays(
+          storedHols.map((item) => ({
+            id: item.id,
+            name: item.name,
+            local_name: item.notes || null,
+            date: item.holiday_date,
+            region: "GLOBAL",
+            holiday_type: (item.is_half_day ? "special" : "public") as HolidayType,
+            is_active: true,
           }))
         );
       }
@@ -173,6 +192,11 @@ function HolidaysPageContent() {
 
   React.useEffect(() => {
     loadHolidaysAndTemplates();
+    const handleStorageChange = () => loadHolidaysAndTemplates();
+    window.addEventListener("remotehr_storage_change", handleStorageChange);
+    return () => {
+      window.removeEventListener("remotehr_storage_change", handleStorageChange);
+    };
   }, [loadHolidaysAndTemplates]);
 
   const handleAddHoliday = async (e: React.FormEvent) => {
@@ -183,17 +207,23 @@ function HolidaysPageContent() {
     }
 
     if (isDemoModeEnabled()) {
-      const newHol: HolidayDisplayItem = {
-        id: `hol-${Date.now()}`,
+      const created = addStoredHoliday({
         name: newName.trim(),
-        local_name: newLocalName.trim() || null,
-        date: newDate,
+        holiday_date: newDate,
+        is_half_day: newType === "special",
+        notes: newLocalName.trim() || null,
+      });
+      const newHol: HolidayDisplayItem = {
+        id: created.id,
+        name: created.name,
+        local_name: created.notes || null,
+        date: created.holiday_date,
         region: newRegion,
         holiday_type: newType,
         is_active: true,
       };
       setHolidays((prev) => [newHol, ...prev]);
-      toast.success(`Holiday "${newName.trim()}" added. (demo session)`);
+      toast.success(`Holiday "${newName.trim()}" added.`);
       setNewName("");
       setNewLocalName("");
       return;
@@ -277,9 +307,10 @@ function HolidaysPageContent() {
   };
 
   const handleDeleteHoliday = async (id: string, name: string) => {
+    deleteStoredHoliday(id);
     if (isDemoModeEnabled()) {
       setHolidays((prev) => prev.filter((h) => h.id !== id));
-      toast.success(`Holiday "${name}" deleted. (demo session)`);
+      toast.success(`Holiday "${name}" deleted.`);
       return;
     }
 

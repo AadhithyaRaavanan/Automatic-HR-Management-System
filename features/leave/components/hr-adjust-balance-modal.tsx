@@ -5,6 +5,7 @@ import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { useLeaveTypes, useHRAdjustBalance } from "../hooks/use-leave";
 import { createClient } from "@/lib/supabase/client";
+import { getStoredUsers } from "@/lib/storage/demo-store";
 
 interface HRAdjustBalanceModalProps {
   open: boolean;
@@ -29,23 +30,30 @@ export function HRAdjustBalanceModal({
 
   React.useEffect(() => {
     async function loadEmps() {
-      const { data } = await supabase
-        .from("employees")
-        .select("id, full_name, email")
-        .eq("status", "active")
-        .order("full_name");
-      if (data) {
-        const empList = data as unknown as Array<{ id: string; full_name: string; email: string }>;
-        setEmployees(empList);
-        if (!employeeId && empList.length > 0) {
-          setEmployeeId(preselectedEmployeeId || empList[0].id);
+      const stored: Array<{ id: string; full_name: string; email: string }> = getStoredUsers().map((u) => ({ id: u.id, full_name: u.name, email: u.email }));
+      try {
+        const { data } = await supabase
+          .from("employees")
+          .select("id, full_name, email")
+          .eq("status", "active")
+          .order("full_name");
+        if (data && (data as any[]).length > 0) {
+          for (const d of (data as any[])) {
+            if (!stored.some((s) => s.id === d.id)) {
+              stored.push({ id: d.id, full_name: d.full_name, email: d.email });
+            }
+          }
         }
+      } catch {}
+      setEmployees(stored);
+      if (!employeeId && stored.length > 0) {
+        setEmployeeId(preselectedEmployeeId || stored[0].id);
       }
     }
     if (open) {
       loadEmps();
     }
-  }, [open, preselectedEmployeeId]);
+  }, [open, preselectedEmployeeId, supabase, employeeId]);
 
   React.useEffect(() => {
     if (leaveTypes.length > 0 && !leaveTypeId) {

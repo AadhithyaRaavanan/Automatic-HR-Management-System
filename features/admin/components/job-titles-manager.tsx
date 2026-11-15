@@ -6,19 +6,15 @@ import { toast } from "sonner";
 import { Modal } from "@/components/ui/modal";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 
-export interface JobTitleItem {
-  id: string;
-  title_name: string;
-  description: string | null;
-  created_at: string;
-}
+import {
+  getStoredJobTitles,
+  saveStoredJobTitles,
+  addStoredJobTitle,
+  deleteStoredJobTitle,
+  type DemoJobTitle,
+} from "@/lib/storage/demo-store";
 
-const defaultMockJobTitles: JobTitleItem[] = [
-  { id: "jt-1", title_name: "Staff Software Engineer", description: "Technical leader", created_at: "2026-01-01" },
-  { id: "jt-2", title_name: "Frontend Engineer", description: "UI/UX implementation", created_at: "2026-01-01" },
-  { id: "jt-3", title_name: "HR Operations Specialist", description: "People operations", created_at: "2026-01-01" },
-  { id: "jt-4", title_name: "Product Manager", description: "Product roadmap", created_at: "2026-01-01" },
-];
+export type JobTitleItem = DemoJobTitle;
 
 interface JobTitlesManagerProps {
   open: boolean;
@@ -31,7 +27,7 @@ export function JobTitlesManager({
   onOpenChange,
   onTitlesUpdated,
 }: JobTitlesManagerProps) {
-  const [titles, setTitles] = React.useState<JobTitleItem[]>([]);
+  const [titles, setTitles] = React.useState<JobTitleItem[]>(() => getStoredJobTitles());
   const [loading, setLoading] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
 
@@ -49,17 +45,14 @@ export function JobTitlesManager({
     try {
       const res = await fetch("/api/admin/job-titles");
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to load job titles");
-      const stored = isDemoModeEnabled() && typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_job_titles") : null;
-      const loaded = stored ? JSON.parse(stored) : (data.titles && data.titles.length > 0 ? data.titles : (isDemoModeEnabled() ? defaultMockJobTitles : []));
-      setTitles(loaded);
-    } catch (err: any) {
-      if (isDemoModeEnabled()) {
-        const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_job_titles") : null;
-        setTitles(stored ? JSON.parse(stored) : defaultMockJobTitles);
+      if (res.ok && data.titles && data.titles.length > 0) {
+        setTitles(data.titles);
+        saveStoredJobTitles(data.titles);
       } else {
-        toast.error(err.message || "Failed to load job titles");
+        setTitles(getStoredJobTitles());
       }
+    } catch {
+      setTitles(getStoredJobTitles());
     } finally {
       setLoading(false);
     }
@@ -78,70 +71,27 @@ export function JobTitlesManager({
       return;
     }
 
-    if (isDemoModeEnabled()) {
-      const newTitle: JobTitleItem = {
-        id: `jt-${Date.now()}`,
-        title_name: newTitleName.trim(),
-        description: newDescription.trim() || null,
-        created_at: new Date().toISOString(),
-      };
-      setTitles((prev) => {
-        const next = [newTitle, ...prev];
-        if (typeof window !== "undefined") {
-          try { localStorage.setItem("remotehr_demo_job_titles", JSON.stringify(next)); } catch {}
-        }
-        return next;
-      });
-      toast.success(`Job title '${newTitleName}' created successfully.`);
-      setNewTitleName("");
-      setNewDescription("");
-      onTitlesUpdated?.();
-      return;
-    }
+    const trimmedName = newTitleName.trim();
+    const trimmedDesc = newDescription.trim() || null;
 
-    setSubmitting(true);
+    const created = addStoredJobTitle(trimmedName, trimmedDesc);
+    setTitles((prev) => [created, ...prev.filter((t) => t.id !== created.id)]);
+    toast.success(`Job title '${trimmedName}' created successfully.`);
+    setNewTitleName("");
+    setNewDescription("");
+    onTitlesUpdated?.();
+
+    // Also persist via API if connected
     try {
-      const res = await fetch("/api/admin/job-titles", {
+      await fetch("/api/admin/job-titles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          titleName: newTitleName.trim(),
-          description: newDescription.trim() || undefined,
+          titleName: trimmedName,
+          description: trimmedDesc || undefined,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to create job title");
-
-      toast.success(`Job title '${newTitleName}' created successfully.`);
-      setNewTitleName("");
-      setNewDescription("");
-      await loadTitles();
-      onTitlesUpdated?.();
-    } catch (err: any) {
-      if (isDemoModeEnabled()) {
-        const newTitle: JobTitleItem = {
-          id: `jt-${Date.now()}`,
-          title_name: newTitleName.trim(),
-          description: newDescription.trim() || null,
-          created_at: new Date().toISOString(),
-        };
-        setTitles((prev) => {
-          const next = [newTitle, ...prev];
-          if (typeof window !== "undefined") {
-            try { localStorage.setItem("remotehr_demo_job_titles", JSON.stringify(next)); } catch {}
-          }
-          return next;
-        });
-        toast.success(`Job title '${newTitleName}' created successfully.`);
-        setNewTitleName("");
-        setNewDescription("");
-        onTitlesUpdated?.();
-      } else {
-        toast.error(err.message || "Failed to create job title");
-      }
-    } finally {
-      setSubmitting(false);
-    }
+    } catch {}
   };
 
   const handleStartEdit = (t: JobTitleItem) => {
@@ -162,53 +112,29 @@ export function JobTitlesManager({
       return;
     }
 
-    if (isDemoModeEnabled()) {
-      setTitles((prev) => {
-        const next = prev.map((t) => t.id === id ? { ...t, title_name: editTitleName.trim(), description: editDescription.trim() || null } : t);
-        if (typeof window !== "undefined") {
-          try { localStorage.setItem("remotehr_demo_job_titles", JSON.stringify(next)); } catch {}
-        }
-        return next;
-      });
-      toast.success("Job title updated successfully.");
-      handleCancelEdit();
-      onTitlesUpdated?.();
-      return;
-    }
+    const trimmedName = editTitleName.trim();
+    const trimmedDesc = editDescription.trim() || null;
+
+    const nextList = titles.map((t) =>
+      t.id === id ? { ...t, title_name: trimmedName, description: trimmedDesc } : t
+    );
+    setTitles(nextList);
+    saveStoredJobTitles(nextList);
+    toast.success("Job title updated successfully.");
+    handleCancelEdit();
+    onTitlesUpdated?.();
 
     try {
-      const res = await fetch("/api/admin/job-titles", {
+      await fetch("/api/admin/job-titles", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id,
-          titleName: editTitleName.trim(),
-          description: editDescription.trim(),
+          titleName: trimmedName,
+          description: trimmedDesc,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to update job title");
-
-      toast.success("Job title updated successfully.");
-      handleCancelEdit();
-      await loadTitles();
-      onTitlesUpdated?.();
-    } catch (err: any) {
-      if (isDemoModeEnabled()) {
-        setTitles((prev) => {
-          const next = prev.map((t) => t.id === id ? { ...t, title_name: editTitleName.trim(), description: editDescription.trim() || null } : t);
-          if (typeof window !== "undefined") {
-            try { localStorage.setItem("remotehr_demo_job_titles", JSON.stringify(next)); } catch {}
-          }
-          return next;
-        });
-        toast.success("Job title updated successfully.");
-        handleCancelEdit();
-        onTitlesUpdated?.();
-      } else {
-        toast.error(err.message || "Failed to update job title");
-      }
-    }
+    } catch {}
   };
 
   const handleDelete = async (t: JobTitleItem) => {
@@ -216,44 +142,16 @@ export function JobTitlesManager({
       return;
     }
 
-    if (isDemoModeEnabled()) {
-      setTitles((prev) => {
-        const next = prev.filter((item) => item.id !== t.id);
-        if (typeof window !== "undefined") {
-          try { localStorage.setItem("remotehr_demo_job_titles", JSON.stringify(next)); } catch {}
-        }
-        return next;
-      });
-      toast.success(`Job title '${t.title_name}' deleted.`);
-      onTitlesUpdated?.();
-      return;
-    }
+    deleteStoredJobTitle(t.id);
+    setTitles((prev) => prev.filter((item) => item.id !== t.id));
+    toast.success(`Job title '${t.title_name}' deleted.`);
+    onTitlesUpdated?.();
 
     try {
-      const res = await fetch(`/api/admin/job-titles?id=${t.id}`, {
+      await fetch(`/api/admin/job-titles?id=${t.id}`, {
         method: "DELETE",
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to delete job title");
-
-      toast.success(`Job title '${t.title_name}' deleted.`);
-      await loadTitles();
-      onTitlesUpdated?.();
-    } catch (err: any) {
-      if (isDemoModeEnabled()) {
-        setTitles((prev) => {
-          const next = prev.filter((item) => item.id !== t.id);
-          if (typeof window !== "undefined") {
-            try { localStorage.setItem("remotehr_demo_job_titles", JSON.stringify(next)); } catch {}
-          }
-          return next;
-        });
-        toast.success(`Job title '${t.title_name}' deleted.`);
-        onTitlesUpdated?.();
-      } else {
-        toast.error(err.message || "Failed to delete job title");
-      }
-    }
+    } catch {}
   };
 
   return (

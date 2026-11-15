@@ -136,55 +136,25 @@ export function useLeaveBalances(employeeId?: string) {
   });
 }
 
-const defaultDemoRequests: LeaveRequest[] = [
-  {
-    id: "lr-demo-1",
-    organization_id: "00000000-0000-0000-0000-000000000001",
-    employee_id: "demo-emp",
-    leave_type_id: mockLeaveTypes[0].id,
-    start_date: "2026-11-20",
-    end_date: "2026-11-21",
-    total_days: 2,
-    day_part: "full",
-    reason: "Family event and personal commitment",
-    status: "pending",
-    created_at: new Date().toISOString(),
-    leave_types: mockLeaveTypes[0],
-    employees: { id: "demo-emp", full_name: "James Aathithyan", email: "admin@remotehr.io", department_id: "dept-1" },
-  },
-  {
-    id: "lr-demo-2",
-    organization_id: "00000000-0000-0000-0000-000000000001",
-    employee_id: "demo-emp-2",
-    leave_type_id: mockLeaveTypes[1].id,
-    start_date: "2026-11-10",
-    end_date: "2026-11-10",
-    total_days: 0.5,
-    day_part: "first_half",
-    reason: "Doctor appointment in morning",
-    status: "approved",
-    created_at: "2026-11-09T08:00:00Z",
-    leave_types: mockLeaveTypes[1],
-    employees: { id: "demo-emp-2", full_name: "Maya Patel", email: "employee@remotehr.io", department_id: "dept-3" },
-  },
-];
+const defaultDemoRequests: LeaveRequest[] = [];
 
 function getDemoRequests(): LeaveRequest[] {
-  if (typeof window === "undefined") return defaultDemoRequests;
+  if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem("remotehr_demo_leave_requests");
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch {}
-  return defaultDemoRequests;
+  return [];
 }
 
 function saveDemoRequests(requests: LeaveRequest[]) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem("remotehr_demo_leave_requests", JSON.stringify(requests));
+    window.dispatchEvent(new Event("remotehr_storage_change"));
   } catch {}
 }
 
@@ -284,10 +254,13 @@ export function useRequestLeave() {
       if (isDemoModeEnabled()) {
         const currentList = getDemoRequests();
         const selectedType = mockLeaveTypes.find((lt) => lt.id === leaveTypeId) || mockLeaveTypes[0];
+        const currentRole = typeof window !== "undefined" ? localStorage.getItem("remotehr_cached_role") || "employee" : "employee";
+        const currentName = typeof window !== "undefined" ? localStorage.getItem("remotehr_cached_name") || "Active User" : "Active User";
+        const currentEmail = typeof window !== "undefined" ? localStorage.getItem("remotehr_cached_email") || `${currentRole}@remotehr.io` : `${currentRole}@remotehr.io`;
         const newReq: LeaveRequest = {
           id: rpcResult?.request_id || `lr-${Date.now()}`,
           organization_id: "00000000-0000-0000-0000-000000000001",
-          employee_id: "demo-emp",
+          employee_id: `emp-${currentRole}`,
           leave_type_id: leaveTypeId,
           start_date: startDate,
           end_date: endDate,
@@ -298,10 +271,10 @@ export function useRequestLeave() {
           created_at: new Date().toISOString(),
           leave_types: selectedType,
           employees: {
-            id: "demo-emp",
-            full_name: "James Aathithyan",
-            email: "admin@remotehr.io",
-            department_id: "dept-1",
+            id: `emp-${currentRole}`,
+            full_name: currentName,
+            email: currentEmail,
+            department_id: "general",
           },
         };
         const updated = [newReq, ...currentList];

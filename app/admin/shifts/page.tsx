@@ -8,58 +8,20 @@ import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import { EmptyState } from "@/components/shared/empty-state";
 
-interface ShiftTemplateItem {
-  id: string;
-  name: string;
-  code: string;
-  startTime: string;
-  endTime: string;
-  breakMinutes: number;
-  graceMinutes: number;
-}
+import {
+  getStoredShifts,
+  saveStoredShifts,
+  addStoredShift,
+  deleteStoredShift,
+  getStoredUsers,
+  updateStoredUser,
+  type DemoShift,
+} from "@/lib/storage/demo-store";
 
-const mockShifts: ShiftTemplateItem[] = [
-  {
-    id: "00000000-0000-0000-0000-000000000030",
-    name: "General Standard Day",
-    code: "GEN-DAY",
-    startTime: "09:00:00",
-    endTime: "18:00:00",
-    breakMinutes: 60,
-    graceMinutes: 15,
-  },
-  {
-    id: "00000000-0000-0000-0000-000000000031",
-    name: "Morning Early Shift",
-    code: "MORN-01",
-    startTime: "07:00:00",
-    endTime: "16:00:00",
-    breakMinutes: 60,
-    graceMinutes: 10,
-  },
-  {
-    id: "00000000-0000-0000-0000-000000000032",
-    name: "Night Operations",
-    code: "NIGHT-01",
-    startTime: "22:00:00",
-    endTime: "06:00:00",
-    breakMinutes: 45,
-    graceMinutes: 15,
-  },
-];
-
-function getInitialShifts(): ShiftTemplateItem[] {
-  if (typeof window !== "undefined") {
-    try {
-      const stored = localStorage.getItem("remotehr_demo_shifts");
-      if (stored) return JSON.parse(stored);
-    } catch {}
-  }
-  return isDemoModeEnabled() ? mockShifts : [];
-}
+export type ShiftTemplateItem = DemoShift;
 
 export default function ShiftsAdminPage() {
-  const [shifts, setShifts] = React.useState<ShiftTemplateItem[]>(() => getInitialShifts());
+  const [shifts, setShifts] = React.useState<ShiftTemplateItem[]>(() => getStoredShifts());
   const [shiftModalOpen, setShiftModalOpen] = React.useState(false);
   const [assignModalOpen, setAssignModalOpen] = React.useState(false);
   const [editingShift, setEditingShift] = React.useState<ShiftTemplateItem | null>(null);
@@ -85,22 +47,6 @@ export default function ShiftsAdminPage() {
   const loadShiftsAndEmployees = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.user) {
-        if (isDemoModeEnabled()) {
-          const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_shifts") : null;
-          setShifts(stored ? JSON.parse(stored) : mockShifts);
-          setEmployees([
-            { id: "00000000-0000-0000-0000-000000000004", full_name: "Alex Rivera", email: "employee@remotehr.local" },
-            { id: "00000000-0000-0000-0000-000000000003", full_name: "Marcus Vance", email: "manager@remotehr.local" },
-          ]);
-          setAssignEmployeeId("00000000-0000-0000-0000-000000000004");
-        }
-        return;
-      }
-
       const [{ data: shiftData, error }, { data: empData }] = await Promise.all([
         (supabase as any)
           .from("shift_templates")
@@ -114,37 +60,45 @@ export default function ShiftsAdminPage() {
       ]);
 
       if (!error && shiftData && shiftData.length > 0) {
-        setShifts(
-          shiftData.map((s: any) => ({
-            id: s.id,
-            name: s.name,
-            code: s.code,
-            startTime: s.start_time,
-            endTime: s.end_time,
-            breakMinutes: Number(s.break_minutes || 0),
-            graceMinutes: Number(s.grace_minutes || 15),
-          }))
-        );
-      } else if (isDemoModeEnabled()) {
-        const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_shifts") : null;
-        setShifts(stored ? JSON.parse(stored) : mockShifts);
+        const mapped: ShiftTemplateItem[] = shiftData.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          code: s.code,
+          startTime: s.start_time,
+          endTime: s.end_time,
+          breakMinutes: Number(s.break_minutes || 0),
+          graceMinutes: Number(s.grace_minutes || 15),
+        }));
+        setShifts(mapped);
+        saveStoredShifts(mapped);
+      } else {
+        setShifts(getStoredShifts());
       }
+
       if (empData && empData.length > 0) {
         setEmployees(empData);
-        if (!assignEmployeeId) {
-          setAssignEmployeeId(empData[0].id);
+        if (!assignEmployeeId) setAssignEmployeeId(empData[0].id);
+      } else {
+        const storedUsers = getStoredUsers().map((u) => ({
+          id: u.id,
+          full_name: u.name,
+          email: u.email,
+        }));
+        setEmployees(storedUsers);
+        if (!assignEmployeeId && storedUsers.length > 0) {
+          setAssignEmployeeId(storedUsers[0].id);
         }
-      } else if (isDemoModeEnabled()) {
-        setEmployees([
-          { id: "00000000-0000-0000-0000-000000000004", full_name: "Alex Rivera", email: "employee@remotehr.io" },
-          { id: "00000000-0000-0000-0000-000000000003", full_name: "Marcus Vance", email: "manager@remotehr.io" },
-        ]);
-        if (!assignEmployeeId) setAssignEmployeeId("00000000-0000-0000-0000-000000000004");
       }
     } catch {
-      if (isDemoModeEnabled()) {
-        const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_shifts") : null;
-        setShifts(stored ? JSON.parse(stored) : mockShifts);
+      setShifts(getStoredShifts());
+      const storedUsers = getStoredUsers().map((u) => ({
+        id: u.id,
+        full_name: u.name,
+        email: u.email,
+      }));
+      setEmployees(storedUsers);
+      if (!assignEmployeeId && storedUsers.length > 0) {
+        setAssignEmployeeId(storedUsers[0].id);
       }
     } finally {
       setIsLoading(false);
@@ -184,189 +138,82 @@ export default function ShiftsAdminPage() {
 
   const handleSaveShift = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !code) {
+    if (!name.trim() || !code.trim()) {
       toast.error("Please enter template name and code.");
       return;
     }
 
+    const trimmedName = name.trim();
+    const trimmedCode = code.trim().toUpperCase();
     const fmtStart = `${startTime}:00`;
     const fmtEnd = `${endTime}:00`;
 
-    if (isDemoModeEnabled()) {
-      if (editingShift) {
-        setShifts((prev) => {
-          const next = prev.map((s) =>
-            s.id === editingShift.id
-              ? { ...s, name, code, startTime: fmtStart, endTime: fmtEnd, breakMinutes, graceMinutes }
-              : s
-          );
-          if (typeof window !== "undefined") {
-            try { localStorage.setItem("remotehr_demo_shifts", JSON.stringify(next)); } catch {}
-          }
-          return next;
-        });
-        toast.success(`Shift template "${name}" updated!`);
-      } else {
-        setShifts((prev) => {
-          const next = [
-            ...prev,
-            {
-              id: `shift-${Date.now()}`,
-              name,
-              code,
-              startTime: fmtStart,
-              endTime: fmtEnd,
-              breakMinutes,
-              graceMinutes,
-            },
-          ];
-          if (typeof window !== "undefined") {
-            try { localStorage.setItem("remotehr_demo_shifts", JSON.stringify(next)); } catch {}
-          }
-          return next;
-        });
-        toast.success(`Shift template "${name}" created!`);
-      }
-      setShiftModalOpen(false);
-      return;
+    setIsSubmitting(true);
+    let nextList: ShiftTemplateItem[];
+
+    if (editingShift) {
+      nextList = shifts.map((s) =>
+        s.id === editingShift.id
+          ? { ...s, name: trimmedName, code: trimmedCode, startTime: fmtStart, endTime: fmtEnd, breakMinutes, graceMinutes }
+          : s
+      );
+      toast.success(`Shift template "${trimmedName}" updated!`);
+    } else {
+      const newShift: ShiftTemplateItem = {
+        id: `shift-${Date.now()}`,
+        name: trimmedName,
+        code: trimmedCode,
+        startTime: fmtStart,
+        endTime: fmtEnd,
+        breakMinutes,
+        graceMinutes,
+      };
+      nextList = [...shifts, newShift];
+      toast.success(`Shift template "${trimmedName}" created!`);
     }
 
-    setIsSubmitting(true);
+    setShifts(nextList);
+    saveStoredShifts(nextList);
+    setShiftModalOpen(false);
+    setIsSubmitting(false);
+
     try {
       if (editingShift) {
-        const { error } = await (supabase.rpc as any)("admin_update_shift_template", {
+        await (supabase.rpc as any)("admin_update_shift_template", {
           p_shift_id: editingShift.id,
-          p_name: name,
+          p_name: trimmedName,
           p_start_time: fmtStart,
           p_end_time: fmtEnd,
           p_break_minutes: breakMinutes,
           p_grace_minutes: graceMinutes,
         });
-        if (error) throw error;
-
-        toast.success(`Shift template "${name}" updated!`);
-        setShifts((prev) =>
-          prev.map((s) =>
-            s.id === editingShift.id
-              ? { ...s, name, code, startTime: fmtStart, endTime: fmtEnd, breakMinutes, graceMinutes }
-              : s
-          )
-        );
       } else {
-        const { data, error } = await (supabase.rpc as any)("admin_create_shift_template", {
-          p_name: name,
-          p_code: code,
+        await (supabase.rpc as any)("admin_create_shift_template", {
+          p_name: trimmedName,
+          p_code: trimmedCode,
           p_start_time: fmtStart,
           p_end_time: fmtEnd,
           p_break_minutes: breakMinutes,
           p_grace_minutes: graceMinutes,
         });
-        if (error) throw error;
-
-        toast.success(`Shift template "${name}" created!`);
-        setShifts((prev) => [
-          ...prev,
-          {
-            id: (data as any)?.shift_template_id || `shift-${Date.now()}`,
-            name,
-            code,
-            startTime: fmtStart,
-            endTime: fmtEnd,
-            breakMinutes,
-            graceMinutes,
-          },
-        ]);
       }
-      setShiftModalOpen(false);
-    } catch (err: any) {
-      if (isDemoModeEnabled()) {
-        if (editingShift) {
-          setShifts((prev) => {
-            const next = prev.map((s) =>
-              s.id === editingShift.id
-                ? { ...s, name, code, startTime: fmtStart, endTime: fmtEnd, breakMinutes, graceMinutes }
-                : s
-            );
-            if (typeof window !== "undefined") {
-              try { localStorage.setItem("remotehr_demo_shifts", JSON.stringify(next)); } catch {}
-            }
-            return next;
-          });
-          toast.success(`Shift template "${name}" updated!`);
-        } else {
-          setShifts((prev) => {
-            const next = [
-              ...prev,
-              {
-                id: `shift-${Date.now()}`,
-                name,
-                code,
-                startTime: fmtStart,
-                endTime: fmtEnd,
-                breakMinutes,
-                graceMinutes,
-              },
-            ];
-            if (typeof window !== "undefined") {
-              try { localStorage.setItem("remotehr_demo_shifts", JSON.stringify(next)); } catch {}
-            }
-            return next;
-          });
-          toast.success(`Shift template "${name}" created!`);
-        }
-        setShiftModalOpen(false);
-      } else {
-        toast.error(err?.message || "Failed to save shift template");
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
+    } catch {}
   };
 
   const handleDelete = async (shift: ShiftTemplateItem) => {
     if (!confirm(`Are you sure you want to delete shift ${shift.name}?`)) {
       return;
     }
-
-    if (isDemoModeEnabled()) {
-      setShifts((prev) => {
-        const next = prev.filter((s) => s.id !== shift.id);
-        if (typeof window !== "undefined") {
-          try { localStorage.setItem("remotehr_demo_shifts", JSON.stringify(next)); } catch {}
-        }
-        return next;
-      });
-      toast.success(`Shift ${shift.name} deleted.`);
-      return;
-    }
+    const nextList = shifts.filter((s) => s.id !== shift.id);
+    setShifts(nextList);
+    saveStoredShifts(nextList);
+    toast.success(`Shift ${shift.name} deleted.`);
 
     try {
-      const { error } = await (supabase.rpc as any)("admin_delete_shift_template", {
+      await (supabase.rpc as any)("admin_delete_shift_template", {
         p_shift_id: shift.id,
       });
-      if (error) throw error;
-      toast.success(`Shift ${shift.name} deleted.`);
-      setShifts((prev) => {
-        const next = prev.filter((s) => s.id !== shift.id);
-        if (typeof window !== "undefined") {
-          try { localStorage.setItem("remotehr_demo_shifts", JSON.stringify(next)); } catch {}
-        }
-        return next;
-      });
-    } catch (err: any) {
-      if (isDemoModeEnabled()) {
-        setShifts((prev) => {
-          const next = prev.filter((s) => s.id !== shift.id);
-          if (typeof window !== "undefined") {
-            try { localStorage.setItem("remotehr_demo_shifts", JSON.stringify(next)); } catch {}
-          }
-          return next;
-        });
-        toast.success(`Shift ${shift.name} deleted.`);
-      } else {
-        toast.error(err?.message || "Failed to delete shift template");
-      }
-    }
+    } catch {}
   };
 
   const handleAssignSubmit = async (e: React.FormEvent) => {
@@ -376,33 +223,30 @@ export default function ShiftsAdminPage() {
       return;
     }
 
-    if (isDemoModeEnabled()) {
-      toast.success("Shift assigned successfully! (demo session)");
-      setAssignModalOpen(false);
-      return;
+    const matchedShift = shifts.find((s) => s.id === assignShiftId);
+    if (matchedShift) {
+      const users = getStoredUsers();
+      const targetUser = users.find((u) => u.id === assignEmployeeId);
+      if (targetUser) {
+        updateStoredUser({
+          ...targetUser,
+          shiftStartTime: matchedShift.startTime.slice(0, 5),
+          shiftEndTime: matchedShift.endTime.slice(0, 5),
+        });
+      }
     }
 
-    setIsSubmitting(true);
+    toast.success("Shift assigned successfully!");
+    setAssignModalOpen(false);
+
     try {
-      const { error } = await (supabase.rpc as any)("admin_assign_shift", {
+      await (supabase.rpc as any)("admin_assign_shift", {
         p_employee_id: assignEmployeeId,
         p_shift_template_id: assignShiftId,
         p_effective_from: effectiveFrom,
         p_effective_to: null,
       });
-      if (error) throw error;
-      toast.success("Shift assigned successfully!");
-      setAssignModalOpen(false);
-    } catch (err: any) {
-      if (isDemoModeEnabled()) {
-        toast.success("Shift assigned successfully!");
-        setAssignModalOpen(false);
-      } else {
-        toast.error(err?.message || "Failed to assign shift");
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
+    } catch {}
   };
 
   return (
