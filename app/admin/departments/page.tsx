@@ -78,7 +78,10 @@ export default function DepartmentsAdminPage() {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session?.user) {
-        if (isDemoModeEnabled()) setDepartments(mockDepartments);
+        if (isDemoModeEnabled()) {
+          const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_departments") : null;
+          setDepartments(stored ? JSON.parse(stored) : mockDepartments);
+        }
         return;
       }
 
@@ -349,7 +352,7 @@ export default function DepartmentsAdminPage() {
   };
 
   return (
-    <AppShell primaryActionLabel="Add Department" onPrimaryAction={handleOpenAdd} userRole="admin">
+    <AppShell primaryActionLabel="Add Department" onPrimaryAction={handleOpenAdd}>
       <div className="space-y-6">
         {/* Header */}
         <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-3">

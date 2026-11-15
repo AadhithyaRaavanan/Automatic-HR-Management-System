@@ -444,63 +444,6 @@ export function useCancelLeave() {
     },
   });
 }
-    }: {
-      requestId: string;
-      reviewNote: string;
-    }) => {
-      const { data, error } = await (supabase.rpc as any)("reject_leave", {
-        p_request_id: requestId,
-        p_review_note: reviewNote,
-      });
-      if (error && isDemoModeEnabled()) {
-        return { success: true, message: "Leave rejected successfully (demo)" };
-      }
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leave-requests"] });
-      queryClient.invalidateQueries({ queryKey: ["leave-balances"] });
-      toast.success("Leave request rejected");
-    },
-    onError: (err: any) => {
-      toast.error(err.message || "Failed to reject leave");
-    },
-  });
-}
-
-export function useCancelLeave() {
-  const supabase = createClient();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      requestId,
-      reason,
-    }: {
-      requestId: string;
-      reason?: string;
-    }) => {
-      const { data, error } = await (supabase.rpc as any)("cancel_leave", {
-        p_request_id: requestId,
-        p_reason: reason,
-      });
-      if (error && isDemoModeEnabled()) {
-        return { success: true, message: "Leave cancelled successfully (demo)" };
-      }
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leave-requests"] });
-      queryClient.invalidateQueries({ queryKey: ["leave-balances"] });
-      toast.success("Leave cancelled successfully");
-    },
-    onError: (err: any) => {
-      toast.error(err.message || "Failed to cancel leave");
-    },
-  });
-}
 
 export function useHRAssignLeave() {
   const supabase = createClient();

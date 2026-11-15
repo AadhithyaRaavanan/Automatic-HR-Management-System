@@ -336,7 +336,7 @@ export default function OrganizationSettingsAdminPage() {
   };
 
   return (
-    <AppShell primaryActionLabel="Settings Saved" userRole="admin">
+    <AppShell primaryActionLabel="Settings Saved">
       <div className="space-y-6 max-w-5xl">
         {/* Header */}
         <section className="pt-1 pb-3">

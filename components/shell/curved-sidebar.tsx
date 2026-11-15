@@ -92,11 +92,21 @@ export function CurvedSidebar({
       ? (localStorage.getItem("remotehr_cached_role") as any) || getCookieRole()
       : null;
 
+  const [mountedRole, setMountedRole] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("remotehr_cached_role") || getCookieRole();
+      if (stored) setMountedRole(stored);
+    }
+  }, []);
+
   const privilegedRoles = ["admin", "hr", "manager"];
   const effectiveRole =
     (propRole && privilegedRoles.includes(propRole) ? propRole : null) ||
+    (mountedRole && privilegedRoles.includes(mountedRole) ? mountedRole : null) ||
     (cachedRole && privilegedRoles.includes(cachedRole) ? cachedRole : null) ||
-    (isDemoModeEnabled() ? (cachedRole || "admin") : (cachedRole || propRole || "employee"));
+    (isDemoModeEnabled() ? (mountedRole || cachedRole || "admin") : (mountedRole || cachedRole || propRole || "employee"));
 
   const navItems = React.useMemo(() => {
     return baseNavItems.filter((item) => {
@@ -108,19 +118,19 @@ export function CurvedSidebar({
   return (
     <aside
       className={cn(
-        "sticky top-0 left-0 hidden md:flex flex-col items-center justify-between py-3 px-2 w-[72px] lg:w-[78px] h-screen max-h-screen bg-brand-purple text-white shadow-float select-none shrink-0 z-40 rounded-r-[28px] lg:rounded-r-[32px] transition-all overflow-hidden",
+        "sticky top-0 left-0 hidden md:flex flex-col items-center justify-between py-2 px-1.5 w-[68px] lg:w-[72px] h-screen max-h-screen bg-brand-purple text-white shadow-float select-none shrink-0 z-40 rounded-r-[24px] lg:rounded-r-[28px] transition-all overflow-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0",
         className
       )}
       aria-label="Sidebar navigation"
     >
       {/* Top Brand Logo / Icon */}
-      <div className="shrink-0 mb-1">
+      <div className="shrink-0 mb-0.5">
         <Link
           href="/"
-          className="w-9 h-9 rounded-2xl bg-white/20 hover:bg-white/30 backdrop-blur-md flex items-center justify-center text-white transition-all shadow-inner"
+          className="w-8 h-8 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-md flex items-center justify-center text-white transition-all shadow-inner"
           title="RemoteHR Home"
         >
-          <div className="grid grid-cols-2 gap-1 p-1">
+          <div className="grid grid-cols-2 gap-0.5 p-1">
             <span className="w-1.5 h-1.5 rounded-sm bg-white" />
             <span className="w-1.5 h-1.5 rounded-sm bg-white/70" />
             <span className="w-1.5 h-1.5 rounded-sm bg-white/70" />
@@ -131,7 +141,7 @@ export function CurvedSidebar({
 
       {/* Navigation Item Stack - Scrollable without visible scrollbars */}
       <nav
-        className="flex-1 w-full overflow-y-auto overflow-x-hidden no-scrollbar flex flex-col items-center gap-1.5 py-1"
+        className="flex-1 w-full overflow-y-auto overflow-x-hidden flex flex-col items-center gap-1 py-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0"
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         {navItems.map((item) => {
@@ -146,20 +156,20 @@ export function CurvedSidebar({
               <Link
                 href={item.href}
                 className={cn(
-                  "relative flex items-center justify-center w-9 h-9 lg:w-10 lg:h-10 rounded-2xl transition-all duration-150",
+                  "relative flex items-center justify-center w-8 h-8 lg:w-8.5 lg:h-8.5 rounded-xl transition-all duration-150",
                   isActive
                     ? "bg-white text-brand-purple shadow-md scale-105"
                     : "text-white/80 hover:text-white hover:bg-white/15"
                 )}
                 title={item.label}
               >
-                <Icon className="w-4 h-4 lg:w-4.5 lg:h-4.5 shrink-0" />
+                <Icon className="w-4 h-4 shrink-0" />
 
                 {/* Badge */}
                 {item.badge && (
                   <span
                     className={cn(
-                      "absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold border-2 border-brand-purple",
+                      "absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full text-[8.5px] font-bold border border-brand-purple",
                       item.badgeColor === "green"
                         ? "bg-status-success-dot text-white"
                         : "bg-status-warning-dot text-brand-navy"
@@ -182,37 +192,37 @@ export function CurvedSidebar({
       </nav>
 
       {/* Bottom Profile / Quick Action */}
-      <div className="shrink-0 pt-2 border-t border-white/15 flex flex-col items-center gap-1.5">
+      <div className="shrink-0 pt-1.5 border-t border-white/15 flex flex-col items-center gap-1">
         <Link
           href="/profile"
           className={cn(
-            "w-8 h-8 lg:w-9 lg:h-9 rounded-xl flex items-center justify-center text-white transition-colors",
+            "w-7.5 h-7.5 lg:w-8 lg:h-8 rounded-lg flex items-center justify-center text-white transition-colors",
             pathname.startsWith("/profile") ? "bg-white text-brand-purple shadow-sm" : "bg-white/10 hover:bg-white/20"
           )}
           title="My Profile"
           aria-label="My Profile"
         >
-          <UserCircle className="w-4 h-4 lg:w-4.5 lg:h-4.5" />
+          <UserCircle className="w-4 h-4" />
         </Link>
         <Link
           href="/settings"
           className={cn(
-            "w-8 h-8 lg:w-9 lg:h-9 rounded-xl flex items-center justify-center text-white transition-colors",
+            "w-7.5 h-7.5 lg:w-8 lg:h-8 rounded-lg flex items-center justify-center text-white transition-colors",
             pathname.startsWith("/settings") ? "bg-white text-brand-purple shadow-sm" : "bg-white/10 hover:bg-white/20"
           )}
           title="Account Settings"
           aria-label="Account Settings"
         >
-          <Settings className="w-4 h-4 lg:w-4.5 lg:h-4.5" />
+          <Settings className="w-4 h-4" />
         </Link>
         <button
           type="button"
           onClick={handleSignOut}
-          className="w-8 h-8 lg:w-9 lg:h-9 rounded-xl bg-white/10 hover:bg-red-500/80 flex items-center justify-center text-white transition-colors cursor-pointer"
+          className="w-7.5 h-7.5 lg:w-8 lg:h-8 rounded-lg bg-white/10 hover:bg-red-500/80 flex items-center justify-center text-white transition-colors cursor-pointer"
           title="Sign Out"
           aria-label="Sign Out"
         >
-          <LogOut className="w-4 h-4 lg:w-4.5 lg:h-4.5" />
+          <LogOut className="w-4 h-4" />
         </button>
       </div>
     </aside>

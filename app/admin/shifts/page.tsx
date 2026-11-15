@@ -90,7 +90,8 @@ export default function ShiftsAdminPage() {
       } = await supabase.auth.getSession();
       if (!session?.user) {
         if (isDemoModeEnabled()) {
-          setShifts(mockShifts);
+          const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_shifts") : null;
+          setShifts(stored ? JSON.parse(stored) : mockShifts);
           setEmployees([
             { id: "00000000-0000-0000-0000-000000000004", full_name: "Alex Rivera", email: "employee@remotehr.local" },
             { id: "00000000-0000-0000-0000-000000000003", full_name: "Marcus Vance", email: "manager@remotehr.local" },
@@ -405,7 +406,7 @@ export default function ShiftsAdminPage() {
   };
 
   return (
-    <AppShell primaryActionLabel="Add Shift" onPrimaryAction={handleOpenAdd} userRole="admin">
+    <AppShell primaryActionLabel="Add Shift" onPrimaryAction={handleOpenAdd}>
       <div className="space-y-6">
         {/* Header */}
         <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-3">

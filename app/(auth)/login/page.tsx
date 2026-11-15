@@ -93,6 +93,22 @@ function LoginForm() {
         }
 
         if (!res.ok) {
+          if (isDemoMode) {
+            const role =
+              loginEmail.includes("admin") ? "admin" :
+              loginEmail.includes("hr") ? "hr" :
+              loginEmail.includes("manager") ? "manager" : "employee";
+            if (typeof window !== "undefined") {
+              try {
+                localStorage.setItem("remotehr_cached_role", role);
+                document.cookie = `remotehr_role=${role}; path=/; max-age=2592000; SameSite=Lax`;
+              } catch {}
+            }
+            toast.success(`Signed in as ${role.toUpperCase()} (Demo Mode)!`);
+            router.push(redirectPath);
+            router.refresh();
+            return;
+          }
           // Generic auth error (status 400 or 401)
           setIsAuthenticating(false);
           throw new Error(data.error || "Invalid email or password. Please verify your credentials and try again.");
@@ -117,6 +133,22 @@ function LoginForm() {
         router.refresh();
       }
     } catch (err: any) {
+      if (isDemoMode) {
+        const role =
+          loginEmail.includes("admin") ? "admin" :
+          loginEmail.includes("hr") ? "hr" :
+          loginEmail.includes("manager") ? "manager" : "employee";
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem("remotehr_cached_role", role);
+            document.cookie = `remotehr_role=${role}; path=/; max-age=2592000; SameSite=Lax`;
+          } catch {}
+        }
+        toast.success(`Signed in as ${role.toUpperCase()} (Demo Mode)!`);
+        router.push(redirectPath);
+        router.refresh();
+        return;
+      }
       setIsAuthenticating(false);
       toast.error(err.message || "Invalid credentials. Please try again.");
     } finally {

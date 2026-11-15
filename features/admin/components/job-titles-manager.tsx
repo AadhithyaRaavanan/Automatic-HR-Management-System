@@ -50,7 +50,8 @@ export function JobTitlesManager({
       const res = await fetch("/api/admin/job-titles");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load job titles");
-      const loaded = data.titles && data.titles.length > 0 ? data.titles : (isDemoModeEnabled() ? defaultMockJobTitles : []);
+      const stored = isDemoModeEnabled() && typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_job_titles") : null;
+      const loaded = stored ? JSON.parse(stored) : (data.titles && data.titles.length > 0 ? data.titles : (isDemoModeEnabled() ? defaultMockJobTitles : []));
       setTitles(loaded);
     } catch (err: any) {
       if (isDemoModeEnabled()) {

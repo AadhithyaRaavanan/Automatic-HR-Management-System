@@ -80,7 +80,10 @@ export default function LocationsAdminPage() {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session?.user) {
-        if (isDemoModeEnabled()) setLocations(mockLocations);
+        if (isDemoModeEnabled()) {
+          const stored = typeof window !== "undefined" ? localStorage.getItem("remotehr_demo_locations") : null;
+          setLocations(stored ? JSON.parse(stored) : mockLocations);
+        }
         return;
       }
 
@@ -324,7 +327,7 @@ export default function LocationsAdminPage() {
   };
 
   return (
-    <AppShell primaryActionLabel="Add Location" onPrimaryAction={handleOpenAdd} userRole="admin">
+    <AppShell primaryActionLabel="Add Location" onPrimaryAction={handleOpenAdd}>
       <div className="space-y-6">
         {/* Header */}
         <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-3">

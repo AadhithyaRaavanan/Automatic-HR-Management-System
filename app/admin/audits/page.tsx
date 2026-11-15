@@ -191,7 +191,7 @@ export default function AuditsAdminPage() {
   };
 
   return (
-    <AppShell primaryActionLabel="Export Logs" onPrimaryAction={() => handleExport("csv")} userRole="admin">
+    <AppShell primaryActionLabel="Export Logs" onPrimaryAction={() => handleExport("csv")}>
       <div className="space-y-6">
         {/* Header */}
         <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-3">
