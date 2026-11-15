@@ -259,6 +259,40 @@ export async function bootstrapProduction(config: BootstrapConfig): Promise<Boot
 // CLI Execution Entry Point
 if (require.main === module) {
   const args = process.argv.slice(2);
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(`
+RemoteHR Production Bootstrapping Utility
+=========================================
+Provisions the initial root organization, attendance policies, standard leave types,
+and invites the primary root administrator without passwords or reusable credentials.
+
+Usage:
+  npx tsx scripts/bootstrap-production.ts [options]
+
+Options:
+  --name         Organization display name (default: "RemoteHR Enterprise")
+  --slug         Unique tenant URL slug (default: "remotehr-enterprise")
+  --domain       Primary corporate domain (default: "enterprise.remotehr.io")
+  --admin-email  Root admin email address (default: "admin@enterprise.remotehr.io")
+  --admin-name   Root admin full name (default: "Primary Administrator")
+  --timezone     Organization primary timezone (default: "UTC")
+  --currency     Currency code (default: "USD")
+  --work-mode    Default workforce mode (remote|hybrid|office, default: "hybrid")
+  --dry-run      Simulate provisioning without executing mutations
+  --force        Delete default seed organization if no production data exists
+  --help, -h     Show this documentation
+
+Security & Credential Policy:
+  - Zero persistent passwords or reusable emergency backup tokens are created.
+  - The first administrator receives a single-use, short-lived (24-hour) invitation link.
+  - The invite link is printed to stdout ONLY if stdout is an interactive terminal (isTTY)
+    and CI environment variable is unset.
+  - In CI or redirected pipelines, the invite link is redacted from console output to
+    guarantee zero token leakage into build logs, audit tables, or Sentry.
+`);
+    process.exit(0);
+  }
+
   const isDryRun = args.includes("--dry-run");
   const isForce = args.includes("--force");
 
@@ -285,9 +319,12 @@ if (require.main === module) {
       console.log("\n=========================================================================");
       console.log("PRODUCTION BOOTSTRAP RESULT:");
       console.log(result.message);
-      if (result.inviteLink) {
+      const isInteractiveTerminal = Boolean(process.stdout.isTTY && !process.env.CI);
+      if (result.inviteLink && isInteractiveTerminal) {
         console.log("\n[ADMIN INVITE LINK]:", result.inviteLink);
-        console.log("INSTRUCTION: Open the invite link in your browser within 24 hours to set your password and complete MFA enrollment.");
+        console.log("INSTRUCTION: Open this single-use, short-lived invite link in your browser within 24 hours to set your password and complete MFA enrollment.");
+      } else if (result.inviteLink) {
+        console.log("\n[ADMIN INVITE LINK]: [REDACTED in non-interactive/CI session]. Link dispatched to admin email.");
       }
       console.log("=========================================================================\n");
       process.exit(result.success ? 0 : 1);

@@ -36,6 +36,9 @@ npx tsx scripts/bootstrap-production.ts \
 5. Standard public holiday calendar.
 6. Initial tenant Administrator with secure single-use invitation link delivered via Resend.
 
+> [!NOTE]
+> Zero persistent passwords or reusable emergency backup tokens are created. The first administrator receives a single-use 24-hour invitation link printed to console only in interactive terminal sessions (never in CI logs, audit rows, or Sentry).
+
 ---
 
 ## 2. Tenant Suspension & Lifecycle Management
