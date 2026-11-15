@@ -10,7 +10,6 @@ import {
   recordFailure,
   clearRateLimit,
 } from "@/lib/auth/rate-limiter";
-import { checkTurnstileRequirements } from "@/lib/auth/turnstile";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 
 /**
@@ -111,16 +110,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Evaluate Cloudflare Turnstile CAPTCHA Requirement (Fails Closed in Production)
-    const captchaCheck = checkTurnstileRequirements(captchaToken);
-    if (!captchaCheck.valid) {
-      return NextResponse.json(
-        { error: captchaCheck.error || "CAPTCHA challenge required." },
-        { status: 400 }
-      );
-    }
-
-    // Prepare response object to collect auth session cookies
+    // 3. Supabase Auth Integration with Native CAPTCHA Verification
+    // Captcha secret is configured in Supabase Dashboard; token is forwarded to GoTrue
     let response = NextResponse.json({ success: true });
 
     // 4. Supabase Auth Integration

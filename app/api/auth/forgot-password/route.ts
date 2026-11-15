@@ -7,7 +7,6 @@ import {
   checkRateLimit,
   recordFailure,
 } from "@/lib/auth/rate-limiter";
-import { checkTurnstileRequirements } from "@/lib/auth/turnstile";
 
 function getPlatformTrustedClientIp(request: NextRequest): string {
   const forwardedFor = request.headers.get("x-forwarded-for");
@@ -37,16 +36,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Validate Cloudflare Turnstile CAPTCHA in production
-    const turnstileCheck = checkTurnstileRequirements(turnstileToken);
-    if (!turnstileCheck.valid) {
-      return NextResponse.json(
-        { error: turnstileCheck.error || "Turnstile verification failed. Please complete the CAPTCHA." },
-        { status: 403 }
-      );
-    }
-
-    // 2. Dual IP & Email Rate Limiting
+    // 1. Dual IP & Email Rate Limiting
     const clientIp = getPlatformTrustedClientIp(request);
     const ipLimitKey = getRateLimitKey(clientIp, email);
     const emailLimitKey = getEmailRateLimitKey(email);
@@ -101,6 +91,7 @@ export async function POST(request: NextRequest) {
       email,
       options: {
         shouldCreateUser: false,
+        captchaToken: turnstileToken,
       },
     });
 

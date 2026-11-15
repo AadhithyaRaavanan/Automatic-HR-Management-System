@@ -84,7 +84,14 @@ flowchart TD
      - `/api/admin/*`: 60 requests / minute per user ID.
      - Punch RPCs: 10 requests / minute per user ID.
 
-2. **Cloudflare Turnstile**:
-   - Integrated into login and forgot-password flows in managed challenge mode.
-   - Non-production environments accept standard test token (`1x0000000000000000000000000000000AA`) without network egress.
-   - Production verifies against `challenges.cloudflare.com/turnstile/v0/siteverify`.
+2. **Cloudflare Turnstile (Single Verification Path)**:
+   - Front-end renders the Turnstile widget (<TurnstileCaptcha />) using `NEXT_PUBLIC_TURNSTILE_SITE_KEY`.
+   - The application forwards the generated challenge token (`captchaToken`) directly to Supabase Auth (`signInWithPassword`, `signInWithOtp`, `verifyOtp`).
+   - Supabase GoTrue performs the single authoritative verification against Cloudflare using the Turnstile Secret Key configured in the Supabase Dashboard (**Authentication** -> **Bot Detection** -> **Turnstile**).
+   - There is zero duplicate server-side verification in the Next.js application layer.
+   - Exact Supabase Dashboard Configuration:
+     1. Open Supabase Dashboard -> **Authentication** -> **Bot Detection (CAPTCHA)**.
+     2. Toggle **Enable CAPTCHA protection**.
+     3. Select Provider: **Turnstile**.
+     4. Enter your Cloudflare Turnstile Secret Key (`0x4AAAAAA...` or test key `1x0000000000000000000000000000000AA`).
+     5. Save settings.

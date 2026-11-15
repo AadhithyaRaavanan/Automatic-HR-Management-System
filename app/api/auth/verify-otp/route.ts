@@ -8,7 +8,6 @@ import {
   recordFailure,
   clearRateLimit,
 } from "@/lib/auth/rate-limiter";
-import { checkTurnstileRequirements } from "@/lib/auth/turnstile";
 
 function getPlatformTrustedClientIp(request: NextRequest): string {
   const forwardedFor = request.headers.get("x-forwarded-for");
@@ -46,16 +45,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Turnstile Check
-    const turnstileCheck = checkTurnstileRequirements(turnstileToken);
-    if (!turnstileCheck.valid) {
-      return NextResponse.json(
-        { error: turnstileCheck.error || "Turnstile verification failed." },
-        { status: 403 }
-      );
-    }
-
-    // 2. Rate Limiting for verification attempts
+    // 1. Rate Limiting for verification attempts
     const clientIp = getPlatformTrustedClientIp(request);
     const ipLimitKey = getRateLimitKey(clientIp, email);
     const emailLimitKey = getEmailRateLimitKey(email);
@@ -104,6 +94,7 @@ export async function POST(request: NextRequest) {
       email,
       token,
       type: "email",
+      options: turnstileToken ? { captchaToken: turnstileToken } : undefined,
     });
 
     if (verifyError || !authData.user) {
