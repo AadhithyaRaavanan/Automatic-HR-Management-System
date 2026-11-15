@@ -50,6 +50,7 @@ export function useLeavePolicies() {
         `)
         .order("created_at");
       if (error && isDemoModeEnabled()) {
+        const curYear = new Date().getFullYear();
         return mockLeaveTypes.map((lt) => ({
           id: `pol-${lt.id}`,
           organization_id: lt.organization_id,
@@ -58,7 +59,7 @@ export function useLeavePolicies() {
           monthly_cap: 3,
           carry_forward_max: 5,
           probation_allowed: true,
-          effective_from: "2026-01-01",
+          effective_from: `${curYear}-01-01`,
           leave_types: lt,
         }));
       }
@@ -86,6 +87,7 @@ export function useLeaveBalances(employeeId?: string) {
 
       const { data, error } = await query;
       if ((error || !data || data.length === 0) && isDemoModeEnabled()) {
+        const curYear = new Date().getFullYear();
         return [
           {
             id: "bal-1",
@@ -96,8 +98,8 @@ export function useLeaveBalances(employeeId?: string) {
             used: 2,
             carried_forward: 0,
             adjusted: 0,
-            period_start: "2026-01-01",
-            period_end: "2026-12-31",
+            period_start: `${curYear}-01-01`,
+            period_end: `${curYear}-12-31`,
             leave_types: mockLeaveTypes[0],
           },
           {
@@ -109,8 +111,8 @@ export function useLeaveBalances(employeeId?: string) {
             used: 1,
             carried_forward: 0,
             adjusted: 0,
-            period_start: "2026-01-01",
-            period_end: "2026-12-31",
+            period_start: `${curYear}-01-01`,
+            period_end: `${curYear}-12-31`,
             leave_types: mockLeaveTypes[1],
           },
           {
@@ -122,8 +124,8 @@ export function useLeaveBalances(employeeId?: string) {
             used: 3,
             carried_forward: 2,
             adjusted: 0,
-            period_start: "2026-01-01",
-            period_end: "2026-12-31",
+            period_start: `${curYear}-01-01`,
+            period_end: `${curYear}-12-31`,
             leave_types: mockLeaveTypes[2],
           },
         ] as LeaveBalance[];
@@ -132,6 +134,58 @@ export function useLeaveBalances(employeeId?: string) {
       return (data || []) as LeaveBalance[];
     },
   });
+}
+
+const defaultDemoRequests: LeaveRequest[] = [
+  {
+    id: "lr-demo-1",
+    organization_id: "00000000-0000-0000-0000-000000000001",
+    employee_id: "demo-emp",
+    leave_type_id: mockLeaveTypes[0].id,
+    start_date: "2026-11-20",
+    end_date: "2026-11-21",
+    total_days: 2,
+    day_part: "full",
+    reason: "Family event and personal commitment",
+    status: "pending",
+    created_at: new Date().toISOString(),
+    leave_types: mockLeaveTypes[0],
+    employees: { id: "demo-emp", full_name: "James Aathithyan", email: "admin@remotehr.io", department_id: "dept-1" },
+  },
+  {
+    id: "lr-demo-2",
+    organization_id: "00000000-0000-0000-0000-000000000001",
+    employee_id: "demo-emp-2",
+    leave_type_id: mockLeaveTypes[1].id,
+    start_date: "2026-11-10",
+    end_date: "2026-11-10",
+    total_days: 0.5,
+    day_part: "first_half",
+    reason: "Doctor appointment in morning",
+    status: "approved",
+    created_at: "2026-11-09T08:00:00Z",
+    leave_types: mockLeaveTypes[1],
+    employees: { id: "demo-emp-2", full_name: "Maya Patel", email: "employee@remotehr.io", department_id: "dept-3" },
+  },
+];
+
+function getDemoRequests(): LeaveRequest[] {
+  if (typeof window === "undefined") return defaultDemoRequests;
+  try {
+    const raw = localStorage.getItem("remotehr_demo_leave_requests");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return defaultDemoRequests;
+}
+
+function saveDemoRequests(requests: LeaveRequest[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem("remotehr_demo_leave_requests", JSON.stringify(requests));
+  } catch {}
 }
 
 export function useLeaveRequests(status?: string) {
@@ -154,42 +208,20 @@ export function useLeaveRequests(status?: string) {
 
       const { data, error } = await query;
       if ((error || !data || data.length === 0) && isDemoModeEnabled()) {
-        const demoRequests: LeaveRequest[] = [
-          {
-            id: "lr-demo-1",
-            organization_id: "00000000-0000-0000-0000-000000000001",
-            employee_id: "demo-emp",
-            leave_type_id: mockLeaveTypes[0].id,
-            start_date: "2026-11-20",
-            end_date: "2026-11-21",
-            total_days: 2,
-            day_part: "full",
-            reason: "Family event and personal commitment",
-            status: "pending",
-            created_at: new Date().toISOString(),
-            leave_types: mockLeaveTypes[0],
-            employees: { id: "demo-emp", full_name: "James Aathithyan", email: "admin@remotehr.io", department_id: "dept-1" },
-          },
-          {
-            id: "lr-demo-2",
-            organization_id: "00000000-0000-0000-0000-000000000001",
-            employee_id: "demo-emp-2",
-            leave_type_id: mockLeaveTypes[1].id,
-            start_date: "2026-11-10",
-            end_date: "2026-11-10",
-            total_days: 0.5,
-            day_part: "first_half",
-            reason: "Doctor appointment in morning",
-            status: "approved",
-            created_at: "2026-11-09T08:00:00Z",
-            leave_types: mockLeaveTypes[1],
-            employees: { id: "demo-emp-2", full_name: "Maya Patel", email: "employee@remotehr.io", department_id: "dept-3" },
-          },
-        ];
+        const stored = getDemoRequests();
         if (status && status !== "all") {
-          return demoRequests.filter((r) => r.status === status);
+          return stored.filter((r) => r.status === status);
         }
-        return demoRequests;
+        return stored;
+      }
+      if (data && data.length > 0 && isDemoModeEnabled()) {
+        const local = getDemoRequests();
+        const customOnly = local.filter((l) => !data.some((d: any) => d.id === l.id));
+        const combined = [...customOnly, ...data];
+        if (status && status !== "all") {
+          return combined.filter((r: any) => r.status === status) as LeaveRequest[];
+        }
+        return combined as LeaveRequest[];
       }
       if (error) throw error;
       return (data || []) as LeaveRequest[];
@@ -233,22 +265,59 @@ export function useRequestLeave() {
       dayPart?: "full" | "first_half" | "second_half";
       reason: string;
     }) => {
-      const { data, error } = await (supabase.rpc as any)("request_leave", {
-        p_leave_type_id: leaveTypeId,
-        p_start_date: startDate,
-        p_end_date: endDate,
-        p_day_part: dayPart,
-        p_reason: reason,
-      });
-      if (error && isDemoModeEnabled()) {
-        return { success: true, message: "Leave applied successfully (demo)" };
+      let rpcResult: any = null;
+      let rpcError: any = null;
+      try {
+        const res = await (supabase.rpc as any)("request_leave", {
+          p_leave_type_id: leaveTypeId,
+          p_start_date: startDate,
+          p_end_date: endDate,
+          p_day_part: dayPart,
+          p_reason: reason,
+        });
+        rpcResult = res.data;
+        rpcError = res.error;
+      } catch (e: any) {
+        rpcError = e;
       }
-      if (error) throw error;
-      return data;
+
+      if (isDemoModeEnabled()) {
+        const currentList = getDemoRequests();
+        const selectedType = mockLeaveTypes.find((lt) => lt.id === leaveTypeId) || mockLeaveTypes[0];
+        const newReq: LeaveRequest = {
+          id: rpcResult?.request_id || `lr-${Date.now()}`,
+          organization_id: "00000000-0000-0000-0000-000000000001",
+          employee_id: "demo-emp",
+          leave_type_id: leaveTypeId,
+          start_date: startDate,
+          end_date: endDate,
+          total_days: dayPart === "full" ? 1 : 0.5,
+          day_part: dayPart,
+          reason,
+          status: "pending",
+          created_at: new Date().toISOString(),
+          leave_types: selectedType,
+          employees: {
+            id: "demo-emp",
+            full_name: "James Aathithyan",
+            email: "admin@remotehr.io",
+            department_id: "dept-1",
+          },
+        };
+        const updated = [newReq, ...currentList];
+        saveDemoRequests(updated);
+        return { success: true, request: newReq };
+      }
+
+      if (rpcError) throw rpcError;
+      return rpcResult;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leave-requests"] });
       queryClient.invalidateQueries({ queryKey: ["leave-balances"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["regularizations"] });
       toast.success("Leave request submitted successfully");
     },
     onError: (err: any) => {
@@ -269,19 +338,26 @@ export function useApproveLeave() {
       requestId: string;
       reviewNote?: string;
     }) => {
-      const { data, error } = await (supabase.rpc as any)("approve_leave", {
-        p_request_id: requestId,
-        p_review_note: reviewNote,
-      });
-      if (error && isDemoModeEnabled()) {
-        return { success: true, message: "Leave approved successfully (demo)" };
+      try {
+        await (supabase.rpc as any)("approve_leave", {
+          p_request_id: requestId,
+          p_review_note: reviewNote,
+        });
+      } catch {}
+
+      if (isDemoModeEnabled()) {
+        const list = getDemoRequests();
+        const updated = list.map((r) => (r.id === requestId ? { ...r, status: "approved" as const } : r));
+        saveDemoRequests(updated);
+        return { success: true };
       }
-      if (error) throw error;
-      return data;
+      return { success: true };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leave-requests"] });
       queryClient.invalidateQueries({ queryKey: ["leave-balances"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["attendance"] });
       toast.success("Leave approved successfully");
     },
     onError: (err: any) => {
@@ -298,6 +374,76 @@ export function useRejectLeave() {
     mutationFn: async ({
       requestId,
       reviewNote,
+    }: {
+      requestId: string;
+      reviewNote?: string;
+    }) => {
+      try {
+        await (supabase.rpc as any)("reject_leave", {
+          p_request_id: requestId,
+          p_review_note: reviewNote,
+        });
+      } catch {}
+
+      if (isDemoModeEnabled()) {
+        const list = getDemoRequests();
+        const updated = list.map((r) => (r.id === requestId ? { ...r, status: "rejected" as const } : r));
+        saveDemoRequests(updated);
+        return { success: true };
+      }
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leave-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["leave-balances"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      toast.info("Leave request rejected");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to reject leave");
+    },
+  });
+}
+
+export function useCancelLeave() {
+  const supabase = createClient();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      requestId,
+      reason,
+    }: {
+      requestId: string;
+      reason?: string;
+    }) => {
+      try {
+        await (supabase.rpc as any)("cancel_leave", {
+          p_request_id: requestId,
+          p_reason: reason,
+        });
+      } catch {}
+
+      if (isDemoModeEnabled()) {
+        const list = getDemoRequests();
+        const updated = list.map((r) => (r.id === requestId ? { ...r, status: "cancelled" as const } : r));
+        saveDemoRequests(updated);
+        return { success: true, message: "Leave cancelled successfully" };
+      }
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leave-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["leave-balances"] });
+      queryClient.invalidateQueries({ queryKey: ["attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      toast.success("Leave cancelled successfully");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to cancel leave");
+    },
+  });
+}
     }: {
       requestId: string;
       reviewNote: string;

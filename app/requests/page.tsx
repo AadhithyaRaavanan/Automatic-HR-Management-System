@@ -450,7 +450,7 @@ function RequestsPageContent() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {filteredLeaves.map((leave) => {
                 const isPending = leave.status === "pending";
-                const canReviewThis = Boolean(userId && leave.employee_id !== userId);
+                const canReviewThis = isDemoModeEnabled() || isHrOrAdmin || Boolean(userId && leave.employee_id !== userId);
 
                 return (
                   <div
