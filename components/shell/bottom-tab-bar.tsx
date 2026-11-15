@@ -34,11 +34,23 @@ export function BottomTabBar({
   userRole?: "employee" | "manager" | "hr" | "admin";
 }) {
   const pathname = usePathname();
+  const getCookieRole = () => {
+    if (typeof document === "undefined") return null;
+    const match = document.cookie.match(/(?:^|;\s*)remotehr_role=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : null;
+  };
+
   const cachedRole =
     typeof window !== "undefined"
-      ? (localStorage.getItem("remotehr_cached_role") as any)
+      ? (localStorage.getItem("remotehr_cached_role") as any) || getCookieRole()
       : null;
-  const userRole = propRole || cachedRole || "employee";
+
+  const privilegedRoles = ["admin", "hr", "manager"];
+  const userRole =
+    (propRole && privilegedRoles.includes(propRole) ? propRole : null) ||
+    cachedRole ||
+    propRole ||
+    "employee";
   const visibleTabs = baseMobileTabs
     .filter((tab) => !tab.roles || tab.roles.includes(userRole))
     .slice(0, 5);

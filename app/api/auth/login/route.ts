@@ -277,6 +277,13 @@ export async function POST(request: NextRequest) {
       response.cookies.getAll().forEach((cookie) => {
         res.cookies.set(cookie);
       });
+      if (userRole) {
+        res.cookies.set("remotehr_role", userRole, {
+          path: "/",
+          sameSite: "lax",
+          maxAge: 60 * 60 * 24 * 30, // 30 days
+        });
+      }
       return res;
     };
 

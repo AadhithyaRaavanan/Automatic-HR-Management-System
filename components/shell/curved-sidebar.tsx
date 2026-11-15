@@ -72,6 +72,7 @@ export function CurvedSidebar({
       try {
         localStorage.removeItem("remotehr_cached_session");
         localStorage.removeItem("remotehr_cached_role");
+        document.cookie = "remotehr_role=; path=/; max-age=0; SameSite=Lax";
       } catch {}
     }
     await supabase.auth.signOut();
@@ -79,11 +80,23 @@ export function CurvedSidebar({
     router.refresh();
   };
 
+  const getCookieRole = () => {
+    if (typeof document === "undefined") return null;
+    const match = document.cookie.match(/(?:^|;\s*)remotehr_role=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : null;
+  };
+
   const cachedRole =
     typeof window !== "undefined"
-      ? (localStorage.getItem("remotehr_cached_role") as any)
+      ? (localStorage.getItem("remotehr_cached_role") as any) || getCookieRole()
       : null;
-  const effectiveRole = propRole || cachedRole || "employee";
+
+  const privilegedRoles = ["admin", "hr", "manager"];
+  const effectiveRole =
+    (propRole && privilegedRoles.includes(propRole) ? propRole : null) ||
+    cachedRole ||
+    propRole ||
+    "employee";
 
   const navItems = React.useMemo(() => {
     return baseNavItems.filter((item) => {

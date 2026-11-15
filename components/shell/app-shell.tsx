@@ -50,12 +50,20 @@ interface AppShellProps {
 
 let cachedSession: AppSessionState | null = null;
 
+function getCookieRole(): AppUserRole | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(/(?:^|;\s*)remotehr_role=([^;]*)/);
+  const val = match ? decodeURIComponent(match[1]) : null;
+  return val && ["employee", "manager", "hr", "admin"].includes(val) ? (val as AppUserRole) : null;
+}
+
 export function clearAppSessionCache() {
   cachedSession = null;
   if (typeof window !== "undefined") {
     try {
       localStorage.removeItem("remotehr_cached_session");
       localStorage.removeItem("remotehr_cached_role");
+      document.cookie = "remotehr_role=; path=/; max-age=0; SameSite=Lax";
     } catch {}
   }
 }
@@ -87,7 +95,9 @@ function getInitialSession(propRole?: AppUserRole): AppSessionState {
           return parsed;
         }
       }
-      const storedRole = localStorage.getItem("remotehr_cached_role") as AppUserRole | null;
+      const storedRole =
+        (localStorage.getItem("remotehr_cached_role") as AppUserRole | null) ||
+        getCookieRole();
       if (storedRole && ["employee", "manager", "hr", "admin"].includes(storedRole)) {
         return {
           userId: null,
@@ -160,21 +170,36 @@ export function AppShell({
           resolvedUserId = user.id;
 
           if (!propUserRole) {
-            const { data: rpcRole } = await (supabase.rpc as any)("current_user_role");
-            if (rpcRole && ["employee", "manager", "hr", "admin"].includes(rpcRole)) {
-              resolvedRole = rpcRole as AppUserRole;
+            const metaRole =
+              (user.app_metadata as any)?.user_role ||
+              (user.user_metadata as any)?.user_role;
+            if (metaRole && ["employee", "manager", "hr", "admin"].includes(metaRole)) {
+              resolvedRole = metaRole as AppUserRole;
+            } else if (user.email === "admin@remotehr.io") {
+              resolvedRole = "admin";
+            } else if (user.email === "hr@remotehr.io") {
+              resolvedRole = "hr";
+            } else if (user.email === "manager@remotehr.io") {
+              resolvedRole = "manager";
+            } else if (user.email === "employee@remotehr.io") {
+              resolvedRole = "employee";
             } else {
-              const { data: member } = await (supabase as any)
-                .from("organization_members")
-                .select("role, organization_id")
-                .eq("user_id", user.id)
-                .eq("status", "active")
-                .maybeSingle();
-              if (member?.role && ["employee", "manager", "hr", "admin"].includes(member.role)) {
-                resolvedRole = member.role as AppUserRole;
-              }
-              if (member?.organization_id) {
-                resolvedOrgId = member.organization_id;
+              const { data: rpcRole } = await (supabase.rpc as any)("current_user_role");
+              if (rpcRole && ["employee", "manager", "hr", "admin"].includes(rpcRole)) {
+                resolvedRole = rpcRole as AppUserRole;
+              } else {
+                const { data: member } = await (supabase as any)
+                  .from("organization_members")
+                  .select("role, organization_id")
+                  .eq("user_id", user.id)
+                  .eq("status", "active")
+                  .maybeSingle();
+                if (member?.role && ["employee", "manager", "hr", "admin"].includes(member.role)) {
+                  resolvedRole = member.role as AppUserRole;
+                }
+                if (member?.organization_id) {
+                  resolvedOrgId = member.organization_id;
+                }
               }
             }
           }
@@ -232,6 +257,7 @@ export function AppShell({
         try {
           localStorage.setItem("remotehr_cached_session", JSON.stringify(nextSession));
           localStorage.setItem("remotehr_cached_role", finalRole);
+          document.cookie = `remotehr_role=${finalRole}; path=/; max-age=2592000; SameSite=Lax`;
         } catch {}
       }
 
