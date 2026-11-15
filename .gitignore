@@ -53,3 +53,6 @@ next-env.d.ts
 !/scripts/verify-docs.mjs
 !/scripts/verify-release.mjs
 !/scripts/bootstrap-production.ts
+!/scripts/audit-dead-ui.mjs
+!/scripts/seed-demo-data.ts
+!/scripts/demo-smoke.mjs
