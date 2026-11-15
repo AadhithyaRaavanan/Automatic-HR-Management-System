@@ -84,30 +84,32 @@ export async function POST(request: NextRequest) {
     const ipEmailKey = getRateLimitKey(clientIp, email);
     const emailKey = getEmailRateLimitKey(email);
 
-    // 2. Evaluate Dual Rate Limits: IP+Email AND Email-only counters
-    const [ipEmailCheck, emailCheck] = await Promise.all([
-      checkRateLimit(ipEmailKey),
-      checkRateLimit(emailKey),
-    ]);
+    // 2. Evaluate Dual Rate Limits: IP+Email AND Email-only counters (bypassed in demo mode)
+    if (!isDemoModeEnabled()) {
+      const [ipEmailCheck, emailCheck] = await Promise.all([
+        checkRateLimit(ipEmailKey),
+        checkRateLimit(emailKey),
+      ]);
 
-    if (!ipEmailCheck.allowed || !emailCheck.allowed) {
-      const retryAfter = Math.max(
-        ipEmailCheck.retryAfterSeconds,
-        emailCheck.retryAfterSeconds
-      );
-      return NextResponse.json(
-        {
-          error: `Too many failed login attempts. Account login is temporarily locked for security. Please try again in ${Math.ceil(
-            retryAfter / 60
-          )} minutes.`,
-        },
-        {
-          status: 429,
-          headers: {
-            "Retry-After": String(retryAfter),
+      if (!ipEmailCheck.allowed || !emailCheck.allowed) {
+        const retryAfter = Math.max(
+          ipEmailCheck.retryAfterSeconds,
+          emailCheck.retryAfterSeconds
+        );
+        return NextResponse.json(
+          {
+            error: `Too many failed login attempts. Account login is temporarily locked for security. Please try again in ${Math.ceil(
+              retryAfter / 60
+            )} minutes.`,
           },
-        }
-      );
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(retryAfter),
+            },
+          }
+        );
+      }
     }
 
     // 3. Supabase Auth Integration with Native CAPTCHA Verification
@@ -160,15 +162,20 @@ export async function POST(request: NextRequest) {
     }
 
     if (authError || !authData.user) {
-      // Record failure on both IP+Email AND Email-only rate limit stores
-      await Promise.all([
-        recordFailure(ipEmailKey),
-        recordFailure(emailKey),
-      ]);
+      if (!isDemoModeEnabled()) {
+        // Record failure on both IP+Email AND Email-only rate limit stores
+        await Promise.all([
+          recordFailure(ipEmailKey),
+          recordFailure(emailKey),
+        ]);
+      }
 
-      // Generic authentication error prevents account enumeration
+      const errorMessage = isDemoModeEnabled()
+        ? `Demo Login: ${authError?.message || "Authentication failed. Please verify Supabase URL & keys in Vercel."}`
+        : "Invalid email or password. Please verify your credentials and try again.";
+
       return NextResponse.json(
-        { error: "Invalid email or password. Please verify your credentials and try again." },
+        { error: errorMessage },
         { status: 401 }
       );
     }
