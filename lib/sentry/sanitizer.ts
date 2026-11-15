@@ -45,6 +45,14 @@ export function sanitizeObject(obj: any): any {
   return sanitized;
 }
 
+export function sanitizeSentryBreadcrumb(breadcrumb: any): any {
+  if (!breadcrumb) return breadcrumb;
+  if (breadcrumb.data && typeof breadcrumb.data === "object") {
+    breadcrumb.data = sanitizeObject(breadcrumb.data);
+  }
+  return breadcrumb;
+}
+
 export function sanitizeSentryEvent(event: any): any {
   if (!event) return event;
 

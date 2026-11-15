@@ -36,17 +36,19 @@ export const serverEnvSchema = z.object({
 export type ClientEnv = z.infer<typeof clientEnvSchema>;
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 
-function validateEnv(): { client: ClientEnv; server: ServerEnv } {
-  const isProduction = process.env.NODE_ENV === "production";
+export function validateEnv(customEnv?: Record<string, string | undefined>): { client: ClientEnv; server: ServerEnv } {
+  const envSource = customEnv || process.env;
+  const isProduction = envSource.NODE_ENV === "production";
+  const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
 
   // Parse Client Env
   const rawClient = {
-    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || (isProduction ? undefined : "http://127.0.0.1:54321"),
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || (isProduction ? undefined : "dummy-anon-key"),
-    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-    NEXT_PUBLIC_TURNSTILE_SITE_KEY: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY,
-    NEXT_PUBLIC_DEMO_MODE: process.env.NEXT_PUBLIC_DEMO_MODE as any,
-    NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
+    NEXT_PUBLIC_SUPABASE_URL: envSource.NEXT_PUBLIC_SUPABASE_URL || (isProduction ? undefined : "http://127.0.0.1:54321"),
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: envSource.NEXT_PUBLIC_SUPABASE_ANON_KEY || (isProduction ? undefined : "dummy-anon-key"),
+    NEXT_PUBLIC_APP_URL: envSource.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: envSource.NEXT_PUBLIC_TURNSTILE_SITE_KEY,
+    NEXT_PUBLIC_DEMO_MODE: envSource.NEXT_PUBLIC_DEMO_MODE as any,
+    NEXT_PUBLIC_SENTRY_DSN: envSource.NEXT_PUBLIC_SENTRY_DSN,
   };
 
   const clientParsed = clientEnvSchema.safeParse(rawClient);
@@ -56,30 +58,30 @@ function validateEnv(): { client: ClientEnv; server: ServerEnv } {
       null,
       2
     )}`;
-    if (isProduction) {
+    if (isProduction && !isBuildPhase) {
       throw new Error(errorMsg);
     } else {
       console.warn(errorMsg);
     }
   }
 
-  // Parse Server Env (only evaluate fully on server side)
-  const isServer = typeof window === "undefined";
+  // Parse Server Env (only evaluate fully on server side or when explicitly validating)
+  const isServer = typeof window === "undefined" || Boolean(customEnv);
   const rawServer = {
-    NODE_ENV: process.env.NODE_ENV || "development",
-    DATABASE_URL: process.env.DATABASE_URL,
-    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || (isProduction ? undefined : "dummy-service-role-key"),
-    RESEND_API_KEY: process.env.RESEND_API_KEY,
-    RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL || "RemoteHR <onboarding@remotehr.io>",
-    TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY,
-    UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
-    UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
-    SENTRY_DSN: process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN,
-    SLACK_WEBHOOK_URL: process.env.SLACK_WEBHOOK_URL,
-    COMPANY_NAME: process.env.COMPANY_NAME || "RemoteHR",
-    SUPPORT_EMAIL: process.env.SUPPORT_EMAIL || "support@remotehr.io",
-    PRIVACY_POLICY_URL: process.env.PRIVACY_POLICY_URL || "/privacy",
-    TERMS_OF_SERVICE_URL: process.env.TERMS_OF_SERVICE_URL || "/terms",
+    NODE_ENV: envSource.NODE_ENV || "development",
+    DATABASE_URL: envSource.DATABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: envSource.SUPABASE_SERVICE_ROLE_KEY || (isProduction ? undefined : "dummy-service-role-key"),
+    RESEND_API_KEY: envSource.RESEND_API_KEY,
+    RESEND_FROM_EMAIL: envSource.RESEND_FROM_EMAIL || "RemoteHR <onboarding@remotehr.io>",
+    TURNSTILE_SECRET_KEY: envSource.TURNSTILE_SECRET_KEY,
+    UPSTASH_REDIS_REST_URL: envSource.UPSTASH_REDIS_REST_URL,
+    UPSTASH_REDIS_REST_TOKEN: envSource.UPSTASH_REDIS_REST_TOKEN,
+    SENTRY_DSN: envSource.SENTRY_DSN || envSource.NEXT_PUBLIC_SENTRY_DSN,
+    SLACK_WEBHOOK_URL: envSource.SLACK_WEBHOOK_URL,
+    COMPANY_NAME: envSource.COMPANY_NAME || "RemoteHR",
+    SUPPORT_EMAIL: envSource.SUPPORT_EMAIL || "support@remotehr.io",
+    PRIVACY_POLICY_URL: envSource.PRIVACY_POLICY_URL || "/privacy",
+    TERMS_OF_SERVICE_URL: envSource.TERMS_OF_SERVICE_URL || "/terms",
   };
 
   const serverParsed = serverEnvSchema.safeParse(rawServer);
@@ -89,10 +91,27 @@ function validateEnv(): { client: ClientEnv; server: ServerEnv } {
       null,
       2
     )}`;
-    if (isProduction) {
+    if (isProduction && !isBuildPhase) {
       throw new Error(errorMsg);
     } else {
       console.warn(errorMsg);
+    }
+  }
+
+  // Strict production runtime enforcement: must fail startup if any required variable is missing
+  if (isProduction && isServer && !isBuildPhase) {
+    const missing: string[] = [];
+    if (!envSource.NEXT_PUBLIC_SUPABASE_URL) missing.push("NEXT_PUBLIC_SUPABASE_URL");
+    if (!envSource.NEXT_PUBLIC_SUPABASE_ANON_KEY) missing.push("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+    if (!envSource.SUPABASE_SERVICE_ROLE_KEY) missing.push("SUPABASE_SERVICE_ROLE_KEY");
+    if (!envSource.NEXT_PUBLIC_APP_URL) missing.push("NEXT_PUBLIC_APP_URL");
+    if (!envSource.NEXT_PUBLIC_TURNSTILE_SITE_KEY) missing.push("NEXT_PUBLIC_TURNSTILE_SITE_KEY");
+    if (!envSource.UPSTASH_REDIS_REST_URL) missing.push("UPSTASH_REDIS_REST_URL");
+    if (!envSource.UPSTASH_REDIS_REST_TOKEN) missing.push("UPSTASH_REDIS_REST_TOKEN");
+    if (!envSource.RESEND_API_KEY) missing.push("RESEND_API_KEY");
+    if (!envSource.RESEND_FROM_EMAIL) missing.push("RESEND_FROM_EMAIL");
+    if (missing.length > 0) {
+      throw new Error(`[Env Config Fatal] Missing required production environment variables: ${missing.join(", ")}`);
     }
   }
 
@@ -105,4 +124,5 @@ function validateEnv(): { client: ClientEnv; server: ServerEnv } {
 const { client: clientEnv, server: serverEnv } = validateEnv();
 
 export { clientEnv, serverEnv };
-export default { client: clientEnv, server: serverEnv };
+const env = { client: clientEnv, server: serverEnv };
+export default env;

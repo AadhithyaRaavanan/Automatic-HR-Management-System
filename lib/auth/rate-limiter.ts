@@ -68,11 +68,18 @@ export async function checkRateLimit(key: string): Promise<RateLimitResult> {
       }
       return { allowed: true, retryAfterSeconds: 0 };
     } catch (err) {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error(`[RateLimiter] Production rate limit evaluation failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
       // In offline/test environments, proceed to fallback
     }
   }
 
-  // 3. In-Memory Fallback (For isolated unit tests)
+  // 3. In-Memory Fallback (Strictly disabled in production)
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("[RateLimiter] In-memory rate limiting fallback is strictly disabled in production.");
+  }
+
   const mem = fallbackMemoryMap.get(key);
   if (mem && mem.lockedUntil && now < mem.lockedUntil) {
     const retryAfter = Math.ceil((mem.lockedUntil - now) / 1000);
@@ -137,11 +144,18 @@ export async function recordFailure(key: string): Promise<void> {
       });
       return;
     } catch (err) {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error(`[RateLimiter] Production rate limit record failure: ${err instanceof Error ? err.message : String(err)}`);
+      }
       // In offline/test environments, proceed to fallback
     }
   }
 
-  // 3. In-Memory Fallback
+  // 3. In-Memory Fallback (Strictly disabled in production)
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("[RateLimiter] In-memory rate limiting fallback is strictly disabled in production.");
+  }
+
   const mem = fallbackMemoryMap.get(key) || { attempts: 0, lockedUntil: null };
   const newAttempts = mem.attempts + 1;
   const lockedUntil = newAttempts >= MAX_FAILED_ATTEMPTS ? now + LOCKOUT_WINDOW_MS : null;
