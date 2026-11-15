@@ -56,6 +56,14 @@ describe("Production Environment Startup Validation", () => {
     expect(() => validateEnv(missingAppUrl)).toThrow(/NEXT_PUBLIC_APP_URL/);
   });
 
+  it("allows demo mode toggle in production without throwing missing variable error", () => {
+    const demoProdEnv = {
+      NODE_ENV: "production",
+      NEXT_PUBLIC_DEMO_MODE: "true",
+    };
+    expect(() => validateEnv(demoProdEnv)).not.toThrow();
+  });
+
   it("keeps optional variables optional in production", () => {
     // Sentry and Slack URLs are completely omitted
     expect(() => validateEnv(completeProdEnv)).not.toThrow();

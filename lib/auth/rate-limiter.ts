@@ -68,15 +68,15 @@ export async function checkRateLimit(key: string): Promise<RateLimitResult> {
       }
       return { allowed: true, retryAfterSeconds: 0 };
     } catch (err) {
-      if (process.env.NODE_ENV === "production") {
+      if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_DEMO_MODE !== "true") {
         throw new Error(`[RateLimiter] Production rate limit evaluation failed: ${err instanceof Error ? err.message : String(err)}`);
       }
       // In offline/test environments, proceed to fallback
     }
   }
 
-  // 3. In-Memory Fallback (Strictly disabled in production)
-  if (process.env.NODE_ENV === "production") {
+  // 3. In-Memory Fallback (Strictly disabled in production unless NEXT_PUBLIC_DEMO_MODE=true)
+  if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_DEMO_MODE !== "true") {
     throw new Error("[RateLimiter] In-memory rate limiting fallback is strictly disabled in production.");
   }
 
@@ -144,15 +144,15 @@ export async function recordFailure(key: string): Promise<void> {
       });
       return;
     } catch (err) {
-      if (process.env.NODE_ENV === "production") {
+      if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_DEMO_MODE !== "true") {
         throw new Error(`[RateLimiter] Production rate limit record failure: ${err instanceof Error ? err.message : String(err)}`);
       }
       // In offline/test environments, proceed to fallback
     }
   }
 
-  // 3. In-Memory Fallback (Strictly disabled in production)
-  if (process.env.NODE_ENV === "production") {
+  // 3. In-Memory Fallback (Strictly disabled in production unless NEXT_PUBLIC_DEMO_MODE=true)
+  if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_DEMO_MODE !== "true") {
     throw new Error("[RateLimiter] In-memory rate limiting fallback is strictly disabled in production.");
   }
 

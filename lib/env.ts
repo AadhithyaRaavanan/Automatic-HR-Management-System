@@ -99,7 +99,8 @@ export function validateEnv(customEnv?: Record<string, string | undefined>): { c
   }
 
   // Strict production runtime enforcement: must fail startup if any required variable is missing
-  if (isProduction && isServer && !isBuildPhase) {
+  // (relaxed if explicitly running in demo mode via NEXT_PUBLIC_DEMO_MODE=true for stakeholder presentations)
+  if (isProduction && isServer && !isBuildPhase && envSource.NEXT_PUBLIC_DEMO_MODE !== "true") {
     const missing: string[] = [];
     if (!envSource.NEXT_PUBLIC_SUPABASE_URL) missing.push("NEXT_PUBLIC_SUPABASE_URL");
     if (!envSource.NEXT_PUBLIC_SUPABASE_ANON_KEY) missing.push("NEXT_PUBLIC_SUPABASE_ANON_KEY");

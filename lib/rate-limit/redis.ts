@@ -51,8 +51,8 @@ export async function checkRateLimitDistributed(
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
   const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-  // In production, strictly require Upstash Redis without in-memory fallback
-  if (process.env.NODE_ENV === "production") {
+  // In production, strictly require Upstash Redis without in-memory fallback (unless NEXT_PUBLIC_DEMO_MODE=true)
+  if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_DEMO_MODE !== "true") {
     if (!redisUrl || !redisToken) {
       throw new Error("[RateLimiter] Production rate limiting strictly requires UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN. In-memory fallback is disabled in production.");
     }
@@ -83,7 +83,7 @@ export async function checkRateLimitDistributed(
         retryAfterSeconds,
       };
     } catch (err) {
-      if (process.env.NODE_ENV === "production") {
+      if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_DEMO_MODE !== "true") {
         console.error(`[RateLimiter] Upstash Redis failure in production:`, err);
         throw new Error(`[RateLimiter] Production rate limiter unavailable: ${err instanceof Error ? err.message : String(err)}`);
       }
