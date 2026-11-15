@@ -91,7 +91,7 @@ export function validateEnv(customEnv?: Record<string, string | undefined>): { c
       null,
       2
     )}`;
-    if (isProduction && !isBuildPhase) {
+    if (isProduction && !isBuildPhase && envSource.NEXT_PUBLIC_DEMO_MODE !== "true") {
       throw new Error(errorMsg);
     } else {
       console.warn(errorMsg);

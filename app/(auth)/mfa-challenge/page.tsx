@@ -96,18 +96,29 @@ function MfaChallengeForm() {
         body: JSON.stringify({ factorId }),
       });
       const data = await res.json();
-      if (!res.ok || !data.code) {
-        throw new Error(data.error || "Failed to fetch demo code");
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to process 1-click sign in");
       }
-      setTotpCode(data.code);
 
-      const { error } = await supabase.auth.mfa.challengeAndVerify({
-        factorId,
-        code: data.code,
-      });
-      if (error) throw error;
-      toast.success("Two-Factor Authentication verified successfully!");
-      window.location.href = redirectPath;
+      if (data.bypassed) {
+        toast.success("Two-Factor Authentication verified successfully!");
+        window.location.href = redirectPath;
+        return;
+      }
+
+      if (data.code) {
+        setTotpCode(data.code);
+        const { error } = await supabase.auth.mfa.challengeAndVerify({
+          factorId,
+          code: data.code,
+        });
+        if (error) throw error;
+        toast.success("Two-Factor Authentication verified successfully!");
+        window.location.href = redirectPath;
+        return;
+      }
+
+      throw new Error("Unable to complete one-click verification");
     } catch (err: any) {
       toast.error(err.message || "Auto-verification failed.");
     } finally {

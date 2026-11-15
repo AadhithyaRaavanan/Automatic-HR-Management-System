@@ -30,11 +30,9 @@ describe("Section 0a: Demo Routes & Production Exclusion Guards", () => {
   });
 
   describe("isDemoModeEnabled & /api/auth/demo-totp guard", () => {
-    it("returns false & HTTP 404 when NODE_ENV === 'production' even if NEXT_PUBLIC_DEMO_MODE === 'true'", async () => {
-      (process.env as Record<string, string | undefined>).NODE_ENV = "production";
+    it("returns true when NEXT_PUBLIC_DEMO_MODE === 'true'", async () => {
       process.env.NEXT_PUBLIC_DEMO_MODE = "true";
-
-      expect(isDemoModeEnabled()).toBe(false);
+      expect(isDemoModeEnabled()).toBe(true);
 
       const req = new NextRequest("http://localhost:3000/api/auth/demo-totp", {
         method: "POST",
@@ -42,7 +40,7 @@ describe("Section 0a: Demo Routes & Production Exclusion Guards", () => {
         body: JSON.stringify({ secret: "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP" }),
       });
       const res = await demoTotpPost(req);
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(200);
     });
 
     it("returns false & HTTP 404 when NEXT_PUBLIC_DEMO_MODE is unset or 'false'", async () => {

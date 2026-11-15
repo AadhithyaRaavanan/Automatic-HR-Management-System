@@ -10,6 +10,7 @@ const SENSITIVE_KEYS = new Set([
   "newpassword",
   "confirmpassword",
   "token",
+  "invitetoken",
   "turnstiletoken",
   "captchatoken",
   "otp",

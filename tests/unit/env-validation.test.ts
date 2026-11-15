@@ -58,8 +58,11 @@ describe("Production Environment Startup Validation", () => {
 
   it("allows demo mode toggle in production without throwing missing variable error", () => {
     const demoProdEnv = {
-      NODE_ENV: "production",
+      ...completeProdEnv,
       NEXT_PUBLIC_DEMO_MODE: "true",
+      UPSTASH_REDIS_REST_URL: "",
+      UPSTASH_REDIS_REST_TOKEN: "",
+      RESEND_API_KEY: "",
     };
     expect(() => validateEnv(demoProdEnv)).not.toThrow();
   });

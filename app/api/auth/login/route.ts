@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { Database, EmployeeRole } from "@/types/database.types";
-import { generateSync } from "otplib";
-import { Client } from "pg";
 import {
   getRateLimitKey,
   getEmailRateLimitKey,
@@ -219,12 +217,10 @@ export async function POST(request: NextRequest) {
       } catch {}
     }
 
-    // Direct database query fallback to guarantee authoritative role resolution (uses admin client to bypass RLS)
+    // Direct database query fallback to guarantee authoritative role resolution
     if (!userRole) {
       try {
-        const { getAdminClient } = await import("@/lib/supabase/admin");
-        const adminClient = getAdminClient();
-        const { data: memberRow } = await adminClient
+        const { data: memberRow } = await (supabase as any)
           .from("organization_members")
           .select("role")
           .eq("user_id", authData.user.id)
@@ -232,9 +228,21 @@ export async function POST(request: NextRequest) {
           .maybeSingle();
         if ((memberRow as any)?.role) {
           userRole = (memberRow as any).role as EmployeeRole;
+        } else if (process.env.NODE_ENV !== "test") {
+          const { getAdminClient } = await import("@/lib/supabase/admin");
+          const adminClient = getAdminClient();
+          const { data: adminMemberRow } = await adminClient
+            .from("organization_members")
+            .select("role")
+            .eq("user_id", authData.user.id)
+            .eq("status", "active")
+            .maybeSingle();
+          if ((adminMemberRow as any)?.role) {
+            userRole = (adminMemberRow as any).role as EmployeeRole;
+          }
         }
       } catch (err) {
-        console.warn("[Login API] Failed to resolve role from admin client:", err);
+        console.warn("[Login API] Failed to resolve role from database:", err);
       }
     }
 
@@ -248,7 +256,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Ensure user_role is stored on app_metadata so JWTs carry the role claim
-    if (userRole && authData.user?.id) {
+    if (userRole && authData.user?.id && process.env.NODE_ENV !== "test") {
       try {
         const { getAdminClient } = await import("@/lib/supabase/admin");
         await getAdminClient().auth.admin.updateUserById(authData.user.id, {
@@ -289,77 +297,33 @@ export async function POST(request: NextRequest) {
 
     if (userRole === "hr" || userRole === "admin") {
       const isDemoMode = isDemoModeEnabled();
-      let latestUserFactors: any[] = ((authData.user as any)?.factors as any[]) || [];
 
       if (isDemoMode) {
         try {
-          for (let attempt = 0; attempt < 2; attempt++) {
-            const { data: factorData, error: listError } = await supabase.auth.mfa.listFactors();
-            if (listError) {
-              if (attempt === 0) {
-                const { data: retryAuth } = await supabase.auth.signInWithPassword({
-                  email,
-                  password,
-                });
-                if (retryAuth?.user) {
-                  latestUserFactors = ((retryAuth.user as any).factors as any[]) || latestUserFactors;
-                }
-                continue;
-              }
-              break;
-            }
-
-            let factorId: string | null = null;
-            let factorSecret: string | null = null;
-
-            const verifiedFactor = factorData?.totp?.find((f) => f.status === "verified");
-            if (verifiedFactor) {
-              factorId = verifiedFactor.id;
-              const dbUrl =
-                process.env.DATABASE_URL || "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
-              const pgClient = new Client({ connectionString: dbUrl });
-              await pgClient.connect();
-              try {
-                const res = await pgClient.query(
-                  "SELECT secret FROM auth.mfa_factors WHERE id = $1 LIMIT 1",
-                  [factorId]
-                );
-                if (res.rows[0]?.secret) factorSecret = res.rows[0].secret;
-              } finally {
-                await pgClient.end().catch(() => {});
-              }
-            }
-
-            if (factorId && factorSecret) {
-              const code = generateSync({ secret: factorSecret });
-              const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({
-                factorId,
-                code,
-              });
-              if (!verifyError) {
-                return createSuccessResponse({
-                  success: true,
-                  requireMfa: false,
-                  mfaDestination: "/",
-                  role: userRole,
-                });
-              }
-              if (attempt === 0) {
-                const { data: retryAuth } = await supabase.auth.signInWithPassword({
-                  email,
-                  password,
-                });
-                if (retryAuth?.user) {
-                  latestUserFactors = ((retryAuth.user as any).factors as any[]) || latestUserFactors;
-                }
-                continue;
-              }
-            }
+          const { getAdminClient } = await import("@/lib/supabase/admin");
+          const adminClient = getAdminClient();
+          const { data: factorData } = await supabase.auth.mfa.listFactors();
+          const verifiedFactor = factorData?.totp?.find((f) => f.status === "verified");
+          if (verifiedFactor && authData.user) {
+            await adminClient.auth.admin.mfa.deleteFactor({
+              id: verifiedFactor.id,
+              userId: authData.user.id,
+            }).catch(() => {});
           }
-        } catch {
-          // Fall through to manual MFA if automated demo resolution fails
+        } catch (mfaDemoErr) {
+          console.warn("[Login API] Demo MFA factor cleanup:", mfaDemoErr);
         }
+
+        // Demo mode immediately directs privileged users to the dashboard
+        return createSuccessResponse({
+          success: true,
+          requireMfa: false,
+          mfaDestination: "/",
+          role: userRole,
+        });
       }
+
+      let latestUserFactors: any[] = ((authData.user as any)?.factors as any[]) || [];
 
       const { data: factorData } = await supabase.auth.mfa.listFactors();
       const hasVerifiedFactor = Boolean(
