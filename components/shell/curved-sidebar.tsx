@@ -58,7 +58,7 @@ const baseNavItems: NavItem[] = [
 
 export function CurvedSidebar({
   className,
-  userRole = "employee",
+  userRole: propRole,
 }: {
   className?: string;
   userRole?: "employee" | "manager" | "hr" | "admin";
@@ -68,15 +68,29 @@ export function CurvedSidebar({
   const supabase = createClient();
 
   const handleSignOut = async () => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("remotehr_cached_session");
+        localStorage.removeItem("remotehr_cached_role");
+      } catch {}
+    }
     await supabase.auth.signOut();
     router.push("/login");
     router.refresh();
   };
 
-  const navItems = baseNavItems.filter((item) => {
-    if (!item.roles) return true;
-    return item.roles.includes(userRole);
-  });
+  const cachedRole =
+    typeof window !== "undefined"
+      ? (localStorage.getItem("remotehr_cached_role") as any)
+      : null;
+  const effectiveRole = propRole || cachedRole || "employee";
+
+  const navItems = React.useMemo(() => {
+    return baseNavItems.filter((item) => {
+      if (!item.roles) return true;
+      return item.roles.includes(effectiveRole);
+    });
+  }, [effectiveRole]);
 
   return (
     <aside

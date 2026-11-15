@@ -28,12 +28,17 @@ const baseMobileTabs = [
 
 export function BottomTabBar({
   className,
-  userRole = "employee",
+  userRole: propRole,
 }: {
   className?: string;
   userRole?: "employee" | "manager" | "hr" | "admin";
 }) {
   const pathname = usePathname();
+  const cachedRole =
+    typeof window !== "undefined"
+      ? (localStorage.getItem("remotehr_cached_role") as any)
+      : null;
+  const userRole = propRole || cachedRole || "employee";
   const visibleTabs = baseMobileTabs
     .filter((tab) => !tab.roles || tab.roles.includes(userRole))
     .slice(0, 5);

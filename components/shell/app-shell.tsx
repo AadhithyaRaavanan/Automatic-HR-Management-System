@@ -48,6 +48,74 @@ interface AppShellProps {
   className?: string;
 }
 
+let cachedSession: AppSessionState | null = null;
+
+export function clearAppSessionCache() {
+  cachedSession = null;
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem("remotehr_cached_session");
+      localStorage.removeItem("remotehr_cached_role");
+    } catch {}
+  }
+}
+
+function getInitialSession(propRole?: AppUserRole): AppSessionState {
+  if (propRole) {
+    return {
+      userId: null,
+      organizationId: null,
+      userRole: propRole,
+      fullName: null,
+      timezone: "UTC",
+      isLoaded: true,
+      departmentName: null,
+      jobTitleName: null,
+      requireMfaForPrivileged: true,
+    };
+  }
+  if (cachedSession) {
+    return cachedSession;
+  }
+  if (typeof window !== "undefined") {
+    try {
+      const stored = localStorage.getItem("remotehr_cached_session");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.userRole) {
+          cachedSession = parsed;
+          return parsed;
+        }
+      }
+      const storedRole = localStorage.getItem("remotehr_cached_role") as AppUserRole | null;
+      if (storedRole && ["employee", "manager", "hr", "admin"].includes(storedRole)) {
+        return {
+          userId: null,
+          organizationId: null,
+          userRole: storedRole,
+          fullName: null,
+          timezone: "UTC",
+          isLoaded: true,
+          departmentName: null,
+          jobTitleName: null,
+          requireMfaForPrivileged: true,
+        };
+      }
+    } catch {}
+  }
+  return {
+    userId: null,
+    organizationId: null,
+    userRole: "employee",
+    fullName: null,
+    timezone: "UTC",
+    isLoaded: false,
+    departmentName: null,
+    jobTitleName: null,
+    requireMfaForPrivileged: true,
+  };
+}
+
 export function AppShell({
   children,
   userRole: propUserRole,
@@ -55,14 +123,9 @@ export function AppShell({
   primaryActionLabel = "Quick Check-in",
   className,
 }: AppShellProps) {
-  const [sessionState, setSessionState] = React.useState<AppSessionState>({
-    userId: null,
-    organizationId: null,
-    userRole: propUserRole || "employee",
-    fullName: null,
-    timezone: "UTC",
-    isLoaded: false,
-  });
+  const [sessionState, setSessionState] = React.useState<AppSessionState>(() =>
+    getInitialSession(propUserRole)
+  );
   const [tourOpen, setTourOpen] = React.useState(false);
 
   React.useEffect(() => {
@@ -70,7 +133,14 @@ export function AppShell({
     const supabase = createClient();
 
     async function resolveSession() {
-      let resolvedRole: AppUserRole = propUserRole || "employee";
+      let resolvedRole: AppUserRole =
+        propUserRole ||
+        sessionState.userRole ||
+        (cachedSession?.userRole) ||
+        (typeof window !== "undefined"
+          ? (localStorage.getItem("remotehr_cached_role") as AppUserRole)
+          : null) ||
+        "employee";
       let resolvedUserId: string | null = null;
       let resolvedOrgId: string | null = null;
       let resolvedName: string | null = null;
@@ -144,17 +214,28 @@ export function AppShell({
       }
 
       if (!active) return;
-      setSessionState({
+      const finalRole = propUserRole || resolvedRole;
+      const nextSession: AppSessionState = {
         userId: resolvedUserId,
         organizationId: resolvedOrgId,
-        userRole: propUserRole || resolvedRole,
+        userRole: finalRole,
         fullName: resolvedName,
         timezone: resolvedTz,
         departmentName: resolvedDeptName,
         jobTitleName: resolvedJobTitle,
         requireMfaForPrivileged: resolvedReqMfa,
         isLoaded: true,
-      });
+      };
+
+      cachedSession = nextSession;
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("remotehr_cached_session", JSON.stringify(nextSession));
+          localStorage.setItem("remotehr_cached_role", finalRole);
+        } catch {}
+      }
+
+      setSessionState(nextSession);
       if (shouldOpenTour) {
         setTourOpen(true);
       }

@@ -106,6 +106,12 @@ function LoginForm() {
           return;
         }
 
+        if (typeof window !== "undefined" && data.role) {
+          try {
+            localStorage.setItem("remotehr_cached_role", data.role);
+          } catch {}
+        }
+
         toast.success("Signed in successfully!");
         router.push(redirectPath);
         router.refresh();
@@ -220,6 +226,12 @@ function LoginForm() {
     setEmail(emailPreset);
     setPassword("DemoPassword123!");
     setIsAuthenticating(true);
+    const normalizedRole = role.toLowerCase().replace("system ", "").replace(" ops", "").trim();
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("remotehr_cached_role", normalizedRole);
+      } catch {}
+    }
     toast.info(`Authenticating as ${role} (${emailPreset})...`);
     await performLogin(emailPreset, "DemoPassword123!");
   };

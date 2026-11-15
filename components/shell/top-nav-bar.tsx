@@ -22,7 +22,7 @@ interface TopNavBarProps {
 }
 
 export function TopNavBar({
-  userRole = "employee",
+  userRole: propRole,
   onPrimaryAction,
   primaryActionLabel = "Quick Check-in",
   className,
@@ -36,10 +36,22 @@ export function TopNavBar({
   const { unreadCount } = useNotifications();
 
   const handleSignOut = async () => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("remotehr_cached_session");
+        localStorage.removeItem("remotehr_cached_role");
+      } catch {}
+    }
     await supabase.auth.signOut();
     router.push("/login");
     router.refresh();
   };
+
+  const cachedRole =
+    typeof window !== "undefined"
+      ? (localStorage.getItem("remotehr_cached_role") as any)
+      : null;
+  const userRole = propRole || session.userRole || cachedRole || "employee";
 
   const showDemoGallery = isDemoModeEnabled();
 
