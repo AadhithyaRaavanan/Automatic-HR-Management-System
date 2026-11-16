@@ -33,7 +33,7 @@ import {
 interface CalendarDayRow {
   dateKey: string;
   dayNumber: number;
-  status: AttendanceDayStatus;
+  status: AttendanceDayStatus | "unrecorded";
   totalMinutes: number;
   isLate: boolean;
   locked: boolean;
@@ -178,16 +178,26 @@ function AttendanceCalendarContent() {
         };
       });
 
-      const fallbackStatus: AttendanceDayStatus = dbHoliday
-        ? "holiday"
-        : dow === 0 || dow === 6
-        ? "weekend"
-        : "absent";
+      const isSunday = dow === 0;
+      let dayStatus: AttendanceDayStatus | "unrecorded" = "unrecorded";
+
+      if (dbHoliday) {
+        dayStatus = "holiday";
+      } else if (isSunday) {
+        dayStatus = "weekend";
+      } else if (dbDay?.status && dbDay.status !== "absent") {
+        dayStatus = dbDay.status as AttendanceDayStatus;
+      } else if (daySessions.length > 0) {
+        dayStatus = (dbDay?.status || "present") as AttendanceDayStatus;
+      } else {
+        // Working day with no punches recorded: render blank
+        dayStatus = "unrecorded";
+      }
 
       built.push({
         dateKey,
         dayNumber: i,
-        status: (dbDay?.status || fallbackStatus) as AttendanceDayStatus,
+        status: dayStatus,
         totalMinutes: dbDay?.total_minutes || 0,
         isLate: Boolean(dbDay?.is_late),
         locked: Boolean(dbDay?.locked),
@@ -230,13 +240,18 @@ function AttendanceCalendarContent() {
     return getTamilMonthInfo(new Date(selectedYear, selectedMonth - 1, 15));
   }, [selectedYear, selectedMonth]);
 
-  const statusDotClass: Record<AttendanceDayStatus, string> = {
+  const firstDayOfWeek = React.useMemo(() => {
+    return new Date(selectedYear, selectedMonth - 1, 1).getDay();
+  }, [selectedYear, selectedMonth]);
+
+  const statusDotClass: Record<AttendanceDayStatus | "unrecorded", string> = {
     present: "bg-status-success-dot",
     half_day: "bg-status-warning-dot",
     absent: "bg-status-danger-dot",
     holiday: "bg-brand-purple",
     weekend: "bg-text-tertiary/30",
     leave: "bg-status-info-dot",
+    unrecorded: "transparent",
   };
 
   return (
@@ -347,26 +362,28 @@ function AttendanceCalendarContent() {
             <span>Wed</span>
             <span>Thu</span>
             <span>Fri</span>
-            <span className="text-status-danger-text/80">Sat</span>
+            <span>Sat</span>
           </div>
 
           {loading ? (
             <div className="h-64 rounded-2xl bg-card-subtle animate-pulse mt-3" />
           ) : (
             <div className="grid grid-cols-7 gap-2 pt-3">
-              {monthDays.map((day) => {
+              {monthDays.map((day, idx) => {
                 const isSelected = day.dateKey === selectedDayKey;
+                const isSunday = day.status === "weekend";
                 return (
                   <button
                     key={day.dateKey}
                     type="button"
                     onClick={() => setSelectedDayKey(day.dateKey)}
+                    style={idx === 0 ? { gridColumnStart: firstDayOfWeek + 1 } : undefined}
                     className={cn(
                       "h-20 p-2 rounded-2xl border text-left flex flex-col justify-between transition-all cursor-pointer relative",
                       isSelected
                         ? "border-brand-purple bg-brand-purple/10 shadow-sm"
                         : "border-border-light/60 bg-card hover:bg-card-subtle/70",
-                      day.status === "weekend" && "opacity-85 bg-card-subtle/30"
+                      isSunday && "opacity-85 bg-card-subtle/30"
                     )}
                   >
                     <div className="flex items-center justify-between w-full">
@@ -387,26 +404,44 @@ function AttendanceCalendarContent() {
 
                     <div className="w-full">
                       {day.holidayName ? (
-                        <span className="text-[9px] font-bold text-brand-purple line-clamp-1 block leading-tight">
-                          {day.holidayName}
-                        </span>
-                      ) : day.status !== "weekend" && day.totalMinutes > 0 ? (
-                        <span className="text-[10px] font-mono font-semibold text-text-secondary">
-                          {formatDurationMinutes(day.totalMinutes)}
-                        </span>
-                      ) : null}
-
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span
-                          className={cn(
-                            "w-1.5 h-1.5 rounded-full shrink-0",
-                            statusDotClass[day.status]
+                        <>
+                          <span className="text-[9px] font-bold text-brand-purple line-clamp-1 block leading-tight">
+                            {day.holidayName}
+                          </span>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-brand-purple" />
+                            <span className="text-[10px] font-medium text-brand-purple capitalize truncate">
+                              Holiday
+                            </span>
+                          </div>
+                        </>
+                      ) : day.status === "weekend" ? (
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-text-tertiary/30" />
+                          <span className="text-[10px] font-medium text-text-tertiary capitalize truncate">
+                            Weekend
+                          </span>
+                        </div>
+                      ) : day.status === "present" || day.status === "half_day" || day.status === "leave" ? (
+                        <>
+                          {day.totalMinutes > 0 && (
+                            <span className="text-[10px] font-mono font-semibold text-text-secondary">
+                              {formatDurationMinutes(day.totalMinutes)}
+                            </span>
                           )}
-                        />
-                        <span className="text-[10px] font-medium text-text-tertiary capitalize truncate">
-                          {day.holidayName ? "Holiday" : day.status.replace("_", " ")}
-                        </span>
-                      </div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span
+                              className={cn(
+                                "w-1.5 h-1.5 rounded-full shrink-0",
+                                statusDotClass[day.status]
+                              )}
+                            />
+                            <span className="text-[10px] font-medium text-text-tertiary capitalize truncate">
+                              {day.status.replace("_", " ")}
+                            </span>
+                          </div>
+                        </>
+                      ) : null /* Blank unrecorded working days */}
                     </div>
                   </button>
                 );
@@ -425,10 +460,6 @@ function AttendanceCalendarContent() {
               Half Day
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-status-danger-dot" />
-              Absent
-            </span>
-            <span className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-brand-purple" />
               Holiday
             </span>
@@ -442,7 +473,7 @@ function AttendanceCalendarContent() {
         {/* Right: Detailed Day Breakdown Card */}
         <BentoCard
           title={selectedDay ? `Details for ${selectedDay.dateKey}` : "Day Details"}
-          action={selectedDay ? <StatusPill status={selectedDay.status} /> : null}
+          action={selectedDay && selectedDay.status !== "unrecorded" ? <StatusPill status={selectedDay.status} /> : null}
           className="lg:col-span-4 p-6 flex flex-col justify-between"
         >
           {selectedDay ? (
@@ -526,7 +557,9 @@ function AttendanceCalendarContent() {
                   description={
                     selectedDay.holidayName
                       ? `Attendance is excused for ${selectedDay.holidayName}.`
-                      : `No punches recorded on this ${selectedDay.status.replace("_", " ")} day.`
+                      : selectedDay.status === "weekend"
+                      ? "Sunday is a scheduled non-working weekend day."
+                      : "No shift punches recorded for this date."
                   }
                 />
               )}

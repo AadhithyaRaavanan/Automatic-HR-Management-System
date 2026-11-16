@@ -20,7 +20,7 @@ import {
 export type DepartmentItem = DemoDepartment;
 
 export default function DepartmentsAdminPage() {
-  const [departments, setDepartments] = React.useState<DepartmentItem[]>(() => getStoredDepartments());
+  const [departments, setDepartments] = React.useState<DepartmentItem[]>([]);
   const [modalOpen, setModalOpen] = React.useState(false);
   const [editingDept, setEditingDept] = React.useState<DepartmentItem | null>(null);
 
@@ -38,34 +38,6 @@ export default function DepartmentsAdminPage() {
     setIsLoading(true);
     setWorkforceUsers(getStoredUsers());
 
-    if (isDemoModeEnabled()) {
-      const stored = getStoredDepartments();
-      const users = getStoredUsers();
-      const empMap = new Map<string, string>(users.map((u) => [u.id, u.name]));
-      const counts = new Map<string, number>();
-      users.forEach((u) => {
-        if (u.departmentId) counts.set(u.departmentId, (counts.get(u.departmentId) || 0) + 1);
-        else if (u.department && u.department !== "Unassigned") {
-          const dObj = stored.find((d) => d.name === u.department);
-          if (dObj) counts.set(dObj.id, (counts.get(dObj.id) || 0) + 1);
-        }
-      });
-      const deptNameMap = new Map<string, string>(stored.map((d) => [d.id, d.name]));
-      const mapped: DepartmentItem[] = stored.map((d) => ({
-        id: d.id,
-        name: d.name,
-        code: d.code,
-        headId: d.headId || undefined,
-        headName: d.headName || (d.headId ? empMap.get(d.headId) : undefined),
-        parentId: d.parentId || undefined,
-        parentName: d.parentId ? deptNameMap.get(d.parentId) : undefined,
-        memberCount: counts.get(d.id) || 0,
-      }));
-      setDepartments(mapped);
-      setIsLoading(false);
-      return;
-    }
-
     try {
       const [{ data: depts, error }, { data: emps }] = await Promise.all([
         (supabase as any)
@@ -78,30 +50,36 @@ export default function DepartmentsAdminPage() {
           .eq("status", "active"),
       ]);
 
-      if (!error && depts && depts.length > 0) {
-        const empMap = new Map<string, string>();
-        const counts = new Map<string, number>();
-        (emps || []).forEach((e: any) => {
-          empMap.set(e.id, e.full_name);
-          if (e.department_id) {
-            counts.set(e.department_id, (counts.get(e.department_id) || 0) + 1);
-          }
-        });
-        const deptNameMap = new Map<string, string>(
-          depts.map((d: any) => [d.id, d.name])
-        );
-        const mapped: DepartmentItem[] = depts.map((d: any) => ({
-          id: d.id,
-          name: d.name,
-          code: d.code,
-          headId: d.department_head_id || undefined,
-          headName: d.department_head_id ? empMap.get(d.department_head_id) : undefined,
-          parentId: d.parent_department_id || undefined,
-          parentName: d.parent_department_id ? deptNameMap.get(d.parent_department_id) : undefined,
-          memberCount: counts.get(d.id) || 0,
-        }));
-        setDepartments(mapped);
-        saveStoredDepartments(mapped);
+      if (!error && Array.isArray(depts)) {
+        if (depts.length > 0) {
+          const empMap = new Map<string, string>();
+          const counts = new Map<string, number>();
+          (emps || []).forEach((e: any) => {
+            empMap.set(e.id, e.full_name);
+            if (e.department_id) {
+              counts.set(e.department_id, (counts.get(e.department_id) || 0) + 1);
+            }
+          });
+          const deptNameMap = new Map<string, string>(
+            depts.map((d: any) => [d.id, d.name])
+          );
+          const mapped: DepartmentItem[] = depts.map((d: any) => ({
+            id: d.id,
+            name: d.name,
+            code: d.code,
+            headId: d.department_head_id || undefined,
+            headName: d.department_head_id ? empMap.get(d.department_head_id) : undefined,
+            parentId: d.parent_department_id || undefined,
+            parentName: d.parent_department_id ? deptNameMap.get(d.parent_department_id) : undefined,
+            memberCount: counts.get(d.id) || 0,
+          }));
+          setDepartments(mapped);
+          saveStoredDepartments(mapped);
+        } else {
+          // Zero departments in database: clean slate
+          setDepartments([]);
+          saveStoredDepartments([]);
+        }
       } else {
         setDepartments(getStoredDepartments());
       }

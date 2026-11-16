@@ -40,9 +40,11 @@ import {
   X,
   CheckCircle2,
   ShieldAlert,
+  Sparkles,
 } from "lucide-react";
+import { AutomaticKpiView } from "@/features/kpi/components/automatic-kpi-view";
 
-type KpiTab = "scorecard" | "team" | "governance";
+type KpiTab = "auto" | "scorecard" | "team" | "governance";
 
 function KpiWorkspaceContent() {
   const { userId, userRole } = useAppSession();
@@ -52,7 +54,7 @@ function KpiWorkspaceContent() {
   const isHrOrAdmin = userRole === "hr" || userRole === "admin";
   const isManagerOrAbove = userRole === "manager" || isHrOrAdmin;
 
-  const [activeTab, setActiveTab] = React.useState<KpiTab>("scorecard");
+  const [activeTab, setActiveTab] = React.useState<KpiTab>("auto");
   const [selectedPeriodId, setSelectedPeriodId] = React.useState<string>("");
 
   // Modals
@@ -471,6 +473,22 @@ function KpiWorkspaceContent() {
           <button
             type="button"
             role="tab"
+            aria-selected={activeTab === "auto"}
+            onClick={() => setActiveTab("auto")}
+            className={cn(
+              "inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer",
+              activeTab === "auto"
+                ? "bg-brand-purple text-white shadow-sm"
+                : "text-text-secondary hover:text-text-primary"
+            )}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            Automatic KPI
+          </button>
+
+          <button
+            type="button"
+            role="tab"
             aria-selected={activeTab === "scorecard"}
             onClick={() => setActiveTab("scorecard")}
             className={cn(
@@ -481,7 +499,7 @@ function KpiWorkspaceContent() {
             )}
           >
             <Award className="w-3.5 h-3.5" />
-            My Scorecard
+            Official Periods (Manual)
           </button>
 
           {isManagerOrAbove && (
@@ -536,6 +554,21 @@ function KpiWorkspaceContent() {
           </div>
         )}
       </div>
+
+      {/* TAB 0: AUTOMATIC REAL-TIME KPI */}
+      {activeTab === "auto" && (
+        <AutomaticKpiView
+          currentUserId={userId || undefined}
+          currentUserRole={userRole || undefined}
+          employees={employees}
+          onPromoteToPeriod={(range) => {
+            setPeriodName(range.name);
+            setPeriodStart(range.startDate);
+            setPeriodEnd(range.endDate);
+            setPeriodModalOpen(true);
+          }}
+        />
+      )}
 
       {/* TAB 1: EMPLOYEE SCORECARD */}
       {activeTab === "scorecard" && (

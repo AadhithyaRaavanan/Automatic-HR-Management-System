@@ -544,46 +544,16 @@ function LoginForm() {
               Non-Production
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              disabled={isFormDisabled}
-              onClick={() => handleQuickDemoRole("Employee", "employee@remotehr.io")}
-              className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
-            >
-              <Users className="w-3 h-3 text-brand-purple" />
-              <span>Employee</span>
-            </button>
-
-            <button
-              type="button"
-              disabled={isFormDisabled}
-              onClick={() => handleQuickDemoRole("Manager", "manager@remotehr.io")}
-              className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
-            >
-              <UserCheck className="w-3 h-3 text-brand-purple" />
-              <span>Manager</span>
-            </button>
-
-            <button
-              type="button"
-              disabled={isFormDisabled}
-              onClick={() => handleQuickDemoRole("HR Ops", "hr@remotehr.io")}
-              className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
-            >
-              <Briefcase className="w-3 h-3 text-brand-purple" />
-              <span>HR Admin</span>
-            </button>
-
+          <div className="flex items-center gap-2">
             <button
               type="button"
               aria-label="Admin Preset"
               disabled={isFormDisabled}
-              onClick={() => handleQuickDemoRole("System Admin", "admin@remotehr.io")}
-              className="py-1.5 px-2 rounded-lg bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-[11px] font-semibold border border-border-light flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+              onClick={() => handleQuickDemoRole("Super Admin", "aadhithya.raavanan@gmail.com")}
+              className="w-full py-2 px-3 rounded-xl bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-xs font-semibold border border-border-light flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
             >
-              <ShieldCheck className="w-3 h-3 text-brand-purple" />
-              <span>Super Admin</span>
+              <ShieldCheck className="w-3.5 h-3.5 text-brand-purple" />
+              <span>Fill Super Admin (Aadhithya Raavanan)</span>
             </button>
           </div>
         </div>

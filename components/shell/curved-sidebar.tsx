@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import { getStoredUsers } from "@/lib/storage/demo-store";
 
 export interface NavItem {
   label: string;
@@ -45,7 +46,7 @@ const baseNavItems: NavItem[] = [
   { label: "Tasks", href: "/tasks", icon: CheckSquare },
   { label: "KPI", href: "/kpi", icon: Target },
   { label: "Leave", href: "/leave", icon: CalendarDays },
-  { label: "Team", href: "/team", icon: Users, badge: "3", badgeColor: "green", roles: ["manager", "hr", "admin"] },
+  { label: "Team", href: "/team", icon: Users, badgeColor: "green", roles: ["manager", "hr", "admin"] },
   { label: "Requests", href: "/requests", icon: FileCheck2 },
   { label: "Leave Hub", href: "/hr/leave", icon: FileSpreadsheet, roles: ["hr", "admin"] },
   { label: "Reports", href: "/reports", icon: BarChart3, roles: ["hr", "admin"] },
@@ -93,6 +94,7 @@ export function CurvedSidebar({
       : null;
 
   const [mountedRole, setMountedRole] = React.useState<string | null>(null);
+  const [teamMemberCount, setTeamMemberCount] = React.useState<number | null>(null);
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
@@ -100,6 +102,40 @@ export function CurvedSidebar({
       if (stored) setMountedRole(stored);
     }
   }, []);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    const fetchMemberCount = async () => {
+      try {
+        const { count, error } = await supabase
+          .from("employees")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "active");
+
+        if (isMounted) {
+          if (!error && typeof count === "number") {
+            setTeamMemberCount(count);
+          } else {
+            const activeUsers = getStoredUsers().filter((u) => u.status === "active");
+            setTeamMemberCount(activeUsers.length);
+          }
+        }
+      } catch {
+        if (isMounted) {
+          const activeUsers = getStoredUsers().filter((u) => u.status === "active");
+          setTeamMemberCount(activeUsers.length);
+        }
+      }
+    };
+
+    fetchMemberCount();
+    const handleStorageChange = () => fetchMemberCount();
+    window.addEventListener("remotehr_storage_change", handleStorageChange);
+    return () => {
+      isMounted = false;
+      window.removeEventListener("remotehr_storage_change", handleStorageChange);
+    };
+  }, [supabase]);
 
   const privilegedRoles = ["admin", "hr", "manager"];
   const effectiveRole =
@@ -109,11 +145,21 @@ export function CurvedSidebar({
     (isDemoModeEnabled() ? (mountedRole || cachedRole || "admin") : (mountedRole || cachedRole || propRole || "employee"));
 
   const navItems = React.useMemo(() => {
-    return baseNavItems.filter((item) => {
-      if (!item.roles) return true;
-      return item.roles.includes(effectiveRole);
-    });
-  }, [effectiveRole]);
+    return baseNavItems
+      .filter((item) => {
+        if (!item.roles) return true;
+        return item.roles.includes(effectiveRole);
+      })
+      .map((item) => {
+        if (item.href === "/team") {
+          return {
+            ...item,
+            badge: teamMemberCount && teamMemberCount > 0 ? String(teamMemberCount) : undefined,
+          };
+        }
+        return item;
+      });
+  }, [effectiveRole, teamMemberCount]);
 
   return (
     <aside

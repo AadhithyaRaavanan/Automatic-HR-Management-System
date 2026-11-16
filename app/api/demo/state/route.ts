@@ -31,62 +31,14 @@ function getStore(): GlobalDemoStore {
       shifts: [],
       users: [
         {
-          id: "00000000-0000-0000-0000-000000000010",
-          name: "James Aathithyan",
-          email: "admin@remotehr.io",
+          id: "952a33f0-3af4-4a69-a382-26fef3b7fa11",
+          name: "Aadhithya Raavanan",
+          email: "aadhithya.raavanan@gmail.com",
           role: "admin",
           workMode: "remote",
           department: "Unassigned",
           departmentId: "",
-          jobTitle: "Unassigned",
-          jobTitleId: "",
-          location: "Unassigned",
-          status: "active",
-          timezone: "UTC",
-          shiftStartTime: "09:00",
-          shiftEndTime: "17:00",
-        },
-        {
-          id: "00000000-0000-0000-0000-000000000020",
-          name: "Sarah Jenkins",
-          email: "hr@remotehr.io",
-          role: "hr",
-          workMode: "remote",
-          department: "Unassigned",
-          departmentId: "",
-          jobTitle: "Unassigned",
-          jobTitleId: "",
-          location: "Unassigned",
-          status: "active",
-          timezone: "UTC",
-          shiftStartTime: "09:00",
-          shiftEndTime: "17:00",
-        },
-        {
-          id: "00000000-0000-0000-0000-000000000030",
-          name: "David Chen",
-          email: "manager@remotehr.io",
-          role: "manager",
-          workMode: "remote",
-          department: "Unassigned",
-          departmentId: "",
-          jobTitle: "Unassigned",
-          jobTitleId: "",
-          location: "Unassigned",
-          status: "active",
-          timezone: "UTC",
-          shiftStartTime: "09:00",
-          shiftEndTime: "17:00",
-        },
-        {
-          id: "00000000-0000-0000-0000-000000000040",
-          name: "Maya Patel",
-          email: "employee@remotehr.io",
-          role: "employee",
-          workMode: "remote",
-          department: "Unassigned",
-          departmentId: "",
-          jobTitle: "Unassigned",
+          jobTitle: "Super Admin",
           jobTitleId: "",
           location: "Unassigned",
           status: "active",
@@ -123,7 +75,19 @@ export async function POST(req: Request) {
     if (Array.isArray(body.jobTitles)) store.jobTitles = body.jobTitles;
     if (Array.isArray(body.locations)) store.locations = body.locations;
     if (Array.isArray(body.shifts)) store.shifts = body.shifts;
-    if (Array.isArray(body.users)) store.users = body.users;
+    if (Array.isArray(body.users)) {
+      store.users = body.users.filter(
+        (u: any) =>
+          u.email !== "admin@remotehr.io" &&
+          u.email !== "hr@remotehr.io" &&
+          u.email !== "manager@remotehr.io" &&
+          u.email !== "employee@remotehr.io" &&
+          !u.name?.toLowerCase().includes("james aathithyan") &&
+          !u.name?.toLowerCase().includes("sarah jenkins") &&
+          !u.name?.toLowerCase().includes("david chen") &&
+          !u.name?.toLowerCase().includes("maya patel")
+      );
+    }
     if (Array.isArray(body.teams)) store.teams = body.teams;
     if (Array.isArray(body.projects)) store.projects = body.projects;
     if (Array.isArray(body.tasks)) store.tasks = body.tasks;

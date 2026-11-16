@@ -112,29 +112,19 @@ function ProfilePageContent() {
           if (data.avatar_url) {
             await resolveAvatarSignedUrl(data.avatar_url);
           }
-        } else if (isDemoModeEnabled()) {
-          setFullName("James Aathithyan");
-          setEmail("admin@remotehr.io");
-          setPhone("+1 (555) 019-2834");
-          setEmergencyContact("Elena Aathithyan (+1 555-019-9988)");
-          setTimezone("America/Los_Angeles");
+        } else {
+          setFullName("Aadhithya Raavanan");
+          setEmail("aadhithya.raavanan@gmail.com");
+          setTimezone("UTC");
           setWorkMode("remote");
           setWorkTargetMinutes(480);
-          setDepartmentName("Engineering");
-          setJobTitleName("Lead Systems Architect");
         }
       } catch {
-        if (isDemoModeEnabled()) {
-          setFullName("James Aathithyan");
-          setEmail("admin@remotehr.io");
-          setPhone("+1 (555) 019-2834");
-          setEmergencyContact("Elena Aathithyan (+1 555-019-9988)");
-          setTimezone("America/Los_Angeles");
-          setWorkMode("remote");
-          setWorkTargetMinutes(480);
-          setDepartmentName("Engineering");
-          setJobTitleName("Lead Systems Architect");
-        }
+        setFullName("Aadhithya Raavanan");
+        setEmail("aadhithya.raavanan@gmail.com");
+        setTimezone("UTC");
+        setWorkMode("remote");
+        setWorkTargetMinutes(480);
       } finally {
         if (active) setLoading(false);
       }

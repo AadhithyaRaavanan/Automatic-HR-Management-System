@@ -30,7 +30,7 @@ export default function GalleryPage() {
   const [demoPercentage, setDemoPercentage] = React.useState(85);
 
   const mockUsers = [
-    { id: "1", name: "James Aathithyan", status: "online" as const },
+    { id: "1", name: "Aadhithya Raavanan", status: "online" as const },
     { id: "2", name: "Rachel Lee", status: "online" as const },
     { id: "3", name: "Ken Smith", status: "idle" as const },
     { id: "4", name: "Devon Lane", status: "offline" as const },

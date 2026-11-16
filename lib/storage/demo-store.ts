@@ -111,6 +111,16 @@ export interface DemoHoliday {
   notes?: string | null;
 }
 
+export interface DemoLeaveRequest {
+  id: string;
+  employee_id?: string;
+  startDate: string;
+  endDate: string;
+  status: "pending" | "approved" | "rejected";
+  days_count?: number;
+  reason?: string;
+}
+
 export interface DemoRegularization {
   id: string;
   employee_id: string;
@@ -156,65 +166,17 @@ export interface DemoAttendanceDay {
   locked: boolean;
 }
 
-// 4 Core Demo Accounts (Preserved for Demo Login Switching - No fake departments or locations)
+// Production & Active Admin User
 export const INITIAL_DEMO_USERS: DemoUser[] = [
   {
-    id: "00000000-0000-0000-0000-000000000010",
-    name: "James Aathithyan",
-    email: "admin@remotehr.io",
+    id: "952a33f0-3af4-4a69-a382-26fef3b7fa11",
+    name: "Aadhithya Raavanan",
+    email: "aadhithya.raavanan@gmail.com",
     role: "admin",
     workMode: "remote",
     department: "Unassigned",
     departmentId: "",
-    jobTitle: "Unassigned",
-    jobTitleId: "",
-    location: "Unassigned",
-    status: "active",
-    timezone: "UTC",
-    shiftStartTime: "09:00",
-    shiftEndTime: "17:00",
-  },
-  {
-    id: "00000000-0000-0000-0000-000000000020",
-    name: "Sarah Jenkins",
-    email: "hr@remotehr.io",
-    role: "hr",
-    workMode: "remote",
-    department: "Unassigned",
-    departmentId: "",
-    jobTitle: "Unassigned",
-    jobTitleId: "",
-    location: "Unassigned",
-    status: "active",
-    timezone: "UTC",
-    shiftStartTime: "09:00",
-    shiftEndTime: "17:00",
-  },
-  {
-    id: "00000000-0000-0000-0000-000000000030",
-    name: "David Chen",
-    email: "manager@remotehr.io",
-    role: "manager",
-    workMode: "remote",
-    department: "Unassigned",
-    departmentId: "",
-    jobTitle: "Unassigned",
-    jobTitleId: "",
-    location: "Unassigned",
-    status: "active",
-    timezone: "UTC",
-    shiftStartTime: "09:00",
-    shiftEndTime: "17:00",
-  },
-  {
-    id: "00000000-0000-0000-0000-000000000040",
-    name: "Maya Patel",
-    email: "employee@remotehr.io",
-    role: "employee",
-    workMode: "remote",
-    department: "Unassigned",
-    departmentId: "",
-    jobTitle: "Unassigned",
+    jobTitle: "Super Admin",
     jobTitleId: "",
     location: "Unassigned",
     status: "active",
@@ -472,6 +434,24 @@ export function deleteStoredShift(id: string): void {
 // --- USERS / WORKFORCE DIRECTORY ---
 export function getStoredUsers(): DemoUser[] {
   const current = readKey<DemoUser[]>(KEYS.users, INITIAL_DEMO_USERS);
+  // Auto-clean: scrub any legacy demo user names
+  const purged = current.filter(
+    (u) =>
+      u.email !== "admin@remotehr.io" &&
+      u.email !== "hr@remotehr.io" &&
+      u.email !== "manager@remotehr.io" &&
+      u.email !== "employee@remotehr.io" &&
+      !u.name.toLowerCase().includes("james aathithyan") &&
+      !u.name.toLowerCase().includes("sarah jenkins") &&
+      !u.name.toLowerCase().includes("david chen") &&
+      !u.name.toLowerCase().includes("maya patel")
+  );
+
+  const activeList = purged.length > 0 ? purged : INITIAL_DEMO_USERS;
+  if (activeList.length !== current.length) {
+    writeKey(KEYS.users, activeList);
+  }
+
   // Auto-clean: verify that if a department, location, or job title no longer exists, it displays Unassigned
   const depts = getStoredDepartments();
   const locs = getStoredLocations();
@@ -480,7 +460,7 @@ export function getStoredUsers(): DemoUser[] {
   const locNames = new Set(locs.map((l) => l.name));
   const titleNames = new Set(titles.map((t) => t.title_name));
 
-  return current.map((u) => {
+  return activeList.map((u) => {
     let changed = false;
     let dept = u.department;
     let deptId = u.departmentId;
@@ -703,6 +683,15 @@ export function addStoredHoliday(holiday: Omit<DemoHoliday, "id"> & { id?: strin
 export function deleteStoredHoliday(id: string): void {
   const current = getStoredHolidays();
   saveStoredHolidays(current.filter((h) => h.id !== id));
+}
+
+// --- LEAVE REQUESTS ---
+export function getStoredLeaveRequests(): DemoLeaveRequest[] {
+  return readKey<DemoLeaveRequest[]>(KEYS.leaveRequests, []);
+}
+
+export function saveStoredLeaveRequests(requests: DemoLeaveRequest[]): void {
+  writeKey(KEYS.leaveRequests, requests);
 }
 
 // --- REGULARIZATION REQUESTS (Clean Slate - Starts Empty) ---
