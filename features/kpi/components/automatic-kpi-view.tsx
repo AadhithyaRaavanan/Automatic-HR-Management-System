@@ -207,20 +207,22 @@ export function AutomaticKpiView({
         // Fallback to local storage if offline or demo
       }
 
-      // Merge stored demo records if empty
-      if (daysData.length === 0) {
-        const storedDays = getStoredAttendanceDays();
-        daysData = storedDays.filter((d) => d.work_date >= start && d.work_date <= end);
-      }
-      if (tasksData.length === 0) {
-        const storedTasks = getStoredTasks();
-        tasksData = storedTasks;
-      }
-      if (leaveData.length === 0) {
-        const storedLeave = getStoredLeaveRequests();
-        leaveData = storedLeave.filter(
-          (l) => l.status === "approved" && l.startDate <= end && l.endDate >= start
-        );
+      // Fallback to local storage only if explicitly in demo mode
+      if (isDemoModeEnabled()) {
+        if (daysData.length === 0) {
+          const storedDays = getStoredAttendanceDays();
+          daysData = storedDays.filter((d) => d.work_date >= start && d.work_date <= end);
+        }
+        if (tasksData.length === 0) {
+          const storedTasks = getStoredTasks();
+          tasksData = storedTasks;
+        }
+        if (leaveData.length === 0) {
+          const storedLeave = getStoredLeaveRequests();
+          leaveData = storedLeave.filter(
+            (l) => l.status === "approved" && l.startDate <= end && l.endDate >= start
+          );
+        }
       }
 
       // --- 2. Metric Calculations ---
@@ -228,7 +230,7 @@ export function AutomaticKpiView({
       // A. Attendance On-Time Rate
       const attendedDays = daysData.filter((d) => d.status === "present" || d.status === "half_day" || d.total_minutes > 0);
       const onTimeDays = attendedDays.filter((d) => !d.is_late);
-      const onTimeRate = attendedDays.length > 0 ? Math.round((onTimeDays.length / attendedDays.length) * 100) : 100;
+      const onTimeRate = attendedDays.length > 0 ? Math.round((onTimeDays.length / attendedDays.length) * 100) : 0;
 
       // B. Worked Hours vs Target
       const totalMinutes = daysData.reduce((acc, d) => acc + (d.total_minutes || 0), 0);
@@ -243,7 +245,7 @@ export function AutomaticKpiView({
       }
       workingDaysCount = Math.max(1, workingDaysCount);
       const targetMinutes = workingDaysCount * 480; // 8 hrs per workday
-      const hoursVsTargetRate = targetMinutes > 0 ? Math.min(125, Math.round((totalMinutes / targetMinutes) * 100)) : 100;
+      const hoursVsTargetRate = targetMinutes > 0 && totalMinutes > 0 ? Math.min(125, Math.round((totalMinutes / targetMinutes) * 100)) : 0;
 
       // C. Absence Days
       const absenceDaysCount = daysData.filter((d) => d.status === "absent").length;
@@ -266,7 +268,7 @@ export function AutomaticKpiView({
         if (!t.due_date || !t.completed_at) return true;
         return t.completed_at.slice(0, 10) <= t.due_date.slice(0, 10);
       });
-      const taskOnTimeRate = completedTasks.length > 0 ? Math.round((tasksOnTime.length / completedTasks.length) * 100) : 100;
+      const taskOnTimeRate = completedTasks.length > 0 ? Math.round((tasksOnTime.length / completedTasks.length) * 100) : 0;
 
       // G. Overdue Tasks
       const overdueTasks = tasksData.filter((t) => {
@@ -297,17 +299,20 @@ export function AutomaticKpiView({
           cycleTasksCount++;
         }
       });
-      const avgCycleDays = cycleTasksCount > 0 ? Number((totalCycleDays / cycleTasksCount).toFixed(1)) : 2.5;
+      const avgCycleDays = cycleTasksCount > 0 ? Number((totalCycleDays / cycleTasksCount).toFixed(1)) : 0;
 
       // Compute Individual Scores (0-100)
-      const scoreOnTime = Math.min(100, Math.round((onTimeRate / 95) * 100));
-      const scoreHours = Math.min(100, Math.round((hoursVsTargetRate / 100) * 100));
-      const scoreAbsence = absenceDaysCount === 0 ? 100 : Math.max(0, 100 - absenceDaysCount * 25);
-      const scoreLeave = totalLeaveDays <= 2 ? 100 : Math.max(0, 100 - (totalLeaveDays - 2) * 20);
-      const scoreTasksCount = Math.min(100, Math.round((tasksCompletedCount / 5) * 100));
-      const scoreTaskOnTime = Math.min(100, Math.round((taskOnTimeRate / 90) * 100));
-      const scoreOverdue = overdueCount === 0 ? 100 : Math.max(0, 100 - overdueCount * 25);
-      const scoreCycle = avgCycleDays <= 3 ? 100 : Math.max(0, Math.round(100 - (avgCycleDays - 3) * 20));
+      const hasAttendanceActivity = attendedDays.length > 0 || totalMinutes > 0;
+      const hasTaskActivity = tasksData.length > 0 || completedTasks.length > 0;
+
+      const scoreOnTime = attendedDays.length > 0 ? Math.min(100, Math.round((onTimeRate / 95) * 100)) : 0;
+      const scoreHours = totalMinutes > 0 ? Math.min(100, Math.round((hoursVsTargetRate / 100) * 100)) : 0;
+      const scoreAbsence = hasAttendanceActivity ? (absenceDaysCount === 0 ? 100 : Math.max(0, 100 - absenceDaysCount * 25)) : 0;
+      const scoreLeave = hasAttendanceActivity || leaveData.length > 0 ? (totalLeaveDays <= 2 ? 100 : Math.max(0, 100 - (totalLeaveDays - 2) * 20)) : 0;
+      const scoreTasksCount = tasksCompletedCount > 0 ? Math.min(100, Math.round((tasksCompletedCount / 5) * 100)) : 0;
+      const scoreTaskOnTime = completedTasks.length > 0 ? Math.min(100, Math.round((taskOnTimeRate / 90) * 100)) : 0;
+      const scoreOverdue = hasTaskActivity ? (overdueCount === 0 ? 100 : Math.max(0, 100 - overdueCount * 25)) : 0;
+      const scoreCycle = cycleTasksCount > 0 ? (avgCycleDays <= 3 ? 100 : Math.max(0, Math.round(100 - (avgCycleDays - 3) * 20))) : 0;
 
       const computedList: AutomaticKpiMetric[] = [
         {
@@ -421,17 +426,29 @@ export function AutomaticKpiView({
     return () => window.removeEventListener("remotehr_storage_change", handleStorage);
   }, [computeAutomaticKpi]);
 
+  const hasActiveRecords = React.useMemo(() => {
+    return summaryStats.attendedDays > 0 || summaryStats.tasksCompleted > 0 || summaryStats.totalMinutesWorked > 0 || summaryStats.leaveDays > 0;
+  }, [summaryStats]);
+
   const overallScore = React.useMemo(() => {
-    if (metrics.length === 0) return 0;
+    if (!hasActiveRecords || metrics.length === 0) return 0;
     const sum = metrics.reduce((acc, m) => acc + m.score, 0);
     return Math.round(sum / metrics.length);
-  }, [metrics]);
+  }, [hasActiveRecords, metrics]);
 
   const band = React.useMemo(() => {
-    if (overallScore >= 85) return { label: "Exceeding Target", tone: "success", color: "text-status-success-dot", bg: "bg-status-success-bg border-status-success-border text-status-success-text" };
-    if (overallScore >= 65) return { label: "On Track", tone: "warning", color: "text-status-warning-dot", bg: "bg-status-warning-bg border-status-warning-border text-status-warning-text" };
-    return { label: "Needs Attention", tone: "danger", color: "text-status-danger-dot", bg: "bg-status-danger-bg border-status-danger-border text-status-danger-text" };
-  }, [overallScore]);
+    if (!hasActiveRecords) {
+      return {
+        label: "No Activity Recorded",
+        tone: "neutral" as const,
+        color: "text-text-tertiary",
+        bg: "bg-card-subtle border-border-light text-text-secondary",
+      };
+    }
+    if (overallScore >= 85) return { label: "Exceeding Target", tone: "success" as const, color: "text-status-success-dot", bg: "bg-status-success-bg border-status-success-border text-status-success-text" };
+    if (overallScore >= 65) return { label: "On Track", tone: "warning" as const, color: "text-status-warning-dot", bg: "bg-status-warning-bg border-status-warning-border text-status-warning-text" };
+    return { label: "Needs Attention", tone: "danger" as const, color: "text-status-danger-dot", bg: "bg-status-danger-bg border-status-danger-border text-status-danger-text" };
+  }, [hasActiveRecords, overallScore]);
 
   const timeframeLabels: Record<KpiTimeframe, string> = {
     today: "Today",
@@ -590,10 +607,10 @@ export function AutomaticKpiView({
                 cx="50"
                 cy="50"
                 r="42"
-                stroke={band.tone === "success" ? "#10b981" : band.tone === "warning" ? "#f59e0b" : "#ef4444"}
+                stroke={!hasActiveRecords ? "#e2e0f0" : band.tone === "success" ? "#10b981" : band.tone === "warning" ? "#f59e0b" : "#ef4444"}
                 strokeWidth="8"
                 strokeDasharray={264}
-                strokeDashoffset={264 - (264 * Math.min(100, overallScore)) / 100}
+                strokeDashoffset={!hasActiveRecords ? 264 : 264 - (264 * Math.min(100, overallScore)) / 100}
                 strokeLinecap="round"
                 fill="transparent"
                 className="transition-all duration-700 ease-out"
@@ -613,12 +630,22 @@ export function AutomaticKpiView({
         </div>
       </div>
 
+      {!hasActiveRecords && (
+        <div className="bg-brand-purple/5 border border-brand-purple/15 rounded-2xl p-4 flex items-center gap-3 text-xs text-text-secondary">
+          <Clock className="w-5 h-5 text-brand-purple shrink-0" />
+          <span>
+            <strong>No shift or task activity recorded yet for this timeframe.</strong> Once employees log attendance check-ins or complete tasks, live performance scores and percentiles will automatically compute here.
+          </span>
+        </div>
+      )}
+
       {/* Metric Breakdown Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {metrics.map((m) => {
+          const isEvaluated = hasActiveRecords && m.score > 0;
           const isSuccess = m.score >= 85;
           const isWarning = m.score >= 65 && m.score < 85;
-          const barColor = isSuccess ? "bg-status-success-dot" : isWarning ? "bg-status-warning-dot" : "bg-status-danger-dot";
+          const barColor = !isEvaluated ? "bg-border-light" : isSuccess ? "bg-status-success-dot" : isWarning ? "bg-status-warning-dot" : "bg-status-danger-dot";
 
           return (
             <div
@@ -630,7 +657,9 @@ export function AutomaticKpiView({
                   <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-card-subtle text-text-tertiary">
                     {m.category}
                   </span>
-                  <span className={cn("text-xs font-bold font-mono", isSuccess ? "text-status-success-dot" : isWarning ? "text-status-warning-dot" : "text-status-danger-dot")}>
+                  <span className={cn("text-xs font-bold font-mono",
+                    !isEvaluated ? "text-text-tertiary" : isSuccess ? "text-status-success-dot" : isWarning ? "text-status-warning-dot" : "text-status-danger-dot"
+                  )}>
                     {m.score}%
                   </span>
                 </div>

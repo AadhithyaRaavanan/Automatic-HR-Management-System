@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 import {
   getStoredUsers,
   getStoredTeams,
@@ -151,9 +152,11 @@ function TeamPageContent() {
       for (const d of daysData || []) {
         dayMap.set(d.employee_id, d);
       }
-      for (const d of storedDays.filter((d) => d.work_date === todayIso)) {
-        if (!dayMap.has(d.employee_id)) {
-          dayMap.set(d.employee_id, d);
+      if (isDemoModeEnabled()) {
+        for (const d of storedDays.filter((d) => d.work_date === todayIso)) {
+          if (!dayMap.has(d.employee_id)) {
+            dayMap.set(d.employee_id, d);
+          }
         }
       }
 
@@ -167,12 +170,14 @@ function TeamPageContent() {
           openMap.set(s.employee_id, true);
         }
       }
-      for (const s of storedSessions.filter((s) => s.work_date === todayIso)) {
-        if (!firstInMap.has(s.employee_id)) {
-          firstInMap.set(s.employee_id, s.check_in_at);
-        }
-        if (s.check_out_at === null) {
-          openMap.set(s.employee_id, true);
+      if (isDemoModeEnabled()) {
+        for (const s of storedSessions.filter((s) => s.work_date === todayIso)) {
+          if (!firstInMap.has(s.employee_id)) {
+            firstInMap.set(s.employee_id, s.check_in_at);
+          }
+          if (s.check_out_at === null) {
+            openMap.set(s.employee_id, true);
+          }
         }
       }
 

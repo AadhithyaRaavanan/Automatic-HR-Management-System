@@ -138,20 +138,22 @@ function AttendanceCalendarContent() {
       // keep clean empty day scaffold
     }
 
-    // Merge stored demo sessions & days
-    const storedSessions = getStoredAttendanceSessions();
-    const storedDays = getStoredAttendanceDays();
+    // Merge stored demo sessions & days only if in demo mode
+    if (isDemoModeEnabled()) {
+      const storedSessions = getStoredAttendanceSessions();
+      const storedDays = getStoredAttendanceDays();
 
-    for (const d of storedDays) {
-      if (!daysMap.has(d.work_date)) {
-        daysMap.set(d.work_date, d);
+      for (const d of storedDays) {
+        if (!daysMap.has(d.work_date)) {
+          daysMap.set(d.work_date, d);
+        }
       }
-    }
-    for (const s of storedSessions) {
-      const list = sessByDate.get(s.work_date) || [];
-      if (!list.some((existing) => existing.id === s.id)) {
-        list.push(s);
-        sessByDate.set(s.work_date, list);
+      for (const s of storedSessions) {
+        const list = sessByDate.get(s.work_date) || [];
+        if (!list.some((existing) => existing.id === s.id)) {
+          list.push(s);
+          sessByDate.set(s.work_date, list);
+        }
       }
     }
 

@@ -194,25 +194,23 @@ export function useTasksData(enabled = true) {
         }
       }
 
-      // Merge projects
-      const mergedProjects: ProjectRecord[] = [
-        ...storedProjects.map((p) => ({
-          id: p.id,
-          organization_id: "",
-          department_id: p.department_id || null,
-          name: p.name,
-          code: p.code,
-          description: p.description || null,
-          status: p.status || "active",
-          created_by: "",
-          created_at: p.created_at || new Date().toISOString(),
-        })),
-      ];
-      for (const p of projectsData) {
-        if (!mergedProjects.some((mp) => mp.id === p.id)) {
-          mergedProjects.push(p);
-        }
-      }
+      // Merge projects: database is authoritative in production
+      const mergedProjects: ProjectRecord[] =
+        !isDemoModeEnabled() && projectsData
+          ? projectsData
+          : [
+              ...storedProjects.map((p) => ({
+                id: p.id,
+                organization_id: "",
+                department_id: p.department_id || null,
+                name: p.name,
+                code: p.code,
+                description: p.description || null,
+                status: p.status || "active",
+                created_by: "",
+                created_at: p.created_at || new Date().toISOString(),
+              })),
+            ];
 
       // Visible employees: database is authoritative
       const mergedEmployees: VisibleEmployeeOption[] =
@@ -226,33 +224,31 @@ export function useTasksData(enabled = true) {
               status: u.status,
             }));
 
-      // Merge tasks
-      const mergedTasks: TaskRecord[] = [
-        ...storedTasks.map((t) => ({
-          id: t.id,
-          organization_id: "",
-          project_id: t.project_id || null,
-          parent_task_id: t.parent_task_id || null,
-          title: t.title,
-          description: t.description || null,
-          creator_id: t.creator_id || "",
-          assignee_id: t.assignee_id || null,
-          status: t.status as TaskStatus,
-          priority: t.priority as TaskPriority,
-          due_date: t.due_date || null,
-          estimated_minutes: t.estimated_minutes || null,
-          started_at: t.started_at || null,
-          completed_at: t.completed_at || null,
-          cancelled_at: t.cancelled_at || null,
-          created_at: t.created_at,
-          updated_at: t.updated_at || t.created_at,
-        })),
-      ];
-      for (const t of tasksData) {
-        if (!mergedTasks.some((mt) => mt.id === t.id)) {
-          mergedTasks.push(t);
-        }
-      }
+      // Merge tasks: database is authoritative in production
+      const mergedTasks: TaskRecord[] =
+        !isDemoModeEnabled() && tasksData
+          ? tasksData
+          : [
+              ...storedTasks.map((t) => ({
+                id: t.id,
+                organization_id: "",
+                project_id: t.project_id || null,
+                parent_task_id: t.parent_task_id || null,
+                title: t.title,
+                description: t.description || null,
+                creator_id: t.creator_id || "",
+                assignee_id: t.assignee_id || null,
+                status: t.status as TaskStatus,
+                priority: t.priority as TaskPriority,
+                due_date: t.due_date || null,
+                estimated_minutes: t.estimated_minutes || null,
+                started_at: t.started_at || null,
+                completed_at: t.completed_at || null,
+                cancelled_at: t.cancelled_at || null,
+                created_at: t.created_at,
+                updated_at: t.updated_at || t.created_at,
+              })),
+            ];
 
       return {
         tasks: mergedTasks,

@@ -8,6 +8,8 @@
  * (Admin, HR, Manager, Employee) so the user can sign in and test each role.
  */
 
+import { isDemoModeEnabled } from "@/lib/config/demo";
+
 export interface DemoDepartment {
   id: string;
   name: string;
@@ -264,6 +266,12 @@ export async function syncFromServer(): Promise<void> {
             r.reason !== "Doctor appointment in morning"
         );
         localStorage.setItem(KEYS.leaveRequests, JSON.stringify(cleaned));
+        changed = true;
+      }
+      if (!isDemoModeEnabled()) {
+        localStorage.removeItem(KEYS.tasks);
+        localStorage.removeItem(KEYS.attendanceDays);
+        localStorage.removeItem(KEYS.attendanceSessions);
         changed = true;
       }
       if (changed) {
@@ -654,6 +662,7 @@ export function deleteStoredProject(id: string): void {
 
 // --- TASKS ---
 export function getStoredTasks(): DemoTask[] {
+  if (!isDemoModeEnabled()) return [];
   return readKey<DemoTask[]>(KEYS.tasks, []);
 }
 
@@ -793,6 +802,7 @@ export function addStoredAudit(
 
 // --- ATTENDANCE TRACKING (Clean Slate - Starts 0) ---
 export function getStoredAttendanceSessions(): DemoAttendanceSession[] {
+  if (!isDemoModeEnabled()) return [];
   return readKey<DemoAttendanceSession[]>(KEYS.attendanceSessions, []);
 }
 
@@ -801,6 +811,7 @@ export function saveStoredAttendanceSessions(sessions: DemoAttendanceSession[]):
 }
 
 export function getStoredAttendanceDays(): DemoAttendanceDay[] {
+  if (!isDemoModeEnabled()) return [];
   return readKey<DemoAttendanceDay[]>(KEYS.attendanceDays, []);
 }
 
