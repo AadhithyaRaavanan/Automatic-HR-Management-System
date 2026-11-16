@@ -127,7 +127,14 @@ export async function POST(req: Request) {
     if (Array.isArray(body.teams)) store.teams = body.teams;
     if (Array.isArray(body.projects)) store.projects = body.projects;
     if (Array.isArray(body.tasks)) store.tasks = body.tasks;
-    if (Array.isArray(body.leaveRequests)) store.leaveRequests = body.leaveRequests;
+    if (Array.isArray(body.leaveRequests)) {
+      store.leaveRequests = body.leaveRequests.filter(
+        (r: any) =>
+          !r.id?.startsWith("lr-demo-") &&
+          r.reason !== "Family event and personal commitment" &&
+          r.reason !== "Doctor appointment in morning"
+      );
+    }
     if (Array.isArray(body.holidays)) store.holidays = body.holidays;
     if (Array.isArray(body.regularizations)) store.regularizations = body.regularizations;
     if (Array.isArray(body.audits)) store.audits = body.audits;

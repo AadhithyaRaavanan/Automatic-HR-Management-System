@@ -293,7 +293,13 @@ export async function syncFromServer(): Promise<void> {
         changed = true;
       }
       if (Array.isArray(data.leaveRequests)) {
-        localStorage.setItem(KEYS.leaveRequests, JSON.stringify(data.leaveRequests));
+        const cleaned = data.leaveRequests.filter(
+          (r: any) =>
+            !r.id?.startsWith("lr-demo-") &&
+            r.reason !== "Family event and personal commitment" &&
+            r.reason !== "Doctor appointment in morning"
+        );
+        localStorage.setItem(KEYS.leaveRequests, JSON.stringify(cleaned));
         changed = true;
       }
       if (changed) {
@@ -701,7 +707,17 @@ export function deleteStoredHoliday(id: string): void {
 
 // --- REGULARIZATION REQUESTS (Clean Slate - Starts Empty) ---
 export function getStoredRegularizations(): DemoRegularization[] {
-  return readKey<DemoRegularization[]>(KEYS.regularizations, []);
+  const list = readKey<DemoRegularization[]>(KEYS.regularizations, []);
+  const cleaned = list.filter(
+    (r) =>
+      !r.id?.includes("demo") &&
+      !r.employee_name?.includes("Eleanor Pena") &&
+      !r.reason?.includes("Broadband connection")
+  );
+  if (cleaned.length !== list.length) {
+    saveStoredRegularizations(cleaned);
+  }
+  return cleaned;
 }
 
 export function saveStoredRegularizations(requests: DemoRegularization[]): void {

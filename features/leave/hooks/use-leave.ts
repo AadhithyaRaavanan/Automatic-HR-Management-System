@@ -152,7 +152,19 @@ function getDemoRequests(): LeaveRequest[] {
     const raw = localStorage.getItem("remotehr_demo_leave_requests");
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) {
+        // Cleanse legacy hardcoded fake demo requests from earlier session
+        const cleaned = parsed.filter(
+          (r: any) =>
+            !r.id?.startsWith("lr-demo-") &&
+            r.reason !== "Family event and personal commitment" &&
+            r.reason !== "Doctor appointment in morning"
+        );
+        if (cleaned.length !== parsed.length) {
+          localStorage.setItem("remotehr_demo_leave_requests", JSON.stringify(cleaned));
+        }
+        return cleaned;
+      }
     }
   } catch {}
   return [];
