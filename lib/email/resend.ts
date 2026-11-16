@@ -132,27 +132,32 @@ export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
         background-color: #fcfcff;
         border: 1px solid #e2e0f0;
         border-radius: 14px;
-        padding: 20px;
+        padding: 6px 18px;
         margin-bottom: 24px;
       }
-      .detail-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 6px 0;
-        border-bottom: 1px solid #f1f0fa;
-        font-size: 13px;
-      }
-      .detail-row:last-child {
-        border-bottom: none;
+      .details-table {
+        width: 100%;
+        border-collapse: collapse;
       }
       .detail-label {
         color: #6C5CE7;
-        font-weight: 600;
+        font-weight: 700;
+        font-size: 13px;
+        padding: 11px 12px 11px 0;
+        border-bottom: 1px solid #f1f0fa;
+        width: 38%;
+        white-space: nowrap;
+        vertical-align: middle;
       }
       .detail-value {
         color: #14123A;
         font-weight: 700;
+        font-size: 13px;
+        padding: 11px 0 11px 12px;
+        border-bottom: 1px solid #f1f0fa;
         text-align: right;
+        word-break: break-all;
+        vertical-align: middle;
       }
       .cta-container {
         text-align: center;
@@ -207,49 +212,51 @@ export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
     <div class="wrapper">
       <div class="container">
         <div class="header">
-          <div class="brand-title">RemoteHR</div>
-          <div class="brand-tag">Secure Workforce Management</div>
+          <div class="brand-title">Pulse</div>
+          <div class="brand-tag">Workforce &amp; HR Management System</div>
         </div>
         <div class="body-content">
           <h2 class="welcome-heading">Welcome, ${fullName}!</h2>
           <p class="intro-text">
-            Your organization has invited you to join RemoteHR with the role of
+            Your organization has invited you to join <strong>Pulse</strong> with the role of
             <strong>${role.toUpperCase()}</strong>.
             ${jobTitle ? `You are appointed as <strong>${jobTitle}</strong>.` : ""}
             ${departmentName ? `Assigned department: <strong>${departmentName}</strong>.` : ""}
           </p>
 
           <div class="details-card">
-            <div class="detail-row">
-              <span class="detail-label">Login Email</span>
-              <span class="detail-value">${to}</span>
-            </div>
-            ${
-              departmentName
-                ? `
-            <div class="detail-row">
-              <span class="detail-label">Department</span>
-              <span class="detail-value">${departmentName}</span>
-            </div>`
-                : ""
-            }
-            ${
-              jobTitle
-                ? `
-            <div class="detail-row">
-              <span class="detail-label">Title</span>
-              <span class="detail-value">${jobTitle}</span>
-            </div>`
-                : ""
-            }
-            <div class="detail-row">
-              <span class="detail-label">Working Hours</span>
-              <span class="detail-value">${shiftStartTime} - ${shiftEndTime}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">System Role</span>
-              <span class="detail-value">${role.toUpperCase()}</span>
-            </div>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="details-table">
+              <tr>
+                <td class="detail-label">Login Email :</td>
+                <td class="detail-value">${to}</td>
+              </tr>
+              ${
+                departmentName
+                  ? `
+              <tr>
+                <td class="detail-label">Department :</td>
+                <td class="detail-value">${departmentName}</td>
+              </tr>`
+                  : ""
+              }
+              ${
+                jobTitle
+                  ? `
+              <tr>
+                <td class="detail-label">Job Title :</td>
+                <td class="detail-value">${jobTitle}</td>
+              </tr>`
+                  : ""
+              }
+              <tr>
+                <td class="detail-label">Working Hours :</td>
+                <td class="detail-value">${shiftStartTime} - ${shiftEndTime}</td>
+              </tr>
+              <tr>
+                <td class="detail-label" style="border-bottom: none;">System Role :</td>
+                <td class="detail-value" style="border-bottom: none;">${role.toUpperCase()}</td>
+              </tr>
+            </table>
           </div>
 
           <div class="cta-container">
@@ -261,12 +268,12 @@ export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
           <div class="security-box">
             <div class="security-title">Anti-Phishing Security Notice</div>
             <p class="security-text">
-              RemoteHR administrators will never ask for your password, TOTP code, or multi-factor authentication setup key. Always verify that your browser address bar points to your organization's legitimate RemoteHR domain before entering any credentials.
+              Pulse administrators will never ask for your password, TOTP code, or multi-factor authentication setup key. Always verify that your browser address bar points to your organization's legitimate domain before entering credentials.
             </p>
           </div>
         </div>
         <div class="footer">
-          RemoteHR Automated Management System &bull; Zero Invasive Monitoring<br />
+          Pulse Automated Management System &bull; Zenxea<br />
           If you did not expect this invitation, please contact your company administrator.
         </div>
       </div>
@@ -307,7 +314,7 @@ export async function sendWelcomeCredentialsEmail(params: SendInviteEmailParams)
   error?: string;
 }> {
   const { to } = params;
-  const subject = `Welcome to RemoteHR — Your Account Invitation`;
+  const subject = `Welcome to Pulse — Your Account Invitation`;
   const htmlContent = buildWelcomeEmailHtml(params);
 
   // 1. Prioritize Hostinger / Custom SMTP if configured
@@ -315,7 +322,7 @@ export async function sendWelcomeCredentialsEmail(params: SendInviteEmailParams)
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {
-        const fromAddress = process.env.SMTP_FROM || `RemoteHR <${process.env.SMTP_USER}>`;
+        const fromAddress = process.env.SMTP_FROM || `Pulse <hr@zenxea.com>`;
         const info = await transporter.sendMail({
           from: fromAddress,
           to,
@@ -436,7 +443,7 @@ export function buildPasswordResetEmailHtml(params: SendPasswordResetParams): st
           </div>
         </div>
         <div class="footer">
-          Delivered securely via Hostinger SMTP &bull; RemoteHR Automated Platform
+          Delivered securely via Hostinger SMTP &bull; Pulse Automated Platform
         </div>
       </div>
     </div>
@@ -450,7 +457,7 @@ export async function sendPasswordResetEmail(params: SendPasswordResetParams): P
   error?: string;
 }> {
   const { to } = params;
-  const subject = `Reset Your RemoteHR Account Password`;
+  const subject = `Reset Your Pulse Account Password`;
   const htmlContent = buildPasswordResetEmailHtml(params);
 
   // 1. Prioritize Hostinger SMTP if configured
@@ -458,7 +465,7 @@ export async function sendPasswordResetEmail(params: SendPasswordResetParams): P
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {
-        const fromAddress = process.env.SMTP_FROM || `RemoteHR <${process.env.SMTP_USER}>`;
+        const fromAddress = process.env.SMTP_FROM || `Pulse <hr@zenxea.com>`;
         const info = await transporter.sendMail({
           from: fromAddress,
           to,
