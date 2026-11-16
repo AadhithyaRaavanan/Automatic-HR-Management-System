@@ -512,6 +512,7 @@ function UsersDirectoryContent() {
         setCreatedCredentials({
           email: inviteEmail,
           inviteLink: data.inviteLink,
+          tempPassword: data.temporaryPassword,
           role: inviteRole,
           jobTitle: selectedJobTitleObj?.title_name,
           department: selectedDeptObj?.name,
@@ -1490,6 +1491,15 @@ function UsersDirectoryContent() {
               <span className="font-semibold text-text-secondary">Shift Schedule:</span>
               <span className="font-mono font-bold text-text-primary">{createdCredentials?.shift}</span>
             </div>
+
+            {createdCredentials?.tempPassword && (
+              <div className="flex items-center justify-between text-xs bg-brand-purple/5 p-2 rounded-xl border border-brand-purple/20">
+                <span className="font-semibold text-text-secondary">Temporary Password:</span>
+                <span className="font-mono font-bold text-brand-purple bg-card px-2.5 py-0.5 rounded-lg border border-border-light select-all">
+                  {createdCredentials.tempPassword}
+                </span>
+              </div>
+            )}
 
             <div className="pt-2 border-t border-border-light/60">
               <span className="block text-xs font-semibold text-text-secondary mb-1">

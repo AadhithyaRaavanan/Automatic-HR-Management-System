@@ -54,12 +54,14 @@ export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
     jobTitle,
     departmentName,
     inviteLink,
+    temporaryPassword,
     shiftStartTime = "09:00 AM",
     shiftEndTime = "05:00 PM",
     loginUrl = `${getSiteUrl()}/login`,
   } = params;
 
   const actionUrl = inviteLink || loginUrl;
+  const siteUrl = getSiteUrl();
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -230,6 +232,19 @@ export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
                 <td class="detail-value">${to}</td>
               </tr>
               ${
+                temporaryPassword
+                  ? `
+              <tr>
+                <td class="detail-label">Temporary Password :</td>
+                <td class="detail-value">
+                  <span style="display: inline-block; background-color: #f1f0fa; color: #6C5CE7; padding: 4px 10px; border-radius: 6px; font-weight: 800; font-family: monospace; font-size: 13px; letter-spacing: 0.5px; border: 1px dashed #d1cbf7;">
+                    ${temporaryPassword}
+                  </span>
+                </td>
+              </tr>`
+                  : ""
+              }
+              ${
                 departmentName
                   ? `
               <tr>
@@ -260,9 +275,12 @@ export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
 
           <div class="cta-container">
             <a href="${actionUrl}" class="cta-button" target="_blank" rel="noopener noreferrer">
-              Accept Invitation &amp; Set Password
+              Accept Invitation &amp; Complete Onboarding
             </a>
           </div>
+          <p style="font-size: 12px; color: #64748b; text-align: center; margin-top: -16px; margin-bottom: 24px;">
+            You can either click the button above to begin onboarding immediately, or sign in at <strong>${siteUrl}/login</strong> using your email and temporary password.
+          </p>
 
           <div class="security-box">
             <div class="security-title">Anti-Phishing Security Notice</div>

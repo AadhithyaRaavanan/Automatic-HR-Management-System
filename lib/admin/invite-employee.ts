@@ -7,6 +7,23 @@ import { isDemoModeEnabled } from "@/lib/config/demo";
 
 import { getSiteUrl } from "@/lib/site-url";
 
+function generateSecureTempPassword(): string {
+  const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%";
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghjkmnpqrstuvwxyz";
+  const num = "23456789";
+  const spec = "!@#$%";
+  let pwd = "";
+  pwd += upper[Math.floor(Math.random() * upper.length)];
+  pwd += lower[Math.floor(Math.random() * lower.length)];
+  pwd += num[Math.floor(Math.random() * num.length)];
+  pwd += spec[Math.floor(Math.random() * spec.length)];
+  for (let i = 4; i < 12; i++) {
+    pwd += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return pwd.split("").sort(() => 0.5 - Math.random()).join("");
+}
+
 export interface InviteEmployeeInput {
   email: string;
   fullName: string;
@@ -262,6 +279,23 @@ export async function inviteSingleEmployee(
     } catch {}
   }
 
+  // Generate and set temporary password on user account
+  const tempPassword = generateSecureTempPassword();
+  try {
+    await supabaseAdmin.auth.admin.updateUserById(invitedUserId, {
+      password: tempPassword,
+      user_metadata: {
+        full_name: normalizedName,
+        user_role: role,
+        must_change_password: true,
+        onboarding_completed: false,
+        temp_password_created_at: new Date().toISOString(),
+      },
+    });
+  } catch (pwdUpdateErr) {
+    console.warn("[Invite Employee Set Temp Password Error]:", pwdUpdateErr);
+  }
+
   // Check cross-tenant uniqueness across organization_members and employees
   const { data: existingMember } = await supabaseAdmin
     .from("organization_members")
@@ -345,7 +379,7 @@ export async function inviteSingleEmployee(
       .eq("organization_id", context.organizationId),
   ]);
 
-  // 3. Dispatch invitation email via Resend (Invite Link, no passwords)
+  // 3. Dispatch invitation email via Resend / Hostinger SMTP (with Token Link & Temporary Password)
   const emailResult = await sendWelcomeCredentialsEmail({
     to: normalizedEmail,
     fullName: normalizedName,
@@ -353,6 +387,7 @@ export async function inviteSingleEmployee(
     jobTitle: resolvedJobTitleName,
     departmentName: resolvedDepartmentName,
     inviteLink: actionInviteLink,
+    temporaryPassword: tempPassword,
     shiftStartTime: shiftStartTime.slice(0, 5),
     shiftEndTime: shiftEndTime.slice(0, 5),
     loginUrl: `${siteUrl}/login`,
@@ -385,6 +420,7 @@ export async function inviteSingleEmployee(
     ok: true,
     userId: invitedUserId,
     inviteLink: actionInviteLink,
+    temporaryPassword: tempPassword,
     emailSent: emailResult.success,
     message: emailResult.success
       ? `User ${normalizedEmail} invited and invitation email dispatched via Resend.`
