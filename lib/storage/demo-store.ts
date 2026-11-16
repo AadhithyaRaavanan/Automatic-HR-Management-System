@@ -452,7 +452,7 @@ export function deleteStoredShift(id: string): void {
 // --- USERS / WORKFORCE DIRECTORY ---
 export function getStoredUsers(): DemoUser[] {
   const current = readKey<DemoUser[]>(KEYS.users, INITIAL_DEMO_USERS);
-  // Auto-clean: scrub any legacy demo user names
+  // Auto-clean: scrub any legacy demo user names and previously deleted emails
   const purged = current.filter(
     (u) =>
       !u.email.endsWith("@remotehr.io") &&
@@ -460,6 +460,8 @@ export function getStoredUsers(): DemoUser[] {
       u.email !== "hr@remotehr.io" &&
       u.email !== "manager@remotehr.io" &&
       u.email !== "employee@remotehr.io" &&
+      u.email !== "jamesaathithyandev@gmail.com" &&
+      !u.name.toLowerCase().includes("jamesaathithyandev") &&
       !u.name.toLowerCase().includes("james aathithyan") &&
       !u.name.toLowerCase().includes("sarah jenkins") &&
       !u.name.toLowerCase().includes("david chen") &&

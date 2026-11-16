@@ -28,24 +28,21 @@ export function HRAssignLeaveModal({ open, onOpenChange }: HRAssignLeaveModalPro
   const [reason, setReason] = React.useState<string>("");
   const [overrideBalance, setOverrideBalance] = React.useState<boolean>(false);
 
-  // Load active employees
+  // Load active employees dynamically from database
   React.useEffect(() => {
     async function loadEmps() {
-      const stored: Array<{ id: string; full_name: string; email: string }> = getStoredUsers().map((u) => ({ id: u.id, full_name: u.name, email: u.email }));
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from("employees")
           .select("id, full_name, email")
           .eq("status", "active")
           .order("full_name");
-        if (data && (data as any[]).length > 0) {
-          for (const d of (data as any[])) {
-            if (!stored.some((s) => s.id === d.id)) {
-              stored.push({ id: d.id, full_name: d.full_name, email: d.email });
-            }
-          }
+        if (!error && data && Array.isArray(data)) {
+          setEmployees(data as any[]);
+          return;
         }
       } catch {}
+      const stored: Array<{ id: string; full_name: string; email: string }> = getStoredUsers().map((u) => ({ id: u.id, full_name: u.name, email: u.email }));
       setEmployees(stored);
     }
     if (open) {

@@ -670,7 +670,7 @@ function UsersDirectoryContent() {
   const handleDeleteUser = async (user: EmployeeUser) => {
     if (
       !confirm(
-        `Are you sure you want to permanently delete ${user.name}? This cannot be undone.`
+        `Are you sure you want to permanently delete ${user.name}? This will remove all their records from the system.`
       )
     ) {
       return;
@@ -678,12 +678,20 @@ function UsersDirectoryContent() {
 
     deleteStoredUser(user.id);
     try {
-      await (supabase.from("employees") as any).delete().eq("id", user.id);
-      await (supabase.from("organization_members") as any).delete().eq("user_id", user.id);
-    } catch { }
+      const res = await fetch("/api/admin/users/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUserId: user.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete user from database");
 
-    setUsers(getStoredUsers() as any);
-    toast.success(`${user.name} deleted successfully.`);
+      toast.success(`${user.name} permanently deleted.`);
+      await loadDirectory();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete user");
+      await loadDirectory();
+    }
   };
 
   const handleResetMFA = async (user: EmployeeUser) => {

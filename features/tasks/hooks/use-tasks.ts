@@ -214,21 +214,17 @@ export function useTasksData(enabled = true) {
         }
       }
 
-      // Merge employees
-      const mergedEmployees: VisibleEmployeeOption[] = [
-        ...storedEmployees.map((u) => ({
-          id: u.id,
-          full_name: u.name,
-          email: u.email,
-          manager_id: null,
-          status: u.status,
-        })),
-      ];
-      for (const e of employeesData) {
-        if (!mergedEmployees.some((me) => me.id === e.id)) {
-          mergedEmployees.push(e);
-        }
-      }
+      // Visible employees: database is authoritative
+      const mergedEmployees: VisibleEmployeeOption[] =
+        employeesData && employeesData.length > 0
+          ? employeesData
+          : storedEmployees.map((u) => ({
+              id: u.id,
+              full_name: u.name,
+              email: u.email,
+              manager_id: null,
+              status: u.status,
+            }));
 
       // Merge tasks
       const mergedTasks: TaskRecord[] = [

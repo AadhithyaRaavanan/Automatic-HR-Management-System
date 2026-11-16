@@ -160,21 +160,17 @@ export function useKpiData(enabled = true) {
         }
       }
 
-      const mergedEmployees: KpiEmployeeOption[] = [
-        ...storedEmployees.map((u) => ({
-          id: u.id,
-          full_name: u.name,
-          email: u.email,
-          manager_id: null,
-          department_id: u.departmentId || null,
-          status: u.status,
-        })),
-      ];
-      for (const e of employeesData) {
-        if (!mergedEmployees.some((me) => me.id === e.id)) {
-          mergedEmployees.push(e);
-        }
-      }
+      const mergedEmployees: KpiEmployeeOption[] =
+        employeesData && employeesData.length > 0
+          ? employeesData
+          : storedEmployees.map((u) => ({
+              id: u.id,
+              full_name: u.name,
+              email: u.email,
+              manager_id: null,
+              department_id: u.departmentId || null,
+              status: u.status,
+            }));
 
       return {
         definitions: defsData.map((d: any) => ({
