@@ -124,17 +124,20 @@ function UsersDirectoryContent() {
   const [govShiftEnd, setGovShiftEnd] = React.useState("17:00");
   const [govDepartmentId, setGovDepartmentId] = React.useState("");
   const [govJobTitleId, setGovJobTitleId] = React.useState("");
+  const [govRole, setGovRole] = React.useState<"employee" | "manager" | "hr" | "admin">("employee");
 
   const filteredInviteTitles = React.useMemo(() => {
     if (!inviteDepartmentId) return jobTitlesList;
-    const matches = jobTitlesList.filter((jt) => jt.department_id === inviteDepartmentId);
-    return matches.length > 0 ? matches : jobTitlesList.filter((jt) => !jt.department_id);
+    return jobTitlesList.filter(
+      (jt) => !jt.department_id || jt.department_id === inviteDepartmentId
+    );
   }, [jobTitlesList, inviteDepartmentId]);
 
   const filteredGovTitles = React.useMemo(() => {
     if (!govDepartmentId) return jobTitlesList;
-    const matches = jobTitlesList.filter((jt) => jt.department_id === govDepartmentId);
-    return matches.length > 0 ? matches : jobTitlesList.filter((jt) => !jt.department_id);
+    return jobTitlesList.filter(
+      (jt) => !jt.department_id || jt.department_id === govDepartmentId
+    );
   }, [jobTitlesList, govDepartmentId]);
 
   // Credentials & Resend Delivery Modal State
@@ -318,20 +321,26 @@ function UsersDirectoryContent() {
               };
             }
 
-            const deptName = e.departments?.name;
-            const hasValidDept =
-              (e.department_id && validDeptIds.has(e.department_id)) ||
-              (deptName && validDeptNames.has(deptName));
+            const deptObj = mergedDepts.find((d) => d.id === e.department_id);
+            const deptName = deptObj?.name || (Array.isArray(e.departments) ? e.departments[0]?.name : e.departments?.name);
+            const hasValidDept = Boolean(
+              (e.department_id && (deptObj || validDeptIds.has(e.department_id))) ||
+              (deptName && validDeptNames.has(deptName))
+            );
 
-            const titleName = e.job_titles?.title_name;
-            const hasValidTitle =
-              (e.job_title_id && validTitleIds.has(e.job_title_id)) ||
-              (titleName && validTitleNames.has(titleName));
+            const titleObj = mergedTitles.find((t) => t.id === e.job_title_id);
+            const titleName = titleObj?.title_name || (Array.isArray(e.job_titles) ? e.job_titles[0]?.title_name : e.job_titles?.title_name);
+            const hasValidTitle = Boolean(
+              (e.job_title_id && (titleObj || validTitleIds.has(e.job_title_id))) ||
+              (titleName && validTitleNames.has(titleName))
+            );
 
-            const locName = e.locations?.name;
-            const hasValidLoc =
-              (e.primary_location_id && validLocIds.has(e.primary_location_id)) ||
-              (locName && validLocNames.has(locName));
+            const locObj = mergedLocations.find((l) => l.id === e.primary_location_id);
+            const locName = locObj?.name || (Array.isArray(e.locations) ? e.locations[0]?.name : e.locations?.name);
+            const hasValidLoc = Boolean(
+              (e.primary_location_id && (locObj || validLocIds.has(e.primary_location_id))) ||
+              (locName && validLocNames.has(locName))
+            );
 
             return {
               id: e.id,
@@ -527,6 +536,7 @@ function UsersDirectoryContent() {
 
   const handleOpenGovernance = (user: EmployeeUser) => {
     setSelectedUser(user);
+    setGovRole(user.role || "employee");
     setGovWorkMode(user.workMode);
     setGovTimezone(user.timezone);
     setGovStatus(user.status === "active" ? "active" : "inactive");
@@ -546,81 +556,84 @@ function UsersDirectoryContent() {
     const effectiveDeptName = govDepartmentId && selectedDeptObj ? selectedDeptObj.name : "Unassigned";
     const effectiveJobTitleName = govJobTitleId && selectedJobTitleObj ? selectedJobTitleObj.title_name : "";
 
-    updateStoredUser({
-      id: selectedUser.id,
-      name: selectedUser.name,
-      email: selectedUser.email,
-      role: selectedUser.role,
-      workMode: govWorkMode as any,
-      timezone: govTimezone,
-      status: govStatus === "active" ? "active" : "inactive",
-      shiftStartTime: govShiftStart,
-      shiftEndTime: govShiftEnd,
-      departmentId: govDepartmentId || "",
-      department: effectiveDeptName,
-      jobTitleId: govJobTitleId || "",
-      jobTitle: effectiveJobTitleName,
-      location: selectedUser.location,
-    });
-
+    setIsSubmitting(true);
     try {
-      await (supabase.from("employees") as any)
-        .update({
-          department_id: govDepartmentId || null,
-          job_title_id: govJobTitleId || null,
-          work_mode: govWorkMode,
+      // 1. Authoritative server-side update across employees & organization_members
+      const res = await fetch("/api/admin/users/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: selectedUser.id,
+          departmentId: govDepartmentId || null,
+          jobTitleId: govJobTitleId || null,
+          role: govRole,
+          workMode: govWorkMode,
           timezone: govTimezone,
           status: govStatus === "active" ? "active" : "inactive",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", selectedUser.id);
+          shiftStartTime: govShiftStart,
+          shiftEndTime: govShiftEnd,
+        }),
+      });
 
-      await (supabase.from("organization_members") as any)
-        .update({
-          department_id: govDepartmentId || null,
-          job_title_id: govJobTitleId || null,
-          status: govStatus === "active" ? "active" : "inactive",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("user_id", selectedUser.id);
-    } catch {}
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update user governance");
+      }
 
-    toast.success("Governance & shift schedule updated successfully.");
-    setGovernanceModalOpen(false);
-    await loadDirectory();
+      // 2. Synchronize local store for instant reactive UI consistency
+      updateStoredUser({
+        id: selectedUser.id,
+        name: selectedUser.name,
+        email: selectedUser.email,
+        role: govRole,
+        workMode: govWorkMode as any,
+        timezone: govTimezone,
+        status: govStatus === "active" ? "active" : "inactive",
+        shiftStartTime: govShiftStart,
+        shiftEndTime: govShiftEnd,
+        departmentId: govDepartmentId || "",
+        department: effectiveDeptName,
+        jobTitleId: govJobTitleId || "",
+        jobTitle: effectiveJobTitleName,
+        location: selectedUser.location,
+      });
+
+      window.dispatchEvent(new Event("remotehr_storage_change"));
+      toast.success("Governance & role attributes updated successfully.");
+      setGovernanceModalOpen(false);
+      await loadDirectory();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update governance");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleChangeRole = async (
     targetUserId: string,
     newRole: "employee" | "manager" | "hr" | "admin"
   ) => {
-    if (isDemoModeEnabled()) {
+    try {
+      const res = await fetch("/api/admin/users/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: targetUserId,
+          role: newRole,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update role");
+      }
+
       const current = getStoredUsers();
       const target = current.find((u) => u.id === targetUserId);
       if (target) {
         updateStoredUser({ ...target, role: newRole });
-        setUsers(getStoredUsers() as any);
       }
-      try {
-        await (supabase.from("organization_members") as any)
-          .update({ role: newRole })
-          .eq("user_id", targetUserId);
-      } catch {}
-      toast.success(`Role updated to ${newRole}.`);
-      return;
-    }
-
-    if (!organizationId) {
-      toast.error("Organization context unavailable.");
-      return;
-    }
-    try {
-      const { error } = await (supabase.rpc as any)("admin_update_org_member_role", {
-        p_user_id: targetUserId,
-        p_new_role: newRole,
-        p_organization_id: organizationId,
-      });
-      if (error) throw error;
+      window.dispatchEvent(new Event("remotehr_storage_change"));
       toast.success(`Role updated to ${newRole}.`);
       await loadDirectory();
     } catch (err: any) {
@@ -1372,22 +1385,45 @@ function UsersDirectoryContent() {
             </div>
           </div>
 
-          <div>
-            <label
-              htmlFor="gov-status"
-              className="text-xs font-bold text-text-secondary block mb-1"
-            >
-              Employee Status
-            </label>
-            <select
-              id="gov-status"
-              value={govStatus}
-              onChange={(e) => setGovStatus(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
-            >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor="gov-system-role"
+                className="text-xs font-bold text-text-secondary block mb-1"
+              >
+                System Role {isAdmin ? "(Admin Only)" : ""}
+              </label>
+              <select
+                id="gov-system-role"
+                disabled={!isAdmin}
+                value={govRole}
+                onChange={(e) => setGovRole(e.target.value as any)}
+                className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary disabled:opacity-50"
+              >
+                <option value="employee">Employee</option>
+                <option value="manager">Manager</option>
+                <option value="hr">HR</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="gov-status"
+                className="text-xs font-bold text-text-secondary block mb-1"
+              >
+                Employee Status
+              </label>
+              <select
+                id="gov-status"
+                value={govStatus}
+                onChange={(e) => setGovStatus(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
           </div>
 
           <div className="pt-2 flex justify-end gap-2">
