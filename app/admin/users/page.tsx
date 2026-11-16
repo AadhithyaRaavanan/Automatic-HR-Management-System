@@ -34,7 +34,9 @@ import { JobTitlesManager } from "@/features/admin/components/job-titles-manager
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import {
   getStoredDepartments,
+  saveStoredDepartments,
   getStoredJobTitles,
+  saveStoredJobTitles,
   getStoredLocations,
   getStoredUsers,
   addStoredUser,
@@ -175,7 +177,7 @@ function UsersDirectoryContent() {
       let locsData: any = null;
 
       try {
-        const results = await Promise.all([
+        const [empRes, memberRes, titlesRes, deptsRes, locsRes] = await Promise.all([
           (supabase as any)
             .from("employees")
             .select(
@@ -185,53 +187,47 @@ function UsersDirectoryContent() {
           (supabase as any)
             .from("organization_members")
             .select("user_id, role, status, shift_start_time, shift_end_time, department_id, job_title_id"),
-          (supabase as any)
-            .from("job_titles")
-            .select("id, title_name, department_id")
-            .order("title_name"),
-          (supabase as any)
-            .from("departments")
-            .select("id, name")
-            .order("name"),
+          fetch("/api/admin/job-titles").then((r) => (r.ok ? r.json() : null)).catch(() => null),
+          fetch("/api/admin/departments").then((r) => (r.ok ? r.json() : null)).catch(() => null),
           (supabase as any)
             .from("locations")
             .select("id, name")
             .order("name"),
         ]);
-        emps = results[0]?.data;
-        members = results[1]?.data;
-        jobTitlesData = results[2]?.data;
-        deptsData = results[3]?.data;
-        locsData = results[4]?.data;
+        emps = empRes?.data;
+        members = memberRes?.data;
+        jobTitlesData = titlesRes?.titles;
+        deptsData = deptsRes?.departments;
+        locsData = locsRes?.data;
       } catch {
         // Supabase not running, continue with stored
       }
 
-      // Merge stored job titles with database
-      const mergedTitles: { id: string; title_name: string; department_id?: string | null }[] = storedTitles.map((t) => ({
-        id: t.id,
-        title_name: t.title_name,
-        department_id: t.department_id || null,
-      }));
-      for (const jt of jobTitlesData || []) {
-        const existingIdx = mergedTitles.findIndex((t) => t.id === jt.id || t.title_name === jt.title_name);
-        if (existingIdx === -1) {
-          mergedTitles.push({ id: jt.id, title_name: jt.title_name, department_id: jt.department_id || null });
-        } else if (jt.department_id && !mergedTitles[existingIdx].department_id) {
-          mergedTitles[existingIdx].department_id = jt.department_id;
-        }
+      // Merge job titles with database (database UUID is strictly authoritative)
+      let mergedTitles: { id: string; title_name: string; department_id?: string | null }[] = [];
+      if (jobTitlesData && jobTitlesData.length > 0) {
+        mergedTitles = jobTitlesData.map((jt: any) => ({
+          id: jt.id,
+          title_name: jt.title_name,
+          department_id: jt.department_id || null,
+        }));
+        saveStoredJobTitles(mergedTitles as any);
+      } else {
+        mergedTitles = storedTitles.map((t) => ({
+          id: t.id,
+          title_name: t.title_name,
+          department_id: t.department_id || null,
+        }));
       }
       setJobTitlesList(mergedTitles);
 
-      // Merge stored departments with database
-      const mergedDepts: { id: string; name: string }[] = storedDepts.map((d) => ({
-        id: d.id,
-        name: d.name,
-      }));
-      for (const d of deptsData || []) {
-        if (!mergedDepts.some((md) => md.id === d.id || md.name === d.name)) {
-          mergedDepts.push({ id: d.id, name: d.name });
-        }
+      // Merge departments with database (database UUID is strictly authoritative)
+      let mergedDepts: { id: string; name: string }[] = [];
+      if (deptsData && deptsData.length > 0) {
+        mergedDepts = deptsData.map((d: any) => ({ id: d.id, name: d.name }));
+        saveStoredDepartments(deptsData as any);
+      } else {
+        mergedDepts = storedDepts.map((d) => ({ id: d.id, name: d.name }));
       }
       setDepartmentsList(mergedDepts);
 

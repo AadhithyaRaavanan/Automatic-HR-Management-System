@@ -21,7 +21,12 @@ export interface DepartmentItem extends DemoDepartment {
 }
 
 export default function DepartmentsAdminPage() {
-  const [departments, setDepartments] = React.useState<DepartmentItem[]>([]);
+  const [departments, setDepartments] = React.useState<DepartmentItem[]>(() => {
+    if (typeof window !== "undefined") {
+      return getStoredDepartments();
+    }
+    return [];
+  });
   const [modalOpen, setModalOpen] = React.useState(false);
   const [editingDept, setEditingDept] = React.useState<DepartmentItem | null>(null);
 
@@ -35,12 +40,19 @@ export default function DepartmentsAdminPage() {
   const [headId, setHeadId] = React.useState("");
   const [workforceUsers, setWorkforceUsers] = React.useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [isLoading, setIsLoading] = React.useState(true);
+  const [isLoading, setIsLoading] = React.useState(() => {
+    if (typeof window !== "undefined") {
+      return getStoredDepartments().length === 0;
+    }
+    return true;
+  });
 
   const supabase = React.useMemo(() => createClient(), []);
 
   const loadDepartments = React.useCallback(async () => {
-    setIsLoading(true);
+    if (departments.length === 0) {
+      setIsLoading(true);
+    }
 
     try {
       // 1. Fetch departments from API
@@ -210,25 +222,34 @@ export default function DepartmentsAdminPage() {
 
         {/* Departments Table */}
         <div className="bg-white dark:bg-slate-900 rounded-[28px] border border-border-light dark:border-slate-800 shadow-card overflow-hidden">
-          {departments.length === 0 ? (
+          {isLoading && departments.length === 0 ? (
+            <div className="p-6 space-y-4 animate-pulse">
+              <div className="h-5 w-48 bg-card-subtle dark:bg-slate-800 rounded-lg mb-6" />
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center justify-between py-3 border-b border-border-light dark:border-slate-800">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-card-subtle dark:bg-slate-800" />
+                    <div className="h-4 w-36 bg-card-subtle dark:bg-slate-800 rounded" />
+                  </div>
+                  <div className="h-4 w-24 bg-card-subtle dark:bg-slate-800 rounded" />
+                  <div className="h-4 w-28 bg-card-subtle dark:bg-slate-800 rounded" />
+                  <div className="h-4 w-20 bg-card-subtle dark:bg-slate-800 rounded" />
+                </div>
+              ))}
+            </div>
+          ) : departments.length === 0 ? (
             <EmptyState
               icon={<Building className="w-6 h-6" />}
-              title={isLoading ? "Loading departments..." : "No departments configured"}
-              description={
-                isLoading
-                  ? "Retrieving organizational hierarchy..."
-                  : "Start building your hierarchy by creating your first department (e.g., Engineering, Sales, HR)."
-              }
+              title="No departments configured"
+              description="Start building your hierarchy by creating your first department (e.g., Engineering, Sales, HR)."
               action={
-                !isLoading && (
-                  <button
-                    onClick={handleOpenAdd}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-purple text-white text-xs font-semibold"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Add Department
-                  </button>
-                )
+                <button
+                  onClick={handleOpenAdd}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-purple text-white text-xs font-semibold cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Department
+                </button>
               }
               className="border-none rounded-none shadow-none"
             />

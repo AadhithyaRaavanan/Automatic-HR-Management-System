@@ -360,18 +360,19 @@ export function addStoredJobTitle(
   titleName: string,
   description?: string | null,
   departmentId?: string | null,
-  departmentName?: string | null
+  departmentName?: string | null,
+  explicitId?: string
 ): DemoJobTitle {
   const current = getStoredJobTitles();
   const created: DemoJobTitle = {
-    id: `jt-${Date.now()}`,
+    id: explicitId || `jt-${Date.now()}`,
     title_name: titleName.trim(),
     description: description ? description.trim() : null,
     department_id: departmentId || null,
     department_name: departmentName || null,
     created_at: new Date().toISOString(),
   };
-  saveStoredJobTitles([created, ...current]);
+  saveStoredJobTitles([created, ...current.filter((t) => t.id !== created.id && t.title_name !== created.title_name)]);
   addStoredAudit("CREATE_JOB_TITLE", "job_titles", created.id, null, created);
   return created;
 }

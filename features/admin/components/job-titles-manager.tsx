@@ -147,7 +147,7 @@ export function JobTitlesManager({
       };
 
       setTitles((prev) => [created, ...prev.filter((t) => t.id !== created.id)]);
-      addStoredJobTitle(trimmedName, trimmedDesc, newDepartmentId || null, selectedDept ? selectedDept.name : null);
+      addStoredJobTitle(trimmedName, trimmedDesc, newDepartmentId || null, selectedDept ? selectedDept.name : null, created.id);
       toast.success(`Role '${trimmedName}' added successfully under ${selectedDept ? selectedDept.name : "Company"}.`);
       setNewTitleName("");
       setNewDescription("");

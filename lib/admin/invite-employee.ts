@@ -43,7 +43,7 @@ export async function inviteSingleEmployee(
   input: InviteEmployeeInput,
   options?: { auditAction?: string }
 ): Promise<InviteEmployeeResult> {
-  const {
+  let {
     email,
     fullName,
     role = "employee",
@@ -101,12 +101,39 @@ export async function inviteSingleEmployee(
   }
 
   if (jobTitleId) {
-    const { data: jt } = await (supabaseAdmin as any)
+    let { data: jt } = await (supabaseAdmin as any)
       .from("job_titles")
-      .select("id, title_name")
+      .select("id, title_name, department_id")
       .eq("id", jobTitleId)
       .eq("organization_id", context.organizationId)
       .maybeSingle();
+
+    // Fallback: If client passed a local/cached ID, resolve by department or organization
+    if (!jt && departmentId) {
+      const { data: fallbackJt } = await (supabaseAdmin as any)
+        .from("job_titles")
+        .select("id, title_name, department_id")
+        .eq("department_id", departmentId)
+        .eq("organization_id", context.organizationId)
+        .maybeSingle();
+      if (fallbackJt) {
+        jt = fallbackJt;
+        jobTitleId = fallbackJt.id;
+      }
+    }
+
+    if (!jt) {
+      const { data: fallbackOrgWide } = await (supabaseAdmin as any)
+        .from("job_titles")
+        .select("id, title_name, department_id")
+        .eq("organization_id", context.organizationId)
+        .maybeSingle();
+      if (fallbackOrgWide) {
+        jt = fallbackOrgWide;
+        jobTitleId = fallbackOrgWide.id;
+      }
+    }
+
     if (!jt) {
       return {
         ok: false,
