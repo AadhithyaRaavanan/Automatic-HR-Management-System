@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { Database } from "@/types/database.types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSiteUrl } from "@/lib/site-url";
 import { sendPasswordResetEmail } from "@/lib/email/resend";
 import {
   getRateLimitKey,
@@ -89,7 +90,7 @@ export async function POST(request: NextRequest) {
       recordFailure(emailLimitKey),
     ]);
 
-    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+    const siteUrl = getSiteUrl();
     let actionLink: string | undefined = undefined;
     let otpCode: string | undefined = undefined;
 
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
         type: "recovery",
         email,
         options: {
-          redirectTo: `${appUrl}/settings?must_change_password=true`,
+          redirectTo: `${siteUrl}/settings?must_change_password=true`,
         },
       });
 

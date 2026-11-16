@@ -6,6 +6,7 @@ import { StatusPill } from "@/components/shared/status-pill";
 import { Calendar, Clock, MessageSquare, Check, X } from "lucide-react";
 import { formatTimeInTimezone } from "@/lib/date/timezone";
 import { cn } from "@/lib/utils";
+import { KpiBadge } from "@/components/shared/kpi-badge";
 
 interface RequestCardProps {
   request: RegularizationRequestItem;
@@ -33,7 +34,7 @@ export function RequestCard({
     >
       <div>
         <div className="flex items-center justify-between gap-2 mb-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="flex items-center gap-1 text-xs font-bold text-text-primary">
               <Calendar className="w-3.5 h-3.5 text-brand-purple" />
               {request.work_date}
@@ -43,6 +44,7 @@ export function RequestCard({
                 • {request.employee_name}
               </span>
             )}
+            <KpiBadge employeeId={request.employee_id} />
           </div>
           <StatusPill status={request.status} />
         </div>

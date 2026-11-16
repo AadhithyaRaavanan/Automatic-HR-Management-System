@@ -2,19 +2,17 @@
 
 import * as React from "react";
 import { Modal } from "@/components/ui/modal";
-import { createClient } from "@/lib/supabase/client";
+import { ROLE_TUTORIAL_STEPS, TutorialStep } from "@/lib/tutorial/tutorial-config";
 import {
-  Sparkles,
-  Clock,
-  CalendarDays,
-  UserCircle,
-  ShieldCheck,
   ChevronRight,
   ChevronLeft,
   CheckCircle2,
+  Compass,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
 
 interface OnboardingTourProps {
   open: boolean;
@@ -27,75 +25,37 @@ interface OnboardingTourProps {
 export function OnboardingTour({
   open,
   onOpenChange,
-  userRole,
+  userRole = "employee",
   fullName,
   onCompleted,
 }: OnboardingTourProps) {
+  const router = useRouter();
   const [step, setStep] = React.useState(0);
   const [submitting, setSubmitting] = React.useState(false);
-  const supabase = React.useMemo(() => createClient(), []);
 
-  const steps = React.useMemo(() => {
-    const baseSteps = [
-      {
-        title: `Welcome to RemoteHR${fullName ? `, ${fullName.split(" ")[0]}` : ""}!`,
-        subtitle: "Zero-surveillance workforce & attendance workspace",
-        icon: Sparkles,
-        points: [
-          "We never record GPS location, keystrokes, webcams, or background screenshots.",
-          "Your attendance is calculated strictly from your explicit check-in and check-out punches.",
-          "You are always in control of your profile, leave requests, and notification alerts.",
-        ],
-      },
-      {
-        title: "Daily Check-In & Timezone Accuracy",
-        subtitle: "Track hours accurately in your assigned work timezone",
-        icon: Clock,
-        points: [
-          "Use Quick Check-in / Check-out from the header bar or dashboard hero card.",
-          "Missed a punch? Submit a Regularization request directly from Attendance or Requests.",
-          "Your shift timezone is governed by HR/Admin to keep payroll and leave calendars aligned.",
-        ],
-      },
-      {
-        title: "Leave, Holidays & Real-Time Alerts",
-        subtitle: "Plan time off with instant balance previews",
-        icon: CalendarDays,
-        points: [
-          "Check your Casual & Sick balances and apply for full or half-day leave on the Leave page.",
-          "View your organization's public and regional holiday calendar under Holidays.",
-          "The bell icon streams instant private notifications on approvals, rejections, and reminders.",
-        ],
-      },
-      {
-        title: "Complete Your Profile & Security",
-        subtitle: "Add contact info, avatar, and review MFA protection",
-        icon: userRole === "hr" || userRole === "admin" ? ShieldCheck : UserCircle,
-        points: [
-          "Visit My Profile to update your name, phone, emergency contact, and private avatar photo.",
-          userRole === "manager" || userRole === "hr" || userRole === "admin"
-            ? "As a Manager/HR leader, you can review direct-report requests and configure approval delegations in Requests."
-            : "Manage notification preferences and optional two-factor authentication anytime in Settings.",
-        ],
-      },
-    ];
-    return baseSteps;
-  }, [fullName, userRole]);
+  const roleKey = (userRole || "employee").toLowerCase();
+  const steps: TutorialStep[] =
+    ROLE_TUTORIAL_STEPS[roleKey] || ROLE_TUTORIAL_STEPS["employee"];
 
-  const current = steps[step];
-  const Icon = current.icon;
+  const current = steps[step] || steps[0];
   const isLast = step === steps.length - 1;
 
   const finishTour = async () => {
     setSubmitting(true);
     try {
-      const { error } = await (supabase.rpc as any)("complete_onboarding");
-      if (error) throw error;
+      if (typeof window !== "undefined") {
+        localStorage.setItem("pulse_tutorial_dismissed", "true");
+      }
+      await fetch("/api/tutorial/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reset: false }),
+      });
       onOpenChange(false);
       onCompleted?.();
-      toast.success("Welcome aboard! Onboarding tour completed.");
+      toast.success("Welcome aboard! Guided tour completed.");
     } catch (err: any) {
-      toast.error(err?.message || "Could not mark onboarding complete.");
+      toast.error(err?.message || "Could not mark tutorial complete.");
     } finally {
       setSubmitting(false);
     }
@@ -111,8 +71,8 @@ export function OnboardingTour({
           onOpenChange(nextOpen);
         }
       }}
-      title="Workspace Onboarding Tour"
-      description={`Step ${step + 1} of ${steps.length}`}
+      title="Welcome to Pulse"
+      description={`Step ${step + 1} of ${steps.length} • Role: ${userRole.toUpperCase()}`}
       className="max-w-lg"
     >
       <div className="space-y-5">
@@ -131,29 +91,39 @@ export function OnboardingTour({
 
         {/* Step Card */}
         <div className="p-5 rounded-2xl bg-card-subtle border border-border-light space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-brand-purple text-white flex items-center justify-center shrink-0 shadow-sm">
-              <Icon className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-extrabold text-text-primary">
-                {current.title}
-              </h3>
-              <p className="text-xs text-text-secondary">{current.subtitle}</p>
-            </div>
+          <div className="flex items-center justify-between">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-purple/10 text-brand-purple uppercase">
+              <Compass className="w-3 h-3" />
+              <span>{current.category}</span>
+            </span>
+            <span className="text-[11px] font-mono text-text-tertiary">
+              {current.path}
+            </span>
           </div>
 
-          <ul className="space-y-2 pt-2">
-            {current.points.map((point, idx) => (
-              <li
-                key={idx}
-                className="flex items-start gap-2 text-xs text-text-secondary leading-relaxed"
-              >
-                <CheckCircle2 className="w-4 h-4 text-status-success-dot shrink-0 mt-0.5" />
-                <span>{point}</span>
-              </li>
-            ))}
-          </ul>
+          <div className="space-y-1.5">
+            <h3 className="text-base font-extrabold text-text-primary">
+              {current.title}
+            </h3>
+            <p className="text-xs text-text-secondary leading-relaxed">
+              {current.description}
+            </p>
+          </div>
+
+          <div className="pt-2 border-t border-border-light/60 flex items-center justify-between">
+            <span className="text-[11px] text-text-tertiary">Direct feature route:</span>
+            <button
+              type="button"
+              onClick={() => {
+                router.push(current.path);
+                finishTour();
+              }}
+              className="text-xs font-bold text-brand-purple hover:underline inline-flex items-center gap-1 cursor-pointer"
+            >
+              <span>Explore page</span>
+              <ExternalLink className="w-3 h-3" />
+            </button>
+          </div>
         </div>
 
         {/* Controls */}
@@ -164,7 +134,7 @@ export function OnboardingTour({
             onClick={finishTour}
             className="text-xs font-bold text-text-tertiary hover:text-text-primary cursor-pointer disabled:opacity-50"
           >
-            Skip tour
+            Skip tutorial
           </button>
 
           <div className="flex items-center gap-2">
@@ -188,7 +158,7 @@ export function OnboardingTour({
                 className="px-4 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>{submitting ? "Saving..." : "Finish & Get Started"}</span>
+                <span>{submitting ? "Saving..." : "Finish Tour"}</span>
               </button>
             ) : (
               <button
@@ -206,4 +176,3 @@ export function OnboardingTour({
     </Modal>
   );
 }
-

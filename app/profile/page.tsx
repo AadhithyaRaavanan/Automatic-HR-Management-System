@@ -19,9 +19,11 @@ import {
   CheckCircle2,
   Building2,
   Briefcase,
+  Compass,
 } from "lucide-react";
 import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import { GuidedTourOverlay } from "@/components/tutorial/guided-tour-overlay";
 
 function ProfilePageContent() {
   const { userId, userRole, isLoaded } = useAppSession();
@@ -46,6 +48,21 @@ function ProfilePageContent() {
   const [workTargetMinutes, setWorkTargetMinutes] = React.useState(480);
   const [departmentName, setDepartmentName] = React.useState<string | null>(null);
   const [jobTitleName, setJobTitleName] = React.useState<string | null>(null);
+  const [tourOpen, setTourOpen] = React.useState(false);
+
+  const handleReplayTutorial = async () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("pulse_tutorial_dismissed");
+    }
+    try {
+      await fetch("/api/tutorial/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reset: true }),
+      });
+    } catch {}
+    setTourOpen(true);
+  };
 
   const resolveAvatarSignedUrl = React.useCallback(
     async (storagePath: string | null) => {
@@ -337,6 +354,15 @@ function ProfilePageContent() {
               {uploadingAvatar ? "Compressing & Uploading..." : "Change Profile Photo"}
             </button>
 
+            <button
+              type="button"
+              onClick={handleReplayTutorial}
+              className="w-full py-2.5 px-4 rounded-xl bg-card border border-brand-purple/30 hover:bg-brand-purple/5 text-xs font-bold text-brand-purple cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+            >
+              <Compass className="w-3.5 h-3.5" />
+              <span>Replay Workplace Tutorial</span>
+            </button>
+
             {avatarPath && (
               <p className="text-[11px] text-status-success-text flex items-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5" />
@@ -504,6 +530,12 @@ function ProfilePageContent() {
           </form>
         </BentoCard>
       </BentoGrid>
+
+      <GuidedTourOverlay
+        forceOpen={tourOpen}
+        userRole={userRole}
+        onClose={() => setTourOpen(false)}
+      />
     </div>
   );
 }

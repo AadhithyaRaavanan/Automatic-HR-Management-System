@@ -321,20 +321,29 @@ export function useApproveLeave() {
       reviewNote,
     }: {
       requestId: string;
-      reviewNote?: string;
+      reviewNote: string;
     }) => {
-      try {
-        await (supabase.rpc as any)("approve_leave", {
-          p_request_id: requestId,
-          p_review_note: reviewNote,
-        });
-      } catch {}
+      const res = await fetch("/api/leave/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requestId,
+          action: "approve",
+          reviewNote,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to approve leave request.");
+      }
 
       if (isDemoModeEnabled()) {
         const list = getDemoRequests();
-        const updated = list.map((r) => (r.id === requestId ? { ...r, status: "approved" as const } : r));
+        const updated = list.map((r) =>
+          r.id === requestId ? { ...r, status: "approved" as const, review_note: reviewNote } : r
+        );
         saveDemoRequests(updated);
-        return { success: true };
       }
       return { success: true };
     },
@@ -361,20 +370,29 @@ export function useRejectLeave() {
       reviewNote,
     }: {
       requestId: string;
-      reviewNote?: string;
+      reviewNote: string;
     }) => {
-      try {
-        await (supabase.rpc as any)("reject_leave", {
-          p_request_id: requestId,
-          p_review_note: reviewNote,
-        });
-      } catch {}
+      const res = await fetch("/api/leave/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requestId,
+          action: "reject",
+          reviewNote,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to reject leave request.");
+      }
 
       if (isDemoModeEnabled()) {
         const list = getDemoRequests();
-        const updated = list.map((r) => (r.id === requestId ? { ...r, status: "rejected" as const } : r));
+        const updated = list.map((r) =>
+          r.id === requestId ? { ...r, status: "rejected" as const, review_note: reviewNote } : r
+        );
         saveDemoRequests(updated);
-        return { success: true };
       }
       return { success: true };
     },

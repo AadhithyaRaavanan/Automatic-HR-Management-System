@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import nodemailer from "nodemailer";
+import { getSiteUrl } from "@/lib/site-url";
 
 const resendApiKey = process.env.RESEND_API_KEY;
 
@@ -55,9 +56,7 @@ export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
     inviteLink,
     shiftStartTime = "09:00 AM",
     shiftEndTime = "05:00 PM",
-    loginUrl = process.env.NEXT_PUBLIC_APP_URL
-      ? `${process.env.NEXT_PUBLIC_APP_URL}/login`
-      : "http://localhost:3000/login",
+    loginUrl = `${getSiteUrl()}/login`,
   } = params;
 
   const actionUrl = inviteLink || loginUrl;
@@ -449,6 +448,113 @@ export function buildPasswordResetEmailHtml(params: SendPasswordResetParams): st
     </div>
   </body>
 </html>`;
+}
+
+export interface SendOnboardingSubmittedParams {
+  to?: string;
+  candidateName: string;
+  candidateEmail: string;
+  candidateType: string;
+}
+
+export async function sendOnboardingSubmittedEmail(params: SendOnboardingSubmittedParams): Promise<{
+  success: boolean;
+  messageId?: string;
+  error?: string;
+  simulated?: boolean;
+}> {
+  const hrRecipient = params.to || process.env.SMTP_USER || "hr@zenxea.com";
+  const subject = `New Candidate Onboarding Submission: ${params.candidateName}`;
+  const siteUrl = getSiteUrl();
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Candidate Onboarding Submission</title>
+  </head>
+  <body style="margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; color: #1e293b;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 580px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden;">
+      <tr>
+        <td style="padding: 28px; background-color: #4f46e5; text-align: center;">
+          <h1 style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 700;">Pulse HR Portal</h1>
+          <p style="margin: 6px 0 0; color: #e0e7ff; font-size: 13px;">Candidate Onboarding Notification</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 28px;">
+          <p style="font-size: 14px; margin-top: 0;">A new candidate has completed their document submission and set up their workplace account:</p>
+          <table width="100%" cellpadding="8" cellspacing="0" style="font-size: 13px; background-color: #f8fafc; border-radius: 12px; margin: 16px 0; border: 1px solid #e2e8f0;">
+            <tr>
+              <td style="font-weight: 700; width: 35%;">Candidate Name</td>
+              <td>: ${params.candidateName}</td>
+            </tr>
+            <tr>
+              <td style="font-weight: 700;">Email Address</td>
+              <td>: ${params.candidateEmail}</td>
+            </tr>
+            <tr>
+              <td style="font-weight: 700;">Candidate Track</td>
+              <td>: ${params.candidateType.replace("_", " ")}</td>
+            </tr>
+          </table>
+          <div style="text-align: center; margin-top: 24px;">
+            <a href="${siteUrl}/hr/onboarding" style="display: inline-block; padding: 12px 24px; background-color: #4f46e5; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 13px; border-radius: 10px;">Review Candidate in HR Portal</a>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 16px 28px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center; font-size: 11px; color: #64748b;">
+          Pulse by Zenxea • Automated Workforce Orchestration
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+  // 1. Prioritize Hostinger / Custom SMTP if configured
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      const transporter = getSmtpTransporter();
+      if (transporter) {
+        const fromAddress = process.env.SMTP_FROM || `Pulse <hr@zenxea.com>`;
+        const info = await transporter.sendMail({
+          from: fromAddress,
+          to: hrRecipient,
+          subject,
+          html,
+        });
+        return { success: true, messageId: info.messageId };
+      }
+    } catch (smtpErr: any) {
+      console.error("[Hostinger SMTP Onboarding Notice Error]:", smtpErr);
+      return { success: false, error: smtpErr.message || "Failed to dispatch email via Hostinger SMTP" };
+    }
+  }
+
+  // 2. Fall back to Resend if configured
+  if (process.env.RESEND_API_KEY) {
+    const client = resend || new Resend(process.env.RESEND_API_KEY);
+    try {
+      const fromAddress = process.env.RESEND_FROM_EMAIL || "RemoteHR <onboarding@remotehr.io>";
+      const response = await client.emails.send({
+        from: fromAddress,
+        to: [hrRecipient],
+        subject,
+        html,
+      });
+
+      if (response.error) {
+        return { success: false, error: response.error.message };
+      }
+
+      return { success: true, messageId: response.data?.id };
+    } catch (err: any) {
+      return { success: false, error: err.message || String(err) };
+    }
+  }
+
+  return { success: true, simulated: true, messageId: `sim_${Date.now()}` };
 }
 
 export async function sendPasswordResetEmail(params: SendPasswordResetParams): Promise<{

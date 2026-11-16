@@ -5,6 +5,8 @@ import { AuthenticatedCallerContext } from "@/lib/auth/admin-guard";
 import { sendWelcomeCredentialsEmail } from "@/lib/email/resend";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 
+import { getSiteUrl } from "@/lib/site-url";
+
 export interface InviteEmployeeInput {
   email: string;
   fullName: string;
@@ -192,7 +194,8 @@ export async function inviteSingleEmployee(
   }
 
   // 1. Create or invite user via Supabase Auth Admin generateLink flow (No temporary passwords)
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const siteUrl = getSiteUrl();
+  const inviteRedirectTo = `${siteUrl}/onboarding`;
   let invitedUserId: string;
   let actionInviteLink: string = "";
 
@@ -205,7 +208,7 @@ export async function inviteSingleEmployee(
         user_role: role,
         must_change_password: true,
       },
-      redirectTo: `${appUrl}/settings?must_change_password=true`,
+      redirectTo: inviteRedirectTo,
     },
   });
 
@@ -229,7 +232,7 @@ export async function inviteSingleEmployee(
       if (!foundUser) {
         if (isDemoModeEnabled()) {
           invitedUserId = `demo-${Date.now()}`;
-          actionInviteLink = `${appUrl}/settings?demo_invite=true`;
+          actionInviteLink = `${inviteRedirectTo}?demo_invite=true`;
         } else {
           return { ok: false, status: 400, error: `Invite failed: ${linkError?.message || "User creation failed"}` };
         }
@@ -241,13 +244,22 @@ export async function inviteSingleEmployee(
       type: "magiclink",
       email: normalizedEmail,
       options: {
-        redirectTo: `${appUrl}/settings?must_change_password=true`,
+        redirectTo: inviteRedirectTo,
       },
     });
     actionInviteLink = recoveryData?.properties?.action_link || "";
   } else {
     invitedUserId = linkData.user.id;
     actionInviteLink = linkData.properties?.action_link || "";
+  }
+
+  // Ensure redirect_to parameter inside Supabase action_link points strictly to getSiteUrl()/onboarding
+  if (actionInviteLink) {
+    try {
+      const parsedUrl = new URL(actionInviteLink);
+      parsedUrl.searchParams.set("redirect_to", inviteRedirectTo);
+      actionInviteLink = parsedUrl.toString();
+    } catch {}
   }
 
   // Check cross-tenant uniqueness across organization_members and employees
@@ -343,7 +355,7 @@ export async function inviteSingleEmployee(
     inviteLink: actionInviteLink,
     shiftStartTime: shiftStartTime.slice(0, 5),
     shiftEndTime: shiftEndTime.slice(0, 5),
-    loginUrl: appUrl,
+    loginUrl: `${siteUrl}/login`,
   });
 
   // 4. Write audit row (Token & invite link are never logged or stored)

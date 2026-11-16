@@ -5,7 +5,9 @@ import { AppShell, useAppSession } from "@/components/shell/app-shell";
 import { RequestCard } from "@/features/requests/components/request-card";
 import { RequestModal } from "@/features/requests/components/request-modal";
 import { Modal } from "@/components/ui/modal";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
+import { KpiBadge } from "@/components/shared/kpi-badge";
 import {
   useRegularizations,
   useSubmitRegularization,
@@ -32,6 +34,7 @@ import {
   UserCheck,
   ShieldCheck,
   Ban,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -95,6 +98,40 @@ function RequestsPageContent() {
 
   const [modalOpen, setModalOpen] = React.useState(false);
   const [statusFilter, setStatusFilter] = React.useState<"all" | RegularizationStatus>("all");
+
+  // Mandatory Decision Note Modal State
+  const [reviewTarget, setReviewTarget] = React.useState<{
+    id: string;
+    type: "regularization" | "leave";
+    action: "approve" | "reject";
+    title: string;
+    empName: string;
+  } | null>(null);
+  const [decisionNote, setDecisionNote] = React.useState("");
+  const isDecisionNoteValid = decisionNote.trim().length >= 5;
+
+  const handleDecisionSubmit = async () => {
+    if (!reviewTarget || !isDecisionNoteValid) return;
+    const note = decisionNote.trim();
+
+    if (reviewTarget.type === "regularization") {
+      if (reviewTarget.action === "approve") {
+        await approveRegMutation.mutateAsync({ requestId: reviewTarget.id, reviewNote: note });
+      } else {
+        await rejectRegMutation.mutateAsync({ requestId: reviewTarget.id, reviewNote: note });
+      }
+      refetchRegs();
+    } else {
+      if (reviewTarget.action === "approve") {
+        await approveLeaveMutation.mutateAsync({ requestId: reviewTarget.id, reviewNote: note });
+      } else {
+        await rejectLeaveMutation.mutateAsync({ requestId: reviewTarget.id, reviewNote: note });
+      }
+    }
+
+    setReviewTarget(null);
+    setDecisionNote("");
+  };
 
   const loadDelegations = React.useCallback(async () => {
     if (!userId) return;
@@ -412,15 +449,21 @@ function RequestsPageContent() {
                     request={req}
                     canReview={canReviewThis}
                     onApprove={(id) =>
-                      approveRegMutation.mutate({
-                        requestId: id,
-                        reviewNote: "Approved via requests inbox",
+                      setReviewTarget({
+                        id,
+                        type: "regularization",
+                        action: "approve",
+                        title: "Approve Regularization",
+                        empName: req.employee_name || "Employee",
                       })
                     }
                     onReject={(id) =>
-                      rejectRegMutation.mutate({
-                        requestId: id,
-                        reviewNote: "Declined per policy guidelines",
+                      setReviewTarget({
+                        id,
+                        type: "regularization",
+                        action: "reject",
+                        title: "Reject Regularization",
+                        empName: req.employee_name || "Employee",
                       })
                     }
                   />
@@ -459,9 +502,12 @@ function RequestsPageContent() {
                   >
                     <div className="flex items-start justify-between">
                       <div>
-                        <span className="font-extrabold text-sm text-text-primary block">
-                          {leave.employees?.full_name || "Team Member"}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-sm text-text-primary block">
+                            {leave.employees?.full_name || "Team Member"}
+                          </span>
+                          <KpiBadge employeeId={leave.employee_id} />
+                        </div>
                         <span className="text-[11px] text-text-tertiary">
                           {leave.employees?.email}
                         </span>
@@ -494,6 +540,12 @@ function RequestsPageContent() {
                       <p className="text-text-tertiary italic text-[11px] pt-1">
                         &ldquo;{leave.reason}&rdquo;
                       </p>
+                      {leave.review_note && (
+                        <div className="mt-2 text-xs text-brand-purple font-medium flex items-start gap-1 pt-1 border-t border-border-light/40">
+                          <MessageSquare className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                          <span>Reviewer Note: {leave.review_note}</span>
+                        </div>
+                      )}
                     </div>
 
                     {isPending && canReviewThis && (
@@ -501,9 +553,12 @@ function RequestsPageContent() {
                         <button
                           type="button"
                           onClick={() =>
-                            rejectLeaveMutation.mutate({
-                              requestId: leave.id,
-                              reviewNote: "Rejected by approver",
+                            setReviewTarget({
+                              id: leave.id,
+                              type: "leave",
+                              action: "reject",
+                              title: "Reject Leave Request",
+                              empName: leave.employees?.full_name || "Team Member",
                             })
                           }
                           className="px-3 py-1.5 rounded-xl border border-rose-200 dark:border-rose-900 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
@@ -514,9 +569,12 @@ function RequestsPageContent() {
                         <button
                           type="button"
                           onClick={() =>
-                            approveLeaveMutation.mutate({
-                              requestId: leave.id,
-                              reviewNote: "Approved by approver",
+                            setReviewTarget({
+                              id: leave.id,
+                              type: "leave",
+                              action: "approve",
+                              title: "Approve Leave Request",
+                              empName: leave.employees?.full_name || "Team Member",
                             })
                           }
                           className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all cursor-pointer flex items-center gap-1"
@@ -790,6 +848,49 @@ function RequestsPageContent() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Mandatory Decision Note Modal for Requests Inbox */}
+      <Modal
+        open={!!reviewTarget}
+        onOpenChange={(open) => !open && setReviewTarget(null)}
+        title={reviewTarget?.title || "Review Decision"}
+        description={`Record official decision for ${reviewTarget?.empName || "this request"}. A decision note of at least 5 characters is required.`}
+      >
+        <div className="space-y-4 pt-2">
+          <div>
+            <label className="block text-xs font-bold text-text-secondary mb-1">
+              Decision Note <span className="text-rose-500">*</span> (min 5 characters)
+            </label>
+            <textarea
+              rows={3}
+              required
+              value={decisionNote}
+              onChange={(e) => setDecisionNote(e.target.value)}
+              placeholder="State the justification or instructions for the employee (min 5 chars)..."
+              className="w-full px-3 py-2 text-xs bg-card border border-border-light rounded-xl text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-purple resize-none"
+            />
+            <div className="flex justify-between items-center mt-1 text-[11px] text-text-tertiary">
+              <span>{decisionNote.trim().length < 5 ? `At least ${5 - decisionNote.trim().length} more characters required` : "Requirement satisfied"}</span>
+              <span>{decisionNote.trim().length} / 5 min</span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2.5 pt-2">
+            <Button type="button" variant="ghost" onClick={() => setReviewTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant={reviewTarget?.action === "approve" ? "default" : "destructive"}
+              onClick={handleDecisionSubmit}
+              disabled={!isDecisionNoteValid || approveRegMutation.isPending || rejectRegMutation.isPending || approveLeaveMutation.isPending || rejectLeaveMutation.isPending}
+              isLoading={approveRegMutation.isPending || rejectRegMutation.isPending || approveLeaveMutation.isPending || rejectLeaveMutation.isPending}
+            >
+              Confirm {reviewTarget?.action === "approve" ? "Approval" : "Rejection"}
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

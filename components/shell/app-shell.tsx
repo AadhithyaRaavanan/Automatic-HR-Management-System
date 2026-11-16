@@ -220,9 +220,21 @@ export function AppShell({
             resolvedOrgId = resolvedOrgId || empProfile.organization_id || null;
             resolvedDeptName = empProfile.departments?.name || null;
             resolvedJobTitle = empProfile.job_titles?.title_name || null;
-            if (empProfile.onboarding_completed_at === null) {
-              shouldOpenTour = true;
-            }
+          }
+
+          const dismissed = typeof window !== "undefined" ? localStorage.getItem("pulse_tutorial_dismissed") : null;
+          if (dismissed !== "true") {
+            try {
+              const { data: prof } = await (supabase as any)
+                .from("profiles")
+                .select("tutorial_completed")
+                .eq("id", user.id)
+                .maybeSingle();
+
+              if (prof && prof.tutorial_completed === false) {
+                shouldOpenTour = true;
+              }
+            } catch {}
           }
 
           if (resolvedOrgId) {

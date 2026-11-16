@@ -26,6 +26,7 @@ import {
   UserCircle,
   CheckSquare,
   Target,
+  UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isDemoModeEnabled } from "@/lib/config/demo";
@@ -49,6 +50,7 @@ const baseNavItems: NavItem[] = [
   { label: "Team", href: "/team", icon: Users, badgeColor: "green", roles: ["manager", "hr", "admin"] },
   { label: "Requests", href: "/requests", icon: FileCheck2 },
   { label: "Leave Hub", href: "/hr/leave", icon: FileSpreadsheet, roles: ["hr", "admin"] },
+  { label: "Onboarding", href: "/hr/onboarding", icon: UserPlus, roles: ["hr", "admin"] },
   { label: "Reports", href: "/reports", icon: BarChart3, roles: ["hr", "admin"] },
   { label: "Workforce", href: "/admin/users", icon: UserCheck, roles: ["hr", "admin"] },
   { label: "Departments", href: "/admin/departments", icon: Building, roles: ["admin"] },

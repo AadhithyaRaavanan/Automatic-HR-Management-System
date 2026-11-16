@@ -33,6 +33,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { KpiBadge } from "@/components/shared/kpi-badge";
 import { EmptyState } from "@/components/shared/empty-state";
 import { toast } from "sonner";
 
@@ -112,17 +113,19 @@ export default function HRLeavePage() {
     [employees, searchQuery]
   );
 
+  const isReviewNoteValid = reviewNote.trim().length >= 5;
+
   const handleReviewSubmit = async () => {
-    if (!reviewTarget) return;
+    if (!reviewTarget || !isReviewNoteValid) return;
     if (reviewTarget.action === "approve") {
       await approveMutation.mutateAsync({
         requestId: reviewTarget.id,
-        reviewNote: reviewNote.trim() || undefined,
+        reviewNote: reviewNote.trim(),
       });
     } else {
       await rejectMutation.mutateAsync({
         requestId: reviewTarget.id,
-        reviewNote: reviewNote.trim() || "Rejected by HR",
+        reviewNote: reviewNote.trim(),
       });
     }
     setReviewTarget(null);
@@ -260,10 +263,11 @@ export default function HRLeavePage() {
                       className="bg-card border border-border-light rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col md:flex-row md:items-center justify-between gap-4"
                     >
                       <div className="space-y-1.5 flex-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-extrabold text-sm text-text-primary">
                             {req.employees?.full_name || "Employee"}
                           </span>
+                          <KpiBadge employeeId={req.employee_id} />
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-purple/10 text-brand-purple uppercase">
                             {req.leave_types?.name || "Leave"} ({req.day_part.replace("_", " ")})
                           </span>
@@ -497,20 +501,25 @@ export default function HRLeavePage() {
           open={!!reviewTarget}
           onOpenChange={(open) => !open && setReviewTarget(null)}
           title={`${reviewTarget?.action === "approve" ? "Approve" : "Reject"} Leave Request`}
-          description={`Review leave application for ${reviewTarget?.empName}.`}
+          description={`Review leave application for ${reviewTarget?.empName}. Decision note is mandatory.`}
         >
           <div className="space-y-4 pt-2">
             <div>
               <label className="block text-xs font-bold text-text-secondary mb-1">
-                Review Note (Optional)
+                Decision Note <span className="text-rose-500">*</span> (min 5 characters)
               </label>
               <textarea
                 rows={3}
+                required
                 value={reviewNote}
                 onChange={(e) => setReviewNote(e.target.value)}
-                placeholder="Add comments or instructions for the employee..."
+                placeholder="Provide mandatory reason or feedback for this decision (min 5 characters)..."
                 className="w-full px-3 py-2 text-xs bg-card border border-border-light rounded-xl text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-purple resize-none"
               />
+              <div className="flex justify-between items-center mt-1 text-[11px] text-text-tertiary">
+                <span>{reviewNote.trim().length < 5 ? `At least ${5 - reviewNote.trim().length} more characters required` : "Requirement satisfied"}</span>
+                <span>{reviewNote.trim().length} / 5 min</span>
+              </div>
             </div>
 
             <div className="flex items-center justify-end gap-2.5 pt-2">
@@ -521,6 +530,7 @@ export default function HRLeavePage() {
                 type="button"
                 variant={reviewTarget?.action === "approve" ? "default" : "destructive"}
                 onClick={handleReviewSubmit}
+                disabled={!isReviewNoteValid || approveMutation.isPending || rejectMutation.isPending}
                 isLoading={approveMutation.isPending || rejectMutation.isPending}
               >
                 Confirm {reviewTarget?.action === "approve" ? "Approval" : "Rejection"}

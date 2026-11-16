@@ -151,20 +151,29 @@ export function useApproveRegularization() {
       reviewNote,
     }: {
       requestId: string;
-      reviewNote?: string;
+      reviewNote: string;
     }) => {
+      const res = await fetch("/api/requests/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requestId,
+          action: "approve",
+          reviewNote,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to approve regularization request.");
+      }
+
       updateStoredRegularization(requestId, {
         status: "approved",
-        review_note: reviewNote || "Approved",
+        review_note: reviewNote,
         reviewed_at: new Date().toISOString(),
       });
 
-      try {
-        await (supabase.rpc as any)("approve_regularization", {
-          p_request_id: requestId,
-          p_review_note: reviewNote || undefined,
-        });
-      } catch {}
       return { success: true };
     },
     onSuccess: () => {
@@ -188,20 +197,29 @@ export function useRejectRegularization() {
       reviewNote,
     }: {
       requestId: string;
-      reviewNote?: string;
+      reviewNote: string;
     }) => {
+      const res = await fetch("/api/requests/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requestId,
+          action: "reject",
+          reviewNote,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to reject regularization request.");
+      }
+
       updateStoredRegularization(requestId, {
         status: "rejected",
-        review_note: reviewNote || "Rejected",
+        review_note: reviewNote,
         reviewed_at: new Date().toISOString(),
       });
 
-      try {
-        await (supabase.rpc as any)("reject_regularization", {
-          p_request_id: requestId,
-          p_review_note: reviewNote || undefined,
-        });
-      } catch {}
       return { success: true };
     },
     onSuccess: () => {

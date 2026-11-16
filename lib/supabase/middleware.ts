@@ -129,8 +129,49 @@ export async function updateSession(request: NextRequest) {
 
   // Role-Based Route Guards (RBAC) & Multi-Factor Authentication Enforcement
   if (isTokenValid) {
-    // Enforce temporary password must-change-password and 24-hour expiration
     const userMeta = (claims?.user_metadata || {}) as Record<string, any>;
+    const userId = (claims?.sub || claims?.id) as string | undefined;
+
+    // Onboarding Guard: Authenticated users with onboarding_completed = false are restricted to /onboarding.
+    // Completed users visiting /onboarding are routed to dashboard.
+    let isOnboardingCompleted = true;
+    if (userId) {
+      if (userMeta.onboarding_completed === false) {
+        isOnboardingCompleted = false;
+      } else if (userMeta.onboarding_completed === true) {
+        isOnboardingCompleted = true;
+      } else {
+        try {
+          const { data: prof } = await (supabase as any)
+            .from("profiles")
+            .select("onboarding_completed")
+            .eq("id", userId)
+            .maybeSingle();
+          if (prof && prof.onboarding_completed === false) {
+            isOnboardingCompleted = false;
+          }
+        } catch {}
+      }
+    }
+
+    if (!isOnboardingCompleted) {
+      if (
+        pathname !== "/onboarding" &&
+        !pathname.startsWith("/api") &&
+        !pathname.startsWith("/auth") &&
+        pathname !== "/login"
+      ) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/onboarding";
+        return NextResponse.redirect(url);
+      }
+    } else if (pathname === "/onboarding") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      return NextResponse.redirect(url);
+    }
+
+    // Enforce temporary password must-change-password and 24-hour expiration
     const mustChangePassword = Boolean(claims?.must_change_password || userMeta.must_change_password);
 
     if (mustChangePassword) {

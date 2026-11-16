@@ -131,6 +131,7 @@ export function AutomaticKpiView({
 }: AutomaticKpiViewProps) {
   const supabase = React.useMemo(() => createClient(), []);
   const isManagerOrAdmin = currentUserRole === "admin" || currentUserRole === "hr" || currentUserRole === "manager";
+  const isHrOrAdmin = currentUserRole === "admin" || currentUserRole === "hr";
 
   const [timeframe, setTimeframe] = React.useState<KpiTimeframe>("this_month");
   const [customStart, setCustomStart] = React.useState(() => {
@@ -140,6 +141,29 @@ export function AutomaticKpiView({
   });
   const [customEnd, setCustomEnd] = React.useState(() => formatDateKey(new Date()));
   const [selectedEmployeeId, setSelectedEmployeeId] = React.useState<string>(currentUserId || "");
+  const [employeeSearchQuery, setEmployeeSearchQuery] = React.useState("");
+
+  // Scoped employees from server API
+  const [scopedEmployees, setScopedEmployees] = React.useState<any[]>(employees || []);
+  const [kpiScope, setKpiScope] = React.useState<"all" | "department" | "self">(
+    isHrOrAdmin ? "all" : currentUserRole === "manager" ? "department" : "self"
+  );
+
+  React.useEffect(() => {
+    async function loadScopedEmployees() {
+      try {
+        const res = await fetch("/api/kpi/summary?listEmployees=true");
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.employees)) {
+            setScopedEmployees(data.employees);
+            setKpiScope(data.scope);
+          }
+        }
+      } catch {}
+    }
+    loadScopedEmployees();
+  }, [currentUserRole]);
 
   const [loading, setLoading] = React.useState(false);
   const [metrics, setMetrics] = React.useState<AutomaticKpiMetric[]>([]);
@@ -518,27 +542,46 @@ export function AutomaticKpiView({
             </div>
           )}
 
-          {isManagerOrAdmin && employees.length > 0 && (
-            <div className="flex items-center gap-2 bg-card-subtle border border-border-light rounded-2xl px-3 py-1.5 text-xs">
-              <User className="w-3.5 h-3.5 text-brand-purple shrink-0" />
-              <label htmlFor="kpi-target-employee" className="sr-only">
-                Target Employee
-              </label>
-              <select
-                id="kpi-target-employee"
-                value={selectedEmployeeId}
-                onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                className="bg-transparent text-xs font-bold text-text-primary focus:outline-none cursor-pointer"
-              >
-                <option value={currentUserId || ""}>Myself (Active Profile)</option>
-                {employees
-                  .filter((e) => e.id !== currentUserId)
-                  .map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.full_name || e.email}
-                    </option>
-                  ))}
-              </select>
+          {kpiScope !== "self" && scopedEmployees.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              {isHrOrAdmin && (
+                <input
+                  type="text"
+                  placeholder="Filter employees..."
+                  value={employeeSearchQuery}
+                  onChange={(e) => setEmployeeSearchQuery(e.target.value)}
+                  className="bg-card-subtle border border-border-light rounded-2xl px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-brand-purple"
+                />
+              )}
+              <div className="flex items-center gap-2 bg-card-subtle border border-border-light rounded-2xl px-3 py-1.5 text-xs">
+                <User className="w-3.5 h-3.5 text-brand-purple shrink-0" />
+                <label htmlFor="kpi-target-employee" className="sr-only">
+                  Target Employee
+                </label>
+                <select
+                  id="kpi-target-employee"
+                  value={selectedEmployeeId}
+                  onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-text-primary focus:outline-none cursor-pointer max-w-[200px] truncate"
+                >
+                  <option value={currentUserId || ""}>Myself (Active Profile)</option>
+                  {scopedEmployees
+                    .filter((e) => e.id !== currentUserId)
+                    .filter((e) => {
+                      if (!employeeSearchQuery.trim()) return true;
+                      const q = employeeSearchQuery.toLowerCase();
+                      return (
+                        (e.full_name && e.full_name.toLowerCase().includes(q)) ||
+                        (e.email && e.email.toLowerCase().includes(q))
+                      );
+                    })
+                    .map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.full_name || e.email}
+                      </option>
+                    ))}
+                </select>
+              </div>
             </div>
           )}
 
