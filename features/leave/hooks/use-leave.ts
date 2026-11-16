@@ -85,8 +85,7 @@ export function useLeaveBalances(employeeId?: string) {
         query = query.eq("employee_id", employeeId);
       }
 
-      const { data, error } = await query;
-      if ((error || !data || data.length === 0) && isDemoModeEnabled()) {
+      if (isDemoModeEnabled()) {
         const curYear = new Date().getFullYear();
         const storedRequests = getDemoRequests();
         const usedByType = new Map<string, number>();
@@ -137,6 +136,8 @@ export function useLeaveBalances(employeeId?: string) {
           },
         ] as LeaveBalance[];
       }
+
+      const { data, error } = await query;
       if (error) throw error;
       return (data || []) as LeaveBalance[];
     },
@@ -183,23 +184,15 @@ export function useLeaveRequests(status?: string) {
         query = query.eq("status", status);
       }
 
-      const { data, error } = await query;
-      if ((error || !data || data.length === 0) && isDemoModeEnabled()) {
+      if (isDemoModeEnabled()) {
         const stored = getDemoRequests();
         if (status && status !== "all") {
           return stored.filter((r) => r.status === status);
         }
         return stored;
       }
-      if (data && data.length > 0 && isDemoModeEnabled()) {
-        const local = getDemoRequests();
-        const customOnly = local.filter((l) => !data.some((d: any) => d.id === l.id));
-        const combined = [...customOnly, ...data];
-        if (status && status !== "all") {
-          return combined.filter((r: any) => r.status === status) as LeaveRequest[];
-        }
-        return combined as LeaveRequest[];
-      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return (data || []) as LeaveRequest[];
     },

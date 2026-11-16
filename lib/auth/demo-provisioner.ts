@@ -10,26 +10,26 @@ interface DemoAccountConfig {
 
 export const DEMO_ACCOUNTS: Record<string, DemoAccountConfig> = {
   "admin@remotehr.io": {
-    id: "00000000-0000-0000-0000-000000000001",
-    name: "Sarah Connor",
+    id: "00000000-0000-0000-0000-000000000010",
+    name: "James Aathithyan",
     email: "admin@remotehr.io",
     role: "admin",
   },
   "hr@remotehr.io": {
-    id: "00000000-0000-0000-0000-000000000002",
-    name: "Marcus Vance",
+    id: "00000000-0000-0000-0000-000000000020",
+    name: "Sarah Jenkins",
     email: "hr@remotehr.io",
     role: "hr",
   },
   "manager@remotehr.io": {
-    id: "00000000-0000-0000-0000-000000000003",
-    name: "Alex Morgan",
+    id: "00000000-0000-0000-0000-000000000030",
+    name: "David Chen",
     email: "manager@remotehr.io",
     role: "manager",
   },
   "employee@remotehr.io": {
-    id: "00000000-0000-0000-0000-000000000004",
-    name: "James Sullivan",
+    id: "00000000-0000-0000-0000-000000000040",
+    name: "Maya Patel",
     email: "employee@remotehr.io",
     role: "employee",
   },

@@ -24,6 +24,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 import {
   getStoredAttendanceSessions,
   getStoredAttendanceDays,
@@ -100,7 +101,7 @@ function AttendanceCalendarContent() {
           .eq("is_active", true)
           .gte("date", start)
           .lte("date", end),
-        uid
+        uid && !isDemoModeEnabled()
           ? (supabase as any)
               .from("attendance_days")
               .select("work_date, status, total_minutes, is_late, locked")
@@ -108,7 +109,7 @@ function AttendanceCalendarContent() {
               .gte("work_date", start)
               .lte("work_date", end)
           : Promise.resolve({ data: [] }),
-        uid
+        uid && !isDemoModeEnabled()
           ? (supabase as any)
               .from("attendance_sessions")
               .select("id, work_date, check_in_at, check_out_at, source")

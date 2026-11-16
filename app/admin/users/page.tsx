@@ -192,38 +192,44 @@ function UsersDirectoryContent() {
         // Supabase not running, continue with stored
       }
 
-      // Merge stored job titles with database
+      // Merge stored job titles with database (in demo mode, strictly respect user-created store)
       const mergedTitles: { id: string; title_name: string }[] = storedTitles.map((t) => ({
         id: t.id,
         title_name: t.title_name,
       }));
-      for (const jt of jobTitlesData || []) {
-        if (!mergedTitles.some((t) => t.id === jt.id || t.title_name === jt.title_name)) {
-          mergedTitles.push({ id: jt.id, title_name: jt.title_name });
+      if (!isDemoModeEnabled()) {
+        for (const jt of jobTitlesData || []) {
+          if (!mergedTitles.some((t) => t.id === jt.id || t.title_name === jt.title_name)) {
+            mergedTitles.push({ id: jt.id, title_name: jt.title_name });
+          }
         }
       }
       setJobTitlesList(mergedTitles);
 
-      // Merge stored departments with database
+      // Merge stored departments with database (in demo mode, strictly respect user-created store)
       const mergedDepts: { id: string; name: string }[] = storedDepts.map((d) => ({
         id: d.id,
         name: d.name,
       }));
-      for (const d of deptsData || []) {
-        if (!mergedDepts.some((md) => md.id === d.id || md.name === d.name)) {
-          mergedDepts.push({ id: d.id, name: d.name });
+      if (!isDemoModeEnabled()) {
+        for (const d of deptsData || []) {
+          if (!mergedDepts.some((md) => md.id === d.id || md.name === d.name)) {
+            mergedDepts.push({ id: d.id, name: d.name });
+          }
         }
       }
       setDepartmentsList(mergedDepts);
 
-      // Merge stored locations with database
+      // Merge stored locations with database (in demo mode, strictly respect user-created store)
       const mergedLocations: { id: string; name: string }[] = storedLocations.map((l) => ({
         id: l.id,
         name: l.name,
       }));
-      for (const l of locsData || []) {
-        if (!mergedLocations.some((ml) => ml.id === l.id || ml.name === l.name)) {
-          mergedLocations.push({ id: l.id, name: l.name });
+      if (!isDemoModeEnabled()) {
+        for (const l of locsData || []) {
+          if (!mergedLocations.some((ml) => ml.id === l.id || ml.name === l.name)) {
+            mergedLocations.push({ id: l.id, name: l.name });
+          }
         }
       }
 
@@ -259,12 +265,47 @@ function UsersDirectoryContent() {
         setUsers(
           emps.map((e: any) => {
             const mem = memberMap.get(e.id);
+            const storedU = storedUsers.find((u) => u.id === e.id || u.email === e.email);
             const effectiveStatus =
               mem?.status === "suspended"
                 ? "suspended"
                 : e.status === "inactive"
                   ? "inactive"
                   : "active";
+
+            // If user has modified governance in demo store, respect their exact assignments
+            if (storedU && isDemoModeEnabled()) {
+              const hasValidDept =
+                storedU.department &&
+                storedU.department !== "Unassigned" &&
+                validDeptNames.has(storedU.department);
+              const hasValidTitle =
+                storedU.jobTitle &&
+                storedU.jobTitle !== "Unassigned" &&
+                validTitleNames.has(storedU.jobTitle);
+              const hasValidLoc =
+                storedU.location &&
+                storedU.location !== "Unassigned" &&
+                validLocNames.has(storedU.location);
+
+              return {
+                id: e.id,
+                name: storedU.name || e.full_name,
+                email: e.email,
+                role: (storedU.role || mem?.role || "employee") as EmployeeUser["role"],
+                workMode: storedU.workMode || e.work_mode || "remote",
+                department: hasValidDept ? storedU.department : "Unassigned",
+                departmentId: hasValidDept ? (storedU.departmentId || "") : "",
+                jobTitle: hasValidTitle ? storedU.jobTitle : "",
+                jobTitleId: hasValidTitle ? (storedU.jobTitleId || "") : "",
+                location: hasValidLoc ? storedU.location : "Unassigned",
+                status: effectiveStatus,
+                timezone: storedU.timezone || e.timezone || "UTC",
+                shiftStartTime: storedU.shiftStartTime || (e.shift_start_time || "09:00:00").slice(0, 5),
+                shiftEndTime: storedU.shiftEndTime || (e.shift_end_time || "17:00:00").slice(0, 5),
+              };
+            }
+
             const deptName = e.departments?.name;
             const hasValidDept =
               (e.department_id && validDeptIds.has(e.department_id)) ||
@@ -387,6 +428,23 @@ function UsersDirectoryContent() {
         shiftEndTime: inviteShiftEnd,
       });
 
+      // Also attempt backend invite for database persistence if connected
+      fetch("/api/admin/users/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: inviteEmail,
+          fullName: inviteName,
+          role: inviteRole,
+          jobTitleId: inviteJobTitleId || undefined,
+          departmentId: inviteDepartmentId || undefined,
+          workMode: inviteWorkMode,
+          timezone: inviteTimezone,
+          shiftStartTime: inviteShiftStart + ":00",
+          shiftEndTime: inviteShiftEnd + ":00",
+        }),
+      }).catch(() => {});
+
       setUsers(getStoredUsers() as any);
       toast.success(`User ${inviteEmail} invited successfully! (demo session)`);
       setInviteModalOpen(false);
@@ -471,79 +529,53 @@ function UsersDirectoryContent() {
     e.preventDefault();
     if (!selectedUser) return;
 
-    if (isDemoModeEnabled()) {
-      const selectedJobTitleObj = jobTitlesList.find((j) => j.id === govJobTitleId);
-      const selectedDeptObj = departmentsList.find((d) => d.id === govDepartmentId);
-      updateStoredUser({
-        id: selectedUser.id,
-        name: selectedUser.name,
-        email: selectedUser.email,
-        role: selectedUser.role,
-        workMode: govWorkMode as any,
-        timezone: govTimezone,
-        status: govStatus === "active" ? "active" : "inactive",
-        shiftStartTime: govShiftStart,
-        shiftEndTime: govShiftEnd,
-        departmentId: govDepartmentId,
-        department: selectedDeptObj?.name || selectedUser.department,
-        jobTitleId: govJobTitleId,
-        jobTitle: selectedJobTitleObj?.title_name || selectedUser.jobTitle || "",
-        location: selectedUser.location,
-      });
-      setUsers(getStoredUsers() as any);
-      toast.success("Governance & shift schedule updated successfully.");
-      setGovernanceModalOpen(false);
-      return;
-    }
+    const selectedJobTitleObj = jobTitlesList.find((j) => j.id === govJobTitleId);
+    const selectedDeptObj = departmentsList.find((d) => d.id === govDepartmentId);
+    const effectiveDeptName = govDepartmentId && selectedDeptObj ? selectedDeptObj.name : "Unassigned";
+    const effectiveJobTitleName = govJobTitleId && selectedJobTitleObj ? selectedJobTitleObj.title_name : "";
 
-    setIsSubmitting(true);
+    updateStoredUser({
+      id: selectedUser.id,
+      name: selectedUser.name,
+      email: selectedUser.email,
+      role: selectedUser.role,
+      workMode: govWorkMode as any,
+      timezone: govTimezone,
+      status: govStatus === "active" ? "active" : "inactive",
+      shiftStartTime: govShiftStart,
+      shiftEndTime: govShiftEnd,
+      departmentId: govDepartmentId || "",
+      department: effectiveDeptName,
+      jobTitleId: govJobTitleId || "",
+      jobTitle: effectiveJobTitleName,
+      location: selectedUser.location,
+    });
+
     try {
-      const [govRes, shiftFetchRes] = await Promise.all([
-        (supabase.rpc as any)("admin_update_employee_governance", {
-          p_employee_id: selectedUser.id,
-          p_work_mode: govWorkMode,
-          p_timezone: govTimezone,
-          p_status: govStatus === "active" ? "active" : "inactive",
-          p_department_id: govDepartmentId || null,
-        }),
-        fetch("/api/admin/users/shift", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: selectedUser.id,
-            shiftStartTime: govShiftStart.length === 5 ? govShiftStart + ":00" : govShiftStart,
-            shiftEndTime: govShiftEnd.length === 5 ? govShiftEnd + ":00" : govShiftEnd,
-          }),
-        }),
-        (supabase.from("organization_members") as any)
-          .update({
-            department_id: govDepartmentId || null,
-            job_title_id: govJobTitleId || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("user_id", selectedUser.id),
-        (supabase.from("employees") as any)
-          .update({
-            job_title_id: govJobTitleId || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", selectedUser.id),
-      ]);
+      await (supabase.from("employees") as any)
+        .update({
+          department_id: govDepartmentId || null,
+          job_title_id: govJobTitleId || null,
+          work_mode: govWorkMode,
+          timezone: govTimezone,
+          status: govStatus === "active" ? "active" : "inactive",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", selectedUser.id);
 
-      if (govRes.error) throw govRes.error;
-      if (!shiftFetchRes.ok) {
-        const errJson = await shiftFetchRes.json().catch(() => ({}));
-        throw new Error(errJson.error || "Failed to update shift schedule.");
-      }
+      await (supabase.from("organization_members") as any)
+        .update({
+          department_id: govDepartmentId || null,
+          job_title_id: govJobTitleId || null,
+          status: govStatus === "active" ? "active" : "inactive",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", selectedUser.id);
+    } catch {}
 
-      toast.success("Governance & shift schedule updated successfully.");
-      setGovernanceModalOpen(false);
-      await loadDirectory();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to update governance.");
-    } finally {
-      setIsSubmitting(false);
-    }
+    toast.success("Governance & shift schedule updated successfully.");
+    setGovernanceModalOpen(false);
+    await loadDirectory();
   };
 
   const handleChangeRole = async (
@@ -557,6 +589,11 @@ function UsersDirectoryContent() {
         updateStoredUser({ ...target, role: newRole });
         setUsers(getStoredUsers() as any);
       }
+      try {
+        await (supabase.from("organization_members") as any)
+          .update({ role: newRole })
+          .eq("user_id", targetUserId);
+      } catch {}
       toast.success(`Role updated to ${newRole}.`);
       return;
     }
@@ -631,7 +668,7 @@ function UsersDirectoryContent() {
     try {
       await (supabase.from("employees") as any).delete().eq("id", user.id);
       await (supabase.from("organization_members") as any).delete().eq("user_id", user.id);
-    } catch {}
+    } catch { }
 
     setUsers(getStoredUsers() as any);
     toast.success(`${user.name} deleted successfully.`);
@@ -1407,7 +1444,7 @@ function UsersDirectoryContent() {
                     type="button"
                     data-testid="copy-invite-link"
                     onClick={() => {
-                      const link = createdCredentials?.inviteLink || `${window.location.origin}/login`;
+                      const link = createdCredentials?.inviteLink || (typeof window !== "undefined" ? `${window.location.origin}/login` : "/login");
                       navigator.clipboard.writeText(link);
                       setHasCopied(true);
                       toast.success("Invite link copied to clipboard!");

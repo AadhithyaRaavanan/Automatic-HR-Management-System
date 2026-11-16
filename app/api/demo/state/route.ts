@@ -31,8 +31,8 @@ function getStore(): GlobalDemoStore {
       shifts: [],
       users: [
         {
-          id: "00000000-0000-0000-0000-000000000001",
-          name: "Sarah Connor",
+          id: "00000000-0000-0000-0000-000000000010",
+          name: "James Aathithyan",
           email: "admin@remotehr.io",
           role: "admin",
           workMode: "remote",
@@ -47,8 +47,8 @@ function getStore(): GlobalDemoStore {
           shiftEndTime: "17:00",
         },
         {
-          id: "00000000-0000-0000-0000-000000000002",
-          name: "Marcus Vance",
+          id: "00000000-0000-0000-0000-000000000020",
+          name: "Sarah Jenkins",
           email: "hr@remotehr.io",
           role: "hr",
           workMode: "remote",
@@ -63,8 +63,8 @@ function getStore(): GlobalDemoStore {
           shiftEndTime: "17:00",
         },
         {
-          id: "00000000-0000-0000-0000-000000000003",
-          name: "Alex Morgan",
+          id: "00000000-0000-0000-0000-000000000030",
+          name: "David Chen",
           email: "manager@remotehr.io",
           role: "manager",
           workMode: "remote",
@@ -79,8 +79,8 @@ function getStore(): GlobalDemoStore {
           shiftEndTime: "17:00",
         },
         {
-          id: "00000000-0000-0000-0000-000000000004",
-          name: "James Sullivan",
+          id: "00000000-0000-0000-0000-000000000040",
+          name: "Maya Patel",
           email: "employee@remotehr.io",
           role: "employee",
           workMode: "remote",

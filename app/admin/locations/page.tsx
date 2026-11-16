@@ -35,6 +35,12 @@ export default function LocationsAdminPage() {
 
   const loadLocations = React.useCallback(async () => {
     setIsLoading(true);
+    if (isDemoModeEnabled()) {
+      setLocations(getStoredLocations());
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const { data, error } = await (supabase as any)
         .from("locations")

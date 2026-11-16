@@ -180,14 +180,28 @@ function TeamPageContent() {
       let rawMembers: { id: string; name: string; timezone: string; department?: string; jobTitle?: string; workMode?: string }[] = [];
 
       if (emps && emps.length > 0) {
-        rawMembers = emps.map((e: any) => ({
-          id: e.id,
-          name: e.full_name,
-          timezone: e.timezone || "UTC",
-          department: e.departments?.name,
-          jobTitle: e.job_titles?.title_name,
-          workMode: e.work_mode,
-        }));
+        rawMembers = emps.map((e: any) => {
+          const storedU = storedUsersList.find((u) => u.id === e.id || u.email === e.email);
+          const deptVal = storedU
+            ? storedU.department !== "Unassigned"
+              ? storedU.department
+              : undefined
+            : e.departments?.name;
+          const titleVal = storedU
+            ? storedU.jobTitle !== "Unassigned"
+              ? storedU.jobTitle
+              : undefined
+            : e.job_titles?.title_name;
+
+          return {
+            id: e.id,
+            name: storedU?.name || e.full_name,
+            timezone: storedU?.timezone || e.timezone || "UTC",
+            department: deptVal,
+            jobTitle: titleVal,
+            workMode: storedU?.workMode || e.work_mode,
+          };
+        });
       } else {
         rawMembers = storedUsersList.map((u) => ({
           id: u.id,

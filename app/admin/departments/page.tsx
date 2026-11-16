@@ -37,6 +37,35 @@ export default function DepartmentsAdminPage() {
   const loadDepartments = React.useCallback(async () => {
     setIsLoading(true);
     setWorkforceUsers(getStoredUsers());
+
+    if (isDemoModeEnabled()) {
+      const stored = getStoredDepartments();
+      const users = getStoredUsers();
+      const empMap = new Map<string, string>(users.map((u) => [u.id, u.name]));
+      const counts = new Map<string, number>();
+      users.forEach((u) => {
+        if (u.departmentId) counts.set(u.departmentId, (counts.get(u.departmentId) || 0) + 1);
+        else if (u.department && u.department !== "Unassigned") {
+          const dObj = stored.find((d) => d.name === u.department);
+          if (dObj) counts.set(dObj.id, (counts.get(dObj.id) || 0) + 1);
+        }
+      });
+      const deptNameMap = new Map<string, string>(stored.map((d) => [d.id, d.name]));
+      const mapped: DepartmentItem[] = stored.map((d) => ({
+        id: d.id,
+        name: d.name,
+        code: d.code,
+        headId: d.headId || undefined,
+        headName: d.headName || (d.headId ? empMap.get(d.headId) : undefined),
+        parentId: d.parentId || undefined,
+        parentName: d.parentId ? deptNameMap.get(d.parentId) : undefined,
+        memberCount: counts.get(d.id) || 0,
+      }));
+      setDepartments(mapped);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const [{ data: depts, error }, { data: emps }] = await Promise.all([
         (supabase as any)

@@ -159,8 +159,8 @@ export interface DemoAttendanceDay {
 // 4 Core Demo Accounts (Preserved for Demo Login Switching - No fake departments or locations)
 export const INITIAL_DEMO_USERS: DemoUser[] = [
   {
-    id: "00000000-0000-0000-0000-000000000001",
-    name: "Sarah Connor",
+    id: "00000000-0000-0000-0000-000000000010",
+    name: "James Aathithyan",
     email: "admin@remotehr.io",
     role: "admin",
     workMode: "remote",
@@ -175,8 +175,8 @@ export const INITIAL_DEMO_USERS: DemoUser[] = [
     shiftEndTime: "17:00",
   },
   {
-    id: "00000000-0000-0000-0000-000000000002",
-    name: "Marcus Vance",
+    id: "00000000-0000-0000-0000-000000000020",
+    name: "Sarah Jenkins",
     email: "hr@remotehr.io",
     role: "hr",
     workMode: "remote",
@@ -191,8 +191,8 @@ export const INITIAL_DEMO_USERS: DemoUser[] = [
     shiftEndTime: "17:00",
   },
   {
-    id: "00000000-0000-0000-0000-000000000003",
-    name: "Alex Morgan",
+    id: "00000000-0000-0000-0000-000000000030",
+    name: "David Chen",
     email: "manager@remotehr.io",
     role: "manager",
     workMode: "remote",
@@ -207,8 +207,8 @@ export const INITIAL_DEMO_USERS: DemoUser[] = [
     shiftEndTime: "17:00",
   },
   {
-    id: "00000000-0000-0000-0000-000000000004",
-    name: "James Sullivan",
+    id: "00000000-0000-0000-0000-000000000040",
+    name: "Maya Patel",
     email: "employee@remotehr.io",
     role: "employee",
     workMode: "remote",
@@ -524,15 +524,28 @@ export function addStoredUser(user: Omit<DemoUser, "id"> & { id?: string }): Dem
 
 export function updateStoredUser(user: DemoUser): void {
   const current = getStoredUsers();
-  const old = current.find((u) => u.id === user.id);
-  saveStoredUsers(current.map((u) => (u.id === user.id ? user : u)));
-  addStoredAudit("UPDATE_USER_GOVERNANCE", "organization_members", user.id, old, user);
+  const index = current.findIndex(
+    (u) =>
+      u.id === user.id ||
+      (Boolean(u.email) && Boolean(user.email) && u.email.toLowerCase() === user.email.toLowerCase())
+  );
+  let next: DemoUser[];
+  let old: DemoUser | undefined;
+  if (index >= 0) {
+    old = current[index];
+    next = [...current];
+    next[index] = { ...old, ...user };
+  } else {
+    next = [...current, user];
+  }
+  saveStoredUsers(next);
+  addStoredAudit("UPDATE_USER_GOVERNANCE", "organization_members", user.id, old || null, user);
 }
 
 export function deleteStoredUser(id: string): void {
   const current = getStoredUsers();
-  const toDelete = current.find((u) => u.id === id);
-  saveStoredUsers(current.filter((u) => u.id !== id));
+  const toDelete = current.find((u) => u.id === id || u.email === id);
+  saveStoredUsers(current.filter((u) => u.id !== id && u.email !== id));
   if (toDelete) {
     addStoredAudit("DELETE_USER", "organization_members", id, toDelete, null);
   }
