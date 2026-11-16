@@ -3,26 +3,31 @@
 import * as React from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { createClient } from "@/lib/supabase/client";
-import { Building, Plus, Edit, Trash2, GitFork, User } from "lucide-react";
+import { Building, Plus, Edit, Trash2, GitFork, User, Briefcase, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
-import { isDemoModeEnabled } from "@/lib/config/demo";
 import { EmptyState } from "@/components/shared/empty-state";
+import { JobTitlesManager } from "@/features/admin/components/job-titles-manager";
 
 import {
   getStoredDepartments,
   saveStoredDepartments,
-  addStoredDepartment,
   deleteStoredDepartment,
   getStoredUsers,
   type DemoDepartment,
 } from "@/lib/storage/demo-store";
 
-export type DepartmentItem = DemoDepartment;
+export interface DepartmentItem extends DemoDepartment {
+  rolesCount?: number;
+}
 
 export default function DepartmentsAdminPage() {
   const [departments, setDepartments] = React.useState<DepartmentItem[]>([]);
   const [modalOpen, setModalOpen] = React.useState(false);
   const [editingDept, setEditingDept] = React.useState<DepartmentItem | null>(null);
+
+  // Role Manager modal state
+  const [roleModalOpen, setRoleModalOpen] = React.useState(false);
+  const [activeRoleDeptId, setActiveRoleDeptId] = React.useState<string | undefined>(undefined);
 
   const [name, setName] = React.useState("");
   const [code, setCode] = React.useState("");
@@ -36,52 +41,41 @@ export default function DepartmentsAdminPage() {
 
   const loadDepartments = React.useCallback(async () => {
     setIsLoading(true);
-    setWorkforceUsers(getStoredUsers());
 
     try {
-      const [{ data: depts, error }, { data: emps }] = await Promise.all([
-        (supabase as any)
-          .from("departments")
-          .select("id, name, code, parent_department_id, department_head_id")
-          .order("name"),
-        (supabase as any)
-          .from("employees")
-          .select("id, full_name, department_id")
-          .eq("status", "active"),
-      ]);
-
-      if (!error && Array.isArray(depts)) {
-        if (depts.length > 0) {
-          const empMap = new Map<string, string>();
-          const counts = new Map<string, number>();
-          (emps || []).forEach((e: any) => {
-            empMap.set(e.id, e.full_name);
-            if (e.department_id) {
-              counts.set(e.department_id, (counts.get(e.department_id) || 0) + 1);
-            }
-          });
-          const deptNameMap = new Map<string, string>(
-            depts.map((d: any) => [d.id, d.name])
-          );
-          const mapped: DepartmentItem[] = depts.map((d: any) => ({
-            id: d.id,
-            name: d.name,
-            code: d.code,
-            headId: d.department_head_id || undefined,
-            headName: d.department_head_id ? empMap.get(d.department_head_id) : undefined,
-            parentId: d.parent_department_id || undefined,
-            parentName: d.parent_department_id ? deptNameMap.get(d.parent_department_id) : undefined,
-            memberCount: counts.get(d.id) || 0,
-          }));
-          setDepartments(mapped);
-          saveStoredDepartments(mapped);
+      // 1. Fetch departments from API
+      const res = await fetch("/api/admin/departments");
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.departments)) {
+          setDepartments(json.departments);
+          saveStoredDepartments(json.departments);
         } else {
-          // Zero departments in database: clean slate
           setDepartments([]);
-          saveStoredDepartments([]);
         }
       } else {
-        setDepartments(getStoredDepartments());
+        const stored = getStoredDepartments();
+        setDepartments(stored);
+      }
+
+      // 2. Fetch workforce active employees for Department Head dropdown
+      const { data: emps } = await (supabase as any)
+        .from("employees")
+        .select("id, full_name, email")
+        .eq("status", "active");
+
+      if (emps && emps.length > 0) {
+        setWorkforceUsers(emps.map((e: any) => ({ id: e.id, name: e.full_name, role: "admin" })));
+      } else {
+        const cleaned = getStoredUsers().filter(
+          (u) =>
+            !u.email.endsWith("@remotehr.io") &&
+            !u.name.toLowerCase().includes("sarah jenkins") &&
+            !u.name.toLowerCase().includes("david chen") &&
+            !u.name.toLowerCase().includes("maya patel") &&
+            !u.name.toLowerCase().includes("james aathithyan")
+        );
+        setWorkforceUsers(cleaned);
       }
     } catch {
       setDepartments(getStoredDepartments());
@@ -94,7 +88,6 @@ export default function DepartmentsAdminPage() {
     loadDepartments();
     const handleStorageChange = () => {
       setDepartments(getStoredDepartments());
-      setWorkforceUsers(getStoredUsers());
     };
     window.addEventListener("remotehr_storage_change", handleStorageChange);
     return () => {
@@ -120,10 +113,15 @@ export default function DepartmentsAdminPage() {
     setModalOpen(true);
   };
 
+  const handleManageRoles = (dept?: DepartmentItem) => {
+    setActiveRoleDeptId(dept?.id);
+    setRoleModalOpen(true);
+  };
+
   const handleSaveDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !code.trim()) {
-      toast.error("Please enter department name and code.");
+      toast.error("Please provide both department name and code.");
       return;
     }
 
@@ -136,81 +134,46 @@ export default function DepartmentsAdminPage() {
     }
 
     setIsSubmitting(true);
-    let nextList: DepartmentItem[];
-    const selectedHead = workforceUsers.find((u) => u.id === headId);
-
-    if (editingDept) {
-      nextList = departments.map((d) =>
-        d.id === editingDept.id
-          ? {
-              ...d,
-              name: trimmedName,
-              code: trimmedCode,
-              headId: headId || undefined,
-              headName: selectedHead ? selectedHead.name : undefined,
-              parentId: parentId || undefined,
-              parentName: departments.find((p) => p.id === parentId)?.name,
-            }
-          : d
-      );
-      toast.success(`Department "${trimmedName}" updated!`);
-    } else {
-      const newDept: DepartmentItem = {
-        id: `dept-${Date.now()}`,
-        name: trimmedName,
-        code: trimmedCode,
-        headId: headId || undefined,
-        headName: selectedHead ? selectedHead.name : undefined,
-        parentId: parentId || undefined,
-        parentName: departments.find((p) => p.id === parentId)?.name,
-        memberCount: 0,
-      };
-      nextList = [...departments, newDept];
-      toast.success(`Department "${trimmedName}" created!`);
-    }
-
-    setDepartments(nextList);
-    saveStoredDepartments(nextList);
-    setModalOpen(false);
-    setIsSubmitting(false);
-
     try {
-      if (editingDept) {
-        await (supabase.rpc as any)("admin_update_department", {
-          p_department_id: editingDept.id,
-          p_name: trimmedName,
-          p_code: trimmedCode,
-          p_department_head_id: editingDept.headId || null,
-          p_parent_department_id: parentId || null,
-        });
-      } else {
-        await (supabase.rpc as any)("admin_create_department", {
-          p_name: trimmedName,
-          p_code: trimmedCode,
-          p_department_head_id: null,
-          p_parent_department_id: parentId || null,
-        });
+      const res = await fetch("/api/admin/departments", {
+        method: editingDept ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingDept?.id,
+          name: trimmedName,
+          code: trimmedCode,
+          parentId: parentId || null,
+          headId: headId || null,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to save department");
       }
-    } catch {}
+
+      toast.success(`Department "${trimmedName}" saved successfully!`);
+      setModalOpen(false);
+      await loadDepartments();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save department");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDelete = async (dept: DepartmentItem) => {
-    if (!confirm(`Are you sure you want to delete ${dept.name}? Employees will be unlinked.`)) {
+    if (!confirm(`Are you sure you want to delete ${dept.name}? Employees and roles will be unlinked.`)) {
       return;
     }
+
     deleteStoredDepartment(dept.id);
-    const nextList = departments.filter((d) => d.id !== dept.id);
-    setDepartments(nextList);
+    setDepartments((prev) => prev.filter((d) => d.id !== dept.id));
     toast.success(`Department ${dept.name} deleted.`);
 
     try {
-      // 1. Unlink employees and members referencing this department
-      await (supabase.from("employees") as any).update({ department_id: null }).eq("department_id", dept.id);
-      await (supabase.from("organization_members") as any).update({ department_id: null }).eq("department_id", dept.id);
-      // 2. Unlink any sub-departments
-      await (supabase.from("departments") as any).update({ parent_department_id: null }).eq("parent_department_id", dept.id);
-      // 3. Delete department
-      await (supabase.from("departments") as any).delete().eq("id", dept.id);
+      await fetch(`/api/admin/departments?id=${dept.id}`, { method: "DELETE" });
+      await loadDepartments();
     } catch {}
   };
 
@@ -221,19 +184,28 @@ export default function DepartmentsAdminPage() {
         <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-3">
           <div>
             <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary dark:text-white tracking-tight flex items-center gap-2">
-              Departments & Hierarchy
+              Departments & Roles Hierarchy
             </h1>
             <p className="text-xs sm:text-sm text-text-secondary dark:text-slate-400 mt-1">
-              Structure organizational units, assign department heads, and prevent cyclic reporting trees.
+              Create departments first, create specialized roles inside each department, and assign them to users.
             </p>
           </div>
-          <button
-            onClick={handleOpenAdd}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-brand-purple hover:bg-brand-purple-hover text-white text-sm font-semibold shadow-sm transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            Add Department
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleManageRoles()}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-card border border-border-light hover:bg-card-subtle text-text-primary text-xs sm:text-sm font-semibold shadow-sm transition-all"
+            >
+              <Briefcase className="w-4 h-4 text-brand-purple" />
+              Manage All Roles
+            </button>
+            <button
+              onClick={handleOpenAdd}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-brand-purple hover:bg-brand-purple-hover text-white text-xs sm:text-sm font-semibold shadow-sm transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              Add Department
+            </button>
+          </div>
         </section>
 
         {/* Departments Table */}
@@ -245,7 +217,7 @@ export default function DepartmentsAdminPage() {
               description={
                 isLoading
                   ? "Retrieving organizational hierarchy..."
-                  : "Create your first department to group employees and assign reporting heads."
+                  : "Start building your hierarchy by creating your first department (e.g., Engineering, Sales, HR)."
               }
               action={
                 !isLoading && (
@@ -267,6 +239,7 @@ export default function DepartmentsAdminPage() {
                   <tr>
                     <th className="py-3.5 px-5">Department Name</th>
                     <th className="py-3.5 px-4">Code</th>
+                    <th className="py-3.5 px-4">Department Roles</th>
                     <th className="py-3.5 px-4">Parent Department</th>
                     <th className="py-3.5 px-4">Department Head</th>
                     <th className="py-3.5 px-4">Headcount</th>
@@ -275,58 +248,77 @@ export default function DepartmentsAdminPage() {
                 </thead>
                 <tbody className="divide-y divide-border-light dark:divide-slate-800">
                   {departments.map((d) => (
-                  <tr key={d.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                    <td className="py-4 px-5">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-xl bg-card-subtle dark:bg-slate-800 flex items-center justify-center text-brand-purple">
-                          <Building className="w-4 h-4" />
+                    <tr key={d.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="py-4 px-5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-xl bg-card-subtle dark:bg-slate-800 flex items-center justify-center text-brand-purple">
+                            <Building className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="font-bold text-text-primary dark:text-white block">{d.name}</span>
+                          </div>
                         </div>
-                        <span className="font-bold text-text-primary dark:text-white">{d.name}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 font-mono text-xs font-bold text-brand-purple">
-                      {d.code}
-                    </td>
-                    <td className="py-4 px-4 text-xs text-text-secondary dark:text-slate-300">
-                      {d.parentName ? (
-                        <span className="inline-flex items-center gap-1">
-                          <GitFork className="w-3.5 h-3.5 text-text-tertiary rotate-180" />
-                          {d.parentName}
-                        </span>
-                      ) : (
-                        <span className="text-text-tertiary italic">Root Level</span>
-                      )}
-                    </td>
-                    <td className="py-4 px-4 text-xs text-text-secondary dark:text-slate-300">
-                      {d.headName ? (
-                        <span className="inline-flex items-center gap-1 font-medium">
-                          <User className="w-3.5 h-3.5 text-text-tertiary" />
-                          {d.headName}
-                        </span>
-                      ) : (
-                        <span className="text-text-tertiary italic">Unassigned</span>
-                      )}
-                    </td>
-                    <td className="py-4 px-4 text-xs font-semibold text-text-primary dark:text-white">
-                      {d.memberCount} members
-                    </td>
-                    <td className="py-4 px-5 text-right space-x-1 whitespace-nowrap">
-                      <button
-                        onClick={() => handleOpenEdit(d)}
-                        title="Edit Department"
-                        className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-text-secondary hover:text-brand-purple transition-colors"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(d)}
-                        title="Delete Department"
-                        className="p-1.5 rounded-xl hover:bg-status-danger-bg text-text-secondary hover:text-status-danger-text transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
+                      </td>
+                      <td className="py-4 px-4 font-mono text-xs font-bold text-brand-purple">
+                        {d.code}
+                      </td>
+                      <td className="py-4 px-4">
+                        <button
+                          onClick={() => handleManageRoles(d)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-brand-purple/10 hover:bg-brand-purple/20 text-brand-purple text-xs font-semibold transition-all"
+                        >
+                          <Briefcase className="w-3 h-3" />
+                          <span>{d.rolesCount || 0} roles</span>
+                          <ChevronRight className="w-3 h-3" />
+                        </button>
+                      </td>
+                      <td className="py-4 px-4 text-xs text-text-secondary dark:text-slate-300">
+                        {d.parentName ? (
+                          <span className="inline-flex items-center gap-1">
+                            <GitFork className="w-3.5 h-3.5 text-text-tertiary rotate-180" />
+                            {d.parentName}
+                          </span>
+                        ) : (
+                          <span className="text-text-tertiary italic">Root Level</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-4 text-xs text-text-secondary dark:text-slate-300">
+                        {d.headName ? (
+                          <span className="inline-flex items-center gap-1 font-medium">
+                            <User className="w-3.5 h-3.5 text-text-tertiary" />
+                            {d.headName}
+                          </span>
+                        ) : (
+                          <span className="text-text-tertiary italic">Unassigned</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-4 text-xs font-semibold text-text-primary dark:text-white">
+                        {d.memberCount} members
+                      </td>
+                      <td className="py-4 px-5 text-right space-x-1 whitespace-nowrap">
+                        <button
+                          onClick={() => handleManageRoles(d)}
+                          title="Add/Manage Roles in Department"
+                          className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-text-secondary hover:text-brand-purple transition-colors"
+                        >
+                          <Briefcase className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleOpenEdit(d)}
+                          title="Edit Department"
+                          className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-text-secondary hover:text-brand-purple transition-colors"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(d)}
+                          title="Delete Department"
+                          className="p-1.5 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/30 text-text-secondary hover:text-status-danger transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
                   ))}
                 </tbody>
               </table>
@@ -334,24 +326,18 @@ export default function DepartmentsAdminPage() {
           )}
         </div>
 
-        {/* Create/Edit Modal */}
+        {/* Modal: Add / Edit Department */}
         {modalOpen && (
-          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-[28px] max-w-md w-full p-6 shadow-shell border border-border-light dark:border-slate-800 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-extrabold text-text-primary dark:text-white flex items-center gap-2">
-                  <Building className="w-5 h-5 text-brand-purple" />
-                  {editingDept ? "Edit Department" : "Add Department"}
-                </h3>
-                <button
-                  onClick={() => setModalOpen(false)}
-                  className="text-text-tertiary hover:text-text-primary text-sm font-bold"
-                >
-                  ✕
-                </button>
-              </div>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fade-in">
+            <div className="bg-white dark:bg-slate-900 rounded-[28px] border border-border-light dark:border-slate-800 p-6 sm:p-8 max-w-lg w-full shadow-modal">
+              <h2 className="text-xl font-extrabold text-text-primary dark:text-white mb-2">
+                {editingDept ? "Edit Department" : "Add New Department"}
+              </h2>
+              <p className="text-xs text-text-secondary dark:text-slate-400 mb-6">
+                Define the department details. Once created, you can add roles inside this department and assign them to users.
+              </p>
 
-              <form onSubmit={handleSaveDepartment} className="space-y-3.5">
+              <form onSubmit={handleSaveDepartment} className="space-y-4">
                 <div>
                   <label className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1">
                     Department Name
@@ -392,7 +378,7 @@ export default function DepartmentsAdminPage() {
                     <option value="">None / Unassigned</option>
                     {workforceUsers.map((u) => (
                       <option key={u.id} value={u.id}>
-                        {u.name} ({u.role.toUpperCase()})
+                        {u.name}
                       </option>
                     ))}
                   </select>
@@ -418,18 +404,18 @@ export default function DepartmentsAdminPage() {
                   </select>
                 </div>
 
-                <div className="pt-2 flex justify-end gap-2">
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-border-light dark:border-slate-800">
                   <button
                     type="button"
                     onClick={() => setModalOpen(false)}
-                    className="px-4 py-2 rounded-xl bg-card-subtle text-text-secondary text-sm font-semibold hover:bg-slate-200"
+                    className="px-4 py-2 rounded-xl text-text-secondary hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-4 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-sm font-semibold shadow-sm transition-all disabled:opacity-50"
+                    className="px-5 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-semibold shadow-sm transition-all disabled:opacity-50"
                   >
                     {isSubmitting ? "Saving..." : editingDept ? "Save Changes" : "Create Department"}
                   </button>
@@ -438,6 +424,14 @@ export default function DepartmentsAdminPage() {
             </div>
           </div>
         )}
+
+        {/* Roles & Job Titles Hierarchy Modal */}
+        <JobTitlesManager
+          open={roleModalOpen}
+          onOpenChange={setRoleModalOpen}
+          defaultDepartmentId={activeRoleDeptId}
+          onTitlesUpdated={loadDepartments}
+        />
       </div>
     </AppShell>
   );

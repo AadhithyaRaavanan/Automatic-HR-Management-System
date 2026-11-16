@@ -11,7 +11,7 @@ import { RequestModal } from "@/features/requests/components/request-modal";
 import { useSubmitRegularization } from "@/features/requests/hooks/use-regularizations";
 import { createClient } from "@/lib/supabase/client";
 import { formatDurationMinutes, formatTimeInTimezone } from "@/lib/date/timezone";
-import { getTamilMonthInfo } from "@/lib/date/holidays-tn";
+import { getTamilMonthInfo, resolveTamilHolidayName } from "@/lib/date/holidays-tn";
 import { AttendanceDayStatus, SessionSource } from "@/types/database.types";
 import {
   Clock,
@@ -121,7 +121,10 @@ function AttendanceCalendarContent() {
       ]);
 
       for (const h of holRes.data || []) {
-        holidayByDate.set(h.date, h);
+        holidayByDate.set(h.date, {
+          ...h,
+          local_name: resolveTamilHolidayName(h.name, h.local_name),
+        });
       }
       for (const d of daysRes.data || []) {
         daysMap.set(d.work_date, d);

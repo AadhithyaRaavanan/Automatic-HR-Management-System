@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { getTamilMonthInfo } from "@/lib/date/holidays-tn";
+import { getTamilMonthInfo, resolveTamilHolidayName } from "@/lib/date/holidays-tn";
 import { createClient } from "@/lib/supabase/client";
 import { HolidayType } from "@/types/database.types";
 import { isDemoModeEnabled } from "@/lib/config/demo";
@@ -131,7 +131,7 @@ function HolidaysPageContent() {
           holRes.data.map((item: any) => ({
             id: item.id,
             name: item.name,
-            local_name: item.local_name || null,
+            local_name: resolveTamilHolidayName(item.name, item.local_name),
             date: item.date,
             region: item.region || "GLOBAL",
             holiday_type: (item.holiday_type || "public") as HolidayType,
@@ -143,7 +143,7 @@ function HolidaysPageContent() {
           storedHols.map((item) => ({
             id: item.id,
             name: item.name,
-            local_name: item.notes || null,
+            local_name: resolveTamilHolidayName(item.name, item.notes),
             date: item.holiday_date,
             region: "GLOBAL",
             holiday_type: (item.is_half_day ? "special" : "public") as HolidayType,

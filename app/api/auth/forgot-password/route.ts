@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { Database } from "@/types/database.types";
+import { supabaseAdmin } from "@/lib/supabase/admin";
+import { sendPasswordResetEmail } from "@/lib/email/resend";
 import {
   getRateLimitKey,
   getEmailRateLimitKey,
@@ -87,18 +89,52 @@ export async function POST(request: NextRequest) {
       recordFailure(emailLimitKey),
     ]);
 
-    await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        shouldCreateUser: false,
-        captchaToken: turnstileToken,
-      },
-    });
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+    let actionLink: string | undefined = undefined;
+    let otpCode: string | undefined = undefined;
+
+    // 1. Generate privileged recovery token & 6-digit OTP from Supabase Admin
+    try {
+      const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
+        type: "recovery",
+        email,
+        options: {
+          redirectTo: `${appUrl}/settings?must_change_password=true`,
+        },
+      });
+
+      if (linkData?.properties) {
+        actionLink = linkData.properties.action_link;
+        otpCode = linkData.properties.email_otp;
+      }
+    } catch (linkErr) {
+      console.warn("[Forgot Password Link Gen]:", linkErr);
+    }
+
+    // 2. Also register via client signInWithOtp for session state
+    try {
+      await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: false,
+          captchaToken: turnstileToken,
+        },
+      });
+    } catch {}
+
+    // 3. Dispatch directly via Hostinger SMTP (business@zenxea.com)
+    if (actionLink || otpCode) {
+      await sendPasswordResetEmail({
+        to: email,
+        otpCode,
+        resetLink: actionLink,
+      });
+    }
 
     // 4. Return identical generic response to prevent email enumeration
     const res = NextResponse.json({
       success: true,
-      message: "If an account exists for this email, a verification code has been sent.",
+      message: "If an account exists for this email, a verification code and reset link have been sent via email.",
     });
 
     response.cookies.getAll().forEach((cookie) => {

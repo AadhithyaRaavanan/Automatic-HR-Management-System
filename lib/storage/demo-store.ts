@@ -23,6 +23,8 @@ export interface DemoJobTitle {
   id: string;
   title_name: string;
   description: string | null;
+  department_id?: string | null;
+  department_name?: string | null;
   created_at: string;
 }
 
@@ -273,7 +275,16 @@ export async function syncFromServer(): Promise<void> {
 
 // --- DEPARTMENTS ---
 export function getStoredDepartments(): DemoDepartment[] {
-  return readKey<DemoDepartment[]>(KEYS.departments, []);
+  const current = readKey<DemoDepartment[]>(KEYS.departments, []);
+  // Auto-clean legacy mock seeded departments if they match the initial seed template
+  const isMockSeed = current.length === 4 &&
+    current.some((d) => d.name === "Engineering" && d.code === "ENG") &&
+    current.some((d) => d.name === "Marketing & Growth" && d.code === "MKT");
+  if (isMockSeed) {
+    writeKey(KEYS.departments, []);
+    return [];
+  }
+  return current;
 }
 
 export function saveStoredDepartments(depts: DemoDepartment[]): void {
@@ -337,12 +348,19 @@ export function saveStoredJobTitles(titles: DemoJobTitle[]): void {
   writeKey(KEYS.jobTitles, titles);
 }
 
-export function addStoredJobTitle(titleName: string, description?: string | null): DemoJobTitle {
+export function addStoredJobTitle(
+  titleName: string,
+  description?: string | null,
+  departmentId?: string | null,
+  departmentName?: string | null
+): DemoJobTitle {
   const current = getStoredJobTitles();
   const created: DemoJobTitle = {
     id: `jt-${Date.now()}`,
     title_name: titleName.trim(),
     description: description ? description.trim() : null,
+    department_id: departmentId || null,
+    department_name: departmentName || null,
     created_at: new Date().toISOString(),
   };
   saveStoredJobTitles([created, ...current]);
@@ -437,6 +455,7 @@ export function getStoredUsers(): DemoUser[] {
   // Auto-clean: scrub any legacy demo user names
   const purged = current.filter(
     (u) =>
+      !u.email.endsWith("@remotehr.io") &&
       u.email !== "admin@remotehr.io" &&
       u.email !== "hr@remotehr.io" &&
       u.email !== "manager@remotehr.io" &&
@@ -444,7 +463,9 @@ export function getStoredUsers(): DemoUser[] {
       !u.name.toLowerCase().includes("james aathithyan") &&
       !u.name.toLowerCase().includes("sarah jenkins") &&
       !u.name.toLowerCase().includes("david chen") &&
-      !u.name.toLowerCase().includes("maya patel")
+      !u.name.toLowerCase().includes("maya patel") &&
+      !u.name.toLowerCase().includes("eleanor") &&
+      !u.name.toLowerCase().includes("leslie")
   );
 
   const activeList = purged.length > 0 ? purged : INITIAL_DEMO_USERS;

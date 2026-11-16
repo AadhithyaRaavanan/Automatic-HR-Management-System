@@ -36,11 +36,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden: Active organization membership required." }, { status: 403 });
     }
 
-    const { data: titles, error: titlesErr } = await (supabaseAdmin as any)
+    const deptFilter = request.nextUrl.searchParams.get("department_id");
+
+    let query = (supabaseAdmin as any)
       .from("job_titles")
-      .select("id, title_name, description, created_at, updated_at")
+      .select("id, title_name, description, department_id, created_at, updated_at, departments:department_id(id, name, code)")
       .eq("organization_id", orgId)
       .order("title_name");
+
+    if (deptFilter) {
+      query = query.eq("department_id", deptFilter);
+    }
+
+    const { data: titles, error: titlesErr } = await query;
 
     if (titlesErr && !isDemoModeEnabled()) {
       return NextResponse.json({ error: titlesErr.message }, { status: 400 });
@@ -61,7 +69,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { titleName, description } = body;
+    const { titleName, description, departmentId, department_id } = body;
+    const effectiveDeptId = departmentId || department_id || null;
 
     const trimmedName = String(titleName || "").trim();
     if (!trimmedName) {
@@ -74,8 +83,9 @@ export async function POST(request: NextRequest) {
         organization_id: context.organizationId,
         title_name: trimmedName,
         description: description ? String(description).trim() : null,
+        department_id: effectiveDeptId,
       })
-      .select("id, title_name, description, created_at")
+      .select("id, title_name, description, department_id, created_at, departments:department_id(id, name, code)")
       .single();
 
     if (insertErr) {
@@ -90,6 +100,7 @@ export async function POST(request: NextRequest) {
           id: `jt-${Date.now()}`,
           title_name: trimmedName,
           description: description ? String(description).trim() : null,
+          department_id: effectiveDeptId,
           created_at: new Date().toISOString(),
         };
         return NextResponse.json({ success: true, jobTitle: mockCreated }, { status: 201 });
@@ -122,7 +133,8 @@ export async function PUT(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { id, titleName, description } = body;
+    const { id, titleName, description, departmentId, department_id } = body;
+    const effectiveDeptId = departmentId !== undefined ? departmentId : department_id;
 
     if (!id) {
       return NextResponse.json({ error: "Validation Error: 'id' is required." }, { status: 400 });
@@ -135,7 +147,7 @@ export async function PUT(request: NextRequest) {
 
     const { data: existing, error: findErr } = await (supabaseAdmin as any)
       .from("job_titles")
-      .select("id, organization_id, title_name, description")
+      .select("id, organization_id, title_name, description, department_id")
       .eq("id", id)
       .eq("organization_id", context.organizationId)
       .maybeSingle();
@@ -144,16 +156,21 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Job title not found in your organization." }, { status: 404 });
     }
 
+    const updatePayload: Record<string, any> = {
+      title_name: trimmedName,
+      description: description !== undefined ? (description ? String(description).trim() : null) : (existing as any).description,
+      updated_at: new Date().toISOString(),
+    };
+    if (effectiveDeptId !== undefined) {
+      updatePayload.department_id = effectiveDeptId || null;
+    }
+
     const { data: updated, error: updateErr } = await (supabaseAdmin as any)
       .from("job_titles")
-      .update({
-        title_name: trimmedName,
-        description: description !== undefined ? (description ? String(description).trim() : null) : (existing as any).description,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq("id", id)
       .eq("organization_id", context.organizationId)
-      .select("id, title_name, description, updated_at")
+      .select("id, title_name, description, department_id, updated_at, departments:department_id(id, name, code)")
       .single();
 
     if (updateErr) {

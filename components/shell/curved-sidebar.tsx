@@ -107,6 +107,15 @@ export function CurvedSidebar({
     let isMounted = true;
     const fetchMemberCount = async () => {
       try {
+        const res = await fetch("/api/workforce/count");
+        if (res.ok) {
+          const json = await res.json();
+          if (isMounted && typeof json.count === "number") {
+            setTeamMemberCount(json.count);
+            return;
+          }
+        }
+
         const { count, error } = await supabase
           .from("employees")
           .select("id", { count: "exact", head: true })
@@ -117,13 +126,13 @@ export function CurvedSidebar({
             setTeamMemberCount(count);
           } else {
             const activeUsers = getStoredUsers().filter((u) => u.status === "active");
-            setTeamMemberCount(activeUsers.length);
+            setTeamMemberCount(activeUsers.length || 1);
           }
         }
       } catch {
         if (isMounted) {
           const activeUsers = getStoredUsers().filter((u) => u.status === "active");
-          setTeamMemberCount(activeUsers.length);
+          setTeamMemberCount(activeUsers.length || 1);
         }
       }
     };

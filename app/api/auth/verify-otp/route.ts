@@ -90,12 +90,33 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    const { data: authData, error: verifyError } = await supabase.auth.verifyOtp({
+    let authData: any = null;
+    let verifyError: any = null;
+
+    const emailOtpRes = await supabase.auth.verifyOtp({
       email,
       token,
       type: "email",
       options: turnstileToken ? { captchaToken: turnstileToken } : undefined,
     });
+
+    if (!emailOtpRes.error && emailOtpRes.data.user) {
+      authData = emailOtpRes.data;
+    } else {
+      // Also attempt recovery type verification
+      const recOtpRes = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: "recovery",
+        options: turnstileToken ? { captchaToken: turnstileToken } : undefined,
+      });
+
+      if (!recOtpRes.error && recOtpRes.data.user) {
+        authData = recOtpRes.data;
+      } else {
+        verifyError = recOtpRes.error || emailOtpRes.error;
+      }
+    }
 
     if (verifyError || !authData.user) {
       await Promise.all([

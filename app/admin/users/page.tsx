@@ -99,7 +99,7 @@ function UsersDirectoryContent() {
   const [selectedUser, setSelectedUser] = React.useState<EmployeeUser | null>(null);
 
   // Job Titles & Departments Lookups
-  const [jobTitlesList, setJobTitlesList] = React.useState<{ id: string; title_name: string }[]>([]);
+  const [jobTitlesList, setJobTitlesList] = React.useState<{ id: string; title_name: string; department_id?: string | null }[]>([]);
   const [departmentsList, setDepartmentsList] = React.useState<{ id: string; name: string }[]>([]);
 
   // Invite Form State
@@ -116,6 +116,27 @@ function UsersDirectoryContent() {
   const [inviteShiftEnd, setInviteShiftEnd] = React.useState("17:00");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
+  // Governance Edit Form State
+  const [govWorkMode, setGovWorkMode] = React.useState("remote");
+  const [govTimezone, setGovTimezone] = React.useState("UTC");
+  const [govStatus, setGovStatus] = React.useState("active");
+  const [govShiftStart, setGovShiftStart] = React.useState("09:00");
+  const [govShiftEnd, setGovShiftEnd] = React.useState("17:00");
+  const [govDepartmentId, setGovDepartmentId] = React.useState("");
+  const [govJobTitleId, setGovJobTitleId] = React.useState("");
+
+  const filteredInviteTitles = React.useMemo(() => {
+    if (!inviteDepartmentId) return jobTitlesList;
+    const matches = jobTitlesList.filter((jt) => jt.department_id === inviteDepartmentId);
+    return matches.length > 0 ? matches : jobTitlesList.filter((jt) => !jt.department_id);
+  }, [jobTitlesList, inviteDepartmentId]);
+
+  const filteredGovTitles = React.useMemo(() => {
+    if (!govDepartmentId) return jobTitlesList;
+    const matches = jobTitlesList.filter((jt) => jt.department_id === govDepartmentId);
+    return matches.length > 0 ? matches : jobTitlesList.filter((jt) => !jt.department_id);
+  }, [jobTitlesList, govDepartmentId]);
+
   // Credentials & Resend Delivery Modal State
   const [createdCredentials, setCreatedCredentials] = React.useState<{
     email: string;
@@ -130,15 +151,6 @@ function UsersDirectoryContent() {
   } | null>(null);
   const [credentialsModalOpen, setCredentialsModalOpen] = React.useState(false);
   const [hasCopied, setHasCopied] = React.useState(false);
-
-  // Governance Edit Form State
-  const [govWorkMode, setGovWorkMode] = React.useState("remote");
-  const [govTimezone, setGovTimezone] = React.useState("UTC");
-  const [govStatus, setGovStatus] = React.useState("active");
-  const [govShiftStart, setGovShiftStart] = React.useState("09:00");
-  const [govShiftEnd, setGovShiftEnd] = React.useState("17:00");
-  const [govDepartmentId, setGovDepartmentId] = React.useState("");
-  const [govJobTitleId, setGovJobTitleId] = React.useState("");
 
   // Bulk CSV Import State
   const [csvText, setCsvText] = React.useState(SAMPLE_BULK_CSV);
@@ -172,7 +184,7 @@ function UsersDirectoryContent() {
             .select("user_id, role, status, shift_start_time, shift_end_time, department_id, job_title_id"),
           (supabase as any)
             .from("job_titles")
-            .select("id, title_name")
+            .select("id, title_name, department_id")
             .order("title_name"),
           (supabase as any)
             .from("departments")
@@ -192,30 +204,30 @@ function UsersDirectoryContent() {
         // Supabase not running, continue with stored
       }
 
-      // Merge stored job titles with database (in demo mode, strictly respect user-created store)
-      const mergedTitles: { id: string; title_name: string }[] = storedTitles.map((t) => ({
+      // Merge stored job titles with database
+      const mergedTitles: { id: string; title_name: string; department_id?: string | null }[] = storedTitles.map((t) => ({
         id: t.id,
         title_name: t.title_name,
+        department_id: t.department_id || null,
       }));
-      if (!isDemoModeEnabled()) {
-        for (const jt of jobTitlesData || []) {
-          if (!mergedTitles.some((t) => t.id === jt.id || t.title_name === jt.title_name)) {
-            mergedTitles.push({ id: jt.id, title_name: jt.title_name });
-          }
+      for (const jt of jobTitlesData || []) {
+        const existingIdx = mergedTitles.findIndex((t) => t.id === jt.id || t.title_name === jt.title_name);
+        if (existingIdx === -1) {
+          mergedTitles.push({ id: jt.id, title_name: jt.title_name, department_id: jt.department_id || null });
+        } else if (jt.department_id && !mergedTitles[existingIdx].department_id) {
+          mergedTitles[existingIdx].department_id = jt.department_id;
         }
       }
       setJobTitlesList(mergedTitles);
 
-      // Merge stored departments with database (in demo mode, strictly respect user-created store)
+      // Merge stored departments with database
       const mergedDepts: { id: string; name: string }[] = storedDepts.map((d) => ({
         id: d.id,
         name: d.name,
       }));
-      if (!isDemoModeEnabled()) {
-        for (const d of deptsData || []) {
-          if (!mergedDepts.some((md) => md.id === d.id || md.name === d.name)) {
-            mergedDepts.push({ id: d.id, name: d.name });
-          }
+      for (const d of deptsData || []) {
+        if (!mergedDepts.some((md) => md.id === d.id || md.name === d.name)) {
+          mergedDepts.push({ id: d.id, name: d.name });
         }
       }
       setDepartmentsList(mergedDepts);
@@ -1049,10 +1061,59 @@ function UsersDirectoryContent() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label
+                htmlFor="invite-department"
+                className="text-xs font-bold text-text-secondary block mb-1"
+              >
+                1. Department <span className="text-status-danger">*</span>
+              </label>
+              <select
+                id="invite-department"
+                value={inviteDepartmentId}
+                onChange={(e) => {
+                  setInviteDepartmentId(e.target.value);
+                  setInviteJobTitleId("");
+                }}
+                className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary focus:ring-1 focus:ring-brand-purple"
+              >
+                <option value="">Select Department...</option>
+                {departmentsList.map((dept) => (
+                  <option key={dept.id} value={dept.id}>
+                    {dept.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="invite-job-title"
+                className="text-xs font-bold text-text-secondary block mb-1"
+              >
+                2. Department Role / Title
+              </label>
+              <select
+                id="invite-job-title"
+                value={inviteJobTitleId}
+                onChange={(e) => setInviteJobTitleId(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary focus:ring-1 focus:ring-brand-purple"
+              >
+                <option value="">
+                  {!inviteDepartmentId ? "Select Department first..." : "Select Role / Title..."}
+                </option>
+                {filteredInviteTitles.map((jt) => (
+                  <option key={jt.id} value={jt.id}>
+                    {jt.title_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label
                 htmlFor="invite-role"
                 className="text-xs font-bold text-text-secondary block mb-1"
               >
-                System Security Role
+                3. System Security Role
               </label>
               <select
                 id="invite-role"
@@ -1064,50 +1125,6 @@ function UsersDirectoryContent() {
                 <option value="manager">Manager</option>
                 <option value="hr">HR</option>
                 <option value="admin">Admin</option>
-              </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="invite-job-title"
-                className="text-xs font-bold text-text-secondary block mb-1"
-              >
-                Company Job Title
-              </label>
-              <select
-                id="invite-job-title"
-                value={inviteJobTitleId}
-                onChange={(e) => setInviteJobTitleId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
-              >
-                <option value="">Select Job Title...</option>
-                {jobTitlesList.map((jt) => (
-                  <option key={jt.id} value={jt.id}>
-                    {jt.title_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="invite-department"
-                className="text-xs font-bold text-text-secondary block mb-1"
-              >
-                Department
-              </label>
-              <select
-                id="invite-department"
-                value={inviteDepartmentId}
-                onChange={(e) => setInviteDepartmentId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
-              >
-                <option value="">Select Department...</option>
-                {departmentsList.map((dept) => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.name}
-                  </option>
-                ))}
               </select>
             </div>
           </div>
@@ -1299,10 +1316,36 @@ function UsersDirectoryContent() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label
+                htmlFor="gov-department"
+                className="text-xs font-bold text-text-secondary block mb-1"
+              >
+                1. Department {isAdmin ? "(Admin Only)" : ""}
+              </label>
+              <select
+                id="gov-department"
+                disabled={!isAdmin}
+                value={govDepartmentId}
+                onChange={(e) => {
+                  setGovDepartmentId(e.target.value);
+                  setGovJobTitleId("");
+                }}
+                className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary disabled:opacity-50"
+              >
+                <option value="">Unassigned</option>
+                {departmentsList.map((dept) => (
+                  <option key={dept.id} value={dept.id}>
+                    {dept.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label
                 htmlFor="gov-job-title"
                 className="text-xs font-bold text-text-secondary block mb-1"
               >
-                Company Job Title {isAdmin ? "(Admin Only)" : ""}
+                2. Department Role / Title {isAdmin ? "(Admin Only)" : ""}
               </label>
               <select
                 id="gov-job-title"
@@ -1312,32 +1355,9 @@ function UsersDirectoryContent() {
                 className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary disabled:opacity-50"
               >
                 <option value="">Unassigned</option>
-                {jobTitlesList.map((jt) => (
+                {filteredGovTitles.map((jt) => (
                   <option key={jt.id} value={jt.id}>
                     {jt.title_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="gov-department"
-                className="text-xs font-bold text-text-secondary block mb-1"
-              >
-                Department {isAdmin ? "(Admin Only)" : ""}
-              </label>
-              <select
-                id="gov-department"
-                disabled={!isAdmin}
-                value={govDepartmentId}
-                onChange={(e) => setGovDepartmentId(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary disabled:opacity-50"
-              >
-                <option value="">Unassigned</option>
-                {departmentsList.map((dept) => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.name}
                   </option>
                 ))}
               </select>

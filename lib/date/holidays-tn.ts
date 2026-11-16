@@ -259,3 +259,66 @@ export function getTamilNaduHoliday(dateKey: string): TamilNaduHoliday | undefin
   return TAMIL_NADU_HOLIDAYS_2026.find((h) => h.date === dateKey);
 }
 
+/**
+ * Canonical Tamil names dictionary for holiday name mapping & mojibake recovery
+ */
+export const TAMIL_HOLIDAY_DICTIONARY: Record<string, string> = {
+  "new year": "ஆங்கிலப் புத்தாண்டு",
+  "bhogi": "போகிப் பண்டிகை",
+  "thai pongal": "தைப்பொங்கல்",
+  "pongal": "பொங்கல் பண்டிகை",
+  "thiruvalluvar": "திருவள்ளுவர் தினம் / மாட்டுப் பொங்கல்",
+  "mattu pongal": "மாட்டுப் பொங்கல்",
+  "uzhavar": "உழவர் திருநாள்",
+  "republic": "குடியரசு தினம்",
+  "thaipusam": "தைப்பூசம்",
+  "ramzan": "ரம்ஜான் (ஈகைத் திருநாள்)",
+  "eid-ul-fitr": "ரம்ஜான் பண்டிகை",
+  "good friday": "புனித வெள்ளி",
+  "tamil new year": "தமிழ்ப் புத்தாண்டு / அம்பேத்கர் ஜெயந்தி",
+  "ambedkar": "அம்பேத்கர் ஜெயந்தி",
+  "may day": "உழைப்பாளர் தினம் (மே தினம்)",
+  "labour day": "தொழிலாளர் தினம்",
+  "bakrid": "பக்ரீத் (தியாகத் திருநாள்)",
+  "eid-al-adha": "பக்ரீத் பண்டிகை",
+  "muharram": "மொஹரம் பண்டிகை",
+  "independence": "சுதந்திர தினம்",
+  "krishna": "கிருஷ்ண ஜெயந்தி / கோகுலாஷ்டமி",
+  "gokulashtami": "கோகுலாஷ்டமி",
+  "vinayakar": "விநாயகர் சதுர்த்தி",
+  "milad": "நபிகள் நாயகம் பிறந்த நாள்",
+  "gandhi": "காந்தி ஜெயந்தி",
+  "ayutha": "ஆயுத பூஜை / சரஸ்வதி பூஜை",
+  "saraswathi": "சரஸ்வதி பூஜை",
+  "vijaya": "விஜயதசமி",
+  "deepavali": "தீபாவளி பண்டிகை",
+  "diwali": "தீபாவளி பண்டிகை",
+  "christmas": "கிறிஸ்துமஸ் பண்டிகை",
+};
+
+/**
+ * Resolves Tamil holiday name from English title or cleanses mojibake encoding
+ */
+export function resolveTamilHolidayName(englishName: string, rawLocalName?: string | null): string | null {
+  // If rawLocalName is already proper Tamil Unicode (range 0B80-0BFF), use it
+  if (rawLocalName && /[\u0B80-\u0BFF]/.test(rawLocalName) && !/[\u00C0-\u00FF]/.test(rawLocalName)) {
+    return rawLocalName;
+  }
+
+  // If rawLocalName contains mojibake characters like à, ®, ¯, Ã, or is null/empty, resolve from dictionary
+  const lowerName = englishName.toLowerCase();
+  for (const [key, tamilStr] of Object.entries(TAMIL_HOLIDAY_DICTIONARY)) {
+    if (lowerName.includes(key)) {
+      return tamilStr;
+    }
+  }
+
+  // If no match found and raw doesn't look like mojibake, return raw
+  if (rawLocalName && !/[\u00C0-\u00FF]/.test(rawLocalName)) {
+    return rawLocalName;
+  }
+
+  return null;
+}
+
+
