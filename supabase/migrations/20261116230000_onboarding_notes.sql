@@ -58,10 +58,9 @@ CREATE POLICY "profiles_select_own_or_admin" ON public.profiles
     USING (
         auth.uid() = id OR
         auth.uid() = user_id OR
-        EXISTS (
-            SELECT 1 FROM public.employees e
-            WHERE e.id = auth.uid() AND (e.user_role IN ('admin', 'hr') OR e.role IN ('admin', 'hr'))
-        )
+        (SELECT public.current_user_role()) IN ('hr', 'admin') OR
+        EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.role IN ('admin', 'hr')) OR
+        EXISTS (SELECT 1 FROM public.organization_members om WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'hr'))
     );
 
 CREATE POLICY "profiles_insert_own" ON public.profiles
@@ -73,10 +72,9 @@ CREATE POLICY "profiles_update_own_or_admin" ON public.profiles
     USING (
         auth.uid() = id OR
         auth.uid() = user_id OR
-        EXISTS (
-            SELECT 1 FROM public.employees e
-            WHERE e.id = auth.uid() AND (e.user_role IN ('admin', 'hr') OR e.role IN ('admin', 'hr'))
-        )
+        (SELECT public.current_user_role()) IN ('hr', 'admin') OR
+        EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.role IN ('admin', 'hr')) OR
+        EXISTS (SELECT 1 FROM public.organization_members om WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'hr'))
     );
 
 -- 3. Candidate Type Enum
@@ -147,10 +145,9 @@ CREATE POLICY "onboarding_profiles_user_rw" ON public.onboarding_profiles
 CREATE POLICY "onboarding_profiles_admin_hr_all" ON public.onboarding_profiles
     FOR SELECT TO authenticated
     USING (
-        EXISTS (
-            SELECT 1 FROM public.employees e
-            WHERE e.id = auth.uid() AND (e.user_role IN ('admin', 'hr') OR e.role IN ('admin', 'hr'))
-        )
+        (SELECT public.current_user_role()) IN ('hr', 'admin') OR
+        EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.role IN ('admin', 'hr')) OR
+        EXISTS (SELECT 1 FROM public.organization_members om WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'hr'))
     );
 
 -- 5. Onboarding Documents Table
@@ -184,10 +181,9 @@ CREATE POLICY "onboarding_documents_user_rw" ON public.onboarding_documents
 CREATE POLICY "onboarding_documents_admin_hr_all" ON public.onboarding_documents
     FOR SELECT TO authenticated
     USING (
-        EXISTS (
-            SELECT 1 FROM public.employees e
-            WHERE e.id = auth.uid() AND (e.user_role IN ('admin', 'hr') OR e.role IN ('admin', 'hr'))
-        )
+        (SELECT public.current_user_role()) IN ('hr', 'admin') OR
+        EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.role IN ('admin', 'hr')) OR
+        EXISTS (SELECT 1 FROM public.organization_members om WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'hr'))
     );
 
 -- 6. Storage Bucket setup for onboarding-docs (Private)
@@ -220,9 +216,8 @@ CREATE POLICY "onboarding_docs_user_view" ON storage.objects
     USING (
         bucket_id = 'onboarding-docs' AND (
             (storage.foldername(name))[1] LIKE '%' || auth.uid()::text || '%' OR
-            EXISTS (
-                SELECT 1 FROM public.employees e
-                WHERE e.id = auth.uid() AND (e.user_role IN ('admin', 'hr') OR e.role IN ('admin', 'hr'))
-            )
+            (SELECT public.current_user_role()) IN ('hr', 'admin') OR
+            EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.role IN ('admin', 'hr')) OR
+            EXISTS (SELECT 1 FROM public.organization_members om WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'hr'))
         )
     );
