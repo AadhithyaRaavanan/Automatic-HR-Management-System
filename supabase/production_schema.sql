@@ -1,4 +1,4 @@
-﻿-- Migration: 20261107000001_initial_schema.sql
+-- Migration: 20261107000001_initial_schema.sql
 -- Description: Core tables, indexes, constraints, and audit log system for Attendance Module
 
 -- Enable UUID extension
@@ -127,6 +127,8 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON public.notifications
 CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON public.audit_logs (actor_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON public.audit_logs (created_at DESC);
 
+
+
 -- Migration: 20261107000002_custom_access_token_hook.sql
 -- Description: Custom Access Token Hook to inject user_role into JWT claims
 
@@ -183,6 +185,8 @@ $$;
 GRANT USAGE ON SCHEMA public TO supabase_auth_admin;
 GRANT EXECUTE ON FUNCTION public.custom_access_token_hook(JSONB) TO supabase_auth_admin;
 REVOKE EXECUTE ON FUNCTION public.custom_access_token_hook(JSONB) FROM authenticated, anon, public;
+
+
 
 -- Migration: 20261107000003_rls_policies.sql
 -- Description: Strict deny-by-default Row Level Security policies with (select auth.uid()) subqueries
@@ -461,6 +465,8 @@ USING (
 );
 
 -- Direct client mutations strictly DENIED; system triggers insert audit records
+
+
 
 -- Migration: 20261107000004_attendance_rpcs.sql
 -- Description: Core Attendance Stored Procedures (check_in, check_out, recalculate_day, lock_month)
@@ -804,6 +810,8 @@ GRANT EXECUTE ON FUNCTION public.check_in(TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.check_out() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.recalculate_day(UUID, DATE) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.lock_month(INTEGER, INTEGER) TO authenticated;
+
+
 -- Migration: 20261107000005_regularization_rpcs.sql
 -- Description: Regularization approval and rejection workflows with audit logging
 
@@ -1035,6 +1043,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.approve_regularization(UUID, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.reject_regularization(UUID, TEXT) TO authenticated;
 
+
+
 -- Migration: 20261107000006_cron_jobs.sql
 -- Description: Automated Background Jobs for Auto-Checkout and Nightly Attendance Finalization
 
@@ -1180,6 +1190,8 @@ BEGIN
         );
     END IF;
 END $$;
+
+
 
 -- Migration: 20261107000007_security_and_mfa.sql
 -- Description: Security Hardening: SET search_path = '', Revoke EXECUTE from PUBLIC/anon,
@@ -2252,6 +2264,8 @@ REVOKE ALL ON TABLE public.auth_rate_limits FROM PUBLIC;
 REVOKE ALL ON TABLE public.auth_rate_limits FROM anon;
 REVOKE ALL ON TABLE public.auth_rate_limits FROM authenticated;
 GRANT ALL ON TABLE public.auth_rate_limits TO service_role;
+
+
 
 -- ============================================================================
 -- Migration: 20261107000008_multi_tenancy_and_workforce.sql
@@ -4872,6 +4886,8 @@ $$;
 
 REVOKE ALL ON FUNCTION public.admin_create_organization(TEXT, TEXT, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
 GRANT ALL ON FUNCTION public.admin_create_organization(TEXT, TEXT, TEXT, TEXT) TO service_role;
+
+
 -- ============================================================================
 -- MIGRATION 9: Phase 3 Organization Admin Panel & Foundation Hardening
 -- ============================================================================
@@ -6316,6 +6332,8 @@ CREATE POLICY "enforce_active_org_membership_departments" ON public.departments
     AS RESTRICTIVE
     FOR ALL TO authenticated
     USING (public.is_active_org_member());
+
+
 -- ============================================================================
 -- Migration 10: Comprehensive Tenant-Scoped Leave Management Module
 --
@@ -7763,6 +7781,8 @@ BEGIN
     END LOOP;
 END;
 $$;
+
+
 -- ============================================================================
 -- Migration 11: Security Hardening, Suspended-Member Isolation, RPC Reconciliation & Leave Fixes
 --
@@ -11460,6 +11480,8 @@ BEGIN
 END;
 $$;
 
+
+
 -- ============================================================================
 -- Migration 12: Section 1 - HR Attendance Tools & Employee Experience
 -- ============================================================================
@@ -12396,7 +12418,7 @@ ALTER TABLE public.holidays
     ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE,
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT pg_catalog.now();
 
--- Backfill split English + Local Script from legacy "English (à®¤à®®à®¿à®´à¯)" format
+-- Backfill split English + Local Script from legacy "English (தமிழ்)" format
 UPDATE public.holidays
 SET
     local_name = COALESCE(local_name, pg_catalog.btrim(substring(name FROM '\(([^)]+)\)\s*$'))),
@@ -12447,46 +12469,46 @@ CREATE POLICY "enforce_active_org_membership_holiday_templates" ON public.holida
 INSERT INTO public.holiday_templates (template_code, template_name, region_code, template_year, month_num, day_num, name, local_name, holiday_type)
 VALUES
     -- India - Tamil Nadu (Fixed Annual Dates)
-    ('IN_TN', 'India - Tamil Nadu', 'TN', NULL, 1, 1, 'New Year''s Day', 'à®†à®™à¯à®•à®¿à®²à®ªà¯ à®ªà¯à®¤à¯à®¤à®¾à®£à¯à®Ÿà¯', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'TN', NULL, 1, 14, 'Bhogi Festival', 'à®ªà¯‹à®•à®¿à®ªà¯ à®ªà®£à¯à®Ÿà®¿à®•à¯ˆ', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'TN', NULL, 1, 15, 'Thai Pongal', 'à®¤à¯ˆà®ªà¯à®ªà¯Šà®™à¯à®•à®²à¯', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'TN', NULL, 1, 16, 'Thiruvalluvar Day / Mattu Pongal', 'à®¤à®¿à®°à¯à®µà®³à¯à®³à¯à®µà®°à¯ à®¤à®¿à®©à®®à¯ / à®®à®¾à®Ÿà¯à®Ÿà¯à®ªà¯ à®ªà¯Šà®™à¯à®•à®²à¯', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'TN', NULL, 1, 17, 'Uzhavar Thirunal', 'à®‰à®´à®µà®°à¯ à®¤à®¿à®°à¯à®¨à®¾à®³à¯', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'IN', NULL, 1, 26, 'Republic Day', 'à®•à¯à®Ÿà®¿à®¯à®°à®šà¯ à®¤à®¿à®©à®®à¯', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'TN', NULL, 4, 14, 'Tamil New Year & Dr. Ambedkar Jayanti', 'à®¤à®®à®¿à®´à¯à®ªà¯ à®ªà¯à®¤à¯à®¤à®¾à®£à¯à®Ÿà¯ / à®…à®®à¯à®ªà¯‡à®¤à¯à®•à®°à¯ à®œà¯†à®¯à®¨à¯à®¤à®¿', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'IN', NULL, 5, 1, 'May Day / Labour Day', 'à®‰à®´à¯ˆà®ªà¯à®ªà®¾à®³à®°à¯ à®¤à®¿à®©à®®à¯ - à®®à¯‡ à®¤à®¿à®©à®®à¯', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'IN', NULL, 8, 15, 'Independence Day', 'à®šà¯à®¤à®¨à¯à®¤à®¿à®° à®¤à®¿à®©à®®à¯', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'IN', NULL, 10, 2, 'Gandhi Jayanti', 'à®•à®¾à®¨à¯à®¤à®¿ à®œà¯†à®¯à®¨à¯à®¤à®¿', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'GLOBAL', NULL, 12, 25, 'Christmas Day', 'à®•à®¿à®±à®¿à®¸à¯à®¤à¯à®®à®¸à¯ à®ªà®£à¯à®Ÿà®¿à®•à¯ˆ', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'TN', NULL, 1, 1, 'New Year''s Day', 'ஆங்கிலப் புத்தாண்டு', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'TN', NULL, 1, 14, 'Bhogi Festival', 'போகிப் பண்டிகை', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'TN', NULL, 1, 15, 'Thai Pongal', 'தைப்பொங்கல்', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'TN', NULL, 1, 16, 'Thiruvalluvar Day / Mattu Pongal', 'திருவள்ளுவர் தினம் / மாட்டுப் பொங்கல்', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'TN', NULL, 1, 17, 'Uzhavar Thirunal', 'உழவர் திருநாள்', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'IN', NULL, 1, 26, 'Republic Day', 'குடியரசு தினம்', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'TN', NULL, 4, 14, 'Tamil New Year & Dr. Ambedkar Jayanti', 'தமிழ்ப் புத்தாண்டு / அம்பேத்கர் ஜெயந்தி', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'IN', NULL, 5, 1, 'May Day / Labour Day', 'உழைப்பாளர் தினம் - மே தினம்', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'IN', NULL, 8, 15, 'Independence Day', 'சுதந்திர தினம்', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'IN', NULL, 10, 2, 'Gandhi Jayanti', 'காந்தி ஜெயந்தி', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'GLOBAL', NULL, 12, 25, 'Christmas Day', 'கிறிஸ்துமஸ் பண்டிகை', 'public'),
     -- India - Tamil Nadu (2026 Lunar/Variable Dates)
-    ('IN_TN', 'India - Tamil Nadu', 'TN', 2026, 2, 1, 'Thaipusam', 'à®¤à¯ˆà®ªà¯à®ªà¯‚à®šà®®à¯', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'IN', 2026, 3, 20, 'Ramzan / Eid-ul-Fitr', 'à®°à®®à¯à®œà®¾à®©à¯ à®ªà®£à¯à®Ÿà®¿à®•à¯ˆ', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'GLOBAL', 2026, 4, 3, 'Good Friday', 'à®ªà¯à®©à®¿à®¤ à®µà¯†à®³à¯à®³à®¿', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'IN', 2026, 5, 27, 'Bakrid / Eid-al-Adha', 'à®ªà®•à¯à®°à¯€à®¤à¯ à®ªà®£à¯à®Ÿà®¿à®•à¯ˆ', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'IN', 2026, 6, 26, 'Muharram', 'à®®à¯Šà®¹à®°à®®à¯ à®ªà®£à¯à®Ÿà®¿à®•à¯ˆ', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'TN', 2026, 9, 4, 'Krishna Jayanthi / Gokulashtami', 'à®•à®¿à®°à¯à®·à¯à®£ à®œà¯†à®¯à®¨à¯à®¤à®¿', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'TN', 2026, 9, 14, 'Vinayakar Chathurthi', 'à®µà®¿à®¨à®¾à®¯à®•à®°à¯ à®šà®¤à¯à®°à¯à®¤à¯à®¤à®¿', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'IN', 2026, 9, 25, 'Milad-un-Nabi', 'à®¨à®ªà®¿à®•à®³à¯ à®¨à®¾à®¯à®•à®®à¯ à®ªà®¿à®±à®¨à¯à®¤ à®¨à®¾à®³à¯', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'TN', 2026, 10, 19, 'Ayutha Pooja / Saraswathi Pooja', 'à®†à®¯à¯à®¤ à®ªà¯‚à®œà¯ˆ', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'TN', 2026, 10, 20, 'Vijaya Dasami', 'à®µà®¿à®œà®¯à®¤à®šà®®à®¿', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'TN', 2026, 11, 8, 'Deepavali', 'à®¤à¯€à®ªà®¾à®µà®³à®¿ à®ªà®£à¯à®Ÿà®¿à®•à¯ˆ', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'TN', 2026, 2, 1, 'Thaipusam', 'தைப்பூசம்', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'IN', 2026, 3, 20, 'Ramzan / Eid-ul-Fitr', 'ரம்ஜான் பண்டிகை', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'GLOBAL', 2026, 4, 3, 'Good Friday', 'புனித வெள்ளி', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'IN', 2026, 5, 27, 'Bakrid / Eid-al-Adha', 'பக்ரீத் பண்டிகை', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'IN', 2026, 6, 26, 'Muharram', 'மொஹரம் பண்டிகை', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'TN', 2026, 9, 4, 'Krishna Jayanthi / Gokulashtami', 'கிருஷ்ண ஜெயந்தி', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'TN', 2026, 9, 14, 'Vinayakar Chathurthi', 'விநாயகர் சதுர்த்தி', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'IN', 2026, 9, 25, 'Milad-un-Nabi', 'நபிகள் நாயகம் பிறந்த நாள்', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'TN', 2026, 10, 19, 'Ayutha Pooja / Saraswathi Pooja', 'ஆயுத பூஜை', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'TN', 2026, 10, 20, 'Vijaya Dasami', 'விஜயதசமி', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'TN', 2026, 11, 8, 'Deepavali', 'தீபாவளி பண்டிகை', 'public'),
     -- India - Tamil Nadu (2027 Lunar/Variable Dates)
-    ('IN_TN', 'India - Tamil Nadu', 'TN', 2027, 1, 22, 'Thaipusam', 'à®¤à¯ˆà®ªà¯à®ªà¯‚à®šà®®à¯', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'IN', 2027, 3, 10, 'Ramzan / Eid-ul-Fitr', 'à®°à®®à¯à®œà®¾à®©à¯ à®ªà®£à¯à®Ÿà®¿à®•à¯ˆ', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'GLOBAL', 2027, 3, 26, 'Good Friday', 'à®ªà¯à®©à®¿à®¤ à®µà¯†à®³à¯à®³à®¿', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'IN', 2027, 5, 17, 'Bakrid / Eid-al-Adha', 'à®ªà®•à¯à®°à¯€à®¤à¯ à®ªà®£à¯à®Ÿà®¿à®•à¯ˆ', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'IN', 2027, 6, 16, 'Muharram', 'à®®à¯Šà®¹à®°à®®à¯ à®ªà®£à¯à®Ÿà®¿à®•à¯ˆ', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'TN', 2027, 8, 25, 'Krishna Jayanthi / Gokulashtami', 'à®•à®¿à®°à¯à®·à¯à®£ à®œà¯†à®¯à®¨à¯à®¤à®¿', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'TN', 2027, 9, 4, 'Vinayakar Chathurthi', 'à®µà®¿à®¨à®¾à®¯à®•à®°à¯ à®šà®¤à¯à®°à¯à®¤à¯à®¤à®¿', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'TN', 2027, 10, 8, 'Ayutha Pooja / Saraswathi Pooja', 'à®†à®¯à¯à®¤ à®ªà¯‚à®œà¯ˆ', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'TN', 2027, 10, 9, 'Vijaya Dasami', 'à®µà®¿à®œà®¯à®¤à®šà®®à®¿', 'public'),
-    ('IN_TN', 'India - Tamil Nadu', 'TN', 2027, 10, 29, 'Deepavali', 'à®¤à¯€à®ªà®¾à®µà®³à®¿ à®ªà®£à¯à®Ÿà®¿à®•à¯ˆ', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'TN', 2027, 1, 22, 'Thaipusam', 'தைப்பூசம்', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'IN', 2027, 3, 10, 'Ramzan / Eid-ul-Fitr', 'ரம்ஜான் பண்டிகை', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'GLOBAL', 2027, 3, 26, 'Good Friday', 'புனித வெள்ளி', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'IN', 2027, 5, 17, 'Bakrid / Eid-al-Adha', 'பக்ரீத் பண்டிகை', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'IN', 2027, 6, 16, 'Muharram', 'மொஹரம் பண்டிகை', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'TN', 2027, 8, 25, 'Krishna Jayanthi / Gokulashtami', 'கிருஷ்ண ஜெயந்தி', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'TN', 2027, 9, 4, 'Vinayakar Chathurthi', 'விநாயகர் சதுர்த்தி', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'TN', 2027, 10, 8, 'Ayutha Pooja / Saraswathi Pooja', 'ஆயுத பூஜை', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'TN', 2027, 10, 9, 'Vijaya Dasami', 'விஜயதசமி', 'public'),
+    ('IN_TN', 'India - Tamil Nadu', 'TN', 2027, 10, 29, 'Deepavali', 'தீபாவளி பண்டிகை', 'public'),
     -- India - National Gazetted
     ('IN_NAT', 'India - National Gazetted', 'IN', NULL, 1, 1, 'New Year''s Day', NULL, 'public'),
-    ('IN_NAT', 'India - National Gazetted', 'IN', NULL, 1, 26, 'Republic Day', 'à¤—à¤£à¤¤à¤‚à¤¤à¥à¤° à¤¦à¤¿à¤µà¤¸', 'public'),
+    ('IN_NAT', 'India - National Gazetted', 'IN', NULL, 1, 26, 'Republic Day', 'गणतंत्र दिवस', 'public'),
     ('IN_NAT', 'India - National Gazetted', 'IN', NULL, 5, 1, 'Labour Day', NULL, 'public'),
-    ('IN_NAT', 'India - National Gazetted', 'IN', NULL, 8, 15, 'Independence Day', 'à¤¸à¥à¤µà¤¤à¤‚à¤¤à¥à¤°à¤¤à¤¾ à¤¦à¤¿à¤µà¤¸', 'public'),
-    ('IN_NAT', 'India - National Gazetted', 'IN', NULL, 10, 2, 'Gandhi Jayanti', 'à¤—à¤¾à¤‚à¤§à¥€ à¤œà¤¯à¤‚à¤¤à¥€', 'public'),
+    ('IN_NAT', 'India - National Gazetted', 'IN', NULL, 8, 15, 'Independence Day', 'स्वतंत्रता दिवस', 'public'),
+    ('IN_NAT', 'India - National Gazetted', 'IN', NULL, 10, 2, 'Gandhi Jayanti', 'गांधी जयंती', 'public'),
     ('IN_NAT', 'India - National Gazetted', 'GLOBAL', NULL, 12, 25, 'Christmas Day', NULL, 'public'),
     -- United States - Federal
     ('US_FED', 'United States - Federal', 'US', NULL, 1, 1, 'New Year''s Day', NULL, 'public'),
@@ -14440,6 +14462,8 @@ BEGIN
 END;
 $$;
 
+
+
 -- ============================================================================
 -- Migration 13: Section 2 - Retention, Archival & Admin System Health
 -- ============================================================================
@@ -14457,7 +14481,7 @@ $$;
 -- 4. Server-only (`service_role`) archival batch & manifest RPCs:
 --    `get_retention_export_batches`, `record_retention_archive`, `run_org_retention_cleanup`.
 -- 5. Admin-only AAL2 RPCs: `admin_update_retention_policy`, `get_org_system_health`
---    (strictly tenant-scoped row counts & approximate org storage â€” never platform DB size),
+--    (strictly tenant-scoped row counts & approximate org storage — never platform DB size),
 --    and `get_org_retention_preview`.
 -- ============================================================================
 
@@ -15507,6 +15531,8 @@ BEGIN
         );
     END IF;
 END $$;
+
+
 
 -- ============================================================================
 -- Migration 14: Section 3 - Task Management System
@@ -16689,6 +16715,8 @@ BEGIN
     END IF;
 END $$;
 
+
+
 -- ============================================================================
 -- Migration 15: Section 4 - KPI System (Attendance, Leave & Tasks)
 -- ============================================================================
@@ -17759,6 +17787,8 @@ $$;
 
 REVOKE ALL ON FUNCTION public.submit_kpi_review(UUID, UUID, NUMERIC, TEXT) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.submit_kpi_review(UUID, UUID, NUMERIC, TEXT) TO authenticated;
+
+
 
 -- ============================================================================
 -- Migration 16: Final Review Security Hardening, Timezone-Correct 15-Min Crons,
@@ -19023,6 +19053,8 @@ BEGIN
         END IF;
     END IF;
 END $$;
+
+
 -- ============================================================================
 -- Migration 17: Final Security & KPI Accuracy Fixes
 --
@@ -19822,6 +19854,8 @@ END;
 $$;
 
 
+
+
 -- ============================================================================
 -- Migration: 20261114000018_shifts_and_night_shifts.sql
 -- Description:
@@ -20343,6 +20377,8 @@ $$;
 
 REVOKE ALL ON FUNCTION public.cron_auto_checkout(TIMESTAMPTZ) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.cron_auto_checkout(TIMESTAMPTZ) TO service_role;
+
+
 -- ============================================================================
 -- Migration: 20261115000019_mfa_policy_and_job_titles.sql
 -- Description:
@@ -21121,3 +21157,5 @@ BEGIN
     END IF;
 END;
 $$;
+
+
