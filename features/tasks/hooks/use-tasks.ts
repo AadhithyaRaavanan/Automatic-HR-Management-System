@@ -89,6 +89,7 @@ export interface VisibleEmployeeOption {
   email: string;
   manager_id: string | null;
   status: string;
+  role?: string;
 }
 
 export interface DepartmentOption {
@@ -98,6 +99,15 @@ export interface DepartmentOption {
 }
 
 export type TaskDueState = "overdue" | "due_soon" | "upcoming" | "none";
+
+export function formatEstimatedDuration(minutes: number | null | undefined): string {
+  if (minutes == null || minutes <= 0) return "";
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h > 0 && m > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h`;
+  return `${m}m`;
+}
 
 export function getTaskDueState(
   dueDate: string | null,
@@ -149,7 +159,7 @@ export function useTasksData(enabled = true) {
       let departmentsData: any[] = [];
 
       try {
-        const [tasksRes, projectsRes, employeesRes, departmentsRes] = await Promise.all([
+        const [tasksRes, projectsRes, employeesRes, departmentsRes, membersRes] = await Promise.all([
           supabase
             .from("tasks")
             .select(
@@ -169,11 +179,29 @@ export function useTasksData(enabled = true) {
             .from("departments")
             .select("id, name, code")
             .order("name", { ascending: true }),
+          supabase
+            .from("organization_members")
+            .select("user_id, role")
+            .eq("status", "active"),
         ]);
+
+        const roleMap = new Map<string, string>();
+        if (membersRes?.data) {
+          for (const m of (membersRes.data as any[])) {
+            if (m?.user_id && m?.role) {
+              roleMap.set(m.user_id, m.role);
+            }
+          }
+        }
 
         if (tasksRes?.data) tasksData = tasksRes.data;
         if (projectsRes?.data) projectsData = projectsRes.data;
-        if (employeesRes?.data) employeesData = employeesRes.data;
+        if (employeesRes?.data) {
+          employeesData = employeesRes.data.map((emp: any) => ({
+            ...emp,
+            role: roleMap.get(emp.id) || "employee",
+          }));
+        }
         if (departmentsRes?.data) departmentsData = departmentsRes.data;
       } catch {
         // Fallback gracefully
@@ -222,6 +250,7 @@ export function useTasksData(enabled = true) {
               email: u.email,
               manager_id: null,
               status: u.status,
+              role: u.role || "employee",
             }));
 
       // Merge tasks: database is authoritative in production
@@ -376,7 +405,11 @@ export function useTaskMutations() {
       estimatedMinutes?: number | null;
       projectId?: string | null;
       parentTaskId?: string | null;
+      isSelfAssign?: boolean;
     }) => {
+      const isSelf = Boolean(input.isSelfAssign);
+      const initialStatus: TaskStatus = isSelf ? "in_progress" : "todo";
+
       addStoredTask({
         title: input.title,
         description: input.description || null,
@@ -387,9 +420,10 @@ export function useTaskMutations() {
           typeof input.estimatedMinutes === "number" ? input.estimatedMinutes : null,
         project_id: input.projectId || null,
         parent_task_id: input.parentTaskId || null,
-        status: "todo",
+        status: initialStatus,
       });
-      return rpcCall("create_task", {
+
+      const res = (await rpcCall("create_task", {
         p_title: input.title,
         p_description: input.description || null,
         p_assignee_id: input.assigneeId || null,
@@ -399,7 +433,25 @@ export function useTaskMutations() {
           typeof input.estimatedMinutes === "number" ? input.estimatedMinutes : null,
         p_project_id: input.projectId || null,
         p_parent_task_id: input.parentTaskId || null,
-      });
+      })) as { success?: boolean; task?: { id?: string }; id?: string } | null;
+
+      // If self-assigned, automatically advance status to in_progress!
+      if (isSelf) {
+        const createdTaskId = res?.task?.id || res?.id;
+        if (createdTaskId) {
+          try {
+            await rpcCall("update_task_status", {
+              p_task_id: createdTaskId,
+              p_new_status: "in_progress",
+              p_note: "Self-assigned: automatically accepted and placed in progress",
+            });
+          } catch (e) {
+            console.warn("Auto-accept task in progress failed:", e);
+          }
+        }
+      }
+
+      return res;
     },
     onSuccess: () => {
       toast.success("Task created");

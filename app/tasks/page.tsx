@@ -10,6 +10,7 @@ import {
   useTaskDetails,
   useTaskMutations,
   getTaskDueState,
+  formatEstimatedDuration,
   TaskRecord,
 } from "@/features/tasks/hooks/use-tasks";
 import { TaskPriority, TaskStatus } from "@/types/database.types";
@@ -103,8 +104,15 @@ function TasksWorkspaceContent() {
   const [newAssigneeId, setNewAssigneeId] = React.useState<string>("");
   const [newPriority, setNewPriority] = React.useState<TaskPriority>("medium");
   const [newDueDate, setNewDueDate] = React.useState<string>("");
-  const [newEstimatedMinutes, setNewEstimatedMinutes] = React.useState<string>("");
+  const [estHours, setEstHours] = React.useState<string>("");
+  const [estMinutes, setEstMinutes] = React.useState<string>("");
   const [newProjectId, setNewProjectId] = React.useState<string>("");
+
+  React.useEffect(() => {
+    if (userId && !newAssigneeId) {
+      setNewAssigneeId(userId);
+    }
+  }, [userId, newAssigneeId]);
 
   // Create project form state
   const [projName, setProjName] = React.useState("");
@@ -166,16 +174,27 @@ function TasksWorkspaceContent() {
     return employeeNameMap.get(id) || "Team Member";
   };
 
-  // Permitted assignee choices for creating/reassigning tasks
+  // Permitted assignee choices for creating/reassigning tasks according to authority hierarchy
   const assignableEmployees = React.useMemo(() => {
-    if (userRole === "hr" || userRole === "admin") {
+    if (userRole === "admin") {
+      // Admin has highest authority: can assign to Admin, HR, Manager, Employee
       return employees;
     }
-    if (userRole === "manager") {
+    if (userRole === "hr") {
+      // HR can assign to HR (self/peers) and Employee (cannot assign to admin or manager)
       return employees.filter(
-        (e) => e.id === userId || e.manager_id === userId
+        (e) => e.id === userId || e.role === "employee" || e.role === "hr"
       );
     }
+    if (userRole === "manager") {
+      // Manager can assign to Manager (self) and Employee (direct reports / employee)
+      return employees.filter(
+        (e) =>
+          e.id === userId ||
+          (e.role === "employee" && (!e.manager_id || e.manager_id === userId))
+      );
+    }
+    // Employee can ONLY assign tasks to themselves (self-assignment)
     return employees.filter((e) => e.id === userId);
   }, [employees, userId, userRole]);
 
@@ -259,6 +278,10 @@ function TasksWorkspaceContent() {
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newTitle.trim().length < 2) return;
+    const totalMinutes =
+      (parseInt(estHours || "0", 10) * 60) + parseInt(estMinutes || "0", 10);
+    const isSelf = Boolean(newAssigneeId && newAssigneeId === userId);
+
     try {
       await mutations.createTask.mutateAsync({
         title: newTitle.trim(),
@@ -266,15 +289,17 @@ function TasksWorkspaceContent() {
         assigneeId: newAssigneeId || null,
         priority: newPriority,
         dueDate: newDueDate || null,
-        estimatedMinutes: newEstimatedMinutes ? Number(newEstimatedMinutes) : null,
+        estimatedMinutes: totalMinutes > 0 ? totalMinutes : null,
         projectId: newProjectId || null,
+        isSelfAssign: isSelf,
       });
       setNewTitle("");
       setNewDescription("");
-      setNewAssigneeId("");
+      setNewAssigneeId(userId || "");
       setNewPriority("medium");
       setNewDueDate("");
-      setNewEstimatedMinutes("");
+      setEstHours("");
+      setEstMinutes("");
       setNewProjectId("");
       setCreateTaskOpen(false);
     } catch {
@@ -338,10 +363,9 @@ function TasksWorkspaceContent() {
 
   const canReassignTask = (task: TaskRecord) => {
     if (task.status === "done" || task.status === "cancelled") return false;
-    if (userRole === "hr" || userRole === "admin" || userRole === "manager") {
-      return true;
-    }
-    return task.creator_id === userId;
+    if (userRole === "admin") return true;
+    if (userRole === "hr" || userRole === "manager") return true;
+    return false; // Employees cannot reassign tasks to others
   };
 
   const canCancelTask = (task: TaskRecord) => {
@@ -644,17 +668,61 @@ function TasksWorkspaceContent() {
                         <p className="text-xs font-bold text-text-primary line-clamp-2">
                           {task.title}
                         </p>
-                        <DueBadge dueDate={task.due_date} status={task.status} />
-                        <div className="flex items-center justify-between pt-1 border-t border-border-light/60 text-[11px] text-text-tertiary">
-                          <span className="truncate">
-                            {formatPerson(task.assignee_id)}
-                          </span>
-                          {task.estimated_minutes != null && (
-                            <span className="font-mono shrink-0">
-                              {task.estimated_minutes}m est
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <DueBadge dueDate={task.due_date} status={task.status} />
+                          {task.assignee_id && task.creator_id === task.assignee_id && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-purple/10 text-brand-purple border border-brand-purple/20">
+                              <UserCheck className="w-2.5 h-2.5" />
+                              Self-Assigned
+                            </span>
+                          )}
+                          {task.assignee_id && task.creator_id !== task.assignee_id && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-card-subtle text-text-tertiary">
+                              From: {formatPerson(task.creator_id)}
                             </span>
                           )}
                         </div>
+                        <div className="flex items-center justify-between pt-1 border-t border-border-light/60 text-[11px] text-text-tertiary">
+                          <span className="truncate font-medium text-text-secondary">
+                            {formatPerson(task.assignee_id)}
+                          </span>
+                          {task.estimated_minutes != null && (
+                            <span className="font-mono font-bold text-brand-purple shrink-0">
+                              {formatEstimatedDuration(task.estimated_minutes)} est
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Subordinate Accept Task Action */}
+                        {task.status === "todo" && task.assignee_id === userId && task.creator_id !== userId && (
+                          <div className="pt-1">
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                mutations.updateTaskStatus.mutate({
+                                  taskId: task.id,
+                                  status: "in_progress",
+                                  note: "Accepted assigned task",
+                                });
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.stopPropagation();
+                                  mutations.updateTaskStatus.mutate({
+                                    taskId: task.id,
+                                    status: "in_progress",
+                                    note: "Accepted assigned task",
+                                  });
+                                }
+                              }}
+                              className="w-full flex items-center justify-center gap-1 py-1.5 px-3 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-[11px] font-bold transition-all shadow-xs cursor-pointer"
+                            >
+                              <span>✓ Accept Task</span>
+                            </div>
+                          </div>
+                        )}
                       </button>
                     ))
                   ) : (
@@ -688,7 +756,14 @@ function TasksWorkspaceContent() {
                   className="hover:bg-card-subtle/50 cursor-pointer transition-colors"
                 >
                   <td className="py-3 px-4 font-bold text-text-primary">
-                    <div>{task.title}</div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span>{task.title}</span>
+                      {task.assignee_id && task.creator_id === task.assignee_id && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-brand-purple/10 text-brand-purple border border-brand-purple/20">
+                          Self-Assigned
+                        </span>
+                      )}
+                    </div>
                     {task.description && (
                       <div className="text-[11px] font-normal text-text-tertiary line-clamp-1">
                         {task.description}
@@ -699,13 +774,36 @@ function TasksWorkspaceContent() {
                     {task.project_id ? projectNameMap.get(task.project_id) || "Project" : "—"}
                   </td>
                   <td className="py-3 px-4 text-text-primary">
-                    {formatPerson(task.assignee_id)}
+                    <div className="font-semibold">{formatPerson(task.assignee_id)}</div>
+                    {task.estimated_minutes != null && (
+                      <div className="text-[10px] font-mono font-bold text-brand-purple">
+                        {formatEstimatedDuration(task.estimated_minutes)} est
+                      </div>
+                    )}
                   </td>
                   <td className="py-3 px-4">
                     <StatusPill status={task.priority} />
                   </td>
                   <td className="py-3 px-4">
-                    <StatusPill status={task.status} />
+                    <div className="flex items-center gap-2">
+                      <StatusPill status={task.status} />
+                      {task.status === "todo" && task.assignee_id === userId && task.creator_id !== userId && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            mutations.updateTaskStatus.mutate({
+                              taskId: task.id,
+                              status: "in_progress",
+                              note: "Accepted assigned task",
+                            });
+                          }}
+                          className="px-2 py-0.5 rounded-lg bg-brand-purple hover:bg-brand-purple-hover text-white text-[10px] font-bold cursor-pointer"
+                        >
+                          Accept
+                        </button>
+                      )}
+                    </div>
                   </td>
                   <td className="py-3 px-4">
                     {task.due_date ? (
@@ -778,7 +876,7 @@ function TasksWorkspaceContent() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
+                <div className="sm:col-span-2">
                   <label className="block text-[11px] font-bold uppercase text-text-secondary mb-1">
                     Assignee
                   </label>
@@ -786,15 +884,29 @@ function TasksWorkspaceContent() {
                     aria-label="Task Assignee"
                     value={newAssigneeId}
                     onChange={(e) => setNewAssigneeId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary"
                   >
                     <option value="">Unassigned</option>
                     {assignableEmployees.map((emp) => (
                       <option key={emp.id} value={emp.id}>
-                        {emp.full_name || emp.email}
+                        {emp.full_name || emp.email} {emp.id === userId ? "(You — Self-Assign)" : ""}
                       </option>
                     ))}
                   </select>
+
+                  {/* Assignee Guidance Badge */}
+                  {newAssigneeId && newAssigneeId === userId && (
+                    <div className="mt-2 flex items-center gap-2 p-2.5 rounded-xl bg-brand-purple/10 border border-brand-purple/20 text-brand-purple text-[11px] font-bold">
+                      <UserCheck className="w-4 h-4 shrink-0" />
+                      <span>Self-Assignment: Automatically accepted and placed in <strong>In Progress</strong> immediately.</span>
+                    </div>
+                  )}
+                  {newAssigneeId && newAssigneeId !== userId && (
+                    <div className="mt-2 flex items-center gap-2 p-2.5 rounded-xl bg-card-subtle border border-border-light text-text-secondary text-[11px]">
+                      <Clock className="w-4 h-4 shrink-0 text-text-tertiary" />
+                      <span>Delegating to <strong>{employeeNameMap.get(newAssigneeId) || "team member"}</strong>. Will start in <strong>To Do</strong> awaiting their acceptance.</span>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -828,20 +940,91 @@ function TasksWorkspaceContent() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold uppercase text-text-secondary mb-1">
-                    Estimate (mins)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100000}
-                    aria-label="Estimated minutes"
-                    value={newEstimatedMinutes}
-                    onChange={(e) => setNewEstimatedMinutes(e.target.value)}
-                    placeholder="e.g., 120"
-                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
-                  />
+                {/* Duration Picker: Hours and Minutes */}
+                <div className="sm:col-span-2">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-bold uppercase text-text-secondary flex items-center gap-1.5">
+                      <Timer className="w-3.5 h-3.5 text-brand-purple" />
+                      Estimated Duration
+                    </label>
+                    {((parseInt(estHours || "0", 10) * 60) + parseInt(estMinutes || "0", 10)) > 0 && (
+                      <span className="text-[11px] font-mono font-bold text-brand-purple">
+                        Total: {formatEstimatedDuration((parseInt(estHours || "0", 10) * 60) + parseInt(estMinutes || "0", 10))} ({(parseInt(estHours || "0", 10) * 60) + parseInt(estMinutes || "0", 10)} mins)
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 flex-1 bg-card-subtle border border-border-light rounded-xl px-3 py-2">
+                      <input
+                        type="number"
+                        min={0}
+                        max={1000}
+                        aria-label="Estimated hours"
+                        value={estHours}
+                        onChange={(e) => setEstHours(e.target.value)}
+                        placeholder="0"
+                        className="w-16 bg-transparent text-xs font-bold text-text-primary focus:outline-hidden"
+                      />
+                      <span className="text-xs font-semibold text-text-tertiary">hrs</span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-1 bg-card-subtle border border-border-light rounded-xl px-3 py-2">
+                      <input
+                        type="number"
+                        min={0}
+                        max={59}
+                        aria-label="Estimated minutes"
+                        value={estMinutes}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === "" || (parseInt(val, 10) >= 0 && parseInt(val, 10) < 60)) {
+                            setEstMinutes(val);
+                          }
+                        }}
+                        placeholder="0"
+                        className="w-16 bg-transparent text-xs font-bold text-text-primary focus:outline-hidden"
+                      />
+                      <span className="text-xs font-semibold text-text-tertiary">mins</span>
+                    </div>
+
+                    {(estHours || estMinutes) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEstHours("");
+                          setEstMinutes("");
+                        }}
+                        className="px-2.5 py-1.5 text-text-tertiary hover:text-text-primary text-[11px] font-bold cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Preset chips */}
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    <span className="text-[10px] font-bold uppercase text-text-tertiary mr-1">Presets:</span>
+                    {[
+                      { label: "30m", h: "", m: "30" },
+                      { label: "1h", h: "1", m: "" },
+                      { label: "2h", h: "2", m: "" },
+                      { label: "4h (Half Day)", h: "4", m: "" },
+                      { label: "8h (Full Day)", h: "8", m: "" },
+                    ].map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => {
+                          setEstHours(preset.h);
+                          setEstMinutes(preset.m);
+                        }}
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-colors border bg-card-subtle hover:bg-card-subtle/80 text-text-secondary border-border-light hover:border-brand-purple/40"
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -1053,11 +1236,14 @@ function TasksWorkspaceContent() {
                       mutations.updateTaskStatus.mutate({
                         taskId: selectedTask.id,
                         status: "in_progress",
+                        note: selectedTask.assignee_id === userId && selectedTask.creator_id !== userId ? "Accepted assigned task" : undefined,
                       })
                     }
                     className="px-3.5 py-1.5 rounded-full bg-brand-purple text-white text-xs font-bold cursor-pointer"
                   >
-                    Start Progress
+                    {selectedTask.assignee_id === userId && selectedTask.creator_id !== userId
+                      ? "✓ Accept Task & Start Progress"
+                      : "Start Progress"}
                   </button>
                 )}
 
@@ -1144,12 +1330,24 @@ function TasksWorkspaceContent() {
 
               {/* Assignee Control */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3.5 rounded-2xl bg-card-subtle border border-border-light">
-                <div className="flex items-center gap-2 text-xs">
-                  <UserCheck className="w-4 h-4 text-brand-purple" />
-                  <span className="font-bold text-text-secondary">Assignee:</span>
-                  <span className="font-extrabold text-text-primary">
-                    {formatPerson(selectedTask.assignee_id)}
-                  </span>
+                <div className="flex flex-col gap-1 text-xs">
+                  <div className="flex items-center gap-2">
+                    <UserCheck className="w-4 h-4 text-brand-purple" />
+                    <span className="font-bold text-text-secondary">Assignee:</span>
+                    <span className="font-extrabold text-text-primary">
+                      {formatPerson(selectedTask.assignee_id)}
+                    </span>
+                  </div>
+                  {selectedTask.assignee_id && selectedTask.creator_id === selectedTask.assignee_id && (
+                    <span className="text-[10px] font-bold text-brand-purple ml-6">
+                      • Self-Assigned
+                    </span>
+                  )}
+                  {selectedTask.assignee_id && selectedTask.creator_id !== selectedTask.assignee_id && (
+                    <span className="text-[10px] text-text-tertiary ml-6">
+                      • Assigned by {formatPerson(selectedTask.creator_id)}
+                    </span>
+                  )}
                 </div>
 
                 {canReassignTask(selectedTask) && (
@@ -1212,7 +1410,7 @@ function TasksWorkspaceContent() {
                 <span className="text-[11px] font-mono text-text-secondary">
                   {totalLoggedMinutes}m logged
                   {selectedTask.estimated_minutes != null
-                    ? ` / ${selectedTask.estimated_minutes}m est`
+                    ? ` / ${formatEstimatedDuration(selectedTask.estimated_minutes)} est`
                     : ""}
                 </span>
               </div>
