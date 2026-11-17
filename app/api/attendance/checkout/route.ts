@@ -137,7 +137,12 @@ export async function POST(request: NextRequest) {
       .update(updatePayload)
       .eq("id", activeSession.id);
 
-    if (updateErr && updateErr.code === "42703") {
+    if (
+      updateErr &&
+      (updateErr.code === "PGRST204" ||
+        updateErr.code === "42703" ||
+        updateErr.message?.includes("early_checkout"))
+    ) {
       // Column does not exist on remote schema yet: update without those columns
       const fallbackPayload = {
         check_out_at: nowIso,

@@ -51,67 +51,80 @@ test.describe("Module 1: Attendance - API Enforcement & Edge Cases", () => {
   test("Early check-out API returns 409 EARLY_CHECKOUT without confirm_early", async ({ request }) => {
     const session = await loginAndGetSession("employee");
 
-    // Create an active session for employee today
-    const now = new Date();
-    const todayStr = now.toISOString().slice(0, 10);
-    const { data: inserted, error } = await supabaseAdmin.from("attendance_sessions").insert({
-      employee_id: EMPLOYEE_ID,
-      organization_id: ORG_ID,
-      work_date: todayStr,
-      check_in_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(), // 30 mins ago
-      source: "web",
-      note: "TEST_ Session",
-    }).select().single();
+    // Ensure shift ends in future (overnight 17:00 to 01:00) so early checkout is triggered regardless of test run time
+    await supabaseAdmin
+      .from("employees")
+      .update({ shift_start_time: "17:00:00", shift_end_time: "01:00:00" })
+      .eq("id", EMPLOYEE_ID);
 
-    expect(error).toBeNull();
-    expect(inserted).toBeDefined();
+    try {
+      // Create an active session for employee today
+      const now = new Date();
+      const todayStr = now.toISOString().slice(0, 10);
+      const { data: inserted, error } = await supabaseAdmin.from("attendance_sessions").insert({
+        employee_id: EMPLOYEE_ID,
+        organization_id: ORG_ID,
+        work_date: todayStr,
+        check_in_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+        source: "web",
+        note: "TEST_ Session",
+      }).select().single();
 
-    // Call checkout without confirm_early
-    const res = await request.post("/api/attendance/checkout", {
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
-      },
-      data: {},
-    });
+      expect(error).toBeNull();
+      expect(inserted).toBeDefined();
 
-    expect(res.status()).toBe(409);
-    const body = await res.json();
-    expect(body.code).toBe("EARLY_CHECKOUT");
-    expect(body.shift_end_time).toBe("17:00");
-    expect(body.minutes_early).toBeGreaterThan(0);
-    expect(body.message).toContain("early. Check out anyway?");
+      // Call checkout without confirm_early
+      const res = await request.post("/api/attendance/checkout", {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        data: {},
+      });
 
-    // Session remains active
-    const { data: checkActive } = await supabaseAdmin
-      .from("attendance_sessions")
-      .select("check_out_at")
-      .eq("id", inserted.id)
-      .single();
-    expect(checkActive?.check_out_at).toBeNull();
+      expect(res.status()).toBe(409);
+      const body = await res.json();
+      expect(body.code).toBe("EARLY_CHECKOUT");
+      expect(body.shift_end_time).toBe("01:00");
+      expect(body.minutes_early).toBeGreaterThan(0);
+      expect(body.message).toContain("early. Check out anyway?");
 
-    // Call checkout WITH confirm_early: true
-    const confirmRes = await request.post("/api/attendance/checkout", {
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
-      },
-      data: { confirm_early: true, reason: "Doctor appointment" },
-    });
+      // Session remains active
+      const { data: checkActive } = await supabaseAdmin
+        .from("attendance_sessions")
+        .select("check_out_at")
+        .eq("id", inserted.id)
+        .single();
+      expect(checkActive?.check_out_at).toBeNull();
 
-    expect(confirmRes.status()).toBe(200);
-    const confirmBody = await confirmRes.json();
-    expect(confirmBody.success).toBe(true);
-    expect(confirmBody.early_checkout).toBe(true);
+      // Call checkout WITH confirm_early: true
+      const confirmRes = await request.post("/api/attendance/checkout", {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        data: { confirm_early: true, reason: "Doctor appointment" },
+      });
 
-    // Verify session was closed and note contains reason
-    const { data: closedSession } = await supabaseAdmin
-      .from("attendance_sessions")
-      .select("check_out_at, note")
-      .eq("id", inserted.id)
-      .single();
-    expect(closedSession?.check_out_at).not.toBeNull();
-    expect(closedSession?.note).toContain("Doctor appointment");
+      expect(confirmRes.status()).toBe(200);
+      const confirmBody = await confirmRes.json();
+      expect(confirmBody.success).toBe(true);
+      expect(confirmBody.early_checkout).toBe(true);
+
+      // Verify session was closed and note contains reason
+      const { data: closedSession } = await supabaseAdmin
+        .from("attendance_sessions")
+        .select("check_out_at, note")
+        .eq("id", inserted.id)
+        .single();
+      expect(closedSession?.check_out_at).not.toBeNull();
+      expect(closedSession?.note).toContain("Doctor appointment");
+    } finally {
+      await supabaseAdmin
+        .from("employees")
+        .update({ shift_start_time: "09:00:00", shift_end_time: "17:00:00" })
+        .eq("id", EMPLOYEE_ID);
+    }
   });
 
   test("Night shift crossing midnight calculates shift end on next calendar day", async ({ request }) => {
@@ -160,68 +173,81 @@ test.describe("Module 1: Attendance - UI Punch & Confirmation Dialog", () => {
   test.use({ storageState: getStorageStatePath("employee") });
 
   test("Hero card check-out shows early dialog, cancel leaves session open, confirm checks out", async ({ page }) => {
-    // 1. Create active session for employee so UI loads in checked-in state
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const { data: inserted } = await supabaseAdmin.from("attendance_sessions").insert({
-      employee_id: EMPLOYEE_ID,
-      organization_id: ORG_ID,
-      work_date: todayStr,
-      check_in_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-      source: "web",
-      note: "TEST_ UI Session",
-    }).select().single();
+    // Set shift to overnight 17:00 to 01:00 so early checkout is guaranteed
+    await supabaseAdmin
+      .from("employees")
+      .update({ shift_start_time: "17:00:00", shift_end_time: "01:00:00" })
+      .eq("id", EMPLOYEE_ID);
 
-    await page.goto("/");
-    await page.waitForLoadState("domcontentloaded");
+    try {
+      // 1. Create active session for employee so UI loads in checked-in state
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const { data: inserted } = await supabaseAdmin.from("attendance_sessions").insert({
+        employee_id: EMPLOYEE_ID,
+        organization_id: ORG_ID,
+        work_date: todayStr,
+        check_in_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+        source: "web",
+        note: "TEST_ UI Session",
+      }).select().single();
 
-    // Assert session is active
-    await expect(page.getByText("Active Session").first()).toBeVisible({ timeout: 10000 });
-    const checkOutBtn = page.getByRole("button", { name: /check out now/i }).first();
-    await expect(checkOutBtn).toBeVisible();
+      await page.goto("/");
+      await page.waitForLoadState("domcontentloaded");
 
-    // Click Check Out Now -> Early Check-Out modal should appear
-    await checkOutBtn.click();
+      // Assert session is active
+      await expect(page.getByText("Active Session").first()).toBeVisible({ timeout: 10000 });
+      const checkOutBtn = page.getByRole("button", { name: /check out now/i }).first();
+      await expect(checkOutBtn).toBeVisible();
 
-    const dialogTitle = page.getByText("Early Check-Out Confirmation");
-    await expect(dialogTitle).toBeVisible({ timeout: 5000 });
+      // Click Check Out Now -> Early Check-Out modal should appear
+      await checkOutBtn.click();
 
-    // Assert message contains shift ends at 17:00
-    await expect(page.getByText(/Your shift ends at 17:00/)).toBeVisible();
+      const dialogTitle = page.getByText("Early Check-Out Confirmation");
+      await expect(dialogTitle).toBeVisible({ timeout: 5000 });
 
-    // Click Cancel -> dialog closes, session remains active
-    const cancelBtn = page.getByRole("button", { name: "Cancel" });
-    await cancelBtn.click();
-    await expect(dialogTitle).not.toBeVisible();
+      // Assert message contains shift ends at 01:00
+      await expect(page.getByText(/Your shift ends at 01:00/).first()).toBeVisible();
 
-    // Verify session still active in DB
-    const { data: sessionStillActive } = await supabaseAdmin
-      .from("attendance_sessions")
-      .select("check_out_at")
-      .eq("id", inserted.id)
-      .single();
-    expect(sessionStillActive?.check_out_at).toBeNull();
+      // Click Cancel -> dialog closes, session remains active
+      const cancelBtn = page.getByRole("button", { name: "Cancel" });
+      await cancelBtn.click();
+      await expect(dialogTitle).not.toBeVisible();
 
-    // Click Check Out Now again -> Confirm check-out
-    await checkOutBtn.click();
-    await expect(dialogTitle).toBeVisible();
+      // Verify session still active in DB
+      const { data: sessionStillActive } = await supabaseAdmin
+        .from("attendance_sessions")
+        .select("check_out_at")
+        .eq("id", inserted.id)
+        .single();
+      expect(sessionStillActive?.check_out_at).toBeNull();
 
-    const reasonInput = page.locator("#early-checkout-reason");
-    await reasonInput.fill("TEST_ Early checkout for doctor");
+      // Click Check Out Now again -> Confirm check-out
+      await checkOutBtn.click();
+      await expect(dialogTitle).toBeVisible();
 
-    const confirmBtn = page.getByRole("button", { name: "Yes, check out" });
-    await confirmBtn.click();
+      const reasonInput = page.locator("#early-checkout-reason");
+      await reasonInput.fill("TEST_ Early checkout for doctor");
 
-    // Modal closes and toast or checked out state appears
-    await expect(dialogTitle).not.toBeVisible({ timeout: 10000 });
-    await expect(page.getByText("Checked out successfully!").first()).toBeVisible({ timeout: 10000 });
+      const confirmBtn = page.getByRole("button", { name: "Yes, check out" });
+      await confirmBtn.click();
 
-    // Verify session closed in DB
-    const { data: sessionClosed } = await supabaseAdmin
-      .from("attendance_sessions")
-      .select("check_out_at")
-      .eq("id", inserted.id)
-      .single();
-    expect(sessionClosed?.check_out_at).not.toBeNull();
+      // Modal closes and toast or checked out state appears
+      await expect(dialogTitle).not.toBeVisible({ timeout: 10000 });
+      await expect(page.getByText("Checked out successfully!").first()).toBeVisible({ timeout: 10000 });
+
+      // Verify session closed in DB
+      const { data: sessionClosed } = await supabaseAdmin
+        .from("attendance_sessions")
+        .select("check_out_at")
+        .eq("id", inserted.id)
+        .single();
+      expect(sessionClosed?.check_out_at).not.toBeNull();
+    } finally {
+      await supabaseAdmin
+        .from("employees")
+        .update({ shift_start_time: "09:00:00", shift_end_time: "17:00:00" })
+        .eq("id", EMPLOYEE_ID);
+    }
   });
 });
 
