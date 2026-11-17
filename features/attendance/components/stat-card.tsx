@@ -29,37 +29,52 @@ export function StatCard({
   className,
 }: StatCardProps) {
   return (
-    <BentoCard className={cn("p-5 justify-between min-h-[140px]", className)}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
+    <BentoCard
+      className={cn(
+        "p-5 justify-between h-full min-h-[148px] flex flex-col transition-all",
+        className
+      )}
+    >
+      {/* Header: Title and Icon */}
+      <div className="flex items-center justify-between gap-2 mb-2 min-w-0">
+        <span className="text-xs font-semibold text-text-secondary uppercase tracking-wider truncate min-w-0 select-none">
           {title}
         </span>
         {icon && (
-          <div className="w-8 h-8 rounded-full bg-brand-purple-light flex items-center justify-center text-brand-purple">
+          <div className="w-8 h-8 rounded-full bg-brand-purple-light flex items-center justify-center text-brand-purple shrink-0">
             {icon}
           </div>
         )}
       </div>
 
-      <div className="my-1">
-        <div className="text-2xl font-extrabold text-text-primary tracking-tight">
+      {/* Metric value and subtitle */}
+      <div className="my-1 min-w-0">
+        <div className="text-2xl font-extrabold text-text-primary tracking-tight tabular-nums truncate">
           {value}
         </div>
         {subtitle && (
-          <p className="text-xs text-text-tertiary mt-1 font-medium">{subtitle}</p>
+          <p className="text-xs text-text-tertiary mt-1 font-medium truncate">{subtitle}</p>
         )}
       </div>
 
-      {progress !== undefined && (
-        <div className="mt-3">
-          <div className="w-full bg-card-subtle h-2 rounded-full overflow-hidden">
-            <div
-              className="bg-brand-purple h-full rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(Math.max(progress, 0), 100)}%` }}
-            />
-          </div>
+      {/* Matching Progress / Metric Footer Line */}
+      <div className="mt-3 pt-1">
+        <div className="w-full bg-card-subtle h-2 rounded-full overflow-hidden">
+          <div
+            className={cn(
+              "h-full rounded-full transition-all duration-500",
+              progress !== undefined ? "bg-brand-purple" : "bg-status-warning-dot"
+            )}
+            style={{
+              width: `${
+                progress !== undefined
+                  ? Math.min(Math.max(progress, 0), 100)
+                  : 100
+              }%`,
+            }}
+          />
         </div>
-      )}
+      </div>
 
       {trend && (
         <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold">
@@ -84,4 +99,3 @@ export function StatCard({
     </BentoCard>
   );
 }
-

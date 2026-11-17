@@ -172,3 +172,48 @@ dialog::backdrop {
   overscroll-behavior: contain;
 }
 
+/* Safe-area insets variables */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
+/* Tabular figures for data, timers, and stats */
+.tabular-nums,
+[data-tabular-nums="true"],
+.font-mono,
+time {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Text wrap balance & pretty */
+h1, h2, h3, h4, h5, h6 {
+  text-wrap: balance;
+}
+p, .text-pretty {
+  text-wrap: pretty;
+}
+
+/* Continuous corners (squircle) */
+.rounded-\[28px\],
+.rounded-\[24px\],
+.rounded-3xl,
+.rounded-2xl {
+  corner-shape: squircle;
+}
+
+/* Mobile hit-slop: coarse pointers have minimum tap area */
+@media (pointer: coarse) {
+  button:not([data-no-hit-slop]),
+  a:not([data-no-hit-slop]),
+  [role="button"]:not([data-no-hit-slop]) {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+

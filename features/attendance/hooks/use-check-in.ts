@@ -12,9 +12,13 @@ export function useCheckIn() {
   return useMutation({
     mutationFn: async (note?: string) => {
       // 1. Call server API which authoritatively enforces shift hours
+      const idempotencyKey = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
       const res = await fetch("/api/attendance/check-in", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
         body: JSON.stringify({ note: note || undefined }),
       });
 

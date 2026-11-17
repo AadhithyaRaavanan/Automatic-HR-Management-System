@@ -26,9 +26,13 @@ export function useCheckOut(options?: {
 
   return useMutation({
     mutationFn: async (params?: CheckOutParams) => {
+      const idempotencyKey = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
       const res = await fetch("/api/attendance/checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
         body: JSON.stringify(params || {}),
       });
 

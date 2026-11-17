@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (event === "status_changed") {
-      if (newStatus === "under_review" || newStatus === "in_review") {
+      if (newStatus === "blocked") {
         const recipients = new Set<string>();
         if (creatorId) recipients.add(creatorId);
         if (task?.assignee_id) {
@@ -56,10 +56,10 @@ export async function POST(request: NextRequest) {
 
         await notify({
           userIds: Array.from(recipients),
-          type: "task_under_review",
+          type: "task_blocked",
           typeGroup: "tasks",
-          title: "Task Moved to Under Review",
-          body: `Task "${title}" is ready and has been placed under review.`,
+          title: "Task Marked as Blocked",
+          body: `Task "${title}" has been marked as blocked and requires attention.`,
           link: "/tasks",
           entityType: "tasks",
           entityId: taskId,

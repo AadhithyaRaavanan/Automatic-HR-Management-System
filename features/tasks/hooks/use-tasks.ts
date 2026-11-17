@@ -510,6 +510,20 @@ export function useTaskMutations() {
   });
 
   const updateTaskStatus = useMutation({
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: ["tasks-workspace"] });
+      const previousData = queryClient.getQueryData(["tasks-workspace"]);
+      queryClient.setQueryData(["tasks-workspace"], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          tasks: (old.tasks || []).map((t: any) =>
+            t.id === vars.taskId ? { ...t, status: vars.status } : t
+          ),
+        };
+      });
+      return { previousData };
+    },
     mutationFn: async (input: {
       taskId: string;
       status: TaskStatus;
@@ -556,7 +570,10 @@ export function useTaskMutations() {
         }),
       }).catch(() => {});
     },
-    onError: (err: Error) => {
+    onError: (err: Error, _, context: any) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(["tasks-workspace"], context.previousData);
+      }
       toast.error(err.message || "Failed to update task status");
     },
   });
@@ -570,7 +587,16 @@ export function useTaskMutations() {
       return { success: true };
     },
     onSuccess: () => {
-      toast.success("Task deleted");
+      toast.success("Task deleted", {
+        duration: 6000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            invalidateAll();
+            toast.info("Task deletion restored");
+          },
+        },
+      });
       invalidateAll();
     },
     onError: (err: Error) => {

@@ -182,6 +182,7 @@ export function useAttendanceToday() {
         streakDays,
       };
     },
-    staleTime: 60 * 1000, // Keep data fresh without flashing empty on route change
+    staleTime: 0, // Live punch state is always immediately refreshed on tab switch / window focus
+    refetchOnWindowFocus: true,
   });
 }

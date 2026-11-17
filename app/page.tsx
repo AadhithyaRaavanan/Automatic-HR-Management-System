@@ -171,7 +171,7 @@ function DashboardContent({
       </section>
 
       {/* Row 1: Hero Action Card & Quick Metrics */}
-      <div data-tour="dashboard-hero" className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <div data-tour="dashboard-hero" className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         <div className="lg:col-span-6 space-y-5">
           <div data-tour="punch-card">
             <HeroCheckInCard
@@ -192,7 +192,7 @@ function DashboardContent({
           </div>
         </div>
 
-        <div className="lg:col-span-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="lg:col-span-6 self-start grid grid-cols-1 sm:grid-cols-3 gap-4 items-stretch">
           <StatCard
             title="Today's Hours"
             value={formatDurationMinutes(todayMinutes)}
@@ -211,6 +211,7 @@ function DashboardContent({
             title="On-Time Streak"
             value={`${data?.streakDays || 0} Days`}
             subtitle="Recent consistent punches"
+            progress={Math.min(Math.max((data?.streakDays || 0) * 15, 10), 100)}
             icon={<Flame className="w-4 h-4 text-status-warning-dot" />}
           />
         </div>

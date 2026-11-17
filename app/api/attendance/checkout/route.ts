@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { Database } from "@/types/database.types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { checkIdempotency, recordIdempotency } from "@/lib/api/idempotency";
 import { evaluateEarlyCheckout } from "@/lib/date/timezone";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +46,12 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const idempotencyKey = request.headers.get("idempotency-key");
+    const cachedResponse = await checkIdempotency(idempotencyKey, user.id, "/api/attendance/checkout");
+    if (cachedResponse) {
+      return cachedResponse;
     }
 
     let body: { confirm_early?: boolean; reason?: string } = {};
@@ -195,14 +202,20 @@ export async function POST(request: NextRequest) {
     const endMs = new Date(nowIso).getTime();
     const durationMinutes = Math.max(0, Math.round((endMs - startMs) / 60000));
 
-    return NextResponse.json({
+    const resultData = {
       success: true,
       session_id: activeSession.id,
       work_date: activeSession.work_date,
       duration_minutes: durationMinutes,
       early_checkout: isEarlyCheckout,
       early_checkout_reason: reason,
-    });
+    };
+
+    if (idempotencyKey) {
+      await recordIdempotency(idempotencyKey, user.id, "/api/attendance/checkout", resultData);
+    }
+
+    return NextResponse.json(resultData);
   } catch (err: any) {
     return NextResponse.json(
       { error: err.message || "Internal server error" },

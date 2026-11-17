@@ -13,6 +13,7 @@ import {
   formatEstimatedDuration,
   TaskRecord,
 } from "@/features/tasks/hooks/use-tasks";
+import { formatFriendlyDueState } from "@/lib/date/task-due";
 import { TaskPriority, TaskStatus } from "@/types/database.types";
 import { cn } from "@/lib/utils";
 import {
@@ -50,30 +51,22 @@ function DueBadge({
   dueDate: string | null;
   status: TaskStatus;
 }) {
-  const state = getTaskDueState(dueDate, status);
-  if (!dueDate || state === "none") return null;
-
-  if (state === "overdue") {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-status-danger-bg text-status-danger-text">
-        <AlertTriangle className="w-3 h-3" />
-        Overdue ({dueDate})
-      </span>
-    );
-  }
-  if (state === "due_soon") {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-status-warning-bg text-status-warning-text">
-        <Clock className="w-3 h-3" />
-        Due Soon ({dueDate})
-      </span>
-    );
-  }
+  if (!dueDate) return null;
+  const { label, state, colorClass } = formatFriendlyDueState(dueDate, status);
+  if (!label || state === "none") return null;
 
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-card-subtle text-text-secondary">
-      <Calendar className="w-3 h-3" />
-      {dueDate}
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px]",
+        colorClass
+      )}
+    >
+      {state === "overdue" && <AlertTriangle className="w-3 h-3 shrink-0" />}
+      {state === "due_today" && <Clock className="w-3 h-3 shrink-0" />}
+      {state === "due_tomorrow" && <Clock className="w-3 h-3 shrink-0" />}
+      {(state === "due_future" || state === "completed") && <Calendar className="w-3 h-3 shrink-0" />}
+      <span>{label}</span>
     </span>
   );
 }
@@ -628,15 +621,15 @@ function TasksWorkspaceContent() {
           }
         />
       ) : viewMode === "board" ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 items-start">
+        <div className="flex overflow-x-auto pb-4 gap-4 snap-x snap-mandatory xl:grid xl:grid-cols-5 xl:overflow-x-visible xl:pb-0 items-stretch">
           {STATUS_COLUMNS.map((col) => {
             const colTasks = filteredTasks.filter((t) => t.status === col.key);
             return (
               <div
                 key={col.key}
-                className="rounded-[24px] bg-card-subtle/70 border border-border-light p-3.5 space-y-3"
+                className="w-[280px] sm:w-[320px] xl:w-auto shrink-0 snap-center flex flex-col min-h-[520px] h-[calc(100vh-280px)] max-h-[760px] rounded-[24px] bg-card-subtle/70 border border-border-light p-3.5 space-y-3"
               >
-                <div className="flex items-center justify-between px-1">
+                <div className="flex items-center justify-between px-1 shrink-0">
                   <div>
                     <h2 className="text-xs font-extrabold uppercase tracking-wider text-text-primary">
                       {col.label}
@@ -648,7 +641,7 @@ function TasksWorkspaceContent() {
                   </span>
                 </div>
 
-                <div className="space-y-2.5">
+                <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 min-h-0">
                   {colTasks.length > 0 ? (
                     colTasks.map((task) => (
                       <button
@@ -726,7 +719,7 @@ function TasksWorkspaceContent() {
                       </button>
                     ))
                   ) : (
-                    <div className="py-6 px-3 text-center rounded-2xl border border-dashed border-border-light text-[11px] text-text-tertiary">
+                    <div className="py-8 px-3 text-center rounded-2xl border border-dashed border-border-light text-[11px] text-text-tertiary">
                       No tasks in {col.label}
                     </div>
                   )}

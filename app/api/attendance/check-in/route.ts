@@ -3,6 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { Database } from "@/types/database.types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { evaluatePreCheckInLock, getEmployeeWorkDate } from "@/lib/date/timezone";
+import { checkIdempotency, recordIdempotency } from "@/lib/api/idempotency";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,12 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const idempotencyKey = request.headers.get("idempotency-key");
+    const cachedResponse = await checkIdempotency(idempotencyKey, user.id, "/api/attendance/check-in");
+    if (cachedResponse) {
+      return cachedResponse;
     }
 
     let body: { note?: string } = {};
@@ -159,12 +166,18 @@ export async function POST(request: NextRequest) {
       });
     } catch {}
 
-    return NextResponse.json({
+    const resultData = {
       success: true,
       session_id: session.id,
       check_in_at: session.check_in_at,
       work_date: effectiveWorkDate,
-    });
+    };
+
+    if (idempotencyKey) {
+      await recordIdempotency(idempotencyKey, user.id, "/api/attendance/check-in", resultData);
+    }
+
+    return NextResponse.json(resultData);
   } catch (err: any) {
     return NextResponse.json(
       { error: err.message || "Internal server error" },

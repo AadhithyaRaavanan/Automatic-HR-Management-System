@@ -8,10 +8,46 @@ export function Skeleton({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("animate-pulse rounded-xl bg-card-subtle/80 border border-border-light/40", className)}
+      className={cn("animate-pulse motion-reduce:animate-none rounded-xl bg-card-subtle/80 border border-border-light/40", className)}
       {...props}
     />
   );
+}
+
+/**
+ * Delayed show helper: prevents flash of skeletons when queries resolve in < 300ms
+ */
+export function useDelayedLoading(isLoading: boolean, delayMs = 300): boolean {
+  const [show, setShow] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!isLoading) {
+      setShow(false);
+      return;
+    }
+    const timer = setTimeout(() => setShow(true), delayMs);
+    return () => clearTimeout(timer);
+  }, [isLoading, delayMs]);
+
+  return isLoading && show;
+}
+
+export function DelayedSkeleton({
+  children,
+  delayMs = 300,
+}: {
+  children: React.ReactNode;
+  delayMs?: number;
+}) {
+  const [show, setShow] = React.useState(false);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => setShow(true), delayMs);
+    return () => clearTimeout(timer);
+  }, [delayMs]);
+
+  if (!show) return null;
+  return <>{children}</>;
 }
 
 export function DashboardSkeleton() {

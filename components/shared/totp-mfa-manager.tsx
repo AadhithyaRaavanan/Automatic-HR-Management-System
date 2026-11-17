@@ -226,8 +226,17 @@ export function TotpMfaManager() {
                 maxLength={6}
                 pattern="[0-9]*"
                 inputMode="numeric"
+                autoComplete="one-time-code"
                 value={verifyCode}
-                onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+                  setVerifyCode(val);
+                  if (val.length === 6 && !isVerifying) {
+                    setTimeout(() => {
+                      (e.target.form as HTMLFormElement)?.requestSubmit();
+                    }, 60);
+                  }
+                }}
                 placeholder="123456"
                 className="w-full text-center tracking-widest font-mono text-sm py-2 px-3 rounded-xl bg-card-subtle border border-border-light text-text-primary focus:outline-none focus:border-brand-purple"
               />
