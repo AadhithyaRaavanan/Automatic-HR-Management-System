@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { Database } from "@/types/database.types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { notify } from "@/lib/notifications/notify";
+import { getHrUsers } from "@/lib/notifications/recipients";
 import { sendOnboardingSubmittedEmail } from "@/lib/email/resend";
 import { QUALIFICATION_DOC_MAP, HighestQualification } from "@/lib/onboarding-types";
 
@@ -372,22 +374,19 @@ export async function POST(request: NextRequest) {
 
     // 7. Trigger In-App Notification to HR Admins
     try {
-      // Find HR and Admin users
-      const { data: hrAdmins } = await (supabaseAdmin.from("employees") as any)
-        .select("id, organization_id")
-        .or("role.eq.admin,role.eq.hr,user_role.eq.admin,user_role.eq.hr");
-
-      if (hrAdmins && hrAdmins.length > 0) {
-        const notifInserts = hrAdmins.map((hr: any) => ({
-          organization_id: hr.organization_id || empRecord?.organization_id,
-          user_id: hr.id,
+      const hrUserIds = await getHrUsers(empRecord?.organization_id);
+      if (hrUserIds.length > 0) {
+        await notify({
+          userIds: hrUserIds,
           type: "onboarding_submission",
-          title: "NEW EMPLOYEE ONBOARDING SUBMISSION",
-          body: `An employee has completed the onboarding form and submitted documents for verification.\n• Name: ${candidateName}\n• ID: ${employeeIdFormatted}\n• Department: ${departmentName}\n• Designation: ${designationName}\n• Status: ${nextStatus}`,
+          typeGroup: "onboarding",
+          title: "New Employee Onboarding Submission",
+          body: `Candidate ${candidateName} has submitted their profile and documents for verification.\nDepartment: ${departmentName} | Designation: ${designationName}`,
           link: `/hr/onboarding?employeeId=${user.id}`,
-          created_at: nowIso,
-        }));
-        await (supabaseAdmin as any).from("notifications").insert(notifInserts);
+          entityType: "onboarding_profiles",
+          entityId: user.id,
+          actorId: user.id,
+        });
       }
     } catch (notifErr) {
       console.warn("[Onboarding Notification Error]:", notifErr);

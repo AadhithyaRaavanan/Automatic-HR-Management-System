@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRouteCaller } from "@/lib/auth/admin-guard";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { notify } from "@/lib/notifications/notify";
 import { QUALIFICATION_DOC_MAP, HighestQualification } from "@/lib/onboarding-types";
 
 export const dynamic = "force-dynamic";
@@ -159,21 +160,18 @@ export async function POST(request: NextRequest) {
       });
     } catch {}
 
-    // 6. In-App Notification to Employee
+    // 6. In-App + Email Notification to Employee
     try {
-      const { data: empRecord } = await (supabaseAdmin.from("employees") as any)
-        .select("organization_id")
-        .eq("id", userId)
-        .maybeSingle();
-
-      await (supabaseAdmin as any).from("notifications").insert({
-        organization_id: empRecord?.organization_id,
-        user_id: userId,
-        type: "onboarding_status",
-        title: "WELCOME ABOARD – ONBOARDING APPROVED!",
-        body: "Your documents have been verified and your profile is approved. You now have full access to your employee workspace.",
+      await notify({
+        userIds: [userId],
+        type: "onboarding_approved",
+        typeGroup: "onboarding",
+        title: "Welcome Aboard – Onboarding Approved!",
+        body: "Your submitted documents have been fully verified and your profile is approved. You now have full access to your workplace dashboard.",
         link: "/",
-        created_at: nowIso,
+        entityType: "onboarding_profiles",
+        entityId: userId,
+        actorId: reviewerId,
       });
     } catch (notifErr) {
       console.warn("[Onboarding Approval Notification Error]:", notifErr);

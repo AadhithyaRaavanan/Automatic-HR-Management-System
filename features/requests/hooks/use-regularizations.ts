@@ -146,10 +146,21 @@ export function useSubmitRegularization() {
         return newStored;
       }
     },
-    onSuccess: () => {
+    onSuccess: (data: any, vars: any) => {
       toast.success("Regularization request submitted!");
       queryClient.invalidateQueries({ queryKey: ["regularizations"] });
       queryClient.invalidateQueries({ queryKey: ["attendance"] });
+
+      fetch("/api/requests/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "submitted",
+          requestId: data?.id,
+          workDate: vars.workDate,
+          reason: vars.reason,
+        }),
+      }).catch(() => {});
     },
   });
 }

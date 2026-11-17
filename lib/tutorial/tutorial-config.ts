@@ -138,6 +138,14 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
       tip: "Keep your emergency contact details updated at all times so management can reach family in an emergency.",
     },
     {
+      id: "emp-notifications",
+      title: "Central Notifications & Preferences",
+      route: "/",
+      selector: '[data-tour="notification-bell"]',
+      body: "Click the bell icon in the header to view unread alerts for shift reminders, task assignments, and review decisions. Click any notification to jump directly to it and mark it as read, or click 'Mark all read' to clear the unread counter. You can customize email and in-app delivery preferences per category in Settings.",
+      tip: "A badge shows unread items up to 99+. Configure In-App and Email toggles per category anytime under Settings.",
+    },
+    {
       id: "emp-settings",
       title: "Security, Privacy & Sign Out",
       route: "/settings",
@@ -294,6 +302,14 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
       selector: '[data-tour="profile-card"]',
       body: "Manage your contact details, emergency phone number, and verified credentials. You can replay this manager tutorial at any time by clicking the Replay button on this page.",
       tip: "Ensure your emergency contact details remain up to date.",
+    },
+    {
+      id: "mgr-notifications",
+      title: "Central Notifications & Delivery Preferences",
+      route: "/",
+      selector: '[data-tour="notification-bell"]',
+      body: "The notification bell in the header alerts you in real time when direct reports submit leave or regularization requests, complete deliverables, or flag goals as at-risk. Click any item to navigate directly to review it. Delivery channels can be tailored per category in Settings.",
+      tip: "Manage your notification preferences under Settings to balance in-app alerts and email dispatches.",
     },
     {
       id: "mgr-settings",
@@ -458,6 +474,14 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
       selector: '[data-tour="profile-card"]',
       body: "Manage your contact details, emergency phone number, and verified credentials. You can replay this HR tutorial at any time by clicking the Replay button on this page.",
       tip: "Ensure your emergency contact details remain up to date.",
+    },
+    {
+      id: "hr-notifications",
+      title: "Workplace Alerts & Incident Center",
+      route: "/",
+      selector: '[data-tour="notification-bell"]',
+      body: "The notification bell keeps HR updated on onboarding document submissions, invite activations, pending approval queues, and security notices. Click any notification to review the candidate or request immediately, or configure delivery settings anytime.",
+      tip: "Security notices are always dispatched in-app and by email, while task and reminder channels can be toggled in Settings.",
     },
     {
       id: "hr-settings",

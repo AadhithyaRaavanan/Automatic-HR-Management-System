@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRouteCaller } from "@/lib/auth/admin-guard";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { notify } from "@/lib/notifications/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -80,19 +81,16 @@ export async function POST(request: NextRequest) {
 
       // In-app notification to the employee
       try {
-        const { data: empRecord } = await (supabaseAdmin.from("employees") as any)
-          .select("organization_id")
-          .eq("id", doc.user_id)
-          .maybeSingle();
-
-        await (supabaseAdmin as any).from("notifications").insert({
-          organization_id: empRecord?.organization_id,
-          user_id: doc.user_id,
-          type: "onboarding_status",
-          title: "ONBOARDING DOCUMENT CORRECTION REQUIRED",
-          body: `Your document '${doc.document_name || doc.file_name}' requires correction.\nReason: ${rejectionReason.trim()}\nPlease upload the corrected document.`,
+        await notify({
+          userIds: [doc.user_id],
+          type: "onboarding_doc_rejected",
+          typeGroup: "onboarding",
+          title: "Document Correction Required",
+          body: `Your document '${doc.document_name || doc.file_name}' requires attention.\nFeedback: ${rejectionReason.trim()}\nPlease upload the corrected file.`,
           link: "/onboarding",
-          created_at: nowIso,
+          entityType: "onboarding_documents",
+          entityId: documentId,
+          actorId: reviewerId,
         });
       } catch (notifErr) {
         console.warn("[Document Rejection Notification Error]:", notifErr);
@@ -109,6 +107,22 @@ export async function POST(request: NextRequest) {
           remarks: `Document '${doc.file_name}' approved by reviewer.`,
         });
       } catch {}
+
+      try {
+        await notify({
+          userIds: [doc.user_id],
+          type: "onboarding_doc_approved",
+          typeGroup: "onboarding",
+          title: "Document Verified",
+          body: `Your document '${doc.document_name || doc.file_name}' has been verified and approved.`,
+          link: "/onboarding",
+          entityType: "onboarding_documents",
+          entityId: documentId,
+          actorId: reviewerId,
+        });
+      } catch (notifErr) {
+        console.warn("[Document Approval Notification Error]:", notifErr);
+      }
 
       // Update onboarding status to UNDER_REVIEW if currently SUBMITTED/RESUBMITTED
       const { data: prof } = await (supabaseAdmin as any)

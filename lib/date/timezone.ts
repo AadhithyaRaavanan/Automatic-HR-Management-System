@@ -197,7 +197,7 @@ export function evaluatePreCheckInLock(
         return {
           isLocked: true,
           openTimeString,
-          isShiftStarted,
+          isShiftStarted: false,
           reason,
           message,
           shiftStartFormatted,
@@ -233,7 +233,7 @@ export function evaluatePreCheckInLock(
         return {
           isLocked: true,
           openTimeString,
-          isShiftStarted: true,
+          isShiftStarted: false,
           reason: "after_shift",
           message: `Your shift ended at ${shiftEndFormatted}. Check-in is not allowed outside your shift hours.`,
           shiftStartFormatted,

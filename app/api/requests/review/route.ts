@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { Database } from "@/types/database.types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { notify } from "@/lib/notifications/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -163,6 +164,23 @@ export async function POST(request: NextRequest) {
           reviewed_at: nowIso,
         },
       });
+    }
+
+    // Trigger Notification to Employee
+    try {
+      await notify({
+        userIds: [regReq.employee_id],
+        type: targetStatus === "approved" ? "request_approved" : "request_rejected",
+        typeGroup: "requests",
+        title: targetStatus === "approved" ? "Attendance Regularization Approved" : "Attendance Regularization Rejected",
+        body: `Your attendance regularization for ${regReq.work_date || "date"} has been ${targetStatus}.\nReviewer note: "${trimmedNote}"`,
+        link: "/requests",
+        entityType: "regularization_requests",
+        entityId: requestId,
+        actorId: user.id,
+      });
+    } catch (notifErr) {
+      console.warn("[Regularization Review Notification Error]:", notifErr);
     }
 
     return NextResponse.json({

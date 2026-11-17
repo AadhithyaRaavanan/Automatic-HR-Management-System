@@ -47,8 +47,8 @@ export function HeroCheckInCard({
       const status = evaluatePreCheckInLock(shiftStartTime, shiftEndTime, userTimezone);
       setLockStatus(status);
 
-      // Trigger Shift-Start Notification if online at shift start and not checked in
-      if (!isCheckedIn && status.isShiftStarted && !hasNotifiedShiftStartRef.current) {
+      // Trigger Shift-Start Notification if online at shift start, shift is active/unlocked, and not checked in
+      if (!isCheckedIn && !status.isLocked && status.isShiftStarted && !hasNotifiedShiftStartRef.current) {
         hasNotifiedShiftStartRef.current = true;
         toast.info("Your shift starts now! Please check in.", {
           id: "shift-start-alert",
@@ -79,7 +79,7 @@ export function HeroCheckInCard({
       if (lockStatus.isLocked) {
         toast.error(
           lockStatus.message ||
-            `Check-in is only allowed during your shift hours (${shiftStartTime.slice(0, 5)} - ${shiftEndTime.slice(0, 5)}).`
+          `Check-in is only allowed during your shift hours (${shiftStartTime.slice(0, 5)} - ${shiftEndTime.slice(0, 5)}).`
         );
         return;
       }
@@ -145,10 +145,10 @@ export function HeroCheckInCard({
               {isCheckedIn
                 ? `Session running for ${workDate}`
                 : lockStatus.isLocked
-                ? lockStatus.reason === "after_shift"
-                  ? `Shift ended (${shiftStartTime.slice(0, 5)} - ${shiftEndTime.slice(0, 5)})`
-                  : `Scheduled shift: ${shiftStartTime.slice(0, 5)} - ${shiftEndTime.slice(0, 5)}`
-                : "Ready to start your work day?"}
+                  ? lockStatus.reason === "after_shift"
+                    ? `Shift ended (${shiftStartTime.slice(0, 5)} - ${shiftEndTime.slice(0, 5)})`
+                    : `Scheduled shift: ${shiftStartTime.slice(0, 5)} - ${shiftEndTime.slice(0, 5)}`
+                  : "Ready to start your work day?"}
             </p>
           </div>
         </div>
@@ -163,8 +163,8 @@ export function HeroCheckInCard({
               isCheckedIn
                 ? "bg-status-danger-bg text-status-danger-text hover:bg-status-danger-bg/80 border border-status-danger-dot/20"
                 : lockStatus.isLocked
-                ? "bg-card-subtle text-text-tertiary border border-border-light hover:bg-card-subtle"
-                : "bg-brand-navy text-white hover:bg-brand-navy-hover hover:shadow-lg border border-border-light/20"
+                  ? "bg-card-subtle text-text-tertiary border border-border-light hover:bg-card-subtle"
+                  : "bg-brand-navy text-white hover:bg-brand-navy-hover hover:shadow-lg border border-border-light/20"
             )}
           >
             {isCheckedIn ? (

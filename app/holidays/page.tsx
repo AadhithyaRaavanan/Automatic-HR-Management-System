@@ -241,6 +241,15 @@ function HolidaysPageContent() {
       if (error) throw error;
 
       toast.success(`Holiday "${newName.trim()}" added.`);
+      fetch("/api/holidays/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          holidayName: newName.trim(),
+          holidayDate: newDate,
+        }),
+      }).catch(() => {});
       setNewName("");
       setNewLocalName("");
       await loadHolidaysAndTemplates();
@@ -345,6 +354,16 @@ function HolidaysPageContent() {
       toast.success(
         `Imported ${inserted} holiday(s) for ${year}${skipped > 0 ? ` (${skipped} duplicates skipped)` : ""}.`
       );
+      if (inserted > 0) {
+        fetch("/api/holidays/notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "import",
+            count: inserted,
+          }),
+        }).catch(() => {});
+      }
       setImportModalOpen(false);
       setSelectedYear(year);
       await loadHolidaysAndTemplates();

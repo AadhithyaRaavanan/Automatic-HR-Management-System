@@ -631,3 +631,104 @@ export async function sendPasswordResetEmail(params: SendPasswordResetParams): P
 
   return { success: true, messageId: `sim_${Date.now()}` };
 }
+
+export interface SendNotificationEmailParams {
+  to: string;
+  recipientName?: string;
+  title: string;
+  body: string;
+  link?: string | null;
+}
+
+export function buildNotificationEmailHtml(params: SendNotificationEmailParams): string {
+  const { recipientName, title, body, link } = params;
+  const siteUrl = getSiteUrl();
+  const actionUrl = link ? (link.startsWith("http") ? link : `${siteUrl}${link.startsWith("/") ? "" : "/"}${link}`) : siteUrl;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${title}</title>
+    <style>
+      body { margin: 0; padding: 0; background-color: #f7f6fd; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+      .container { max-width: 580px; margin: 32px auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e0f0; overflow: hidden; box-shadow: 0 4px 20px rgba(20, 18, 58, 0.05); }
+      .header { background: #14123A; padding: 28px 32px; text-align: left; }
+      .content { padding: 32px; }
+      .btn { display: inline-block; background: #6C5CE7; color: #ffffff !important; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 10px; font-size: 14px; margin-top: 20px; }
+      .footer { background: #faf9fe; padding: 20px 32px; border-top: 1px solid #e2e0f0; font-size: 12px; color: #718096; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em;">Pulse HRMS</h1>
+        <p style="color: #a0aec0; margin: 4px 0 0; font-size: 12px;">Workplace Notification</p>
+      </div>
+      <div class="content">
+        ${recipientName ? `<p style="font-size: 15px; color: #2d3748; margin-top: 0;">Hi <strong>${recipientName}</strong>,</p>` : ""}
+        <h2 style="font-size: 18px; color: #14123A; margin: 0 0 12px 0;">${title}</h2>
+        <p style="font-size: 14px; line-height: 1.6; color: #4a5568; white-space: pre-line; margin: 0 0 20px 0;">${body}</p>
+        ${link ? `<a href="${actionUrl}" class="btn" target="_blank" rel="noopener noreferrer">View in Pulse →</a>` : ""}
+      </div>
+      <div class="footer">
+        <p style="margin: 0 0 6px 0;">You received this email according to your Pulse workplace notification settings.</p>
+        <p style="margin: 0;"><a href="${siteUrl}/settings" style="color: #6C5CE7; text-decoration: none;">Manage Notification Preferences</a></p>
+      </div>
+    </div>
+  </body>
+</html>`;
+}
+
+export async function sendNotificationEmail(params: SendNotificationEmailParams): Promise<{
+  success: boolean;
+  messageId?: string;
+  error?: string;
+}> {
+  const { to, title } = params;
+  const subject = `[Pulse] ${title}`;
+  const htmlContent = buildNotificationEmailHtml(params);
+
+  // 1. Hostinger SMTP
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      const transporter = getSmtpTransporter();
+      if (transporter) {
+        const fromAddress = process.env.SMTP_FROM || `Pulse <hr@zenxea.com>`;
+        const info = await transporter.sendMail({
+          from: fromAddress,
+          to,
+          subject,
+          html: htmlContent,
+        });
+        return { success: true, messageId: info.messageId };
+      }
+    } catch (smtpErr: any) {
+      console.error("[SMTP Notification Error]:", smtpErr);
+      return { success: false, error: smtpErr.message || "Failed to dispatch notification email via SMTP" };
+    }
+  }
+
+  // 2. Resend fallback
+  if (process.env.RESEND_API_KEY) {
+    const client = resend || new Resend(process.env.RESEND_API_KEY);
+    try {
+      const fromAddress = process.env.RESEND_FROM_EMAIL || "Pulse <onboarding@remotehr.io>";
+      const response = await client.emails.send({
+        from: fromAddress,
+        to: [to],
+        subject,
+        html: htmlContent,
+      });
+      if (response.error) {
+        return { success: false, error: response.error.message };
+      }
+      return { success: true, messageId: response.data?.id };
+    } catch (err: any) {
+      return { success: false, error: err.message || String(err) };
+    }
+  }
+
+  return { success: true, messageId: `sim_${Date.now()}` };
+}

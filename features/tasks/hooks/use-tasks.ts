@@ -453,9 +453,21 @@ export function useTaskMutations() {
 
       return res;
     },
-    onSuccess: () => {
+    onSuccess: (res: any, vars: any) => {
       toast.success("Task created");
       invalidateAll();
+      if (vars.assigneeId) {
+        fetch("/api/tasks/notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event: "assigned",
+            taskId: res?.task?.id || res?.id,
+            taskTitle: vars.title,
+            assigneeId: vars.assigneeId,
+          }),
+        }).catch(() => {});
+      }
     },
     onError: (err: Error) => {
       toast.error(err.message || "Failed to create task");
@@ -480,6 +492,17 @@ export function useTaskMutations() {
     onSuccess: (_, vars) => {
       toast.success("Task assignment updated");
       invalidateAll(vars.taskId);
+      if (vars.assigneeId) {
+        fetch("/api/tasks/notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event: "assigned",
+            taskId: vars.taskId,
+            assigneeId: vars.assigneeId,
+          }),
+        }).catch(() => {});
+      }
     },
     onError: (err: Error) => {
       toast.error(err.message || "Failed to update task assignee");
@@ -523,6 +546,15 @@ export function useTaskMutations() {
     onSuccess: (_, vars) => {
       toast.success(`Task moved to ${vars.status.replace("_", " ")}`);
       invalidateAll(vars.taskId);
+      fetch("/api/tasks/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "status_changed",
+          taskId: vars.taskId,
+          newStatus: vars.status,
+        }),
+      }).catch(() => {});
     },
     onError: (err: Error) => {
       toast.error(err.message || "Failed to update task status");
@@ -556,6 +588,15 @@ export function useTaskMutations() {
     onSuccess: (_, vars) => {
       toast.success("Comment posted");
       invalidateAll(vars.taskId);
+      fetch("/api/tasks/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "comment",
+          taskId: vars.taskId,
+          commentText: vars.body,
+        }),
+      }).catch(() => {});
     },
     onError: (err: Error) => {
       toast.error(err.message || "Failed to post comment");

@@ -57,6 +57,8 @@ export function TopNavBar({
 
         {/* 3. Notification Bell */}
         <button
+          id="notification-bell"
+          data-tour="notification-bell"
           type="button"
           title="Notifications"
           aria-label={
@@ -70,7 +72,7 @@ export function TopNavBar({
           <Bell className="w-4 h-4" />
           {unreadCount > 0 && (
             <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-brand-purple text-white text-[9px] font-extrabold flex items-center justify-center ring-2 ring-card">
-              {unreadCount > 9 ? "9+" : unreadCount}
+              {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           )}
         </button>

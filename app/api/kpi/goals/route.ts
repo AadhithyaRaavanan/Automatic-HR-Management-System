@@ -4,6 +4,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { FEATURES } from "@/lib/features";
+import { notify } from "@/lib/notifications/notify";
+import { getManagersOf } from "@/lib/notifications/recipients";
 import { getKpiCallerContext, verifyEmployeeAccess } from "@/lib/kpi/auth-helper";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -83,6 +85,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    if (FEATURES.KPI && employee_id) {
+      try {
+        await notify({
+          userIds: [employee_id],
+          type: "kpi_goal_created",
+          typeGroup: "kpi",
+          title: "New Performance Goal Created",
+          body: `A new performance goal has been assigned to you: "${title.trim()}".`,
+          link: "/kpi",
+          entityType: "kpi_goals",
+          entityId: newGoal?.id,
+          actorId: caller.userId,
+        });
+      } catch {}
+    }
+
     return NextResponse.json({ success: true, goal: newGoal }, { status: 201 });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Invalid goal payload" }, { status: 400 });
@@ -143,6 +161,25 @@ export async function PATCH(request: NextRequest) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (FEATURES.KPI && status === "at_risk") {
+      try {
+        const managers = await getManagersOf(existingGoal.employee_id);
+        if (managers.length > 0) {
+          await notify({
+            userIds: managers,
+            type: "kpi_goal_at_risk",
+            typeGroup: "kpi",
+            title: "Performance Goal At Risk",
+            body: `Goal "${updatedGoal.title || "Goal"}" has been marked as At Risk.`,
+            link: `/kpi?employee_id=${existingGoal.employee_id}`,
+            entityType: "kpi_goals",
+            entityId: id,
+            actorId: caller.userId,
+          });
+        }
+      } catch {}
     }
 
     return NextResponse.json({ success: true, goal: updatedGoal });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRouteCaller } from "@/lib/auth/admin-guard";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import { notify } from "@/lib/notifications/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -112,6 +113,37 @@ export async function POST(request: NextRequest) {
         old_data: null,
         new_data: { ...employeeUpdates, ...memberUpdates },
       });
+    } catch {}
+
+    // Notify user if role or status was modified
+    try {
+      if (role !== undefined) {
+        await notify({
+          userIds: [userId],
+          type: "security_role_changed",
+          typeGroup: "security",
+          title: "Workplace Role Updated",
+          body: `Your access role has been updated to "${role}". Log out and back in to apply updated permissions.`,
+          link: "/profile",
+          entityType: "users",
+          entityId: userId,
+          actorId: context.userId,
+          forceEmail: true,
+        });
+      } else if (status !== undefined) {
+        await notify({
+          userIds: [userId],
+          type: "security_status_changed",
+          typeGroup: "security",
+          title: `Account Status Changed: ${status}`,
+          body: `Your employee profile status has been marked as ${status}.`,
+          link: "/profile",
+          entityType: "users",
+          entityId: userId,
+          actorId: context.userId,
+          forceEmail: true,
+        });
+      }
     } catch {}
 
     return NextResponse.json({

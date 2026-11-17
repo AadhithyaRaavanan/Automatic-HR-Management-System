@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRouteCaller } from "@/lib/auth/admin-guard";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { notify } from "@/lib/notifications/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +76,22 @@ export async function POST(request: NextRequest) {
     } catch (signOutErr: any) {
       console.warn("Sign out revoke warning:", signOutErr.message);
     }
+
+    // Notify user of account deactivation (Security: in-app + email)
+    try {
+      await notify({
+        userIds: [targetUserId],
+        type: "security_account_deactivated",
+        typeGroup: "security",
+        title: "Account Status Changed: Deactivated",
+        body: "Your Pulse employee account has been deactivated by an administrator.",
+        link: "/login",
+        entityType: "users",
+        entityId: targetUserId,
+        actorId: context.userId,
+        forceEmail: true,
+      });
+    } catch {}
 
     return NextResponse.json({
       success: true,

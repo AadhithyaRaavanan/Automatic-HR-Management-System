@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { Database } from "@/types/database.types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { notify } from "@/lib/notifications/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -171,6 +172,23 @@ export async function POST(request: NextRequest) {
           reviewed_at: nowIso,
         },
       });
+    }
+
+    // Trigger Notification to Employee
+    try {
+      await notify({
+        userIds: [leaveReq.employee_id],
+        type: targetStatus === "approved" ? "leave_approved" : "leave_rejected",
+        typeGroup: "leave",
+        title: targetStatus === "approved" ? "Leave Request Approved" : "Leave Request Rejected",
+        body: `Your leave request for ${leaveReq.start_date || "requested dates"} to ${leaveReq.end_date || "end"} has been ${targetStatus}.\nReviewer note: "${trimmedNote}"`,
+        link: "/leave",
+        entityType: "leave_requests",
+        entityId: requestId,
+        actorId: user.id,
+      });
+    } catch (notifErr) {
+      console.warn("[Leave Review Notification Error]:", notifErr);
     }
 
     return NextResponse.json({

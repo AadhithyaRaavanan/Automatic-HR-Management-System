@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { Database } from "@/types/database.types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { notify } from "@/lib/notifications/notify";
+import { getHrUsers } from "@/lib/notifications/recipients";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +64,41 @@ export async function POST(request: NextRequest) {
 
     if (updateErr) {
       return NextResponse.json({ error: updateErr.message }, { status: 500 });
+    }
+
+    // 1. Notify user of password change (Security: in-app + email)
+    try {
+      await notify({
+        userIds: [user.id],
+        type: "security_password_changed",
+        typeGroup: "security",
+        title: "Account Password Changed",
+        body: "Your Pulse account password was changed. If you did not make this change, please contact your administrator immediately.",
+        link: "/settings",
+        entityType: "users",
+        entityId: user.id,
+        forceEmail: true,
+      });
+    } catch {}
+
+    // 2. If initial invite activation, notify HR
+    if ((user.user_metadata as any)?.must_change_password) {
+      try {
+        const hrUsers = await getHrUsers();
+        if (hrUsers.length > 0) {
+          const name = (user.user_metadata as any)?.full_name || user.email;
+          await notify({
+            userIds: hrUsers,
+            type: "onboarding_invite_accepted",
+            typeGroup: "onboarding",
+            title: "Workplace Invite Accepted",
+            body: `${name} has activated their invitation and completed their initial password setup.`,
+            link: "/hr/onboarding",
+            entityType: "users",
+            entityId: user.id,
+          });
+        }
+      } catch {}
     }
 
     return NextResponse.json({ success: true, message: "Password updated successfully." });

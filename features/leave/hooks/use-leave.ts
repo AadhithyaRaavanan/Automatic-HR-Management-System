@@ -297,13 +297,26 @@ export function useRequestLeave() {
       if (rpcError) throw rpcError;
       return rpcResult;
     },
-    onSuccess: () => {
+    onSuccess: (data: any, vars: any) => {
       queryClient.invalidateQueries({ queryKey: ["leave-requests"] });
       queryClient.invalidateQueries({ queryKey: ["leave-balances"] });
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       queryClient.invalidateQueries({ queryKey: ["attendance"] });
       queryClient.invalidateQueries({ queryKey: ["regularizations"] });
       toast.success("Leave request submitted successfully");
+
+      // Non-blocking server-side notification trigger
+      fetch("/api/leave/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "submitted",
+          requestId: data?.request_id || data?.id || data?.request?.id,
+          startDate: vars.startDate,
+          endDate: vars.endDate,
+          reason: vars.reason,
+        }),
+      }).catch(() => {});
     },
     onError: (err: any) => {
       toast.error(err.message || "Failed to submit leave request");
@@ -435,12 +448,23 @@ export function useCancelLeave() {
       }
       return { success: true };
     },
-    onSuccess: () => {
+    onSuccess: (_data: any, vars: any) => {
       queryClient.invalidateQueries({ queryKey: ["leave-requests"] });
       queryClient.invalidateQueries({ queryKey: ["leave-balances"] });
       queryClient.invalidateQueries({ queryKey: ["attendance"] });
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       toast.success("Leave cancelled successfully");
+
+      // Non-blocking server-side notification trigger
+      fetch("/api/leave/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "cancelled",
+          requestId: vars.requestId,
+          reason: vars.reason,
+        }),
+      }).catch(() => {});
     },
     onError: (err: any) => {
       toast.error(err.message || "Failed to cancel leave");
@@ -524,9 +548,20 @@ export function useHRAdjustBalance() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_data: any, vars: any) => {
       queryClient.invalidateQueries({ queryKey: ["leave-balances"] });
       toast.success("Leave balance adjusted successfully");
+
+      fetch("/api/leave/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "adjusted",
+          targetEmployeeId: vars.employeeId,
+          amount: vars.amount,
+          reason: vars.reason,
+        }),
+      }).catch(() => {});
     },
     onError: (err: any) => {
       toast.error(err.message || "Failed to adjust balance");

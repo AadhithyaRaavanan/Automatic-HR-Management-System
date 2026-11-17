@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { FEATURES } from "@/lib/features";
+import { notify } from "@/lib/notifications/notify";
 import { getKpiCallerContext, verifyEmployeeAccess } from "@/lib/kpi/auth-helper";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -127,6 +128,22 @@ export async function POST(request: NextRequest) {
 
     if (insertErr) {
       return NextResponse.json({ error: insertErr.message }, { status: 500 });
+    }
+
+    if (FEATURES.KPI) {
+      try {
+        await notify({
+          userIds: [employee_id],
+          type: "kpi_review_submitted",
+          typeGroup: "kpi",
+          title: "New Performance Review Published",
+          body: `A new ${validPeriodType} performance review has been recorded for your profile.`,
+          link: "/kpi",
+          entityType: "kpi_reviews",
+          entityId: newReview?.id,
+          actorId: caller.userId,
+        });
+      } catch {}
     }
 
     return NextResponse.json({ success: true, review: newReview }, { status: 201 });

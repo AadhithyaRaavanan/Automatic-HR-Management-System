@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRouteCaller } from "@/lib/auth/admin-guard";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { notify } from "@/lib/notifications/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +72,22 @@ export async function POST(request: NextRequest) {
       old_data: { factors_count: factors.length },
       new_data: { reset_at: new Date().toISOString(), deleted_count: deletedCount },
     });
+
+    // Notify user of MFA reset (Security: in-app + email)
+    try {
+      await notify({
+        userIds: [targetUserId],
+        type: "security_mfa_reset",
+        typeGroup: "security",
+        title: "Two-Factor Authentication (MFA) Reset",
+        body: "Your two-factor authentication factors have been reset by an administrator. You will be prompted to re-enroll next time you sign in.",
+        link: "/settings",
+        entityType: "users",
+        entityId: targetUserId,
+        actorId: context.userId,
+        forceEmail: true,
+      });
+    } catch {}
 
     return NextResponse.json({
       success: true,

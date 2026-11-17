@@ -8,6 +8,7 @@ import { BentoGrid } from "@/components/bento/bento-grid";
 import { BentoCard } from "@/components/bento/bento-card";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { TotpMfaManager } from "@/components/shared/totp-mfa-manager";
+import { NotificationPreferencesCard } from "@/components/settings/notification-preferences-card";
 import { createClient } from "@/lib/supabase/client";
 import {
   ShieldCheck,
@@ -478,52 +479,18 @@ function SettingsPageContent() {
           </div>
         </BentoCard>
 
-        {/* Notifications & Theme Controls */}
+        {/* Theme Mode Control */}
         <BentoCard
           title={
             <div className="flex items-center gap-2">
-              <Bell className="w-4 h-4 text-brand-purple" />
-              <span>Notification Preferences</span>
+              <Globe className="w-4 h-4 text-brand-purple" />
+              <span>Appearance & Display</span>
             </div>
           }
-          subtitle="Alert channels and display theme"
+          subtitle="Display theme and workspace contrast"
           className="lg:col-span-5 p-6 flex flex-col justify-between"
         >
-          <form onSubmit={handleSaveNotifications} className="space-y-4">
-            <label className="flex items-center justify-between p-3.5 rounded-2xl bg-card-subtle border border-border-light cursor-pointer">
-              <div>
-                <span className="text-xs font-bold text-text-primary block">
-                  Email Notifications
-                </span>
-                <span className="text-[11px] text-text-tertiary">
-                  Missed checkout reminders and approval results
-                </span>
-              </div>
-              <input
-                type="checkbox"
-                checked={emailAlerts}
-                onChange={(e) => setEmailAlerts(e.target.checked)}
-                className="w-4 h-4 accent-brand-purple rounded cursor-pointer"
-              />
-            </label>
-
-            <label className="flex items-center justify-between p-3.5 rounded-2xl bg-card-subtle border border-border-light cursor-pointer">
-              <div>
-                <span className="text-xs font-bold text-text-primary block">
-                  Slack Sync
-                </span>
-                <span className="text-[11px] text-text-tertiary">
-                  Team presence alerts via incoming webhook
-                </span>
-              </div>
-              <input
-                type="checkbox"
-                checked={slackAlerts}
-                onChange={(e) => setSlackAlerts(e.target.checked)}
-                className="w-4 h-4 accent-brand-purple rounded cursor-pointer"
-              />
-            </label>
-
+          <div className="space-y-4">
             <div className="flex items-center justify-between p-3.5 rounded-2xl bg-card-subtle border border-border-light">
               <div>
                 <span className="text-xs font-bold text-text-primary block">
@@ -535,20 +502,16 @@ function SettingsPageContent() {
               </div>
               <ThemeToggle />
             </div>
-
-            <button
-              type="submit"
-              className="w-full py-2.5 px-4 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
-            >
-              Save Alert Preferences
-            </button>
-          </form>
+          </div>
 
           <div className="pt-4 mt-4 border-t border-border-light text-[11px] text-text-tertiary flex items-center gap-1.5">
             <Lock className="w-3.5 h-3.5 text-status-success-dot" />
-            <span>Data encrypted at rest and in transit via Supabase TLS</span>
+            <span>Theme preference stored locally in browser session</span>
           </div>
         </BentoCard>
+
+        {/* Central Notification System Preferences */}
+        <NotificationPreferencesCard />
 
         {/* Security & Change Password Section */}
         <BentoCard
