@@ -347,7 +347,6 @@ export async function inviteSingleEmployee(
       p_work_target_minutes: Number(workTargetMinutes),
       p_expected_office_days: expectedOfficeDays,
       p_required_office_days_per_week: Number(requiredOfficeDaysPerWeek),
-      p_employment_category: employmentCategory,
     }
   );
 

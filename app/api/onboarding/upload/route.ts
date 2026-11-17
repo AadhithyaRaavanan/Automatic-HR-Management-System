@@ -92,7 +92,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      docId: uploadRes.documentId,
+      storagePath: uploadRes.storagePath,
       data: {
+        docId: uploadRes.documentId,
         docType,
         fileName: uploadRes.standardFileName,
         storagePath: uploadRes.storagePath,
@@ -102,9 +105,13 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (err: any) {
+    const isValidationErr =
+      err?.message?.includes("Invalid file content") ||
+      err?.message?.includes("exceeds") ||
+      err?.message?.includes("document");
     return NextResponse.json(
       { error: err?.message || "File upload failed." },
-      { status: 500 }
+      { status: isValidationErr ? 400 : 500 }
     );
   }
 }

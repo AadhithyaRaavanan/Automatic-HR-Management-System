@@ -219,11 +219,16 @@ export async function uploadDoc({
     salary_year: salaryYear || null,
   };
 
-  const { error: insertErr } = await (supabaseAdmin as any)
+  let documentId: string | undefined = undefined;
+  const { data: insertedRow, error: insertErr } = await (supabaseAdmin as any)
     .from("onboarding_documents")
-    .insert(fullPayload);
+    .insert(fullPayload)
+    .select("id")
+    .maybeSingle();
 
-  if (insertErr) {
+  if (insertedRow?.id) {
+    documentId = insertedRow.id;
+  } else if (insertErr) {
     // If the schema hasn't had the v2 columns added yet, fall back to base schema
     console.warn("[uploadDoc] Insert with full schema failed, falling back to base schema:", insertErr.message);
     const basePayload = {
@@ -234,11 +239,16 @@ export async function uploadDoc({
       file_size: buffer.length,
       mime_type: fileInfo.mime,
     };
-    const { error: fallbackErr } = await (supabaseAdmin as any)
+    const { data: fallbackRow, error: fallbackErr } = await (supabaseAdmin as any)
       .from("onboarding_documents")
-      .insert(basePayload);
+      .insert(basePayload)
+      .select("id")
+      .maybeSingle();
     if (fallbackErr) {
       throw new Error(`Failed to save document metadata: ${fallbackErr.message}`);
+    }
+    if (fallbackRow?.id) {
+      documentId = fallbackRow.id;
     }
   }
 
@@ -255,6 +265,7 @@ export async function uploadDoc({
   const driveFolderUrl = process.env.ONBOARDING_DRIVE_FOLDER_URL || null;
 
   return {
+    documentId,
     storagePath,
     storageFolder: folder,
     signedUrl,

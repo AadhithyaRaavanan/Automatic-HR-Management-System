@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     const [empsRes, deptsRes, teamsRes, onbRes, internsRes] = await Promise.all([
       (supabaseAdmin as any)
         .from("employees")
-        .select("id, status, employment_category, department_id, manager_id"),
+        .select("id, status, department_id, manager_id, work_mode"),
       (supabaseAdmin as any)
         .from("departments")
         .select("id, name, department_head_id, parent_department_id"),

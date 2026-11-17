@@ -1,7 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { getStorageStatePath, loginAndGetSession, loadEnvTest } from "../helpers/auth";
 import { createClient } from "@supabase/supabase-js";
-import { inviteSingleEmployee } from "../../lib/admin/invite-employee";
 
 const env = loadEnvTest();
 const supabaseAdmin = createClient(
@@ -112,34 +111,30 @@ test.describe("Module 6: EMS & Onboarding Verification", () => {
     }
   });
 
-  test("Invite link uses https://pulse.zenxea.com, never localhost", async () => {
+  test("Invite link uses https://pulse.zenxea.com, never localhost", async ({ request }) => {
+    const adminSession = await loginAndGetSession("admin");
     const inviteEmail = `test_candidate_invite_${Date.now()}@zenxea.com`;
-    const result = await inviteSingleEmployee(
-      {
-        userId: TEST_ADMIN_ID,
-        role: "admin",
-        organizationId: ORG_ID,
-        aal: "aal1",
-      },
-      {
+    const res = await request.post("/api/admin/users/invite", {
+      headers: { Authorization: `Bearer ${adminSession.access_token}` },
+      data: {
         email: inviteEmail,
         fullName: "TEST Candidate Invite",
         role: "employee",
-        jobTitle: "Junior QA Engineer",
-        departmentName: "Engineering",
-      }
-    );
+      },
+    });
 
-    expect(result.ok).toBe(true);
-    if (result.ok && result.inviteLink) {
+    expect(res.status()).toBe(200);
+    const result = await res.json();
+    expect(result.success).toBe(true);
+    if (result.inviteLink) {
       expect(result.inviteLink).toContain("https://pulse.zenxea.com");
       expect(result.inviteLink).not.toContain("localhost");
       expect(result.inviteLink).not.toContain("127.0.0.1");
     }
 
     // Clean up
-    if (result.ok && (result as any).userId) {
-      await supabaseAdmin.auth.admin.deleteUser((result as any).userId).catch(() => {});
+    if (result.userId) {
+      await supabaseAdmin.auth.admin.deleteUser(result.userId).catch(() => {});
     }
   });
 
@@ -217,5 +212,17 @@ test.describe("Module 6: EMS & Onboarding Verification", () => {
     expect(rejectNoNoteRes.status()).toBe(400);
     const rejectNoNoteJson = await rejectNoNoteRes.json();
     expect(rejectNoNoteJson.error).toMatch(/mandatory when rejecting/i);
+
+    if (validUploadJson.docId) {
+      const rejectWithNoteRes = await request.post("/api/hr/onboarding/verify-doc", {
+        headers: { Authorization: `Bearer ${hrSession.access_token}` },
+        data: {
+          documentId: validUploadJson.docId,
+          action: "reject",
+          rejectionReason: "Document image is blurred, please upload clear copy.",
+        },
+      });
+      expect(rejectWithNoteRes.status()).toBe(200);
+    }
   });
 });
