@@ -65,7 +65,8 @@ export default function NewEmployeeWizardPage() {
         const dJson = await dRes.json();
         const jtJson = await jtRes.json();
         if (dJson.departments) setDepartments(dJson.departments);
-        if (jtJson.jobTitles) setJobTitles(jtJson.jobTitles);
+        const titlesList = jtJson.jobTitles || jtJson.titles || [];
+        setJobTitles(titlesList);
       } catch {}
     }
     loadLookups();
@@ -73,7 +74,8 @@ export default function NewEmployeeWizardPage() {
 
   const filteredTitles = React.useMemo(() => {
     if (!departmentId) return jobTitles;
-    return jobTitles.filter((j) => !j.department_id || j.department_id === departmentId);
+    const filtered = jobTitles.filter((j) => !j.department_id || j.department_id === departmentId);
+    return filtered.length > 0 ? filtered : jobTitles;
   }, [departmentId, jobTitles]);
 
   const handleNext = () => {

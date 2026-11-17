@@ -55,17 +55,65 @@ export async function POST(request: NextRequest) {
     }
 
     // 1. Fetch current profile
-    const { data: onbProfile } = await (supabaseAdmin as any)
+    let { data: onbProfile } = await (supabaseAdmin as any)
       .from("onboarding_profiles")
       .select("*")
       .eq("user_id", user.id)
       .maybeSingle();
 
     if (!onbProfile) {
-      return NextResponse.json(
-        { error: "Onboarding profile not found. Please complete the form steps first." },
-        { status: 400 }
-      );
+      // If draft was not saved in DB yet, auto-create it from payload now
+      const initialName = payload.full_name || user.user_metadata?.full_name || "Employee";
+      const initialEdu = {
+        highest_qualification: payload.highest_qualification || "12th Standard",
+        emergency_contact_name: payload.emergency_contact_name || null,
+        emergency_contact_relationship: payload.emergency_contact_relationship || null,
+        emergency_contact_phone: payload.emergency_contact_phone || null,
+        bank_branch: payload.bank_branch || null,
+        has_experience: Boolean(payload.has_experience),
+        experience_explanation: payload.experience_explanation || null,
+      };
+
+      const initialPayload = {
+        user_id: user.id,
+        candidate_type: payload.has_experience ? "EXPERIENCED" : "GRADUATE_FRESHER",
+        full_name: initialName,
+        dob: payload.dob || null,
+        gender: payload.gender || null,
+        phone: payload.phone || null,
+        personal_email: payload.personal_email || user.email,
+        current_address: payload.current_address || null,
+        permanent_address: payload.permanent_address || null,
+        blood_group: payload.blood_group || null,
+        pan_number: payload.pan_number || null,
+        aadhaar_number: payload.aadhaar_number || null,
+        bank_account_holder: payload.bank_account_holder || null,
+        bank_account_number: payload.bank_account_number || null,
+        bank_ifsc: payload.bank_ifsc || null,
+        bank_name: payload.bank_name || null,
+        uan_number: payload.uan_number || null,
+        education_details: initialEdu,
+        previous_company_name: payload.previous_company_name || null,
+        previous_designation: payload.previous_designation || null,
+        previous_start_date: payload.previous_start_date || null,
+        previous_end_date: payload.previous_end_date || null,
+        previous_hr_email: payload.previous_hr_email || null,
+        previous_hr_phone: payload.previous_hr_phone || null,
+        previous_employee_id: payload.previous_employee_id || null,
+        status: "draft",
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data: createdProf, error: createErr } = await (supabaseAdmin as any)
+        .from("onboarding_profiles")
+        .upsert(initialPayload, { onConflict: "user_id" })
+        .select()
+        .maybeSingle();
+
+      if (createErr) {
+        console.error("[POST /api/onboarding/complete] Auto-create draft profile failed:", createErr.message);
+      }
+      onbProfile = createdProf || initialPayload;
     }
 
     // 2. Fetch uploaded documents
@@ -235,71 +283,54 @@ export async function POST(request: NextRequest) {
       bank_branch: payload.bank_branch || onbProfile.bank_branch || edu.bank_branch,
     };
 
-    // 4. Update onboarding profile to SUBMITTED / RESUBMITTED
-    const { error: fullUpdateErr } = await (supabaseAdmin as any)
+    // 4. Update onboarding profile to submitted
+    const updateProfileData: Record<string, any> = {
+      full_name: resolvedFullName,
+      dob: resolvedDob,
+      gender: payload.gender || onbProfile.gender || null,
+      phone: resolvedPhone,
+      personal_email: resolvedPersonalEmail,
+      current_address: resolvedCurrentAddress,
+      permanent_address: resolvedPermanentAddress,
+      blood_group: payload.blood_group || onbProfile.blood_group || null,
+      pan_number: resolvedPan,
+      aadhaar_number: payload.aadhaar_number || onbProfile.aadhaar_number || null,
+      bank_account_holder: resolvedHolder,
+      bank_account_number: resolvedAccount,
+      bank_ifsc: resolvedIfsc,
+      bank_name: resolvedBank,
+      uan_number: payload.uan_number || onbProfile.uan_number || null,
+      education_details: mergedEdu,
+      status: "submitted",
+      submitted_at: nowIso,
+      updated_at: nowIso,
+    };
+
+    const { error: updateErr } = await (supabaseAdmin as any)
       .from("onboarding_profiles")
-      .update({
-        full_name: resolvedFullName,
-        dob: resolvedDob,
-        gender: payload.gender || onbProfile.gender,
-        phone: resolvedPhone,
-        personal_email: resolvedPersonalEmail,
-        current_address: resolvedCurrentAddress,
-        permanent_address: resolvedPermanentAddress,
-        blood_group: payload.blood_group || onbProfile.blood_group,
-        pan_number: resolvedPan,
-        aadhaar_number: payload.aadhaar_number || onbProfile.aadhaar_number,
-        bank_account_holder: resolvedHolder,
-        bank_account_number: resolvedAccount,
-        bank_ifsc: resolvedIfsc,
-        bank_name: resolvedBank,
-        uan_number: payload.uan_number || onbProfile.uan_number,
-        highest_qualification: highestQual,
-        education_details: mergedEdu,
-        onboarding_status: nextStatus,
-        status: nextStatus.toLowerCase(),
-        declaration_agreed: true,
-        submitted_at: nowIso,
-        updated_at: nowIso,
-      })
+      .update(updateProfileData)
       .eq("user_id", user.id);
 
-    if (fullUpdateErr) {
-      // Fallback for base schema
-      await (supabaseAdmin as any)
-        .from("onboarding_profiles")
-        .update({
-          full_name: resolvedFullName,
-          dob: resolvedDob,
-          gender: payload.gender || onbProfile.gender,
-          phone: resolvedPhone,
-          personal_email: resolvedPersonalEmail,
-          current_address: resolvedCurrentAddress,
-          permanent_address: resolvedPermanentAddress,
-          blood_group: payload.blood_group || onbProfile.blood_group,
-          pan_number: resolvedPan,
-          aadhaar_number: payload.aadhaar_number || onbProfile.aadhaar_number,
-          bank_account_holder: resolvedHolder,
-          bank_account_number: resolvedAccount,
-          bank_ifsc: resolvedIfsc,
-          bank_name: resolvedBank,
-          uan_number: payload.uan_number || onbProfile.uan_number,
-          education_details: mergedEdu,
-          status: nextStatus.toLowerCase(),
-          submitted_at: nowIso,
-          updated_at: nowIso,
-        })
-        .eq("user_id", user.id);
+    if (updateErr) {
+      console.error("[POST /api/onboarding/complete] Failed to update onboarding profile:", updateErr.message);
     }
 
     // 5. Update employees and profiles to mark onboarding submitted / completed so dashboard access is granted
     try {
+      const empEmergency = emergencyName && emergencyPhone ? `${emergencyName} - ${emergencyPhone}` : undefined;
+      const empUpdatePayload: Record<string, any> = {
+        onboarding_completed: true,
+        onboarding_completed_at: nowIso,
+        status: "active",
+        full_name: resolvedFullName,
+        phone: resolvedPhone,
+      };
+      if (empEmergency) {
+        empUpdatePayload.emergency_contact = empEmergency;
+      }
+
       await (supabaseAdmin.from("employees") as any)
-        .update({
-          onboarding_completed: true,
-          onboarding_completed_at: nowIso,
-          status: "active",
-        })
+        .update(empUpdatePayload)
         .eq("id", user.id);
 
       await (supabaseAdmin as any)

@@ -54,7 +54,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: titlesErr.message }, { status: 400 });
     }
 
-    return NextResponse.json({ titles: titles || [] });
+    const titlesList = titles || [];
+    return NextResponse.json({ titles: titlesList, jobTitles: titlesList });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Failed to fetch job titles" }, { status: 500 });
   }

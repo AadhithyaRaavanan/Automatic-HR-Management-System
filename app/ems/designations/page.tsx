@@ -17,9 +17,8 @@ export default function EmsDesignationsPage() {
     try {
       const res = await fetch("/api/admin/job-titles");
       const json = await res.json();
-      if (json.jobTitles) {
-        setTitles(json.jobTitles);
-      }
+      const list = json.jobTitles || json.titles || [];
+      setTitles(list);
     } catch {
       toast.error("Failed to load designations");
     } finally {

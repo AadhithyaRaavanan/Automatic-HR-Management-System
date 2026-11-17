@@ -96,9 +96,6 @@ export async function POST(request: NextRequest) {
     const resolvedName = full_name || user.user_metadata?.full_name || "Candidate";
     const storageFolder = getCandidateStorageFolder(resolvedName, user.id);
 
-    // If status was NOT_STARTED or draft, set to IN_PROGRESS
-    const nextStatus = currentStatus === "CORRECTION_REQUIRED" ? "CORRECTION_REQUIRED" : "IN_PROGRESS";
-
     const existingEducation = (existingProfile?.education_details as Record<string, any>) || {};
     const mergedEducationDetails = {
       ...existingEducation,
@@ -112,10 +109,8 @@ export async function POST(request: NextRequest) {
       has_experience: has_experience !== undefined ? Boolean(has_experience) : existingEducation.has_experience,
     };
 
-    const upsertData: Record<string, any> = {
+    const payloadToSave: Record<string, any> = {
       user_id: user.id,
-      onboarding_status: nextStatus,
-      status: nextStatus.toLowerCase(),
       candidate_type: has_experience ? "EXPERIENCED" : "GRADUATE_FRESHER",
       full_name: resolvedName,
       dob: dob || null,
@@ -124,13 +119,15 @@ export async function POST(request: NextRequest) {
       personal_email: personal_email || user.email,
       current_address: current_address || null,
       permanent_address: permanent_address || null,
-      emergency_contact_name: emergency_contact_name || null,
-      emergency_contact_relationship: emergency_contact_relationship || null,
-      emergency_contact_phone: emergency_contact_phone || null,
       blood_group: blood_group || null,
-      highest_qualification: highest_qualification || null,
+      pan_number: pan_number || null,
+      aadhaar_number: aadhaar_number || null,
+      bank_account_holder: bank_account_holder || null,
+      bank_account_number: bank_account_number || null,
+      bank_ifsc: bank_ifsc || null,
+      bank_name: bank_name || null,
+      uan_number: uan_number || null,
       education_details: mergedEducationDetails,
-      has_experience: Boolean(has_experience),
       previous_company_name: previous_company_name || null,
       previous_designation: previous_designation || null,
       previous_start_date: previous_start_date || null,
@@ -138,74 +135,39 @@ export async function POST(request: NextRequest) {
       previous_hr_email: previous_hr_email || null,
       previous_hr_phone: previous_hr_phone || null,
       previous_employee_id: previous_employee_id || null,
-      experience_explanation: experience_explanation || null,
-      pan_number: pan_number || null,
-      aadhaar_number: aadhaar_number || null,
-      bank_account_holder: bank_account_holder || null,
-      bank_account_number: bank_account_number || null,
-      bank_ifsc: bank_ifsc || null,
-      bank_name: bank_name || null,
-      bank_branch: bank_branch || null,
-      uan_number: uan_number || null,
+      status: "draft",
       storage_folder: storageFolder,
       updated_at: new Date().toISOString(),
     };
 
-    let savedProfile: any = null;
-    const { data: v2Data, error: upsertErr } = await (supabaseAdmin as any)
+    const { data: savedProfile, error: upsertErr } = await (supabaseAdmin as any)
       .from("onboarding_profiles")
-      .upsert(upsertData, { onConflict: "user_id" })
+      .upsert(payloadToSave, { onConflict: "user_id" })
       .select()
       .maybeSingle();
 
     if (upsertErr) {
-      console.warn("[POST /api/onboarding/draft] Upsert with full schema failed, falling back to base schema:", upsertErr.message);
-      const basePayload: Record<string, any> = {
-        user_id: user.id,
-        candidate_type: has_experience ? "EXPERIENCED" : "GRADUATE_FRESHER",
-        full_name: resolvedName,
-        dob: dob || null,
-        gender: gender || null,
-        phone: phone || null,
-        personal_email: personal_email || user.email,
-        current_address: current_address || null,
-        permanent_address: permanent_address || null,
-        blood_group: blood_group || null,
-        pan_number: pan_number || null,
-        aadhaar_number: aadhaar_number || null,
-        bank_account_holder: bank_account_holder || null,
-        bank_account_number: bank_account_number || null,
-        bank_ifsc: bank_ifsc || null,
-        bank_name: bank_name || null,
-        uan_number: uan_number || null,
-        education_details: mergedEducationDetails,
-        previous_company_name: previous_company_name || null,
-        previous_designation: previous_designation || null,
-        previous_start_date: previous_start_date || null,
-        previous_end_date: previous_end_date || null,
-        previous_hr_email: previous_hr_email || null,
-        previous_hr_phone: previous_hr_phone || null,
-        previous_employee_id: previous_employee_id || null,
-        status: nextStatus.toLowerCase(),
-        storage_folder: storageFolder,
-        updated_at: new Date().toISOString(),
-      };
+      console.error("[POST /api/onboarding/draft] Upsert failed:", upsertErr.message);
+      return NextResponse.json(
+        { error: `Failed to save onboarding draft: ${upsertErr.message}` },
+        { status: 500 }
+      );
+    }
 
-      const { data: baseData, error: fallbackErr } = await (supabaseAdmin as any)
-        .from("onboarding_profiles")
-        .upsert(basePayload, { onConflict: "user_id" })
-        .select()
-        .maybeSingle();
-
-      if (fallbackErr) {
-        return NextResponse.json(
-          { error: `Failed to save onboarding draft: ${fallbackErr.message}` },
-          { status: 500 }
-        );
+    // Sync basic info to employees directory record if available
+    try {
+      const empUpdates: Record<string, any> = {};
+      if (resolvedName && resolvedName !== "Candidate") empUpdates.full_name = resolvedName;
+      if (phone) empUpdates.phone = phone;
+      if (emergency_contact_name && emergency_contact_phone) {
+        empUpdates.emergency_contact = `${emergency_contact_name} - ${emergency_contact_phone}`;
       }
-      savedProfile = baseData;
-    } else {
-      savedProfile = v2Data;
+      if (Object.keys(empUpdates).length > 0) {
+        empUpdates.updated_at = new Date().toISOString();
+        await (supabaseAdmin.from("employees") as any).update(empUpdates).eq("id", user.id);
+      }
+    } catch (syncErr) {
+      console.warn("[POST /api/onboarding/draft] Sync to employee failed:", syncErr);
     }
 
     return NextResponse.json({ success: true, profile: savedProfile });
