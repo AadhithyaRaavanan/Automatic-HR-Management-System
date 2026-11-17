@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { QueryProvider } from "@/components/query-provider";
 import { AttendanceProvider } from "@/features/attendance/context/attendance-context";
 import { Toaster } from "sonner";
+import { DesktopOnlyGatekeeper } from "@/components/shared/desktop-only-gatekeeper";
 import "./globals.css";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -33,9 +34,11 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <QueryProvider>
-            <AttendanceProvider>
-              {children}
-            </AttendanceProvider>
+            <DesktopOnlyGatekeeper>
+              <AttendanceProvider>
+                {children}
+              </AttendanceProvider>
+            </DesktopOnlyGatekeeper>
             <Toaster richColors position="top-right" />
           </QueryProvider>
         </ThemeProvider>
