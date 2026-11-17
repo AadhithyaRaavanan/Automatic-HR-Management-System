@@ -1,19 +1,18 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
+import { verifyAdminRouteCaller } from "@/lib/auth/admin-guard";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
-export async function POST(request: Request) {
+export const dynamic = "force-dynamic";
+
+export async function POST(request: NextRequest) {
+  const authResult = await verifyAdminRouteCaller(request, ["admin", "hr"]);
+  if ("response" in authResult) {
+    return authResult.response;
+  }
+  const { context } = authResult;
+
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const body = await request.json();
     const { userId, shiftStartTime, shiftEndTime } = body;
 
@@ -24,15 +23,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify caller role and organization
-    const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
-    const { data: callerMember, error: callerError } = await supabaseAdmin
-      .from("organization_members")
-      .select("organization_id, role")
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .maybeSingle();
-
+    const isDemo = isDemoModeEnabled();
     if (isDemo) {
       return NextResponse.json({
         success: true,
@@ -43,13 +34,6 @@ export async function POST(request: Request) {
       });
     }
 
-    if (callerError || !callerMember || !["admin", "hr"].includes(callerMember.role)) {
-      return NextResponse.json(
-        { error: "Forbidden: Only HR or Admins can configure employee shift schedules." },
-        { status: 403 }
-      );
-    }
-
     // Verify target user belongs to caller organization
     const { data: targetMember, error: targetError } = await supabaseAdmin
       .from("organization_members")
@@ -57,7 +41,7 @@ export async function POST(request: Request) {
       .eq("user_id", userId)
       .maybeSingle();
 
-    if (targetError || !targetMember || targetMember.organization_id !== callerMember.organization_id) {
+    if (targetError || !targetMember || targetMember.organization_id !== context.organizationId) {
       return NextResponse.json(
         { error: "Forbidden: Target member does not belong to your organization." },
         { status: 403 }
@@ -75,7 +59,7 @@ export async function POST(request: Request) {
           updated_at: new Date().toISOString(),
         })
         .eq("user_id", userId)
-        .eq("organization_id", callerMember.organization_id),
+        .eq("organization_id", context.organizationId),
       (supabaseAdmin.from("employees") as any)
         .update({
           shift_start_time: startVal,
@@ -83,7 +67,7 @@ export async function POST(request: Request) {
           updated_at: new Date().toISOString(),
         })
         .eq("id", userId)
-        .eq("organization_id", callerMember.organization_id),
+        .eq("organization_id", context.organizationId),
     ]);
 
     return NextResponse.json({
