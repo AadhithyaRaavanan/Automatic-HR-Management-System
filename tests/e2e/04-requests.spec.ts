@@ -50,8 +50,8 @@ test.describe("Module 4: Regularization Requests & Authorization", () => {
     const futureDate = "2029-12-31";
     const dateInput = page.locator('input[type="date"]').first();
     await dateInput.fill(futureDate);
-    await page.getByPlaceholder(/Explain why this punch correction is needed/i).fill("TEST_FutureDateReasonWithMin10Chars");
-    await page.getByRole("button", { name: /Submit Request/i }).click();
+    await page.locator('textarea[name="reason"]').fill("TEST_FutureDateReasonWithMin10Chars");
+    await page.getByRole("button", { name: /Submit for Approval/i }).click();
 
     // Should display validation error and stay open
     await expect(page.getByText(/cannot be requested for a future date/i)).toBeVisible({ timeout: 10000 });
@@ -70,7 +70,7 @@ test.describe("Module 4: Regularization Requests & Authorization", () => {
 
     // Attempt submitting for duplicate date
     await dateInput.fill(yesterday);
-    await page.getByRole("button", { name: /Submit Request/i }).click();
+    await page.getByRole("button", { name: /Submit for Approval/i }).click();
     await expect(page.getByText(/already exists for this date/i)).toBeVisible({ timeout: 10000 });
 
     await context.close();
