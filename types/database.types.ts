@@ -1567,4 +1567,6 @@ export type NotificationType =
   | "task_due_soon"
   | "task_overdue"
   | "task_completed"
-  | "kpi_review";
+  | "kpi_review"
+  | "onboarding_submission"
+  | "onboarding_status";

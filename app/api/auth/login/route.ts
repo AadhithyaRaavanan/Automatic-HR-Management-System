@@ -380,12 +380,60 @@ export async function POST(request: NextRequest) {
 
     const mustChangePassword = Boolean(userMeta.must_change_password);
 
-    // Standard employee / manager
+    // Check onboarding status for standard employees
+    // If the employee has submitted all documents (SUBMITTED, RESUBMITTED, UNDER_REVIEW, VERIFIED, COMPLETED),
+    // they are immediately allowed to enter the dashboard to continue working!
+    let canAccessDashboard = false;
+    if (userMeta.onboarding_completed === true) {
+      canAccessDashboard = true;
+    } else {
+      const { data: onbProf } = await (supabase as any)
+        .from("onboarding_profiles")
+        .select("onboarding_status, status")
+        .eq("user_id", authData.user.id)
+        .maybeSingle();
+
+      const onbStatus = (onbProf?.onboarding_status || onbProf?.status || "").toUpperCase();
+      if (["SUBMITTED", "RESUBMITTED", "UNDER_REVIEW", "VERIFIED", "COMPLETED"].includes(onbStatus)) {
+        canAccessDashboard = true;
+      } else {
+        const { data: prof } = await (supabase as any)
+          .from("profiles")
+          .select("onboarding_completed")
+          .eq("id", authData.user.id)
+          .maybeSingle();
+
+        if (prof?.onboarding_completed === true) {
+          canAccessDashboard = true;
+        } else {
+          const { data: emp } = await (supabase as any)
+            .from("employees")
+            .select("onboarding_completed")
+            .eq("id", authData.user.id)
+            .maybeSingle();
+          canAccessDashboard = Boolean(emp?.onboarding_completed);
+        }
+      }
+    }
+
+    if (!canAccessDashboard) {
+      return createSuccessResponse({
+        success: true,
+        requireMfa: false,
+        onboardingRequired: true,
+        destination: "/onboarding",
+        mfaDestination: "/onboarding",
+        role: userRole,
+      });
+    }
+
+    // Standard employee / manager with completed onboarding
     return createSuccessResponse({
       success: true,
       requireMfa: false,
       mustChangePassword,
       mfaDestination: mustChangePassword ? "/settings?must_change_password=true" : "/",
+      destination: mustChangePassword ? "/settings?must_change_password=true" : "/",
       role: userRole,
     });
   } catch (err: any) {

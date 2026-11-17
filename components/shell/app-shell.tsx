@@ -7,6 +7,7 @@ import { CurvedSidebar } from "@/components/shell/curved-sidebar";
 import { TopNavBar } from "@/components/shell/top-nav-bar";
 import { BottomTabBar } from "@/components/shell/bottom-tab-bar";
 import { OnboardingTour } from "@/components/shared/onboarding-tour";
+import { AutoSignoutListener } from "@/components/shared/auto-signout-listener";
 import { SidebarProvider } from "@/components/shell/sidebar-context";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -184,7 +185,7 @@ export function AppShell({
           const { data: empProfile } = await (supabase as any)
             .from("employees")
             .select(
-              "full_name, timezone, organization_id, onboarding_completed_at, departments:department_id(name), job_titles:job_title_id(title_name)"
+              "full_name, timezone, organization_id, onboarding_completed, onboarding_completed_at, departments:department_id(name), job_titles:job_title_id(title_name)"
             )
             .eq("id", user.id)
             .maybeSingle();
@@ -195,6 +196,18 @@ export function AppShell({
             resolvedOrgId = resolvedOrgId || empProfile.organization_id || null;
             resolvedDeptName = empProfile.departments?.name || null;
             resolvedJobTitle = empProfile.job_titles?.title_name || null;
+
+            // Extra client-side lockdown guard: un-onboarded employees cannot mount the workplace shell
+            if (
+              resolvedRole !== "admin" &&
+              resolvedRole !== "hr" &&
+              empProfile.onboarding_completed === false
+            ) {
+              if (typeof window !== "undefined" && window.location.pathname !== "/onboarding") {
+                window.location.href = "/onboarding";
+                return;
+              }
+            }
           }
 
           const dismissed = typeof window !== "undefined" ? localStorage.getItem("pulse_tutorial_dismissed") : null;
@@ -318,6 +331,9 @@ export function AppShell({
 
           {/* Mobile Bottom Navigation Bar */}
           <BottomTabBar userRole={userRole} />
+
+          {/* 3-Hour Post-Logout Auto Signout Enforcer */}
+          <AutoSignoutListener />
 
           {/* First-Login Onboarding Tour */}
           {mounted && sessionState.userId && (

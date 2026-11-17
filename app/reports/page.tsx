@@ -85,6 +85,7 @@ function ReportsPageContent() {
   const { userId, userRole } = useAppSession();
   const isAdmin = userRole === "admin";
   const supabase = React.useMemo(() => createClient(), []);
+  const [mounted, setMounted] = React.useState(false);
 
   const now = new Date();
   const [selectedYear, setSelectedYear] = React.useState<number>(now.getFullYear());
@@ -94,6 +95,10 @@ function ReportsPageContent() {
   const [employees, setEmployees] = React.useState<EmployeeOption[]>([]);
   const [departments, setDepartments] = React.useState<string[]>([]);
   const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedDept, setSelectedDept] = React.useState("All");
@@ -699,7 +704,7 @@ function ReportsPageContent() {
         }
         className="p-6"
       >
-        {loading ? (
+        {!mounted || loading ? (
           <div className="h-44 rounded-2xl bg-card-subtle animate-pulse mt-2" />
         ) : filteredData.length > 0 ? (
           <div className="overflow-x-auto mt-2">

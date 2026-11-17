@@ -114,6 +114,8 @@ export function CurvedSidebar({
 
   React.useEffect(() => {
     let isMounted = true;
+    let fetchTimeout: any = null;
+
     const fetchMemberCount = async () => {
       try {
         const res = await fetch("/api/workforce/count");
@@ -147,11 +149,19 @@ export function CurvedSidebar({
     };
 
     fetchMemberCount();
-    const handleStorageChange = () => fetchMemberCount();
-    window.addEventListener("remotehr_storage_change", handleStorageChange);
+
+    const debouncedStorageChange = () => {
+      clearTimeout(fetchTimeout);
+      fetchTimeout = setTimeout(() => {
+        fetchMemberCount();
+      }, 500);
+    };
+
+    window.addEventListener("remotehr_storage_change", debouncedStorageChange);
     return () => {
       isMounted = false;
-      window.removeEventListener("remotehr_storage_change", handleStorageChange);
+      clearTimeout(fetchTimeout);
+      window.removeEventListener("remotehr_storage_change", debouncedStorageChange);
     };
   }, [supabase]);
 

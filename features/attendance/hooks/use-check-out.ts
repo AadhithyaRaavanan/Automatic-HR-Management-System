@@ -27,8 +27,11 @@ export function useCheckOut() {
     },
     onSuccess: (data: any) => {
       const duration = formatDurationMinutes(data?.duration_minutes || 0);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("remotehr_last_checkout_timestamp", String(Date.now()));
+      }
       toast.info("Checked out successfully!", {
-        description: `Session closed. Logged ${duration} for ${data?.work_date}.`,
+        description: `Session closed. Logged ${duration} for ${data?.work_date}. Auto logout scheduled after 3 hours.`,
       });
       queryClient.invalidateQueries({ queryKey: ["attendance"] });
     },

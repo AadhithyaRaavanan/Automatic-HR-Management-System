@@ -128,6 +128,13 @@ function LoginForm() {
           } catch {}
         }
 
+        if (data.onboardingRequired || data.destination === "/onboarding" || data.mfaDestination === "/onboarding") {
+          toast.success("Welcome aboard! Please complete your mandatory employee onboarding.");
+          router.push("/onboarding");
+          router.refresh();
+          return;
+        }
+
         toast.success("Signed in successfully!");
         router.push(redirectPath);
         router.refresh();

@@ -2,12 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { Database } from "@/types/database.types";
 import { uploadDoc } from "@/lib/onboarding-storage";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "application/pdf"];
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB per prompt spec
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,7 +37,10 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const docType = (formData.get("docType") as string) || "document";
-    const fullName = (formData.get("fullName") as string) || user.user_metadata?.full_name || "candidate";
+    const fullName = (formData.get("fullName") as string) || user.user_metadata?.full_name || "Candidate";
+    const employeeId = (formData.get("employeeId") as string) || undefined;
+    const salaryMonth = (formData.get("salaryMonth") as string) || undefined;
+    const salaryYear = (formData.get("salaryYear") as string) || undefined;
 
     if (!file) {
       return NextResponse.json({ error: "No file was provided in the upload payload." }, { status: 400 });
@@ -47,14 +48,15 @@ export async function POST(request: NextRequest) {
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
       return NextResponse.json(
-        { error: "File exceeds 5MB size limit. Please upload a file smaller than 5MB." },
+        { error: "File exceeds 10MB size limit. Please upload a file smaller than 10MB." },
         { status: 400 }
       );
     }
 
-    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+    // PDF filename check
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
       return NextResponse.json(
-        { error: "Invalid file format. Only JPG, PNG, and PDF files are accepted." },
+        { error: "Invalid file type. Only PDF documents are accepted." },
         { status: 400 }
       );
     }
@@ -65,16 +67,20 @@ export async function POST(request: NextRequest) {
       docType,
       file,
       fileName: file.name,
+      employeeId,
+      salaryMonth,
+      salaryYear,
     });
 
     return NextResponse.json({
       success: true,
       data: {
         docType,
-        fileName: file.name,
+        fileName: uploadRes.standardFileName,
         storagePath: uploadRes.storagePath,
         storageFolder: uploadRes.storageFolder,
         signedUrl: uploadRes.signedUrl,
+        driveFolderUrl: uploadRes.driveFolderUrl,
       },
     });
   } catch (err: any) {

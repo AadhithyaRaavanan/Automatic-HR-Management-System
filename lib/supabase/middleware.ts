@@ -132,29 +132,57 @@ export async function updateSession(request: NextRequest) {
     const userMeta = (claims?.user_metadata || {}) as Record<string, any>;
     const userId = (claims?.sub || claims?.id) as string | undefined;
 
-    // Onboarding Guard: Authenticated users with onboarding_completed = false are restricted to /onboarding.
-    // Completed users visiting /onboarding are routed to dashboard.
-    let isOnboardingCompleted = true;
-    if (userId) {
-      if (userMeta.onboarding_completed === false) {
-        isOnboardingCompleted = false;
-      } else if (userMeta.onboarding_completed === true) {
-        isOnboardingCompleted = true;
+    // Onboarding Guard:
+    // HR and Admin accounts retain authorized administrative access and are not restricted.
+    // Regular employees who have submitted all documents (SUBMITTED, RESUBMITTED, UNDER_REVIEW, VERIFIED, COMPLETED)
+    // are allowed into the dashboard to continue work.
+    // Employees who have NOT submitted (NOT_STARTED, IN_PROGRESS) or require corrections (CORRECTION_REQUIRED) are routed to /onboarding.
+    const isPrivilegedAdminOrHr = userRole === "admin" || userRole === "hr";
+
+    let canAccessDashboard = isPrivilegedAdminOrHr;
+
+    if (userId && !isPrivilegedAdminOrHr) {
+      if (userMeta.onboarding_completed === true) {
+        canAccessDashboard = true;
       } else {
         try {
-          const { data: prof } = await (supabase as any)
-            .from("profiles")
-            .select("onboarding_completed")
-            .eq("id", userId)
+          // Check onboarding_profiles for submission/completion status
+          const { data: onbProf } = await (supabase as any)
+            .from("onboarding_profiles")
+            .select("onboarding_status, status")
+            .eq("user_id", userId)
             .maybeSingle();
-          if (prof && prof.onboarding_completed === false) {
-            isOnboardingCompleted = false;
+
+          const onbStatus = (onbProf?.onboarding_status || onbProf?.status || "").toUpperCase();
+
+          if (["SUBMITTED", "RESUBMITTED", "UNDER_REVIEW", "VERIFIED", "COMPLETED"].includes(onbStatus)) {
+            canAccessDashboard = true;
+          } else {
+            const { data: prof } = await (supabase as any)
+              .from("profiles")
+              .select("onboarding_completed")
+              .eq("id", userId)
+              .maybeSingle();
+
+            if (prof?.onboarding_completed === true) {
+              canAccessDashboard = true;
+            } else {
+              const { data: emp } = await (supabase as any)
+                .from("employees")
+                .select("onboarding_completed")
+                .eq("id", userId)
+                .maybeSingle();
+
+              canAccessDashboard = Boolean(emp?.onboarding_completed);
+            }
           }
-        } catch {}
+        } catch {
+          canAccessDashboard = false;
+        }
       }
     }
 
-    if (!isOnboardingCompleted) {
+    if (!isPrivilegedAdminOrHr && !canAccessDashboard) {
       if (
         pathname !== "/onboarding" &&
         !pathname.startsWith("/api") &&
@@ -165,10 +193,8 @@ export async function updateSession(request: NextRequest) {
         url.pathname = "/onboarding";
         return NextResponse.redirect(url);
       }
-    } else if (pathname === "/onboarding") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/";
-      return NextResponse.redirect(url);
+    } else if (!isPrivilegedAdminOrHr && canAccessDashboard && pathname === "/onboarding") {
+      // If employee wants to visit /onboarding while permitted, allow them to view/replace documents
     }
 
     // Enforce temporary password must-change-password and 24-hour expiration

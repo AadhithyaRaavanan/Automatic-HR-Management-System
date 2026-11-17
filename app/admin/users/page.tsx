@@ -156,6 +156,11 @@ function UsersDirectoryContent() {
   } | null>(null);
   const [credentialsModalOpen, setCredentialsModalOpen] = React.useState(false);
   const [hasCopied, setHasCopied] = React.useState(false);
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Bulk CSV Import State
   const [csvText, setCsvText] = React.useState(SAMPLE_BULK_CSV);
@@ -857,7 +862,7 @@ function UsersDirectoryContent() {
 
       {/* Directory Table */}
       <div className="bg-card rounded-[28px] border border-border-light shadow-card overflow-hidden">
-        {loading ? (
+        {!mounted || loading ? (
           <div className="p-6 space-y-3">
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="h-14 rounded-2xl bg-card-subtle animate-pulse" />
@@ -1506,8 +1511,8 @@ function UsersDirectoryContent() {
                 Single-Use Invite Link (Expires in 24 hours):
               </span>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-card p-2.5 rounded-xl border border-border-light gap-2">
-                <code className="text-xs font-mono font-bold text-brand-navy select-all break-all">
-                  {createdCredentials?.inviteLink || (typeof window !== "undefined" ? `${window.location.origin}/login` : "/login")}
+                <code suppressHydrationWarning className="text-xs font-mono font-bold text-brand-navy select-all break-all">
+                  {createdCredentials?.inviteLink || (mounted && typeof window !== "undefined" ? `${window.location.origin}/login` : "/login")}
                 </code>
                 <div className="flex items-center gap-2 shrink-0">
                   <button

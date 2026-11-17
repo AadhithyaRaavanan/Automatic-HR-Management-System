@@ -20,10 +20,20 @@ import {
   Building2,
   Briefcase,
   Compass,
+  GraduationCap,
+  CreditCard,
+  FileCheck,
+  FileText,
+  ExternalLink,
+  ShieldCheck,
+  AlertCircle,
+  BadgeCheck,
+  MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import { GuidedTourOverlay } from "@/components/tutorial/guided-tour-overlay";
+import { cn } from "@/lib/utils";
 
 function ProfilePageContent() {
   const { userId, userRole, isLoaded } = useAppSession();
@@ -48,7 +58,44 @@ function ProfilePageContent() {
   const [workTargetMinutes, setWorkTargetMinutes] = React.useState(480);
   const [departmentName, setDepartmentName] = React.useState<string | null>(null);
   const [jobTitleName, setJobTitleName] = React.useState<string | null>(null);
+  const [employeeIdFormatted, setEmployeeIdFormatted] = React.useState<string | null>(null);
   const [tourOpen, setTourOpen] = React.useState(false);
+
+  // Onboarding & Verified Details State
+  const [onboardingStatus, setOnboardingStatus] = React.useState<string>("NOT_STARTED");
+  const [onboardingData, setOnboardingData] = React.useState<{
+    dob?: string;
+    gender?: string;
+    bloodGroup?: string;
+    currentAddress?: string;
+    permanentAddress?: string;
+    emergencyName?: string;
+    emergencyRel?: string;
+    emergencyPhone?: string;
+    highestQualification?: string;
+    hasExperience?: boolean;
+    previousCompany?: string;
+    previousDesignation?: string;
+    panNumber?: string;
+    bankAccountHolder?: string;
+    maskedAccountNumber?: string;
+    bankIfsc?: string;
+    bankName?: string;
+    bankBranch?: string;
+    uanNumber?: string;
+    submittedAt?: string;
+  } | null>(null);
+
+  const [verifiedDocuments, setVerifiedDocuments] = React.useState<
+    Array<{
+      id: string;
+      doc_type: string;
+      document_name: string;
+      file_name: string;
+      document_status: string;
+      signedUrl?: string;
+    }>
+  >([]);
 
   const handleReplayTutorial = async () => {
     if (typeof window !== "undefined") {
@@ -74,9 +121,7 @@ function ProfilePageContent() {
         setAvatarSignedUrl(storagePath);
         return;
       }
-      const { data } = await supabase.storage
-        .from("avatars")
-        .createSignedUrl(storagePath, 3600);
+      const { data } = await supabase.storage.from("avatars").createSignedUrl(storagePath, 3600);
       if (data?.signedUrl) {
         setAvatarSignedUrl(data.signedUrl);
       }
@@ -87,6 +132,7 @@ function ProfilePageContent() {
   React.useEffect(() => {
     if (!isLoaded) return;
     let active = true;
+
     async function loadProfile() {
       try {
         let uid = userId;
@@ -105,10 +151,11 @@ function ProfilePageContent() {
           return;
         }
 
+        // 1. Fetch Employee Record
         const { data, error } = await (supabase as any)
           .from("employees")
           .select(
-            "full_name, email, phone, emergency_contact, avatar_url, timezone, work_mode, work_target_minutes, departments:department_id(name), job_titles:job_title_id(title_name)"
+            "id, full_name, email, phone, emergency_contact, avatar_url, timezone, work_mode, work_target_minutes, departments:department_id(name), job_titles:job_title_id(title_name)"
           )
           .eq("id", uid)
           .maybeSingle();
@@ -126,26 +173,59 @@ function ProfilePageContent() {
           setWorkTargetMinutes(data.work_target_minutes || 480);
           setDepartmentName(data.departments?.name || null);
           setJobTitleName(data.job_titles?.title_name || null);
+          setEmployeeIdFormatted(`EMP-${data.id.slice(0, 6).toUpperCase()}`);
           if (data.avatar_url) {
             await resolveAvatarSignedUrl(data.avatar_url);
           }
-        } else {
-          setFullName("Aadhithya Raavanan");
-          setEmail("aadhithya.raavanan@gmail.com");
-          setTimezone("UTC");
-          setWorkMode("remote");
-          setWorkTargetMinutes(480);
         }
-      } catch {
-        setFullName("Aadhithya Raavanan");
-        setEmail("aadhithya.raavanan@gmail.com");
-        setTimezone("UTC");
-        setWorkMode("remote");
-        setWorkTargetMinutes(480);
+
+        // 2. Fetch Onboarding & Document Verification Details
+        const onbRes = await fetch("/api/onboarding/profile");
+        if (onbRes.ok) {
+          const onbJson = await onbRes.json();
+          const p = onbJson.onboardingProfile;
+          if (p) {
+            const rawStatus = (p.onboarding_status || p.status || "NOT_STARTED").toUpperCase();
+            setOnboardingStatus(rawStatus);
+
+            const accNum = p.bank_account_number || "";
+            const maskedAcc = accNum.length > 4 ? `•••• •••• ${accNum.slice(-4)}` : accNum;
+
+            setOnboardingData({
+              dob: p.dob,
+              gender: p.gender,
+              bloodGroup: p.blood_group,
+              currentAddress: p.current_address,
+              permanentAddress: p.permanent_address,
+              emergencyName: p.emergency_contact_name,
+              emergencyRel: p.emergency_contact_relationship,
+              emergencyPhone: p.emergency_contact_phone,
+              highestQualification: p.highest_qualification || "Undergraduate Degree",
+              hasExperience: Boolean(p.has_experience),
+              previousCompany: p.previous_company_name,
+              previousDesignation: p.previous_designation,
+              panNumber: p.pan_number,
+              bankAccountHolder: p.bank_account_holder,
+              maskedAccountNumber: maskedAcc,
+              bankIfsc: p.bank_ifsc,
+              bankName: p.bank_name,
+              bankBranch: p.bank_branch,
+              uanNumber: p.uan_number,
+              submittedAt: p.submitted_at,
+            });
+          }
+
+          if (Array.isArray(onbJson.documents)) {
+            setVerifiedDocuments(onbJson.documents);
+          }
+        }
+      } catch (err) {
+        console.warn("[Profile Load Error]:", err);
       } finally {
         if (active) setLoading(false);
       }
     }
+
     loadProfile();
     return () => {
       active = false;
@@ -220,12 +300,10 @@ function ProfilePageContent() {
       const ext = mimeType === "image/webp" ? "webp" : mimeType === "image/png" ? "png" : "jpg";
       const storagePath = `${uid}/avatar.${ext}`;
 
-      const { error: uploadErr } = await supabase.storage
-        .from("avatars")
-        .upload(storagePath, blob, {
-          contentType: mimeType,
-          upsert: true,
-        });
+      const { error: uploadErr } = await supabase.storage.from("avatars").upload(storagePath, blob, {
+        contentType: mimeType,
+        upsert: true,
+      });
       if (uploadErr) throw uploadErr;
 
       const { error: dbErr } = await (supabase.from("employees") as any)
@@ -255,24 +333,61 @@ function ProfilePageContent() {
     .slice(0, 2)
     .toUpperCase();
 
+  const isVerified = ["COMPLETED", "VERIFIED"].includes(onboardingStatus);
+
   return (
     <div className="space-y-6">
+      {/* Top Profile Header */}
       <section className="pt-1 pb-2 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight">
-            My Profile
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight">
+              My Profile
+            </h1>
+            <span
+              className={cn(
+                "px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider border flex items-center gap-1.5 shadow-sm",
+                isVerified
+                  ? "bg-status-success/15 text-status-success border-status-success/30"
+                  : onboardingStatus === "CORRECTION_REQUIRED"
+                  ? "bg-status-danger/15 text-status-danger border-status-danger/30"
+                  : "bg-brand-purple/15 text-brand-purple border-brand-purple/30"
+              )}
+            >
+              {isVerified ? (
+                <>
+                  <BadgeCheck className="w-4 h-4 text-status-success" />
+                  <span>Verified Onboarding</span>
+                </>
+              ) : (
+                <>
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Onboarding: {onboardingStatus.replace(/_/g, " ")}</span>
+                </>
+              )}
+            </span>
+          </div>
           <p className="text-xs sm:text-sm text-text-secondary mt-1">
-            Update your personal contact details and private avatar photo. Work governance settings remain HR/Admin managed.
+            Official employee record, verified onboarding credentials, and payroll details.
           </p>
         </div>
 
-        <Link
-          href="/settings"
-          className="px-4 py-2 rounded-full bg-card border border-border-light text-xs font-bold text-text-primary hover:bg-card-subtle transition-colors w-fit shadow-sm"
-        >
-          Security & Preferences →
-        </Link>
+        <div className="flex items-center gap-2">
+          {!isVerified && (
+            <Link
+              href="/onboarding"
+              className="px-4 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
+            >
+              <span>Onboarding Portal →</span>
+            </Link>
+          )}
+          <Link
+            href="/settings"
+            className="px-4 py-2 rounded-xl bg-card border border-border-light text-xs font-bold text-text-primary hover:bg-card-subtle transition-colors shadow-sm"
+          >
+            Security & Preferences →
+          </Link>
+        </div>
       </section>
 
       <BentoGrid>
@@ -284,7 +399,7 @@ function ProfilePageContent() {
               <span>Identity & Avatar</span>
             </div>
           }
-          subtitle="Private tenant-isolated storage (compressed <= 200 KB JPEG/PNG/WebP)"
+          subtitle="Private tenant-isolated storage"
           className="lg:col-span-4 p-6 flex flex-col justify-between space-y-5"
         >
           <div className="flex flex-col items-center text-center space-y-4 py-2">
@@ -326,6 +441,11 @@ function ProfilePageContent() {
                 {fullName || "Employee"}
               </h2>
               <p className="text-xs text-text-tertiary font-mono mt-0.5">{email}</p>
+              {employeeIdFormatted && (
+                <p className="text-[11px] font-bold text-brand-purple font-mono mt-0.5">
+                  {employeeIdFormatted}
+                </p>
+              )}
               <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-brand-purple-light text-brand-purple">
                   {userRole}
@@ -377,10 +497,10 @@ function ProfilePageContent() {
           title={
             <div className="flex items-center gap-2">
               <Phone className="w-4 h-4 text-brand-purple" />
-              <span>Personal Contact Details</span>
+              <span>Contact & Personal Details</span>
             </div>
           }
-          subtitle="Changes apply immediately to your directory profile"
+          subtitle="Directory updates apply immediately"
           className="lg:col-span-8 p-6"
         >
           <form onSubmit={handleSaveProfile} className="space-y-4">
@@ -437,13 +557,29 @@ function ProfilePageContent() {
                   id="profile-emergency-contact"
                   type="text"
                   disabled={loading}
-                  value={emergencyContact}
+                  value={
+                    emergencyContact ||
+                    (onboardingData?.emergencyName
+                      ? `${onboardingData.emergencyName} (${onboardingData.emergencyRel}) • ${onboardingData.emergencyPhone}`
+                      : "")
+                  }
                   onChange={(e) => setEmergencyContact(e.target.value)}
-                  placeholder="e.g. Dana Sullivan (Spouse) • +1 555-0199"
+                  placeholder="e.g. Dana Sullivan (Spouse) • +91 98765 00000"
                   className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary focus:outline-none focus:border-brand-purple"
                 />
               </div>
             </div>
+
+            {/* Address Information from Onboarding */}
+            {onboardingData?.currentAddress && (
+              <div className="p-3.5 rounded-xl bg-card-subtle border border-border-light text-xs space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-text-primary">
+                  <MapPin className="w-3.5 h-3.5 text-brand-purple" />
+                  <span>Residential Address</span>
+                </div>
+                <p className="text-text-secondary pl-5">{onboardingData.currentAddress}</p>
+              </div>
+            )}
 
             {/* Read-only HR/Admin Governed Section */}
             <div className="pt-4 mt-4 border-t border-border-light space-y-3">
@@ -511,10 +647,6 @@ function ProfilePageContent() {
                   />
                 </div>
               </div>
-
-              <p className="text-[11px] text-text-tertiary">
-                Timezone changes are restricted to HR and Administrators to prevent punch boundary spoofing.
-              </p>
             </div>
 
             <div className="pt-2 flex justify-end">
@@ -529,13 +661,163 @@ function ProfilePageContent() {
             </div>
           </form>
         </BentoCard>
+
+        {/* Bank & Payroll Details Card */}
+        <BentoCard
+          title={
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-brand-purple" />
+              <span>Bank & Payroll Details</span>
+            </div>
+          }
+          subtitle="Masked for security (authorized HR/Payroll managed)"
+          className="lg:col-span-6 p-6"
+        >
+          <div className="space-y-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-3 rounded-xl bg-card-subtle border border-border-light">
+                <span className="text-[10px] font-bold uppercase text-text-tertiary block">Account Holder</span>
+                <span className="font-extrabold text-text-primary text-sm">
+                  {onboardingData?.bankAccountHolder || fullName || "—"}
+                </span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-card-subtle border border-border-light">
+                <span className="text-[10px] font-bold uppercase text-text-tertiary block">Account Number</span>
+                <span className="font-mono font-bold text-text-primary text-sm">
+                  {onboardingData?.maskedAccountNumber || "•••• •••• ••••"}
+                </span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-card-subtle border border-border-light">
+                <span className="text-[10px] font-bold uppercase text-text-tertiary block">Bank & Branch</span>
+                <span className="font-bold text-text-primary">
+                  {onboardingData?.bankName ? `${onboardingData.bankName} (${onboardingData.bankBranch || "Main"})` : "—"}
+                </span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-card-subtle border border-border-light">
+                <span className="text-[10px] font-bold uppercase text-text-tertiary block">IFSC Code</span>
+                <span className="font-mono font-bold text-brand-purple">
+                  {onboardingData?.bankIfsc || "—"}
+                </span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-card-subtle border border-border-light">
+                <span className="text-[10px] font-bold uppercase text-text-tertiary block">PAN Number</span>
+                <span className="font-mono font-bold text-text-primary">
+                  {onboardingData?.panNumber || "—"}
+                </span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-card-subtle border border-border-light">
+                <span className="text-[10px] font-bold uppercase text-text-tertiary block">UAN Number</span>
+                <span className="font-mono font-bold text-text-primary">
+                  {onboardingData?.uanNumber || "Not registered"}
+                </span>
+              </div>
+            </div>
+          </div>
+        </BentoCard>
+
+        {/* Education & Qualifications Card */}
+        <BentoCard
+          title={
+            <div className="flex items-center gap-2">
+              <GraduationCap className="w-4 h-4 text-brand-purple" />
+              <span>Education & Prior Experience</span>
+            </div>
+          }
+          subtitle="Verified by HR Admin during onboarding"
+          className="lg:col-span-6 p-6"
+        >
+          <div className="space-y-3 text-xs">
+            <div className="p-3.5 rounded-xl bg-card-subtle border border-border-light space-y-1">
+              <span className="text-[10px] font-bold uppercase text-text-tertiary block">Highest Qualification</span>
+              <p className="font-extrabold text-sm text-text-primary">
+                {onboardingData?.highestQualification || "Undergraduate Degree"}
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-card-subtle border border-border-light space-y-1">
+              <span className="text-[10px] font-bold uppercase text-text-tertiary block">Prior Corporate Experience</span>
+              <p className="font-bold text-text-primary">
+                {onboardingData?.hasExperience
+                  ? `Experienced • ${onboardingData.previousCompany || "Previous Employer"} (${onboardingData.previousDesignation || "Role"})`
+                  : "Fresher / Direct Graduate Entry"}
+              </p>
+            </div>
+          </div>
+        </BentoCard>
+
+        {/* Verified Onboarding Documents Card */}
+        <BentoCard
+          title={
+            <div className="flex items-center gap-2">
+              <FileCheck className="w-4 h-4 text-brand-purple" />
+              <span>Verified Onboarding Documents</span>
+            </div>
+          }
+          subtitle="Encrypted Google Drive / Supabase storage archive"
+          className="lg:col-span-12 p-6"
+        >
+          {verifiedDocuments.length === 0 ? (
+            <p className="text-xs text-text-tertiary italic p-3">
+              No documents linked to this profile. Complete onboarding to attach verified records.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {verifiedDocuments.map((doc) => (
+                <div
+                  key={doc.id}
+                  className="p-3.5 rounded-2xl bg-card-subtle border border-border-light flex items-center justify-between gap-2"
+                >
+                  <div className="space-y-0.5 truncate">
+                    <div className="flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-brand-purple shrink-0" />
+                      <span className="text-xs font-bold text-text-primary truncate">
+                        {doc.document_name || doc.doc_type.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                    <p className="text-[11px] font-mono text-text-tertiary pl-5 truncate">
+                      {doc.file_name}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span
+                      className={cn(
+                        "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase",
+                        doc.document_status === "approved"
+                          ? "bg-status-success/15 text-status-success"
+                          : doc.document_status === "rejected"
+                          ? "bg-status-danger/15 text-status-danger"
+                          : "bg-brand-purple/15 text-brand-purple"
+                      )}
+                    >
+                      {doc.document_status}
+                    </span>
+
+                    {doc.signedUrl && (
+                      <a
+                        href={doc.signedUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-1.5 rounded-lg bg-card border border-border-light hover:bg-card-subtle text-brand-purple transition-colors"
+                        title="View PDF"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </BentoCard>
       </BentoGrid>
 
-      <GuidedTourOverlay
-        forceOpen={tourOpen}
-        userRole={userRole}
-        onClose={() => setTourOpen(false)}
-      />
+      <GuidedTourOverlay forceOpen={tourOpen} userRole={userRole} onClose={() => setTourOpen(false)} />
     </div>
   );
 }
@@ -547,4 +829,3 @@ export default function ProfilePage() {
     </AppShell>
   );
 }
-

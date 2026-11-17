@@ -3,6 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { Database } from "@/types/database.types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { sendOnboardingSubmittedEmail } from "@/lib/email/resend";
+import { QUALIFICATION_DOC_MAP, HighestQualification } from "@/lib/onboarding-types";
 
 export const dynamic = "force-dynamic";
 
@@ -33,87 +34,224 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const nowIso = new Date().toISOString();
+    const payload = await request.json().catch(() => ({}));
+    const { declaration } = payload;
 
-    // 1. Mark onboarding profile status as submitted
+    if (!declaration) {
+      return NextResponse.json(
+        { error: "You must accept the declaration to submit your onboarding for verification." },
+        { status: 400 }
+      );
+    }
+
+    // 1. Fetch current profile
     const { data: onbProfile } = await (supabaseAdmin as any)
       .from("onboarding_profiles")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!onbProfile) {
+      return NextResponse.json(
+        { error: "Onboarding profile not found. Please complete the form steps first." },
+        { status: 400 }
+      );
+    }
+
+    // 2. Fetch uploaded documents
+    const { data: docs } = await (supabaseAdmin as any)
+      .from("onboarding_documents")
+      .select("*")
+      .eq("user_id", user.id);
+
+    const uploadedDocs = docs || [];
+    const docTypesUploaded = new Set(uploadedDocs.map((d: any) => d.doc_type));
+
+    // Admin accounts are exempt from document requirements and only submit basic details
+    const userRole = (user.app_metadata?.user_role || user.user_metadata?.role || "").toLowerCase();
+    const isUserAdmin = userRole === "admin";
+
+    // 3. Validate Mandatory Information
+    if (!onbProfile.full_name || !onbProfile.dob || !onbProfile.phone || !onbProfile.personal_email || !onbProfile.current_address || !onbProfile.permanent_address) {
+      return NextResponse.json(
+        { error: "Mandatory personal information is incomplete. Please complete Step 1." },
+        { status: 400 }
+      );
+    }
+
+    if (!onbProfile.emergency_contact_name || !onbProfile.emergency_contact_relationship || !onbProfile.emergency_contact_phone) {
+      return NextResponse.json(
+        { error: "Emergency contact details are required. Please complete Step 1." },
+        { status: 400 }
+      );
+    }
+
+    // Standard employee document validations (Admin is exempt from documents)
+    if (!isUserAdmin) {
+      // Photo & Resume checks
+      if (!docTypesUploaded.has("photo")) {
+        return NextResponse.json(
+          { error: "Passport-size photo (PDF) is required. Please upload it in Step 1." },
+          { status: 400 }
+        );
+      }
+
+      if (!docTypesUploaded.has("resume")) {
+        return NextResponse.json(
+          { error: "Candidate Resume / CV (PDF) is required. Please upload it under passport-size photo in Step 1." },
+          { status: 400 }
+        );
+      }
+
+      // Educational Qualification check
+      const highestQual = (onbProfile.highest_qualification || "Undergraduate Degree") as HighestQualification;
+      const requiredQualDoc = QUALIFICATION_DOC_MAP[highestQual]?.docType || "cert_undergraduate";
+      if (!docTypesUploaded.has(requiredQualDoc)) {
+        return NextResponse.json(
+          { error: `Missing highest qualification document: ${QUALIFICATION_DOC_MAP[highestQual]?.label || "Certificate"}. Please upload it in Step 2.` },
+          { status: 400 }
+        );
+      }
+
+      // Employment History check
+      if (onbProfile.has_experience) {
+        if (!onbProfile.previous_company_name || !onbProfile.previous_designation) {
+          return NextResponse.json(
+            { error: "Previous employment company and designation are required for experienced candidates." },
+            { status: 400 }
+          );
+        }
+
+        const hasExpCert = docTypesUploaded.has("experience_cert");
+        const hasExplanation = Boolean(onbProfile.experience_explanation?.trim());
+        if (!hasExpCert && !hasExplanation) {
+          return NextResponse.json(
+            { error: "Experience certificate (or an explanation note for HR) is required in Step 3." },
+            { status: 400 }
+          );
+        }
+      }
+
+      // Identity check (PAN is mandatory)
+      if (!onbProfile.pan_number || !docTypesUploaded.has("pan_card")) {
+        return NextResponse.json(
+          { error: "PAN number and PAN Card PDF are mandatory. Please complete Step 4." },
+          { status: 400 }
+        );
+      }
+
+      // Bank Details check
+      if (!onbProfile.bank_account_holder || !onbProfile.bank_account_number || !onbProfile.bank_ifsc || !onbProfile.bank_name) {
+        return NextResponse.json(
+          { error: "Bank account holder, account number, IFSC, and bank name are mandatory. Please complete Step 5." },
+          { status: 400 }
+        );
+      }
+
+      if (!docTypesUploaded.has("bank_proof")) {
+        return NextResponse.json(
+          { error: "Bank proof (passbook front page or cancelled cheque PDF) is mandatory. Please upload it in Step 5." },
+          { status: 400 }
+        );
+      }
+    }
+
+    const nowIso = new Date().toISOString();
+    const currentStatus = onbProfile.onboarding_status || onbProfile.status || "NOT_STARTED";
+    const nextStatus = isUserAdmin
+      ? "COMPLETED"
+      : currentStatus === "CORRECTION_REQUIRED"
+      ? "RESUBMITTED"
+      : "SUBMITTED";
+
+    // 4. Update onboarding profile to SUBMITTED / RESUBMITTED / COMPLETED
+    await (supabaseAdmin as any)
+      .from("onboarding_profiles")
       .update({
-        status: "submitted",
+        onboarding_status: nextStatus,
+        status: nextStatus.toLowerCase(),
+        declaration_agreed: true,
         submitted_at: nowIso,
         updated_at: nowIso,
       })
-      .eq("user_id", user.id)
-      .select()
-      .maybeSingle();
+      .eq("user_id", user.id);
 
-    // 2. Mark profiles and employees onboarding_completed = true
-    await Promise.all([
-      (supabaseAdmin as any).from("profiles").upsert({
-        id: user.id,
-        user_id: user.id,
-        onboarding_completed: true,
-        tutorial_completed: false,
-        updated_at: nowIso,
-      }, { onConflict: "id" }),
-      (supabaseAdmin as any).from("employees").update({
-        onboarding_completed: true,
-        updated_at: nowIso,
-      }).eq("id", user.id),
-      // Also update auth user metadata
-      supabaseAdmin.auth.admin.updateUserById(user.id, {
-        user_metadata: {
-          ...user.user_metadata,
-          onboarding_completed: true,
-          must_change_password: false,
-        },
-      }),
-    ]);
+    if (isUserAdmin) {
+      await (supabaseAdmin as any)
+        .from("profiles")
+        .update({ onboarding_completed: true })
+        .eq("id", user.id);
+      await (supabaseAdmin as any)
+        .from("employees")
+        .update({ onboarding_completed: true })
+        .eq("id", user.id);
+    }
 
-    // 3. Write audit log
+    // 5. Fetch employee details for notification
     const { data: empRecord } = await (supabaseAdmin.from("employees") as any)
-      .select("organization_id, full_name, email")
+      .select("id, organization_id, full_name, email, departments:department_id(name), job_titles:job_title_id(title_name)")
       .eq("id", user.id)
       .maybeSingle();
 
-    const candidateName = onbProfile?.full_name || empRecord?.full_name || user.user_metadata?.full_name || "New Candidate";
-    const candidateEmail = onbProfile?.personal_email || empRecord?.email || user.email || "";
-    const candidateType = onbProfile?.candidate_type || "GRADUATE_FRESHER";
+    const candidateName = onbProfile.full_name || empRecord?.full_name || user.user_metadata?.full_name || "Employee";
+    const employeeIdFormatted = empRecord?.id ? `EMP-${empRecord.id.slice(0, 6).toUpperCase()}` : `EMP-${user.id.slice(0, 6).toUpperCase()}`;
+    const departmentName = empRecord?.departments?.name || "General";
+    const designationName = empRecord?.job_titles?.title_name || "Employee";
 
-    if (empRecord?.organization_id) {
-      await supabaseAdmin.from("audit_logs").insert({
-        organization_id: empRecord.organization_id,
-        actor_id: user.id,
-        action: "ONBOARDING_COMPLETED",
-        table_name: "onboarding_profiles",
-        record_id: user.id,
-        old_data: null,
-        new_data: {
-          candidate_name: candidateName,
-          candidate_type: candidateType,
-          submitted_at: nowIso,
-        },
+    // 6. Record Audit Log
+    try {
+      await (supabaseAdmin as any).from("employee_onboarding_audit").insert({
+        employee_id: user.id,
+        action: nextStatus === "RESUBMITTED" ? "RESUBMITTED_FOR_VERIFICATION" : "SUBMITTED_FOR_VERIFICATION",
+        performed_by: user.id,
+        previous_status: currentStatus,
+        new_status: nextStatus,
+        remarks: "Employee completed onboarding submission.",
       });
+    } catch {}
+
+    // 7. Trigger In-App Notification to HR Admins
+    try {
+      // Find HR and Admin users
+      const { data: hrAdmins } = await (supabaseAdmin.from("employees") as any)
+        .select("id, organization_id")
+        .or("role.eq.admin,role.eq.hr,user_role.eq.admin,user_role.eq.hr");
+
+      if (hrAdmins && hrAdmins.length > 0) {
+        const notifInserts = hrAdmins.map((hr: any) => ({
+          organization_id: hr.organization_id || empRecord?.organization_id,
+          user_id: hr.id,
+          type: "onboarding_submission",
+          title: "NEW EMPLOYEE ONBOARDING SUBMISSION",
+          body: `An employee has completed the onboarding form and submitted documents for verification.\n• Name: ${candidateName}\n• ID: ${employeeIdFormatted}\n• Department: ${departmentName}\n• Designation: ${designationName}\n• Status: ${nextStatus}`,
+          link: `/hr/onboarding?employeeId=${user.id}`,
+          created_at: nowIso,
+        }));
+        await (supabaseAdmin as any).from("notifications").insert(notifInserts);
+      }
+    } catch (notifErr) {
+      console.warn("[Onboarding Notification Error]:", notifErr);
     }
 
-    // 4. Email HR via existing Hostinger SMTP
+    // 8. Trigger Email Notification to HR
     try {
       await sendOnboardingSubmittedEmail({
         candidateName,
-        candidateEmail,
-        candidateType,
+        candidateEmail: onbProfile.personal_email || user.email || "",
+        candidateType: onbProfile.candidate_type || "GRADUATE_FRESHER",
       });
     } catch (emailErr) {
-      console.warn("[Onboarding HR Email Notification Error]:", emailErr);
+      console.warn("[Onboarding Email Error]:", emailErr);
     }
 
     return NextResponse.json({
       success: true,
-      message: "Onboarding successfully completed and submitted.",
+      onboarding_status: nextStatus,
+      message: "Onboarding submitted successfully for HR Admin verification.",
     });
   } catch (err: any) {
     return NextResponse.json(
-      { error: err?.message || "Failed to finalize onboarding." },
+      { error: err?.message || "Failed to submit onboarding." },
       { status: 500 }
     );
   }

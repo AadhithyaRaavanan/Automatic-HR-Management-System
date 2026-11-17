@@ -47,22 +47,48 @@ export async function GET(request: NextRequest) {
       .eq("user_id", user.id)
       .maybeSingle();
 
-    // Fetch employee data
+    // Fetch employee data joined with department and job title
     const { data: employee } = await (supabaseAdmin.from("employees") as any)
-      .select("id, full_name, email, department_id, job_title_id, status")
+      .select(`
+        id,
+        full_name,
+        email,
+        phone,
+        emergency_contact,
+        department_id,
+        job_title_id,
+        status,
+        onboarding_completed,
+        departments:department_id(name),
+        job_titles:job_title_id(title_name)
+      `)
       .eq("id", user.id)
       .maybeSingle();
 
-    // Fetch uploaded documents
+    // Fetch uploaded documents with signed URLs and status
     const documents = await listCandidateDocs(user.id).catch(() => []);
+
+    const employeeIdFormatted = employee?.id
+      ? `EMP-${employee.id.slice(0, 6).toUpperCase()}`
+      : `EMP-${user.id.slice(0, 6).toUpperCase()}`;
+
+    const userRole = (user.app_metadata?.user_role || user.user_metadata?.role || "employee").toLowerCase();
 
     return NextResponse.json({
       user: {
         id: user.id,
         email: user.email,
         fullName: employee?.full_name || user.user_metadata?.full_name || "",
+        employeeId: employeeIdFormatted,
+        rawEmployeeId: employee?.id || user.id,
+        department: employee?.departments?.name || "General",
+        designation: employee?.job_titles?.title_name || "Employee",
+        role: userRole,
       },
-      profile: profile || { onboarding_completed: false, tutorial_completed: false },
+      profile: {
+        onboarding_completed: Boolean(profile?.onboarding_completed || employee?.onboarding_completed),
+        tutorial_completed: Boolean(profile?.tutorial_completed),
+      },
       onboardingProfile: onboardingProfile || null,
       documents,
     });

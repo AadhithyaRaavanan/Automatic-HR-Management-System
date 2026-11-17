@@ -9,6 +9,7 @@ import { BentoCard } from "@/components/bento/bento-card";
 import { StatusPill } from "@/components/shared/status-pill";
 import { EmptyState } from "@/components/shared/empty-state";
 import { HeroCheckInCard } from "@/features/attendance/components/hero-check-in-card";
+import { BreakControlCard } from "@/features/attendance/components/break-control-card";
 import { StatCard } from "@/features/attendance/components/stat-card";
 import { SessionProgressRow } from "@/features/attendance/components/session-progress-row";
 import { AnimatedProgressRing } from "@/features/attendance/components/animated-progress-ring";
@@ -166,7 +167,7 @@ function DashboardContent({
 
       {/* Row 1: Hero Action Card & Quick Metrics */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        <div className="lg:col-span-6">
+        <div className="lg:col-span-6 space-y-5">
           <HeroCheckInCard
             isCheckedIn={isCheckedIn}
             activeTime={timer.formattedTime}
@@ -179,6 +180,7 @@ function DashboardContent({
             onCheckIn={() => checkInMutation.mutate("Shift check-in")}
             onCheckOut={() => checkOutMutation.mutate()}
           />
+          <BreakControlCard isCheckedIn={isCheckedIn} />
         </div>
 
         <div className="lg:col-span-6 grid grid-cols-1 sm:grid-cols-3 gap-4">

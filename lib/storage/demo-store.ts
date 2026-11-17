@@ -221,15 +221,20 @@ function readKey<T>(key: string, fallback: T): T {
 function writeKey<T>(key: string, value: T): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    const prev = localStorage.getItem(key);
+    const serialized = JSON.stringify(value);
+    if (prev === serialized) return; // avoid duplicate writes and redundant events/requests
+    localStorage.setItem(key, serialized);
     // Dispatch local change event
     window.dispatchEvent(new Event("remotehr_storage_change"));
-    // Push update to server state asynchronously for cross-device sync
-    fetch("/api/demo/state", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [key.replace("remotehr_demo_", "")]: value }),
-    }).catch(() => {});
+    // Push update to server state only in demo mode
+    if (isDemoModeEnabled()) {
+      fetch("/api/demo/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [key.replace("remotehr_demo_", "")]: value }),
+      }).catch(() => {});
+    }
   } catch {}
 }
 
@@ -461,22 +466,25 @@ export function deleteStoredShift(id: string): void {
 // --- USERS / WORKFORCE DIRECTORY ---
 export function getStoredUsers(): DemoUser[] {
   const current = readKey<DemoUser[]>(KEYS.users, INITIAL_DEMO_USERS);
-  // Auto-clean: scrub any legacy demo user names and previously deleted emails
+  // Keep strictly only aadhithya.raavanan@gmail.com and custom added active users
   const purged = current.filter(
     (u) =>
-      !u.email.endsWith("@remotehr.io") &&
-      u.email !== "admin@remotehr.io" &&
-      u.email !== "hr@remotehr.io" &&
-      u.email !== "manager@remotehr.io" &&
-      u.email !== "employee@remotehr.io" &&
-      u.email !== "jamesaathithyandev@gmail.com" &&
-      !u.name.toLowerCase().includes("jamesaathithyandev") &&
-      !u.name.toLowerCase().includes("james aathithyan") &&
-      !u.name.toLowerCase().includes("sarah jenkins") &&
-      !u.name.toLowerCase().includes("david chen") &&
-      !u.name.toLowerCase().includes("maya patel") &&
-      !u.name.toLowerCase().includes("eleanor") &&
-      !u.name.toLowerCase().includes("leslie")
+      u.email.toLowerCase() === "aadhithya.raavanan@gmail.com" ||
+      (!u.email.endsWith("@remotehr.io") &&
+        u.email !== "admin@remotehr.io" &&
+        u.email !== "hr@remotehr.io" &&
+        u.email !== "manager@remotehr.io" &&
+        u.email !== "employee@remotehr.io" &&
+        u.email !== "shriharini3108@gmail.com" &&
+        u.email !== "jamesaathithyandev@gmail.com" &&
+        !u.name.toLowerCase().includes("shriharini") &&
+        !u.name.toLowerCase().includes("jamesaathithyandev") &&
+        !u.name.toLowerCase().includes("james aathithyan") &&
+        !u.name.toLowerCase().includes("sarah jenkins") &&
+        !u.name.toLowerCase().includes("david chen") &&
+        !u.name.toLowerCase().includes("maya patel") &&
+        !u.name.toLowerCase().includes("eleanor") &&
+        !u.name.toLowerCase().includes("leslie"))
   );
 
   const activeList = purged.length > 0 ? purged : INITIAL_DEMO_USERS;
