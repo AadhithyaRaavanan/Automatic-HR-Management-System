@@ -102,6 +102,19 @@ export function useSubmitRegularization() {
         currentName = localStorage.getItem("remotehr_cached_name") || (currentRole === "employee" ? "James Sullivan" : "Active User");
       }
 
+      if (user?.id) {
+        const { data: existing } = await (supabase.from("regularization_requests") as any)
+          .select("id")
+          .eq("employee_id", user.id)
+          .eq("work_date", formData.workDate)
+          .in("status", ["pending", "approved"])
+          .maybeSingle();
+
+        if (existing) {
+          throw new Error("A regularization request already exists for this date.");
+        }
+      }
+
       const newStored = addStoredRegularization({
         employee_id: user?.id || `emp-${currentRole}`,
         employee_name: currentName,

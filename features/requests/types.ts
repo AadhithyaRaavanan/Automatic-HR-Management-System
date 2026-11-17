@@ -3,7 +3,16 @@ import { RegularizationStatus } from "@/types/database.types";
 
 export const regularizationFormSchema = z
   .object({
-    workDate: z.string().min(10, "Valid date (YYYY-MM-DD) is required"),
+    workDate: z
+      .string()
+      .min(10, "Valid date (YYYY-MM-DD) is required")
+      .refine(
+        (val) => {
+          const today = new Date().toISOString().split("T")[0];
+          return val <= today;
+        },
+        { message: "Regularization cannot be requested for a future date" }
+      ),
     requestedInTime: z.string().min(4, "Check-in time is required (e.g. 09:00)"),
     requestedOutTime: z.string().min(4, "Check-out time is required (e.g. 17:30)"),
     reason: z

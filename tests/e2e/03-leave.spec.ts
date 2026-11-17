@@ -383,7 +383,7 @@ test.describe("Module 3: Leave Management & Authorization", () => {
     await expect(page.getByRole("heading", { name: /Leave Management Hub/i })).toBeVisible({ timeout: 20000 });
 
     // Find and click approve button for this request
-    const approveBtn = page.getByRole("button", { name: /Approve leave/i }).first();
+    const approveBtn = page.getByRole("button", { name: /^Approve$/i }).first();
     await expect(approveBtn).toBeVisible({ timeout: 15000 });
     await approveBtn.click();
 

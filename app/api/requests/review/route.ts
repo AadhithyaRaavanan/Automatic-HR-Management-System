@@ -8,27 +8,42 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     let response = NextResponse.next();
-    const supabase = createServerClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll();
-          },
-          setAll(cookiesToSet: Array<{ name: string; value: string; options?: any }>) {
-            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-            response = NextResponse.next();
-            cookiesToSet.forEach(({ name, value, options }) =>
-              response.cookies.set(name, value, options)
-            );
-          },
-        },
-      }
-    );
+    const authHeader = request.headers.get("authorization");
+    let user: any = null;
 
-    const { data: { user }, error: authErr } = await supabase.auth.getUser();
-    if (authErr || !user) {
+    if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
+      const token = authHeader.slice(7).trim();
+      const { data: authData, error: tokenErr } = await supabaseAdmin.auth.getUser(token);
+      if (!tokenErr && authData?.user) {
+        user = authData.user;
+      }
+    }
+
+    if (!user) {
+      const supabase = createServerClient<Database>(
+        process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
+        {
+          cookies: {
+            getAll() {
+              return request.cookies.getAll();
+            },
+            setAll(cookiesToSet: Array<{ name: string; value: string; options?: any }>) {
+              cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+              response = NextResponse.next();
+              cookiesToSet.forEach(({ name, value, options }) =>
+                response.cookies.set(name, value, options)
+              );
+            },
+          },
+        }
+      );
+
+      const { data: authData } = await supabase.auth.getUser();
+      user = authData?.user;
+    }
+
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -52,7 +67,7 @@ export async function POST(request: NextRequest) {
 
     // Fetch regularization request
     const { data: regReq, error: fetchErr } = await (supabaseAdmin.from("regularization_requests") as any)
-      .select("*, employees(full_name, organization_id)")
+      .select("*")
       .eq("id", requestId)
       .maybeSingle();
 
@@ -65,6 +80,34 @@ export async function POST(request: NextRequest) {
         { error: "Separation of duties: You cannot approve or reject your own request." },
         { status: 403 }
       );
+    }
+
+    // Role-based review permission scoping
+    const { data: member } = await (supabaseAdmin.from("organization_members") as any)
+      .select("role")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const callerRole = member?.role || "employee";
+    if (callerRole === "employee") {
+      return NextResponse.json(
+        { error: "Forbidden: Employees cannot review regularization requests." },
+        { status: 403 }
+      );
+    }
+
+    if (callerRole === "manager") {
+      const { data: empRecord } = await (supabaseAdmin.from("employees") as any)
+        .select("manager_id")
+        .eq("id", regReq.employee_id)
+        .maybeSingle();
+
+      if (!empRecord || empRecord.manager_id !== user.id) {
+        return NextResponse.json(
+          { error: "Forbidden: Managers can only review requests for their direct reports." },
+          { status: 403 }
+        );
+      }
     }
 
     const nowIso = new Date().toISOString();
@@ -110,7 +153,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Write audit log
-    const orgId = regReq.employees?.organization_id;
+    const orgId = regReq.organization_id || regReq.employees?.organization_id;
     if (orgId) {
       await supabaseAdmin.from("audit_logs").insert({
         organization_id: orgId,
