@@ -13,7 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 
-export type AppUserRole = "employee" | "manager" | "hr" | "admin";
+export type AppUserRole = "employee" | "team_lead" | "manager" | "hr" | "admin";
 
 export interface AppSessionState {
   userId: string | null;
@@ -57,7 +57,7 @@ function getCookieRole(): AppUserRole | null {
   if (typeof document === "undefined") return null;
   const match = document.cookie.match(/(?:^|;\s*)remotehr_role=([^;]*)/);
   const val = match ? decodeURIComponent(match[1]) : null;
-  return val && ["employee", "manager", "hr", "admin"].includes(val) ? (val as AppUserRole) : null;
+  return val && ["employee", "team_lead", "manager", "hr", "admin"].includes(val) ? (val as AppUserRole) : null;
 }
 
 export function clearAppSessionCache() {

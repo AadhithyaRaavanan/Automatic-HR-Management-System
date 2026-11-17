@@ -43,17 +43,13 @@ export interface NavItem {
 
 const baseNavItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
+  { label: "EMS Hub", href: "/ems", icon: Users, badgeColor: "purple", roles: ["hr", "admin"] },
   { label: "Attendance", href: "/attendance", icon: Clock },
   { label: "Tasks", href: "/tasks", icon: CheckSquare },
   { label: "KPI", href: "/kpi", icon: Target },
   { label: "Leave", href: "/leave", icon: CalendarDays },
-  { label: "Team", href: "/team", icon: Users, badgeColor: "green", roles: ["manager", "hr", "admin"] },
   { label: "Requests", href: "/requests", icon: FileCheck2 },
-  { label: "Leave Hub", href: "/hr/leave", icon: FileSpreadsheet, roles: ["hr", "admin"] },
-  { label: "Onboarding", href: "/hr/onboarding", icon: UserPlus, roles: ["hr", "admin"] },
   { label: "Reports", href: "/reports", icon: BarChart3, roles: ["hr", "admin"] },
-  { label: "Workforce", href: "/admin/users", icon: UserCheck, roles: ["hr", "admin"] },
-  { label: "Departments", href: "/admin/departments", icon: Building, roles: ["admin"] },
   { label: "Locations", href: "/admin/locations", icon: MapPin, roles: ["admin"] },
   { label: "Shifts", href: "/admin/shifts", icon: CalendarClock, roles: ["admin"] },
   { label: "Audits", href: "/admin/audits", icon: ScrollText, roles: ["admin"] },
@@ -68,7 +64,7 @@ export function CurvedSidebar({
   onToggle: controlledOnToggle,
 }: {
   className?: string;
-  userRole?: "employee" | "manager" | "hr" | "admin";
+  userRole?: "employee" | "team_lead" | "manager" | "hr" | "admin";
   isCollapsed?: boolean;
   onToggle?: () => void;
 }) {
@@ -165,12 +161,12 @@ export function CurvedSidebar({
     };
   }, [supabase]);
 
-  const privilegedRoles = ["admin", "hr", "manager"];
+  const privilegedRoles = ["admin", "hr", "manager", "team_lead"];
   const effectiveRole =
     (propRole && privilegedRoles.includes(propRole) ? propRole : null) ||
-    (mounted && session.userRole && privilegedRoles.includes(session.userRole) ? session.userRole : null) ||
+    (session.userRole && privilegedRoles.includes(session.userRole) ? session.userRole : null) ||
     (mountedRole && privilegedRoles.includes(mountedRole) ? mountedRole : null) ||
-    (isDemoModeEnabled() ? "admin" : (propRole || "employee"));
+    (isDemoModeEnabled() ? "admin" : (propRole || session.userRole || "employee"));
 
   const navItems = React.useMemo(() => {
     const items = [...baseNavItems];

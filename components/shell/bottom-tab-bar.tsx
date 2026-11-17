@@ -17,11 +17,11 @@ import { cn } from "@/lib/utils";
 
 const baseMobileTabs = [
   { label: "Home", href: "/", icon: LayoutDashboard },
+  { label: "EMS Hub", href: "/ems", icon: Users, roles: ["hr", "admin"] },
   { label: "Attendance", href: "/attendance", icon: Clock },
   { label: "Tasks", href: "/tasks", icon: CheckSquare },
   { label: "Leave", href: "/leave", icon: CalendarDays },
   { label: "Requests", href: "/requests", icon: FileCheck2 },
-  { label: "Team", href: "/team", icon: Users, roles: ["manager", "hr", "admin"] },
   { label: "Reports", href: "/reports", icon: BarChart3, roles: ["hr", "admin"] },
   { label: "Profile", href: "/profile", icon: UserCircle },
 ];
@@ -31,9 +31,15 @@ export function BottomTabBar({
   userRole: propRole,
 }: {
   className?: string;
-  userRole?: "employee" | "manager" | "hr" | "admin";
+  userRole?: "employee" | "team_lead" | "manager" | "hr" | "admin";
 }) {
   const pathname = usePathname();
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const getCookieRole = () => {
     if (typeof document === "undefined") return null;
     const match = document.cookie.match(/(?:^|;\s*)remotehr_role=([^;]*)/);
@@ -41,11 +47,11 @@ export function BottomTabBar({
   };
 
   const cachedRole =
-    typeof window !== "undefined"
+    mounted && typeof window !== "undefined"
       ? (localStorage.getItem("remotehr_cached_role") as any) || getCookieRole()
       : null;
 
-  const privilegedRoles = ["admin", "hr", "manager"];
+  const privilegedRoles = ["admin", "hr", "manager", "team_lead"];
   const userRole =
     (propRole && privilegedRoles.includes(propRole) ? propRole : null) ||
     cachedRole ||

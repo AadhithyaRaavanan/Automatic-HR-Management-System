@@ -284,6 +284,15 @@ export async function updateSession(request: NextRequest) {
       }
     }
 
+    // EMS route guard (HR and Admin only; unauthorized gets /403)
+    if (pathname.startsWith("/ems") || pathname.startsWith("/employees")) {
+      if (userRole !== "admin" && userRole !== "hr") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/403";
+        return NextResponse.redirect(url);
+      }
+    }
+
     // Team route guard (Manager+)
     if (pathname.startsWith("/team") && userRole === "employee") {
       const url = request.nextUrl.clone();

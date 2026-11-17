@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 interface TopNavBarProps {
-  userRole?: "employee" | "manager" | "hr" | "admin";
+  userRole?: "employee" | "team_lead" | "manager" | "hr" | "admin";
   onPrimaryAction?: () => void;
   primaryActionLabel?: string;
   className?: string;

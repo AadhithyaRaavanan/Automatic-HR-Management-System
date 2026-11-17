@@ -9,7 +9,7 @@ export interface BulkEmployeeRowInput {
   rowNumber: number;
   email: string;
   fullName: string;
-  role: "employee" | "manager" | "hr" | "admin";
+  role: "employee" | "team_lead" | "manager" | "hr" | "admin";
   workMode: "remote" | "hybrid" | "office";
   timezone: string;
   departmentCode: string | null;

@@ -17,7 +17,7 @@ import { useRouter } from "next/navigation";
 interface OnboardingTourProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  userRole: "employee" | "manager" | "hr" | "admin";
+  userRole: "employee" | "team_lead" | "manager" | "hr" | "admin";
   fullName?: string | null;
   onCompleted?: () => void;
 }

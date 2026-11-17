@@ -48,7 +48,9 @@ interface EmployeeUser {
   id: string;
   name: string;
   email: string;
-  role: "employee" | "manager" | "hr" | "admin";
+  role: "employee" | "team_lead" | "manager" | "hr" | "admin";
+  employmentCategory?: string;
+  employeeNumber?: string;
   workMode: string;
   department: string;
   departmentId?: string;
@@ -107,9 +109,10 @@ function UsersDirectoryContent() {
   // Invite Form State
   const [inviteEmail, setInviteEmail] = React.useState("");
   const [inviteName, setInviteName] = React.useState("");
-  const [inviteRole, setInviteRole] = React.useState<"employee" | "manager" | "hr" | "admin">(
+  const [inviteRole, setInviteRole] = React.useState<"employee" | "team_lead" | "manager" | "hr" | "admin">(
     "employee"
   );
+  const [inviteEmploymentCategory, setInviteEmploymentCategory] = React.useState<"full_time" | "part_time" | "contract" | "intern">("full_time");
   const [inviteJobTitleId, setInviteJobTitleId] = React.useState("");
   const [inviteDepartmentId, setInviteDepartmentId] = React.useState("");
   const [inviteWorkMode, setInviteWorkMode] = React.useState("remote");
@@ -126,7 +129,8 @@ function UsersDirectoryContent() {
   const [govShiftEnd, setGovShiftEnd] = React.useState("17:00");
   const [govDepartmentId, setGovDepartmentId] = React.useState("");
   const [govJobTitleId, setGovJobTitleId] = React.useState("");
-  const [govRole, setGovRole] = React.useState<"employee" | "manager" | "hr" | "admin">("employee");
+  const [govRole, setGovRole] = React.useState<"employee" | "team_lead" | "manager" | "hr" | "admin">("employee");
+  const [govEmploymentCategory, setGovEmploymentCategory] = React.useState<"full_time" | "part_time" | "contract" | "intern">("full_time");
 
   const filteredInviteTitles = React.useMemo(() => {
     if (!inviteDepartmentId) return jobTitlesList;
@@ -613,7 +617,7 @@ function UsersDirectoryContent() {
 
   const handleChangeRole = async (
     targetUserId: string,
-    newRole: "employee" | "manager" | "hr" | "admin"
+    newRole: "employee" | "team_lead" | "manager" | "hr" | "admin"
   ) => {
     try {
       const res = await fetch("/api/admin/users/update", {
@@ -1145,30 +1149,52 @@ function UsersDirectoryContent() {
                 className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
               >
                 <option value="employee">Employee</option>
-                <option value="manager">Manager</option>
-                <option value="hr">HR</option>
+                <option value="team_lead">Team Lead</option>
+                <option value="manager">Department Manager</option>
+                <option value="hr">HR Manager</option>
                 <option value="admin">Admin</option>
               </select>
             </div>
           </div>
 
-          <div>
-            <label
-              htmlFor="invite-work-mode"
-              className="text-xs font-bold text-text-secondary block mb-1"
-            >
-              Work Mode
-            </label>
-            <select
-              id="invite-work-mode"
-              value={inviteWorkMode}
-              onChange={(e) => setInviteWorkMode(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
-            >
-              <option value="remote">Remote</option>
-              <option value="office">Office</option>
-              <option value="hybrid">Hybrid</option>
-            </select>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor="invite-category"
+                className="text-xs font-bold text-text-secondary block mb-1"
+              >
+                4. Employment Category
+              </label>
+              <select
+                id="invite-category"
+                value={inviteEmploymentCategory}
+                onChange={(e) => setInviteEmploymentCategory(e.target.value as any)}
+                className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+              >
+                <option value="full_time">Full-Time Employee</option>
+                <option value="part_time">Part-Time Employee</option>
+                <option value="contract">Contract Employee</option>
+                <option value="intern">Intern</option>
+              </select>
+            </div>
+            <div>
+              <label
+                htmlFor="invite-work-mode"
+                className="text-xs font-bold text-text-secondary block mb-1"
+              >
+                Work Mode
+              </label>
+              <select
+                id="invite-work-mode"
+                value={inviteWorkMode}
+                onChange={(e) => setInviteWorkMode(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+              >
+                <option value="remote">Remote</option>
+                <option value="office">Office</option>
+                <option value="hybrid">Hybrid</option>
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -1403,9 +1429,30 @@ function UsersDirectoryContent() {
                 className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary disabled:opacity-50"
               >
                 <option value="employee">Employee</option>
-                <option value="manager">Manager</option>
-                <option value="hr">HR</option>
+                <option value="team_lead">Team Lead</option>
+                <option value="manager">Department Manager</option>
+                <option value="hr">HR Manager</option>
                 <option value="admin">Admin</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="gov-category"
+                className="text-xs font-bold text-text-secondary block mb-1"
+              >
+                Employment Category
+              </label>
+              <select
+                id="gov-category"
+                value={govEmploymentCategory}
+                onChange={(e) => setGovEmploymentCategory(e.target.value as any)}
+                className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+              >
+                <option value="full_time">Full-Time Employee</option>
+                <option value="part_time">Part-Time Employee</option>
+                <option value="contract">Contract Employee</option>
+                <option value="intern">Intern</option>
               </select>
             </div>
 

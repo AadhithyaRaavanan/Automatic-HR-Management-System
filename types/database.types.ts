@@ -1533,7 +1533,8 @@ export const Constants = {
 // ============================================================================
 // Application Domain Helper Types
 // ============================================================================
-export type EmployeeRole = "employee" | "manager" | "hr" | "admin";
+export type EmployeeRole = "employee" | "team_lead" | "manager" | "hr" | "admin";
+export type EmploymentCategory = "full_time" | "part_time" | "contract" | "intern";
 export type AttendanceDayStatus = "present" | "half_day" | "absent" | "leave" | "holiday" | "weekend";
 export type RegularizationStatus = "pending" | "approved" | "rejected";
 export type SessionSource = "web" | "auto" | "manual";
@@ -1542,6 +1543,9 @@ export type LeaveStatus = "pending" | "approved" | "rejected" | "cancelled";
 export type HolidayType = "public" | "company" | "special";
 export type TaskStatus = "todo" | "in_progress" | "blocked" | "done" | "cancelled";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
+export type PermissionType = "personal" | "medical" | "official" | "emergency";
+export type PermissionStatus = "pending" | "approved" | "rejected" | "cancelled";
+export type InternshipStatus = "Selected" | "Offer Sent" | "Joined" | "Active" | "Extended" | "Completed" | "Discontinued";
 export type KpiSourceMetric =
   | "attendance_on_time_rate"
   | "hours_vs_target"

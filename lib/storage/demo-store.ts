@@ -54,7 +54,9 @@ export interface DemoUser {
   id: string;
   name: string;
   email: string;
-  role: "employee" | "manager" | "hr" | "admin";
+  role: "employee" | "team_lead" | "manager" | "hr" | "admin";
+  employmentCategory?: "full_time" | "part_time" | "contract" | "intern";
+  employeeNumber?: string;
   workMode: "remote" | "hybrid" | "office";
   department: string;
   departmentId: string;

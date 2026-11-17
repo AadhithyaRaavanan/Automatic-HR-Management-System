@@ -168,6 +168,18 @@ export function RequestModal({
             )}
           </div>
 
+          <div>
+            <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1.5">
+              Supporting Document (Optional)
+            </label>
+            <input
+              type="text"
+              {...register("documentName")}
+              placeholder="Document Reference / File Name (e.g. medical_slip.pdf, client_email.png)"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-medium text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-brand-purple focus:ring-2 focus:ring-brand-purple/20 transition-all"
+            />
+          </div>
+
           <div className="pt-2 flex items-center justify-end gap-2.5">
             <button
               type="button"

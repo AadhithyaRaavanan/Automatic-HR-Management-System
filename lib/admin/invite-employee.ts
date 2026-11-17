@@ -28,6 +28,7 @@ export interface InviteEmployeeInput {
   email: string;
   fullName: string;
   role?: string;
+  employmentCategory?: string;
   workMode?: string;
   timezone?: string;
   departmentId?: string | null;
@@ -66,6 +67,7 @@ export async function inviteSingleEmployee(
     email,
     fullName,
     role = "employee",
+    employmentCategory = "full_time",
     workMode = "remote",
     timezone = "UTC",
     departmentId = null,
@@ -342,6 +344,7 @@ export async function inviteSingleEmployee(
       p_work_target_minutes: Number(workTargetMinutes),
       p_expected_office_days: expectedOfficeDays,
       p_required_office_days_per_week: Number(requiredOfficeDaysPerWeek),
+      p_employment_category: employmentCategory,
     }
   );
 

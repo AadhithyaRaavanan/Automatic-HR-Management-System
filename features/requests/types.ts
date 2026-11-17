@@ -10,6 +10,8 @@ export const regularizationFormSchema = z
       .string()
       .min(10, "Reason must be at least 10 characters long")
       .max(500, "Reason cannot exceed 500 characters"),
+    documentUrl: z.string().optional(),
+    documentName: z.string().optional(),
   })
   .refine(
     (data) => {

@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
       email: body.email,
       fullName: body.fullName,
       role: body.role,
+      employmentCategory: body.employmentCategory,
       workMode: body.workMode,
       timezone: body.timezone,
       departmentId: body.departmentId,
