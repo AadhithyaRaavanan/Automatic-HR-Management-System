@@ -127,7 +127,7 @@ test.describe("Module 6: EMS & Onboarding Verification", () => {
     const result = await res.json();
     expect(result.success).toBe(true);
     if (result.inviteLink) {
-      expect(result.inviteLink).toContain("https://pulse.zenxea.com");
+      expect(decodeURIComponent(result.inviteLink)).toContain("https://pulse.zenxea.com/onboarding");
       expect(result.inviteLink).not.toContain("localhost");
       expect(result.inviteLink).not.toContain("127.0.0.1");
     }
