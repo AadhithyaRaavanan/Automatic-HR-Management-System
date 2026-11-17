@@ -691,7 +691,9 @@ export default function OnboardingPage() {
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
             <button
               type="button"
-              onClick={() => router.push("/")}
+              onClick={() => {
+                window.location.href = "/";
+              }}
               className="w-full sm:w-auto px-6 py-3 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
             >
               <span>Continue to Work Dashboard</span>
@@ -735,7 +737,9 @@ export default function OnboardingPage() {
           <div className="pt-2">
             <button
               type="button"
-              onClick={() => router.replace("/")}
+              onClick={() => {
+                window.location.href = "/";
+              }}
               className="w-full py-3.5 px-6 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-sm font-bold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>Enter Employee Dashboard</span>

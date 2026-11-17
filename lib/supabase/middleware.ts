@@ -146,19 +146,27 @@ export async function updateSession(request: NextRequest) {
         canAccessDashboard = true;
       } else {
         try {
-          // Check onboarding_profiles for submission/completion status
-          const { data: onbProf } = await (supabase as any)
+          // Check onboarding_profiles for submission/completion status using privileged client or session client
+          const checkClient = process.env.SUPABASE_SERVICE_ROLE_KEY
+            ? createServerClient<Database>(
+                process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+                process.env.SUPABASE_SERVICE_ROLE_KEY,
+                { cookies: { getAll: () => [], setAll: () => {} } }
+              )
+            : supabase;
+
+          const { data: onbProf } = await (checkClient as any)
             .from("onboarding_profiles")
-            .select("onboarding_status, status")
+            .select("status")
             .eq("user_id", userId)
             .maybeSingle();
 
-          const onbStatus = (onbProf?.onboarding_status || onbProf?.status || "").toUpperCase();
+          const onbStatus = (onbProf?.status || "").toUpperCase();
 
-          if (["SUBMITTED", "RESUBMITTED", "UNDER_REVIEW", "VERIFIED", "COMPLETED"].includes(onbStatus)) {
+          if (["SUBMITTED", "RESUBMITTED", "UNDER_REVIEW", "VERIFIED", "COMPLETED", "APPROVED"].includes(onbStatus)) {
             canAccessDashboard = true;
           } else {
-            const { data: prof } = await (supabase as any)
+            const { data: prof } = await (checkClient as any)
               .from("profiles")
               .select("onboarding_completed")
               .eq("id", userId)
@@ -167,7 +175,7 @@ export async function updateSession(request: NextRequest) {
             if (prof?.onboarding_completed === true) {
               canAccessDashboard = true;
             } else {
-              const { data: emp } = await (supabase as any)
+              const { data: emp } = await (checkClient as any)
                 .from("employees")
                 .select("onboarding_completed")
                 .eq("id", userId)
@@ -221,6 +229,7 @@ export async function updateSession(request: NextRequest) {
       if (!canAccessDashboard && (pathname === "/onboarding" || pathname.startsWith("/onboarding"))) {
         // Allow access to onboarding
       } else if (
+        pathname !== "/" &&
         !pathname.startsWith("/settings") &&
         !pathname.startsWith("/onboarding") &&
         !pathname.startsWith("/auth") &&

@@ -292,7 +292,36 @@ export async function POST(request: NextRequest) {
         .eq("user_id", user.id);
     }
 
-    // 5. Employee details for notification (empRecord resolved above)
+    // 5. Update employees and profiles to mark onboarding submitted / completed so dashboard access is granted
+    try {
+      await (supabaseAdmin.from("employees") as any)
+        .update({
+          onboarding_completed: true,
+          onboarding_completed_at: nowIso,
+          status: "active",
+        })
+        .eq("id", user.id);
+
+      await (supabaseAdmin as any)
+        .from("profiles")
+        .upsert({
+          id: user.id,
+          onboarding_completed: true,
+        });
+
+      await supabaseAdmin.auth.admin.updateUserById(user.id, {
+        user_metadata: {
+          ...user.user_metadata,
+          onboarding_completed: true,
+          onboarding_status: "SUBMITTED",
+          must_change_password: false,
+        },
+      });
+    } catch (grantErr) {
+      console.warn("[Onboarding Complete] Error granting dashboard access:", grantErr);
+    }
+
+    // 6. Employee details for notification (empRecord resolved above)
     const candidateName = resolvedFullName || onbProfile.full_name || empRecord?.full_name || user.user_metadata?.full_name || "Employee";
     const employeeIdFormatted = empRecord?.id ? `EMP-${empRecord.id.slice(0, 6).toUpperCase()}` : `EMP-${user.id.slice(0, 6).toUpperCase()}`;
     const departmentName = empRecord?.departments?.name || "General";
