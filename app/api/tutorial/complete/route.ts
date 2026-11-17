@@ -95,9 +95,18 @@ export async function POST(request: NextRequest) {
       }
     } catch {}
 
-    // Mark tutorial_completed = true and save tutorial_version
-    await Promise.all([
-      (supabaseAdmin as any).from("profiles").upsert(
+    // 1. Mark tutorial_completed on employees
+    await (supabaseAdmin as any)
+      .from("employees")
+      .update({
+        tutorial_completed: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", user.id);
+
+    // 2. Mark tutorial_completed on profiles with version fallback
+    try {
+      await (supabaseAdmin as any).from("profiles").upsert(
         {
           id: user.id,
           user_id: user.id,
@@ -106,15 +115,20 @@ export async function POST(request: NextRequest) {
           updated_at: new Date().toISOString(),
         },
         { onConflict: "id" }
-      ),
-      (supabaseAdmin as any)
-        .from("employees")
-        .update({
-          tutorial_completed: true,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", user.id),
-    ]);
+      );
+    } catch {
+      try {
+        await (supabaseAdmin as any).from("profiles").upsert(
+          {
+            id: user.id,
+            user_id: user.id,
+            tutorial_completed: true,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" }
+        );
+      } catch {}
+    }
 
     return NextResponse.json({ success: true, tutorial_completed: true, tutorial_version: targetVersion });
   } catch (err: any) {

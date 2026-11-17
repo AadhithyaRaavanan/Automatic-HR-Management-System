@@ -158,7 +158,13 @@ export function OnboardingTour({
     try {
       if (typeof window !== "undefined") {
         sessionStorage.removeItem(STEP_STORAGE_KEY);
+        sessionStorage.removeItem("pulse_tutorial_active");
+        sessionStorage.setItem("pulse_tutorial_completed", "true");
+        localStorage.setItem("pulse_tutorial_completed", "true");
       }
+
+      onOpenChange(false);
+      onCompleted?.();
 
       let headers: Record<string, string> = { "Content-Type": "application/json" };
       try {
@@ -177,8 +183,6 @@ export function OnboardingTour({
         body: JSON.stringify({ reset: false, tutorial_version: TUTORIAL_VERSION }),
       });
 
-      onOpenChange(false);
-      onCompleted?.();
       toast.success("Walkthrough completed. Welcome to Pulse!");
     } catch (err: any) {
       onOpenChange(false);

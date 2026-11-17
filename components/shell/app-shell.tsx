@@ -118,16 +118,14 @@ export function AppShell({
   );
   const [userTutorialVersion, setUserTutorialVersion] = React.useState<number>(0);
   const [isExistingUserTour, setIsExistingUserTour] = React.useState<boolean>(false);
-  const [tourOpen, setTourOpen] = React.useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return sessionStorage.getItem("pulse_tutorial_active") === "true";
-    }
-    return false;
-  });
+  const [tourOpen, setTourOpen] = React.useState<boolean>(false);
 
   const handleTourOpenChange = React.useCallback((open: boolean) => {
     if (!open && typeof window !== "undefined") {
       sessionStorage.removeItem("pulse_tutorial_active");
+      sessionStorage.removeItem("pulse_tutorial_step_index");
+      sessionStorage.setItem("pulse_tutorial_completed", "true");
+      localStorage.setItem("pulse_tutorial_completed", "true");
     }
     setTourOpen(open);
   }, []);
@@ -138,7 +136,8 @@ export function AppShell({
       if (sessionState.userRole !== "admin") {
         if (typeof window !== "undefined") {
           sessionStorage.setItem("pulse_tutorial_step_index", "0");
-          sessionStorage.setItem("pulse_tutorial_active", "true");
+          sessionStorage.removeItem("pulse_tutorial_completed");
+          localStorage.removeItem("pulse_tutorial_completed");
         }
         setTourOpen(true);
       }
@@ -300,23 +299,22 @@ export function AppShell({
             }
           } catch { }
 
+          const clientCompleted =
+            typeof window !== "undefined" &&
+            (sessionStorage.getItem("pulse_tutorial_completed") === "true" ||
+              localStorage.getItem("pulse_tutorial_completed") === "true");
+
           if (
             isEligibleRole &&
             onboardingCompleted &&
             !mustChangePassword &&
-            mfaFinished
+            mfaFinished &&
+            !tutorialCompleted &&
+            !clientCompleted
           ) {
-            if (!tutorialCompleted) {
-              // Brand-new user: full tour
-              shouldOpenTour = true;
-              setIsExistingUserTour(false);
-              setUserTutorialVersion(0);
-            } else if (FEATURES.KPI && tutorialVersion < 2) {
-              // Existing user: "What's new in KPI" mini-tour once
-              shouldOpenTour = true;
-              setIsExistingUserTour(true);
-              setUserTutorialVersion(tutorialVersion);
-            }
+            shouldOpenTour = true;
+            setIsExistingUserTour(false);
+            setUserTutorialVersion(0);
           }
         }
       } catch {
@@ -364,6 +362,12 @@ export function AppShell({
           sessionStorage.setItem("pulse_tutorial_active", "true");
         }
         setTourOpen(true);
+      } else {
+        if (typeof window !== "undefined") {
+          sessionStorage.removeItem("pulse_tutorial_active");
+          sessionStorage.removeItem("pulse_tutorial_step_index");
+        }
+        setTourOpen(false);
       }
     }
 
