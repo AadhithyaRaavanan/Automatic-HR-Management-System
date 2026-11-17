@@ -296,12 +296,9 @@ function AttendanceCalendarContent() {
             <ChevronLeft className="w-4 h-4" />
           </button>
 
-          <div className="flex flex-col items-center justify-center px-4 py-1.5 rounded-2xl bg-card-subtle border border-border-light text-center min-w-[170px]">
+          <div className="flex flex-col items-center justify-center px-4 py-2 rounded-2xl bg-card-subtle border border-border-light text-center min-w-[170px]">
             <span className="text-xs font-bold text-text-primary">
               {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
-            </span>
-            <span className="text-[10px] font-bold text-brand-purple">
-              {tamilMonthInfo.tamil} ({tamilMonthInfo.english})
             </span>
           </div>
 

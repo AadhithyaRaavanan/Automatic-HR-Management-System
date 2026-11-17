@@ -71,6 +71,14 @@ function DueBadge({
   );
 }
 
+function getInitials(name: string): string {
+  if (!name || name === "Unassigned") return "—";
+  if (name === "You") return "ME";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 function TasksWorkspaceContent() {
   const { userId, userRole } = useAppSession();
   const { data, isLoading, refetch } = useTasksData(Boolean(userId));
@@ -621,13 +629,13 @@ function TasksWorkspaceContent() {
           }
         />
       ) : viewMode === "board" ? (
-        <div className="flex overflow-x-auto pb-4 gap-4 snap-x snap-mandatory xl:grid xl:grid-cols-5 xl:overflow-x-visible xl:pb-0 items-stretch">
+        <div className="grid grid-cols-5 gap-4 items-start">
           {STATUS_COLUMNS.map((col) => {
             const colTasks = filteredTasks.filter((t) => t.status === col.key);
             return (
               <div
                 key={col.key}
-                className="w-[280px] sm:w-[320px] xl:w-auto shrink-0 snap-center flex flex-col min-h-[520px] h-[calc(100vh-280px)] max-h-[760px] rounded-[24px] bg-card-subtle/70 border border-border-light p-3.5 space-y-3"
+                className="flex flex-col min-h-[220px] max-h-[calc(100vh-220px)] rounded-[24px] bg-card-subtle/70 border border-border-light p-3.5 space-y-3"
               >
                 <div className="flex items-center justify-between px-1 shrink-0">
                   <div>
@@ -641,85 +649,94 @@ function TasksWorkspaceContent() {
                   </span>
                 </div>
 
-                <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 min-h-0">
+                <div className="overflow-y-auto space-y-2 pr-1 max-h-[calc(100vh-310px)] min-h-0">
                   {colTasks.length > 0 ? (
-                    colTasks.map((task) => (
-                      <button
-                        key={task.id}
-                        type="button"
-                        onClick={() => setSelectedTaskId(task.id)}
-                        className="w-full text-left p-3.5 rounded-2xl bg-card hover:border-brand-purple/50 border border-border-light shadow-xs transition-all cursor-pointer space-y-2"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <StatusPill status={task.priority} showIcon={false} />
-                          {task.project_id && projectNameMap.has(task.project_id) && (
-                            <span className="text-[10px] font-bold text-brand-purple truncate max-w-[110px]">
-                              {projectNameMap.get(task.project_id)}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs font-bold text-text-primary line-clamp-2">
-                          {task.title}
-                        </p>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <DueBadge dueDate={task.due_date} status={task.status} />
-                          {task.assignee_id && task.creator_id === task.assignee_id && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-purple/10 text-brand-purple border border-brand-purple/20">
-                              <UserCheck className="w-2.5 h-2.5" />
-                              Self-Assigned
-                            </span>
-                          )}
-                          {task.assignee_id && task.creator_id !== task.assignee_id && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-card-subtle text-text-tertiary">
-                              From: {formatPerson(task.creator_id)}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between pt-1 border-t border-border-light/60 text-[11px] text-text-tertiary">
-                          <span className="truncate font-medium text-text-secondary">
-                            {formatPerson(task.assignee_id)}
-                          </span>
-                          {task.estimated_minutes != null && (
-                            <span className="font-mono font-bold text-brand-purple shrink-0">
-                              {formatEstimatedDuration(task.estimated_minutes)} est
-                            </span>
-                          )}
-                        </div>
+                    colTasks.map((task) => {
+                      const assigneeName = formatPerson(task.assignee_id);
+                      const initials = getInitials(assigneeName);
+                      return (
+                        <button
+                          key={task.id}
+                          type="button"
+                          onClick={() => setSelectedTaskId(task.id)}
+                          className="w-full text-left p-3 rounded-2xl bg-card hover:border-brand-purple/60 hover:shadow-card-hover border border-border-light shadow-xs transition-all cursor-pointer space-y-2 focus-visible:ring-2 focus-visible:ring-brand-purple focus-visible:outline-none"
+                        >
+                          <div className="flex items-center justify-between gap-1.5">
+                            <StatusPill status={task.priority} showIcon={false} />
+                            {task.project_id && projectNameMap.has(task.project_id) && (
+                              <span className="text-[10px] font-bold text-brand-purple truncate max-w-[110px]">
+                                {projectNameMap.get(task.project_id)}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs font-bold text-text-primary line-clamp-2 leading-snug">
+                            {task.title}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <DueBadge dueDate={task.due_date} status={task.status} />
+                            {task.assignee_id && task.creator_id === task.assignee_id && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-purple/10 text-brand-purple border border-brand-purple/20">
+                                <UserCheck className="w-2.5 h-2.5" />
+                                Self-Assigned
+                              </span>
+                            )}
+                            {task.assignee_id && task.creator_id !== task.assignee_id && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-card-subtle text-text-tertiary">
+                                From: {formatPerson(task.creator_id)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between pt-1.5 border-t border-border-light/60 text-[11px] text-text-tertiary gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="w-5 h-5 rounded-full bg-brand-purple/10 text-brand-purple font-bold text-[9px] flex items-center justify-center shrink-0">
+                                {initials}
+                              </span>
+                              <span className="truncate font-medium text-text-secondary">
+                                {assigneeName}
+                              </span>
+                            </div>
+                            {task.estimated_minutes != null && (
+                              <span className="font-mono font-bold text-brand-purple shrink-0 tabular-nums text-[10px]">
+                                {formatEstimatedDuration(task.estimated_minutes)} est
+                              </span>
+                            )}
+                          </div>
 
-                        {/* Subordinate Accept Task Action */}
-                        {task.status === "todo" && task.assignee_id === userId && task.creator_id !== userId && (
-                          <div className="pt-1">
-                            <div
-                              role="button"
-                              tabIndex={0}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                mutations.updateTaskStatus.mutate({
-                                  taskId: task.id,
-                                  status: "in_progress",
-                                  note: "Accepted assigned task",
-                                });
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" || e.key === " ") {
+                          {/* Subordinate Accept Task Action */}
+                          {task.status === "todo" && task.assignee_id === userId && task.creator_id !== userId && (
+                            <div className="pt-1">
+                              <div
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => {
                                   e.stopPropagation();
                                   mutations.updateTaskStatus.mutate({
                                     taskId: task.id,
                                     status: "in_progress",
                                     note: "Accepted assigned task",
                                   });
-                                }
-                              }}
-                              className="w-full flex items-center justify-center gap-1 py-1.5 px-3 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-[11px] font-bold transition-all shadow-xs cursor-pointer"
-                            >
-                              <span>✓ Accept Task</span>
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.stopPropagation();
+                                    mutations.updateTaskStatus.mutate({
+                                      taskId: task.id,
+                                      status: "in_progress",
+                                      note: "Accepted assigned task",
+                                    });
+                                  }
+                                }}
+                                className="w-full flex items-center justify-center gap-1 py-1.5 px-3 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-[11px] font-bold transition-all shadow-xs cursor-pointer"
+                              >
+                                <span>✓ Accept Task</span>
+                              </div>
                             </div>
-                          </div>
-                        )}
-                      </button>
-                    ))
+                          )}
+                        </button>
+                      );
+                    })
                   ) : (
-                    <div className="py-8 px-3 text-center rounded-2xl border border-dashed border-border-light text-[11px] text-text-tertiary">
+                    <div className="py-6 px-3 text-center rounded-2xl border border-dashed border-border-light text-[11px] text-text-tertiary">
                       No tasks in {col.label}
                     </div>
                   )}
@@ -729,10 +746,10 @@ function TasksWorkspaceContent() {
           })}
         </div>
       ) : (
-        <div className="bg-card rounded-[24px] border border-border-light shadow-card overflow-x-auto">
+        <div className="bg-card rounded-[24px] border border-border-light shadow-card overflow-x-auto max-h-[calc(100vh-240px)] overflow-y-auto">
           <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-border-light bg-card-subtle/60 text-[11px] font-bold uppercase tracking-wider text-text-tertiary">
+            <thead className="sticky top-0 bg-card/95 backdrop-blur-xs z-10">
+              <tr className="border-b border-border-light bg-card-subtle/80 text-[11px] font-bold uppercase tracking-wider text-text-tertiary">
                 <th className="py-3 px-4">Task</th>
                 <th className="py-3 px-4">Project</th>
                 <th className="py-3 px-4">Assignee</th>

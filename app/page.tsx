@@ -8,9 +8,12 @@ import { BentoGrid } from "@/components/bento/bento-grid";
 import { BentoCard } from "@/components/bento/bento-card";
 import { StatusPill } from "@/components/shared/status-pill";
 import { EmptyState } from "@/components/shared/empty-state";
+import { SectionCard } from "@/components/shared/section-card";
 import { HeroCheckInCard } from "@/features/attendance/components/hero-check-in-card";
 import { BreakControlCard } from "@/features/attendance/components/break-control-card";
 import { StatCard } from "@/features/attendance/components/stat-card";
+import { WeeklyHoursChart, DayBarData } from "@/features/attendance/components/weekly-hours-chart";
+import { TodayTimeline } from "@/features/attendance/components/today-timeline";
 import { SessionProgressRow } from "@/features/attendance/components/session-progress-row";
 import { AnimatedProgressRing } from "@/features/attendance/components/animated-progress-ring";
 import { HighlightCard } from "@/features/attendance/components/highlight-card";
@@ -27,7 +30,7 @@ import {
   useSubmitRegularization,
 } from "@/features/requests/hooks/use-regularizations";
 import { createClient } from "@/lib/supabase/client";
-import { formatDurationMinutes, formatTimeInTimezone } from "@/lib/date/timezone";
+import { formatDurationMinutes, formatTimeInTimezone, evaluatePreCheckInLock } from "@/lib/date/timezone";
 import { getTamilMonthInfo } from "@/lib/date/holidays-tn";
 import { getTaskDueState, TaskRecord } from "@/features/tasks/hooks/use-tasks";
 import { EarlyCheckOutDialog } from "@/components/attendance/early-checkout-dialog";
@@ -42,6 +45,9 @@ import {
   ArrowRight,
   CheckSquare,
   AlertTriangle,
+  BarChart3,
+  Sparkles,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -125,12 +131,83 @@ function DashboardContent({
   const weekProgress = Math.min(Math.round((weekMinutes / weeklyTarget) * 100), 100);
 
   const firstName = fullName ? fullName.split(/\s+/)[0] : "there";
-  const tamilMonth = getTamilMonthInfo();
   const topNotifications = notifications.slice(0, 3);
   const recentRegularizations = regularizations.slice(0, 2);
 
+  // Authoritative shift & lock status matching the check-in card
+  const shiftStartTime = data?.shiftStartTime || "09:00:00";
+  const shiftEndTime = data?.shiftEndTime || "17:00:00";
+  const userTimezone = data?.timezone || timezone || "Asia/Kolkata";
+  const lockStatus = evaluatePreCheckInLock(shiftStartTime, shiftEndTime, userTimezone);
+
+  // Load week attendance history for the weekly bar chart (Mon - Fri)
+  const [weeklyBars, setWeeklyBars] = React.useState<DayBarData[]>([]);
+
+  React.useEffect(() => {
+    let active = true;
+    async function loadWeekChart() {
+      if (!userId) return;
+      const today = new Date();
+      const dayOfWeek = today.getDay(); // 0 is Sunday, 1 is Monday
+      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const monday = new Date(today);
+      monday.setDate(today.getDate() + mondayOffset);
+
+      const daysArr: DayBarData[] = [];
+      const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+      const datesToQuery: string[] = [];
+
+      for (let i = 0; i < 5; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        const iso = d.toISOString().slice(0, 10);
+        datesToQuery.push(iso);
+        daysArr.push({
+          dayLabel: dayNames[i],
+          dateStr: iso,
+          workedMinutes: 0,
+          isToday: iso === (data?.workDate || today.toISOString().slice(0, 10)),
+        });
+      }
+
+      const { data: dbDays } = await (supabase as any)
+        .from("attendance_days")
+        .select("work_date, total_minutes")
+        .eq("employee_id", userId)
+        .in("work_date", datesToQuery);
+
+      if (active && dbDays) {
+        const minMap = new Map<string, number>();
+        for (const row of dbDays) {
+          minMap.set(row.work_date, row.total_minutes || 0);
+        }
+        const todayDate = data?.workDate || today.toISOString().slice(0, 10);
+        if (todayMinutes > 0) {
+          minMap.set(todayDate, Math.max(minMap.get(todayDate) || 0, todayMinutes));
+        }
+
+        const merged = daysArr.map((d) => ({
+          ...d,
+          workedMinutes: minMap.get(d.dateStr) || 0,
+        }));
+        setWeeklyBars(merged);
+      } else if (active) {
+        const todayDate = data?.workDate || today.toISOString().slice(0, 10);
+        const merged = daysArr.map((d) => ({
+          ...d,
+          workedMinutes: d.dateStr === todayDate ? todayMinutes : 0,
+        }));
+        setWeeklyBars(merged);
+      }
+    }
+    loadWeekChart();
+    return () => {
+      active = false;
+    };
+  }, [supabase, userId, data?.workDate, todayMinutes]);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Header Greeting Row */}
       <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-3">
         <div>
@@ -142,7 +219,7 @@ function DashboardContent({
             <span className="font-bold text-text-primary">
               {data?.workDate || new Date().toISOString().slice(0, 10)}
             </span>{" "}
-            ({data?.timezone || timezone || "UTC"}). Target:{" "}
+            ({userTimezone}). Target:{" "}
             <span className="font-bold text-brand-purple">
               {Math.floor(targetMinutes / 60)} hours
             </span>
@@ -160,28 +237,68 @@ function DashboardContent({
           >
             <RefreshCw className="w-4 h-4 text-brand-purple" />
           </button>
+
+          {/* Synchronized Header Action Button */}
           <button
             type="button"
+            disabled={!isCheckedIn && lockStatus.isLocked}
             onClick={onTogglePunch}
-            className="px-4 py-2 rounded-full bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold shadow-sm cursor-pointer"
+            title={!isCheckedIn && lockStatus.isLocked ? lockStatus.message : undefined}
+            className={cn(
+              "px-4 py-2 rounded-full text-xs font-bold transition-all shadow-sm flex items-center gap-1.5",
+              !isCheckedIn && lockStatus.isLocked
+                ? "bg-card-subtle text-text-tertiary border border-border-light cursor-not-allowed opacity-75"
+                : "bg-brand-navy hover:bg-brand-navy-hover text-white cursor-pointer"
+            )}
           >
-            {isCheckedIn ? "Check Out Now" : "Check In Now"}
+            {!isCheckedIn && lockStatus.isLocked && <Lock className="w-3.5 h-3.5" />}
+            {isCheckedIn
+              ? "Check Out Now"
+              : lockStatus.isLocked
+              ? "Outside Shift Hours"
+              : "Check In Now"}
           </button>
         </div>
       </section>
 
-      {/* Row 1: Hero Action Card & Quick Metrics */}
-      <div data-tour="dashboard-hero" className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        <div className="lg:col-span-6 space-y-5">
+      {/* Row 1: Full-Width 3 Stat Cards (Titles in full, no truncation, big tabular-nums values, identical structure) */}
+      <div className="grid grid-cols-3 gap-5">
+        <StatCard
+          title="Today's Hours"
+          value={formatDurationMinutes(todayMinutes)}
+          subtitle={`Goal: ${formatDurationMinutes(targetMinutes)}`}
+          progress={todayProgress}
+          icon={<Clock className="w-4 h-4" />}
+        />
+        <StatCard
+          title="Week Total"
+          value={formatDurationMinutes(weekMinutes)}
+          subtitle={`${weekProgress}% of target completed`}
+          progress={weekProgress}
+          icon={<Calendar className="w-4 h-4" />}
+        />
+        <StatCard
+          title="On-Time Streak"
+          value={`${data?.streakDays || 0} Days`}
+          subtitle="Recent consistent punches"
+          progress={Math.min(Math.max((data?.streakDays || 0) * 15, 10), 100)}
+          icon={<Flame className="w-4 h-4 text-status-warning-dot" />}
+        />
+      </div>
+
+      {/* Row 2: Two-Column Main Layout (Left: Hero Check-in + Breaks; Right: Weekly chart + Today's timeline + Shift info) */}
+      <div data-tour="dashboard-hero" className="grid grid-cols-12 gap-5 items-start">
+        {/* LEFT COLUMN (6 cols) */}
+        <div className="col-span-6 space-y-5">
           <div data-tour="punch-card">
             <HeroCheckInCard
               isCheckedIn={isCheckedIn}
               activeTime={timer.formattedTime}
               workDate={data?.workDate || "Today"}
               targetMinutes={targetMinutes}
-              shiftStartTime={data?.shiftStartTime || "09:00:00"}
-              shiftEndTime={data?.shiftEndTime || "17:00:00"}
-              userTimezone={data?.timezone || timezone || "UTC"}
+              shiftStartTime={shiftStartTime}
+              shiftEndTime={shiftEndTime}
+              userTimezone={userTimezone}
               isLoading={checkInMutation.isPending || isCheckingOut || checkOutMutation.isPending || isLoading}
               onCheckIn={() => checkInMutation.mutate("Shift check-in")}
               onCheckOut={onCheckOut || (() => checkOutMutation.mutate())}
@@ -192,28 +309,69 @@ function DashboardContent({
           </div>
         </div>
 
-        <div className="lg:col-span-6 self-start grid grid-cols-1 sm:grid-cols-3 gap-4 items-stretch">
-          <StatCard
-            title="Today's Hours"
-            value={formatDurationMinutes(todayMinutes)}
-            subtitle={`Goal: ${formatDurationMinutes(targetMinutes)}`}
-            progress={todayProgress}
-            icon={<Clock className="w-4 h-4" />}
-          />
-          <StatCard
-            title="Week Total"
-            value={formatDurationMinutes(weekMinutes)}
-            subtitle={`${weekProgress}% completed`}
-            progress={weekProgress}
-            icon={<Calendar className="w-4 h-4" />}
-          />
-          <StatCard
-            title="On-Time Streak"
-            value={`${data?.streakDays || 0} Days`}
-            subtitle="Recent consistent punches"
-            progress={Math.min(Math.max((data?.streakDays || 0) * 15, 10), 100)}
-            icon={<Flame className="w-4 h-4 text-status-warning-dot" />}
-          />
+        {/* RIGHT COLUMN (6 cols): Fills the space with actionable data */}
+        <div className="col-span-6 space-y-5">
+          {/* (a) Weekly Worked Hours Bar Chart */}
+          <SectionCard
+            title="This Week's Worked Hours"
+            subtitle="Daily performance vs 8h shift target"
+            icon={<BarChart3 className="w-4 h-4 text-brand-purple" />}
+          >
+            <WeeklyHoursChart
+              days={weeklyBars}
+              targetHours={Math.round(targetMinutes / 60)}
+            />
+          </SectionCard>
+
+          {/* (b) Today's Punch Timeline */}
+          <SectionCard
+            title="Today's Timeline"
+            subtitle={`${data?.sessions?.length || 0} recorded session(s)`}
+            icon={<Clock className="w-4 h-4 text-brand-purple" />}
+          >
+            <TodayTimeline
+              sessions={data?.sessions || []}
+              activeSession={data?.activeSession || null}
+              timezone={userTimezone}
+            />
+          </SectionCard>
+
+          {/* (c) Next Holiday & Shift Information */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 rounded-2xl bg-card border border-border-light shadow-card space-y-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-text-tertiary flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-brand-purple" />
+                Upcoming Holiday
+              </span>
+              {nextHoliday ? (
+                <div>
+                  <h4 className="text-xs font-bold text-text-primary truncate">
+                    {nextHoliday.name}
+                  </h4>
+                  <p className="text-[11px] font-mono text-text-secondary mt-0.5">
+                    {nextHoliday.date}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-text-tertiary">No upcoming holidays scheduled</p>
+              )}
+            </div>
+
+            <div className="p-4 rounded-2xl bg-card border border-border-light shadow-card space-y-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-text-tertiary flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-brand-purple" />
+                Scheduled Shift
+              </span>
+              <div>
+                <h4 className="text-xs font-bold text-text-primary">
+                  {shiftStartTime.slice(0, 5)} – {shiftEndTime.slice(0, 5)}
+                </h4>
+                <p className="text-[11px] text-text-secondary mt-0.5">
+                  Timezone: {userTimezone}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -327,132 +485,40 @@ function DashboardContent({
         {/* Attendance Calendar Card */}
         <div className="lg:col-span-4">
           <AttendanceCalendarCard
-            currentMonth={`${new Date().toLocaleString("en-US", {
+            currentMonth={new Date().toLocaleString("en-US", {
               month: "long",
               year: "numeric",
-            })} • ${tamilMonth.tamil}`}
+            })}
             onSelectDate={() => router.push("/attendance")}
           />
         </div>
       </BentoGrid>
 
-      {/* Row 3: Today's Sessions, Tip, Progress Ring & Upcoming Holiday */}
+      {/* Row 3: Deliverable Tasks & Privacy Architecture */}
       <BentoGrid>
-        {/* Today Sessions */}
-        <BentoCard
-          title="Today's Sessions"
-          subtitle="Clock intervals logged in your active shift"
-          className="lg:col-span-5"
-        >
-          <div className="space-y-1">
-            {(data?.sessions || []).length > 0 ? (
-              data!.sessions.map((sess) => {
-                const checkInTime = formatTimeInTimezone(
-                  sess.check_in_at,
-                  data?.timezone || "UTC"
-                );
-                const checkOutTime = sess.check_out_at
-                  ? formatTimeInTimezone(sess.check_out_at, data?.timezone || "UTC")
-                  : "In Progress";
-
-                const diffMins = sess.check_out_at
-                  ? Math.round(
-                      (new Date(sess.check_out_at).getTime() -
-                        new Date(sess.check_in_at).getTime()) /
-                        (60 * 1000)
-                    )
-                  : Math.round(timer.elapsedSeconds / 60);
-
-                const sessPct = Math.min(
-                  Math.round((diffMins / (targetMinutes / 2)) * 100),
-                  100
-                );
-
-                return (
-                  <SessionProgressRow
-                    key={sess.id}
-                    title={sess.note || "Work Session"}
-                    timestamp={`${checkInTime} - ${checkOutTime}`}
-                    duration={formatDurationMinutes(diffMins)}
-                    percentage={sessPct}
-                    tags={[sess.source]}
-                  />
-                );
-              })
-            ) : (
-              <EmptyState
-                className="py-6 border-dashed shadow-none bg-card-subtle/40"
-                icon={<Clock className="w-5 h-5" />}
-                title="No sessions recorded today"
-                description='Use "Check In" when you begin work.'
-              />
-            )}
-          </div>
-        </BentoCard>
-
         {/* Highlight Policy Card */}
         <HighlightCard
           title="Privacy-First Attendance"
           description="Only your check-in and check-out timestamps and declared timezone are recorded. Never GPS, screen, or keystroke monitoring."
           buttonText="View Privacy Manifesto"
           onAction={() => router.push("/settings")}
-          className="lg:col-span-3"
+          className="lg:col-span-8"
         />
 
         {/* Animated Progress Ring */}
         <BentoCard
-          title="Shift Progress"
-          className="lg:col-span-2 flex flex-col justify-between text-center"
+          title="Daily Shift Target"
+          className="lg:col-span-4 flex flex-col justify-between text-center"
         >
           <div className="flex flex-col items-center justify-around gap-4 py-2">
             <AnimatedProgressRing
               percentage={todayProgress}
-              size={90}
-              strokeWidth={7}
-              title="Shift Target"
+              size={100}
+              strokeWidth={8}
+              title="Shift Progress"
               caption={`${todayMinutes}/${targetMinutes} mins`}
               color="var(--brand-purple)"
             />
-          </div>
-        </BentoCard>
-
-        {/* Next Upcoming Holiday Card */}
-        <BentoCard
-          title="Upcoming Holiday"
-          action={
-            <Link href="/holidays" className="text-xs font-bold text-brand-purple hover:underline">
-              Calendar →
-            </Link>
-          }
-          className="lg:col-span-2 flex flex-col justify-between"
-        >
-          {nextHoliday ? (
-            <div>
-              <div className="flex items-center gap-1.5 text-xs text-brand-purple font-semibold mb-1">
-                <CalendarDays className="w-3.5 h-3.5" />
-                <span>{nextHoliday.date}</span>
-              </div>
-              <h3 className="text-sm font-bold text-text-primary">{nextHoliday.name}</h3>
-              {nextHoliday.local_name && (
-                <p className="text-xs text-brand-purple mt-0.5">{nextHoliday.local_name}</p>
-              )}
-              <p className="text-[11px] text-text-tertiary mt-1">
-                Region: {nextHoliday.region}
-              </p>
-            </div>
-          ) : (
-            <div className="py-4 text-center text-xs text-text-tertiary">
-              No upcoming holidays scheduled yet.
-            </div>
-          )}
-
-          <div className="mt-4 pt-3 border-t border-border-light">
-            <Link
-              href="/holidays"
-              className="w-full py-2 px-3 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-colors flex items-center justify-center gap-1"
-            >
-              <span>View Holiday Calendar</span>
-            </Link>
           </div>
         </BentoCard>
       </BentoGrid>

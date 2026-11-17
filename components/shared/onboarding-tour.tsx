@@ -225,10 +225,9 @@ export function OnboardingTour({
   if (!open) return null;
 
   // Positioning calculation
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
   let cardPositionStyle: React.CSSProperties = {};
 
-  if (!isMobile && targetRect) {
+  if (targetRect) {
     const cardHeight = 360;
     const cardWidth = 460;
     const maxTop = Math.max(16, window.innerHeight - cardHeight - 20);
@@ -250,6 +249,14 @@ export function OnboardingTour({
       left: `${left}px`,
       width: `${cardWidth}px`,
       maxHeight: "calc(100vh - 32px)",
+    };
+  } else {
+    cardPositionStyle = {
+      position: "fixed",
+      bottom: "32px",
+      right: "32px",
+      width: "460px",
+      maxHeight: "calc(100vh - 64px)",
     };
   }
 
@@ -313,11 +320,7 @@ export function OnboardingTour({
       {/* Floating Tour Card */}
       <div
         style={cardPositionStyle}
-        className={cn(
-          "z-[9999] bg-card border border-border-light shadow-2xl rounded-2xl p-5 md:p-6 transition-all duration-300 ease-out overflow-y-auto",
-          (isMobile || !targetRect) &&
-            "fixed inset-x-4 bottom-4 md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:max-w-lg md:w-full"
-        )}
+        className="z-[9999] bg-card border border-border-light shadow-2xl rounded-2xl p-5 md:p-6 transition-all duration-300 ease-out overflow-y-auto"
       >
         {/* Card Header & Badges */}
         <div className="flex items-center justify-between gap-3 mb-3">

@@ -51,14 +51,16 @@ export async function GET(request: NextRequest) {
 
   // Target employee info
   const { data: targetEmp } = await (supabaseAdmin.from("employees") as any)
-    .select("id, full_name, email, department_id, job_title_id, status")
+    .select("id, full_name, email, department_id, job_title_id, status, employment_category")
     .eq("id", targetEmployeeId)
     .maybeSingle();
 
+  const effectiveEmpType = employeeType || targetEmp?.employment_category || "full_time";
+
   // Compute current and previous period KPI
   const [currentKpi, previousKpi] = await Promise.all([
-    computeKpi(targetEmployeeId, from, to, employeeType),
-    computeKpi(targetEmployeeId, prevFrom, prevTo, employeeType),
+    computeKpi(targetEmployeeId, from, to, effectiveEmpType),
+    computeKpi(targetEmployeeId, prevFrom, prevTo, effectiveEmpType),
   ]);
 
   // If manager/HR/admin: calculate scoped employees and team average

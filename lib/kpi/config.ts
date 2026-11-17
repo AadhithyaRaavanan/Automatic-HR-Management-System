@@ -40,7 +40,7 @@ export const KPI_CONFIG = {
       taskOnTimeTargetRate: 85,
     },
     intern: {
-      hoursPerDay: 6,
+      hoursPerDay: 8,
       onTimeTargetRate: 90,
       daysWorkedTargetRate: 100,
       hoursTargetRate: 100,

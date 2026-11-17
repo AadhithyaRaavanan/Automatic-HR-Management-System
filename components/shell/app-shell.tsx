@@ -118,7 +118,11 @@ export function AppShell({
   );
   const [userTutorialVersion, setUserTutorialVersion] = React.useState<number>(0);
   const [isExistingUserTour, setIsExistingUserTour] = React.useState<boolean>(false);
-  const [tourOpen, setTourOpen] = React.useState<boolean>(false);
+  const [tourOpen, setTourOpen] = React.useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    if (localStorage.getItem("pulse_tutorial_completed") === "true") return false;
+    return sessionStorage.getItem("pulse_tutorial_active") === "true";
+  });
 
   const handleTourOpenChange = React.useCallback((open: boolean) => {
     if (!open && typeof window !== "undefined") {

@@ -132,23 +132,30 @@ export async function computeKpi(
   }
 
   // 2. Working days, holidays, and approved leave calculation
-  const totalCalendarWeekdays = getWeekdaysCount(from, to);
+  // Days worked vs expected counts only days that have ALREADY passed (up to current date)
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const effectiveEnd = to > todayIso ? todayIso : to;
+  const totalCalendarWeekdays = effectiveEnd >= from ? getWeekdaysCount(from, effectiveEnd) : 0;
 
   // Approved leave days in period that fall on weekdays
   let approvedLeaveWeekdays = 0;
   for (const leave of approvedLeaves) {
     const lStart = leave.start_date < from ? from : leave.start_date;
-    const lEnd = leave.end_date > to ? to : leave.end_date;
-    approvedLeaveWeekdays += getWeekdaysCount(lStart, lEnd);
+    const lEnd = leave.end_date > effectiveEnd ? effectiveEnd : leave.end_date;
+    if (lEnd >= lStart) {
+      approvedLeaveWeekdays += getWeekdaysCount(lStart, lEnd);
+    }
   }
 
-  // Holidays that fall on weekdays in period
+  // Holidays that fall on weekdays in elapsed period
   let holidayWeekdays = 0;
   for (const h of holidays) {
-    const hDate = new Date(`${h.holiday_date}T00:00:00Z`);
-    const day = hDate.getUTCDay();
-    if (day !== 0 && day !== 6) {
-      holidayWeekdays++;
+    if (h.holiday_date >= from && h.holiday_date <= effectiveEnd) {
+      const hDate = new Date(`${h.holiday_date}T00:00:00Z`);
+      const day = hDate.getUTCDay();
+      if (day !== 0 && day !== 6) {
+        holidayWeekdays++;
+      }
     }
   }
 
@@ -176,7 +183,7 @@ export async function computeKpi(
         : "behind";
   }
 
-  // Days worked vs expected
+  // Days worked vs expected: shows "No data" if the person has no attendance in the period, instead of 0/12 Behind
   const workedDaysCount = attendanceDays.filter(
     (d: any) => d.status === "present" || d.status === "half_day" || (d.total_minutes || 0) > 0
   ).length;
@@ -185,7 +192,11 @@ export async function computeKpi(
   let daysWorkedDisplay = "No data";
   let daysWorkedStatus: "on_track" | "at_risk" | "behind" | "no_data" = "no_data";
 
-  if (expectedWorkingDays > 0) {
+  if (totalAttendedDays === 0) {
+    daysWorkedRate = null;
+    daysWorkedDisplay = "No data";
+    daysWorkedStatus = "no_data";
+  } else if (expectedWorkingDays > 0) {
     daysWorkedRate = Math.min(100, Math.round((workedDaysCount / expectedWorkingDays) * 100));
     daysWorkedDisplay = `${workedDaysCount} / ${expectedWorkingDays} days (${daysWorkedRate}%)`;
     daysWorkedStatus =
@@ -200,18 +211,50 @@ export async function computeKpi(
     daysWorkedStatus = "on_track";
   }
 
-  // Early check-outs
+  // Early check-outs: with nothing to measure (0 attendance), must NOT be green!
   const earlyCheckOutCount = attendanceSessions.filter(
     (s: any) => s.early_checkout === true
   ).length;
+
+  const earlyCheckOutStatus: "on_track" | "at_risk" | "behind" | "no_data" =
+    totalAttendedDays === 0
+      ? "no_data"
+      : earlyCheckOutCount === 0
+      ? "on_track"
+      : earlyCheckOutCount <= 2
+      ? "at_risk"
+      : "behind";
+  const earlyCheckOutDisplay =
+    totalAttendedDays === 0 ? "No data" : `${earlyCheckOutCount}`;
 
   // Auto-closed / forgotten checkouts
   const autoClosedCount = attendanceSessions.filter(
     (s: any) => s.source === "auto_checkout" || (s.check_in_at && !s.check_out_at)
   ).length;
 
+  const autoClosedStatus: "on_track" | "at_risk" | "behind" | "no_data" =
+    totalAttendedDays === 0
+      ? "no_data"
+      : autoClosedCount === 0
+      ? "on_track"
+      : autoClosedCount <= 1
+      ? "at_risk"
+      : "behind";
+  const autoClosedDisplay =
+    totalAttendedDays === 0 ? "No data" : `${autoClosedCount}`;
+
   // Regularization requests count
   const regularizationCount = regularizations.length;
+  const regularizationStatus: "on_track" | "at_risk" | "behind" | "no_data" =
+    totalAttendedDays === 0 && regularizationCount === 0
+      ? "no_data"
+      : regularizationCount <= 1
+      ? "on_track"
+      : regularizationCount <= 3
+      ? "at_risk"
+      : "behind";
+  const regularizationDisplay =
+    totalAttendedDays === 0 && regularizationCount === 0 ? "No data" : `${regularizationCount}`;
 
   // 4. Hours Metrics
   // Worked hours vs target (approved leave and holidays count as met)
@@ -354,31 +397,31 @@ export async function computeKpi(
       key: "early_check_outs",
       label: "Early Check-Outs",
       category: "attendance",
-      value: earlyCheckOutCount,
+      value: totalAttendedDays === 0 ? null : earlyCheckOutCount,
       target: 0,
       unit: "count",
-      status: earlyCheckOutCount === 0 ? "on_track" : earlyCheckOutCount <= 2 ? "at_risk" : "behind",
-      displayValue: `${earlyCheckOutCount}`,
+      status: earlyCheckOutStatus,
+      displayValue: earlyCheckOutDisplay,
     }),
     auto_closed_check_outs: applyAdj("auto_closed_check_outs", {
       key: "auto_closed_check_outs",
       label: "Auto-Closed / Forgotten Check-Outs",
       category: "attendance",
-      value: autoClosedCount,
+      value: totalAttendedDays === 0 ? null : autoClosedCount,
       target: 0,
       unit: "count",
-      status: autoClosedCount === 0 ? "on_track" : autoClosedCount <= 1 ? "at_risk" : "behind",
-      displayValue: `${autoClosedCount}`,
+      status: autoClosedStatus,
+      displayValue: autoClosedDisplay,
     }),
     regularization_requests: applyAdj("regularization_requests", {
       key: "regularization_requests",
       label: "Regularization Requests",
       category: "attendance",
-      value: regularizationCount,
+      value: totalAttendedDays === 0 && regularizationCount === 0 ? null : regularizationCount,
       target: 0,
       unit: "count",
-      status: regularizationCount <= 1 ? "on_track" : regularizationCount <= 3 ? "at_risk" : "behind",
-      displayValue: `${regularizationCount}`,
+      status: regularizationStatus,
+      displayValue: regularizationDisplay,
     }),
     worked_hours_vs_target: applyAdj("worked_hours_vs_target", {
       key: "worked_hours_vs_target",
@@ -453,9 +496,11 @@ export async function computeKpi(
     }
   }
 
-  // If fewer than 2 core metrics have data, return null overall score (never forced 0%)
+  // If fewer than 2 core metrics have data or zero activity in period, return null overall score (never forced 0%)
   const overallScore =
-    dataPointsCount >= 2 && totalWeight > 0
+    (totalAttendedDays > 0 || tasks.length > 0) &&
+    dataPointsCount >= 2 &&
+    totalWeight > 0
       ? Math.round(weightedSum / totalWeight)
       : null;
 
