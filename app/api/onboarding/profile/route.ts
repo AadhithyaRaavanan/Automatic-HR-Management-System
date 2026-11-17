@@ -115,15 +115,18 @@ export async function GET(request: NextRequest) {
         user: {
           id: user.id,
           email: user.email,
-          fullName: employee?.full_name || user.user_metadata?.full_name || "",
+          fullName: employee?.full_name || onboardingProfile?.full_name || user.user_metadata?.full_name || "",
           employeeId: employeeIdFormatted,
           rawEmployeeId: employee?.id || user.id,
-          department: employee?.departments?.name || "General",
+          department: employee?.departments?.name || "Technical",
           designation: employee?.job_titles?.title_name || "Employee",
           role: userRole,
+          phone: employee?.phone || onboardingProfile?.phone || "",
+          emergency_contact: employee?.emergency_contact || "",
+          storage_folder: onboardingProfile?.storage_folder || null,
         },
         profile: {
-          onboarding_completed: Boolean(profile?.onboarding_completed || employee?.onboarding_completed),
+          onboarding_completed: Boolean(profile?.onboarding_completed || employee?.onboarding_completed || onboardingProfile?.status === "submitted"),
           tutorial_completed: Boolean(profile?.tutorial_completed),
         },
         onboardingProfile: onboardingProfile || null,
@@ -140,6 +143,72 @@ export async function GET(request: NextRequest) {
   } catch (err: any) {
     return NextResponse.json(
       { error: err?.message || "Failed to load onboarding profile." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    let response = NextResponse.next();
+    const supabase = createServerClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll(cookiesToSet: Array<{ name: string; value: string; options?: any }>) {
+            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+            response = NextResponse.next();
+            cookiesToSet.forEach(({ name, value, options }) =>
+              response.cookies.set(name, value, options)
+            );
+          },
+        },
+      }
+    );
+
+    const authHeader = request.headers.get("Authorization");
+    let user = null;
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.substring(7);
+      const { data: tokenUser } = await supabaseAdmin.auth.getUser(token);
+      user = tokenUser?.user || null;
+    }
+    if (!user) {
+      const { data: cookieUser } = await supabase.auth.getUser();
+      user = cookieUser?.user || null;
+    }
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const { fullName, phone, emergencyContact } = body;
+
+    const empUpdates: Record<string, any> = { updated_at: new Date().toISOString() };
+    if (typeof fullName === "string" && fullName.trim()) empUpdates.full_name = fullName.trim();
+    if (typeof phone === "string") empUpdates.phone = phone.trim() || null;
+    if (typeof emergencyContact === "string") empUpdates.emergency_contact = emergencyContact.trim() || null;
+
+    await ((supabaseAdmin as any).from("employees"))
+      .update(empUpdates)
+      .eq("id", user.id);
+
+    const onbUpdates: Record<string, any> = { updated_at: new Date().toISOString() };
+    if (empUpdates.full_name) onbUpdates.full_name = empUpdates.full_name;
+    if (empUpdates.phone) onbUpdates.phone = empUpdates.phone;
+
+    await ((supabaseAdmin as any).from("onboarding_profiles"))
+      .update(onbUpdates)
+      .eq("user_id", user.id);
+
+    return NextResponse.json({ success: true, updates: empUpdates });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: err?.message || "Failed to update profile." },
       { status: 500 }
     );
   }

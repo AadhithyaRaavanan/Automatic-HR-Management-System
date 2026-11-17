@@ -35,6 +35,21 @@ import { isDemoModeEnabled } from "@/lib/config/demo";
 import { GuidedTourOverlay } from "@/components/tutorial/guided-tour-overlay";
 import { cn } from "@/lib/utils";
 
+const DOC_TYPE_LABELS: Record<string, string> = {
+  photo: "Passport-Size Photo (PDF)",
+  resume: "Candidate Resume / CV (PDF)",
+  pan_card: "PAN Card PDF",
+  cert_10th: "10th Standard Certificate",
+  cert_12th: "12th Standard Certificate",
+  cert_undergraduate: "Degree Certificate",
+  cert_postgraduate: "Postgraduate Certificate",
+  bank_proof: "Bank Proof (Passbook / Cheque)",
+  aadhaar_card: "Aadhaar Card PDF",
+  salary_slip: "Salary Slip",
+  experience_cert: "Experience Certificate",
+  relieving_letter: "Relieving Letter",
+};
+
 function ProfilePageContent() {
   const { userId, userRole, isLoaded } = useAppSession();
   const supabase = React.useMemo(() => createClient(), []);
@@ -136,22 +151,108 @@ function ProfilePageContent() {
     async function loadProfile() {
       try {
         let uid = userId;
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
         if (!uid) {
-          const {
-            data: { session },
-          } = await supabase.auth.getSession();
           uid = session?.user?.id || (await supabase.auth.getUser()).data.user?.id || null;
         }
         if (!uid) {
           if (active) setLoading(false);
           return;
         }
-        if (loadedUserIdRef.current === uid) {
-          if (active) setLoading(false);
-          return;
+
+        // 1. Fetch from authoritative Onboarding Profile API (with Bearer auth to bypass client RLS)
+        const headers: Record<string, string> = { "Cache-Control": "no-cache" };
+        if (session?.access_token) {
+          headers["Authorization"] = `Bearer ${session.access_token}`;
         }
 
-        // 1. Fetch Employee Record
+        try {
+          const onbRes = await fetch(`/api/onboarding/profile?t=${Date.now()}`, {
+            headers,
+            cache: "no-store",
+          });
+          if (onbRes.ok) {
+            const onbJson = await onbRes.json();
+            const p = onbJson.onboardingProfile;
+            const u = onbJson.user;
+            const prof = onbJson.profile;
+            const edu = p?.education_details || {};
+
+            if (u) {
+              setFullName(u.fullName || p?.full_name || "");
+              setEmail(u.email || p?.personal_email || "");
+              if (u.department) setDepartmentName(u.department);
+              if (u.designation) setJobTitleName(u.designation);
+              if (u.employeeId) setEmployeeIdFormatted(u.employeeId);
+              if (u.phone) setPhone(u.phone);
+              if (u.emergency_contact) setEmergencyContact(u.emergency_contact);
+            }
+
+            // Compute Onboarding Status
+            let computedStatus = "NOT_STARTED";
+            if (p?.status) {
+              computedStatus = p.status.toUpperCase();
+            } else if (prof?.onboarding_completed) {
+              computedStatus = "SUBMITTED";
+            }
+            setOnboardingStatus(computedStatus);
+
+            if (p) {
+              const accNum = p.bank_account_number || edu.accountNumber || "";
+              const maskedAcc = accNum.length > 4 ? `•••• •••• ${accNum.slice(-4)}` : accNum;
+
+              const resEmergencyName = p.emergency_contact_name || edu.emergency_contact_name || edu.emergencyName || "";
+              const resEmergencyRel = p.emergency_contact_relationship || edu.emergency_contact_relationship || edu.emergencyRelationship || "";
+              const resEmergencyPhone = p.emergency_contact_phone || edu.emergency_contact_phone || edu.emergencyPhone || "";
+
+              if (resEmergencyName || resEmergencyPhone) {
+                setEmergencyContact((prev) =>
+                  prev || (resEmergencyRel
+                    ? `${resEmergencyName} (${resEmergencyRel}) • ${resEmergencyPhone}`
+                    : `${resEmergencyName} • ${resEmergencyPhone}`)
+                );
+              }
+
+              if (p.phone) {
+                setPhone((prev) => prev || p.phone);
+              }
+
+              setOnboardingData({
+                dob: p.dob,
+                gender: p.gender,
+                bloodGroup: p.blood_group,
+                currentAddress: p.current_address,
+                permanentAddress: p.permanent_address,
+                emergencyName: resEmergencyName,
+                emergencyRel: resEmergencyRel,
+                emergencyPhone: resEmergencyPhone,
+                highestQualification:
+                  p.highest_qualification || edu.highest_qualification || edu.qualification || "12th Standard",
+                hasExperience: Boolean(p.has_experience),
+                previousCompany: p.previous_company_name,
+                previousDesignation: p.previous_designation,
+                panNumber: p.pan_number,
+                bankAccountHolder: p.bank_account_holder || edu.accountHolder || u?.fullName || "",
+                maskedAccountNumber: maskedAcc,
+                bankIfsc: p.bank_ifsc || edu.ifscCode || "",
+                bankName: p.bank_name || edu.bankName || "",
+                bankBranch: p.bank_branch || edu.bank_branch || edu.bankBranch || "",
+                uanNumber: p.uan_number,
+                submittedAt: p.submitted_at,
+              });
+            }
+
+            if (Array.isArray(onbJson.documents) && onbJson.documents.length > 0) {
+              setVerifiedDocuments(onbJson.documents);
+            }
+          }
+        } catch (apiErr) {
+          console.warn("[Profile API Load Note]:", apiErr);
+        }
+
+        // 2. Fetch Employee Record via Supabase client for additional client state
         const { data, error } = await (supabase as any)
           .from("employees")
           .select(
@@ -163,60 +264,19 @@ function ProfilePageContent() {
         if (!active) return;
         if (!error && data) {
           loadedUserIdRef.current = uid;
-          setFullName(data.full_name || "");
-          setEmail(data.email || "");
-          setPhone(data.phone || "");
-          setEmergencyContact(data.emergency_contact || "");
-          setAvatarPath(data.avatar_url || null);
-          setTimezone(data.timezone || "UTC");
-          setWorkMode(data.work_mode || "remote");
-          setWorkTargetMinutes(data.work_target_minutes || 480);
-          setDepartmentName(data.departments?.name || null);
-          setJobTitleName(data.job_titles?.title_name || null);
+          if (data.full_name) setFullName(data.full_name);
+          if (data.email) setEmail(data.email);
+          if (data.phone) setPhone(data.phone);
+          if (data.emergency_contact) setEmergencyContact(data.emergency_contact);
+          if (data.avatar_url) setAvatarPath(data.avatar_url);
+          if (data.timezone) setTimezone(data.timezone);
+          if (data.work_mode) setWorkMode(data.work_mode);
+          if (data.work_target_minutes) setWorkTargetMinutes(data.work_target_minutes);
+          if (data.departments?.name) setDepartmentName(data.departments.name);
+          if (data.job_titles?.title_name) setJobTitleName(data.job_titles.title_name);
           setEmployeeIdFormatted(`EMP-${data.id.slice(0, 6).toUpperCase()}`);
           if (data.avatar_url) {
             await resolveAvatarSignedUrl(data.avatar_url);
-          }
-        }
-
-        // 2. Fetch Onboarding & Document Verification Details
-        const onbRes = await fetch("/api/onboarding/profile");
-        if (onbRes.ok) {
-          const onbJson = await onbRes.json();
-          const p = onbJson.onboardingProfile;
-          if (p) {
-            const rawStatus = (p.onboarding_status || p.status || "NOT_STARTED").toUpperCase();
-            setOnboardingStatus(rawStatus);
-
-            const accNum = p.bank_account_number || "";
-            const maskedAcc = accNum.length > 4 ? `•••• •••• ${accNum.slice(-4)}` : accNum;
-
-            setOnboardingData({
-              dob: p.dob,
-              gender: p.gender,
-              bloodGroup: p.blood_group,
-              currentAddress: p.current_address,
-              permanentAddress: p.permanent_address,
-              emergencyName: p.emergency_contact_name,
-              emergencyRel: p.emergency_contact_relationship,
-              emergencyPhone: p.emergency_contact_phone,
-              highestQualification: p.highest_qualification || "Undergraduate Degree",
-              hasExperience: Boolean(p.has_experience),
-              previousCompany: p.previous_company_name,
-              previousDesignation: p.previous_designation,
-              panNumber: p.pan_number,
-              bankAccountHolder: p.bank_account_holder,
-              maskedAccountNumber: maskedAcc,
-              bankIfsc: p.bank_ifsc,
-              bankName: p.bank_name,
-              bankBranch: p.bank_branch,
-              uanNumber: p.uan_number,
-              submittedAt: p.submitted_at,
-            });
-          }
-
-          if (Array.isArray(onbJson.documents)) {
-            setVerifiedDocuments(onbJson.documents);
           }
         }
       } catch (err) {
@@ -244,9 +304,11 @@ function ProfilePageContent() {
       return;
     }
 
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
     const uid =
       userId ||
-      (await supabase.auth.getSession()).data.session?.user?.id ||
+      sessionData?.session?.user?.id ||
       (await supabase.auth.getUser()).data.user?.id;
 
     if (!uid) {
@@ -256,15 +318,31 @@ function ProfilePageContent() {
 
     setSaving(true);
     try {
-      const { error } = await (supabase.from("employees") as any)
-        .update({
-          full_name: fullName.trim(),
+      // 1. Try server PATCH endpoint first (authenticated via Bearer token to cleanly update both tables)
+      const res = await fetch("/api/onboarding/profile", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          fullName: fullName.trim(),
           phone: phone.trim() || null,
-          emergency_contact: emergencyContact.trim() || null,
-        })
-        .eq("id", uid);
+          emergencyContact: emergencyContact.trim() || null,
+        }),
+      });
 
-      if (error) throw error;
+      if (!res.ok) {
+        const { error } = await (supabase.from("employees") as any)
+          .update({
+            full_name: fullName.trim(),
+            phone: phone.trim() || null,
+            emergency_contact: emergencyContact.trim() || null,
+          })
+          .eq("id", uid);
+        if (error) throw error;
+      }
+
       toast.success("Profile updated successfully.");
     } catch (err: any) {
       toast.error(err?.message || "Failed to update profile.");
@@ -333,7 +411,8 @@ function ProfilePageContent() {
     .slice(0, 2)
     .toUpperCase();
 
-  const isVerified = ["COMPLETED", "VERIFIED"].includes(onboardingStatus);
+  const isVerified = ["COMPLETED", "VERIFIED", "APPROVED"].includes(onboardingStatus);
+  const isSubmitted = ["SUBMITTED", "PENDING_VERIFICATION", "IN_REVIEW"].includes(onboardingStatus);
 
   return (
     <div className="space-y-6">
@@ -349,15 +428,22 @@ function ProfilePageContent() {
                 "px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider border flex items-center gap-1.5 shadow-sm",
                 isVerified
                   ? "bg-status-success/15 text-status-success border-status-success/30"
+                  : isSubmitted
+                  ? "bg-brand-purple/15 text-brand-purple border-brand-purple/30"
                   : onboardingStatus === "CORRECTION_REQUIRED"
                   ? "bg-status-danger/15 text-status-danger border-status-danger/30"
-                  : "bg-brand-purple/15 text-brand-purple border-brand-purple/30"
+                  : "bg-brand-navy/10 text-brand-navy border-brand-navy/20"
               )}
             >
               {isVerified ? (
                 <>
                   <BadgeCheck className="w-4 h-4 text-status-success" />
                   <span>Verified Onboarding</span>
+                </>
+              ) : isSubmitted ? (
+                <>
+                  <Clock className="w-3.5 h-3.5 text-brand-purple" />
+                  <span>Onboarding: Submitted & In Review</span>
                 </>
               ) : (
                 <>
@@ -378,7 +464,7 @@ function ProfilePageContent() {
               href="/onboarding"
               className="px-4 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
             >
-              <span>Onboarding Portal →</span>
+              <span>{isSubmitted ? "Review Submission →" : "Onboarding Portal →"}</span>
             </Link>
           )}
           <Link
@@ -766,52 +852,67 @@ function ProfilePageContent() {
               No documents linked to this profile. Complete onboarding to attach verified records.
             </p>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {verifiedDocuments.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="p-3.5 rounded-2xl bg-card-subtle border border-border-light flex items-center justify-between gap-2"
-                >
-                  <div className="space-y-0.5 truncate">
-                    <div className="flex items-center gap-1.5">
-                      <FileText className="w-3.5 h-3.5 text-brand-purple shrink-0" />
-                      <span className="text-xs font-bold text-text-primary truncate">
-                        {doc.document_name || doc.doc_type.replace(/_/g, " ")}
-                      </span>
+            <div className="space-y-4">
+              <div className="px-3.5 py-2.5 rounded-xl bg-card-subtle border border-border-light flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="text-text-secondary flex items-center gap-1.5 font-medium">
+                  <ShieldCheck className="w-3.5 h-3.5 text-status-success shrink-0" />
+                  <span>
+                    Vault Location: <code className="font-mono font-bold text-text-primary">onboarding-docs/{employeeIdFormatted ? employeeIdFormatted.replace("-", "") : "archive"}</code>
+                  </span>
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-purple/10 text-brand-purple">
+                  {verifiedDocuments.length} Verified Document{verifiedDocuments.length === 1 ? "" : "s"}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {verifiedDocuments.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="p-3.5 rounded-2xl bg-card-subtle border border-border-light flex items-center justify-between gap-2 hover:border-brand-purple/30 transition-colors"
+                  >
+                    <div className="space-y-0.5 truncate">
+                      <div className="flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-brand-purple shrink-0" />
+                        <span className="text-xs font-bold text-text-primary truncate">
+                          {doc.document_name || DOC_TYPE_LABELS[doc.doc_type] || doc.doc_type.replace(/_/g, " ")}
+                        </span>
+                      </div>
+                      <p className="text-[11px] font-mono text-text-tertiary pl-5 truncate">
+                        {doc.file_name}
+                      </p>
                     </div>
-                    <p className="text-[11px] font-mono text-text-tertiary pl-5 truncate">
-                      {doc.file_name}
-                    </p>
-                  </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span
-                      className={cn(
-                        "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase",
-                        doc.document_status === "approved"
-                          ? "bg-status-success/15 text-status-success"
-                          : doc.document_status === "rejected"
-                          ? "bg-status-danger/15 text-status-danger"
-                          : "bg-brand-purple/15 text-brand-purple"
-                      )}
-                    >
-                      {doc.document_status}
-                    </span>
-
-                    {doc.signedUrl && (
-                      <a
-                        href={doc.signedUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-1.5 rounded-lg bg-card border border-border-light hover:bg-card-subtle text-brand-purple transition-colors"
-                        title="View PDF"
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span
+                        className={cn(
+                          "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase",
+                          doc.document_status === "approved"
+                            ? "bg-status-success/15 text-status-success"
+                            : doc.document_status === "rejected"
+                            ? "bg-status-danger/15 text-status-danger"
+                            : "bg-brand-purple/15 text-brand-purple"
+                        )}
                       >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
-                    )}
+                        {doc.document_status}
+                      </span>
+
+                      {doc.signedUrl && (
+                        <a
+                          href={doc.signedUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-2 py-1 rounded-lg bg-card border border-border-light hover:bg-card-subtle text-brand-purple hover:text-brand-purple-hover text-xs font-bold transition-colors inline-flex items-center gap-1 shadow-xs"
+                          title="View PDF"
+                        >
+                          <span>View</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
         </BentoCard>

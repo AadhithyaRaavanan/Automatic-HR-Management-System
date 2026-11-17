@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AppShell, useAppSession } from "@/components/shell/app-shell";
 import { BentoGrid } from "@/components/bento/bento-grid";
 import { BentoCard } from "@/components/bento/bento-card";
@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 
 function SettingsPageContent() {
+  const router = useRouter();
   const { userId, userRole } = useAppSession();
   const supabase = React.useMemo(() => createClient(), []);
   const [timezone, setTimezone] = React.useState("Asia/Kolkata");
@@ -124,7 +125,19 @@ function SettingsPageContent() {
         console.warn("[Password Update] Note:", clientErr.message);
       }
 
-      // 3. Immediately dismiss banner and remove query param from URL
+      // 3. Reset tutorial completion status so walkthrough plays automatically
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("pulse_tutorial_dismissed");
+        sessionStorage.setItem("pulse_auto_start_tour", "true");
+      }
+
+      await fetch("/api/tutorial/complete", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ reset: true }),
+      }).catch(() => {});
+
+      // 4. Immediately dismiss banner and remove query param from URL
       setShowMustChangeBanner(false);
       if (typeof window !== "undefined") {
         const url = new URL(window.location.href);
@@ -132,9 +145,14 @@ function SettingsPageContent() {
         window.history.replaceState(null, "", url.pathname + url.search);
       }
 
-      toast.success("Your password has been updated successfully!");
+      toast.success("Password updated successfully! Welcome to your workplace.");
       setNewPassword("");
       setConfirmPassword("");
+
+      // 5. Navigate to dashboard so walkthrough tutorial starts automatically
+      setTimeout(() => {
+        router.push("/?tour=auto");
+      }, 1000);
     } catch (err: any) {
       toast.error(err.message || "Failed to update password.");
     } finally {

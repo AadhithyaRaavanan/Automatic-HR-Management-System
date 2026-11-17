@@ -114,6 +114,22 @@ export function AppShell({
 
   React.useEffect(() => {
     setMounted(true);
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const isAuto =
+        params.get("tour") === "auto" ||
+        sessionStorage.getItem("pulse_auto_start_tour") === "true";
+      if (isAuto) {
+        localStorage.removeItem("pulse_tutorial_dismissed");
+        sessionStorage.removeItem("pulse_auto_start_tour");
+        if (params.get("tour") === "auto") {
+          params.delete("tour");
+          const cleanQuery = params.toString() ? `?${params.toString()}` : "";
+          window.history.replaceState(null, "", window.location.pathname + cleanQuery);
+        }
+        setTourOpen(true);
+      }
+    }
   }, []);
 
   React.useEffect(() => {
@@ -210,19 +226,28 @@ export function AppShell({
             }
           }
 
-          const dismissed = typeof window !== "undefined" ? localStorage.getItem("pulse_tutorial_dismissed") : null;
-          if (dismissed !== "true") {
-            try {
-              const { data: prof } = await (supabase as any)
-                .from("profiles")
-                .select("tutorial_completed")
-                .eq("id", user.id)
-                .maybeSingle();
+          const isAutoTour =
+            typeof window !== "undefined" &&
+            (new URLSearchParams(window.location.search).get("tour") === "auto" ||
+              sessionStorage.getItem("pulse_auto_start_tour") === "true");
 
-              if (prof && prof.tutorial_completed === false) {
-                shouldOpenTour = true;
-              }
-            } catch {}
+          if (isAutoTour) {
+            shouldOpenTour = true;
+          } else {
+            const dismissed = typeof window !== "undefined" ? localStorage.getItem("pulse_tutorial_dismissed") : null;
+            if (dismissed !== "true") {
+              try {
+                const { data: prof } = await (supabase as any)
+                  .from("profiles")
+                  .select("tutorial_completed")
+                  .eq("id", user.id)
+                  .maybeSingle();
+
+                if (prof && prof.tutorial_completed === false) {
+                  shouldOpenTour = true;
+                }
+              } catch {}
+            }
           }
 
           if (resolvedOrgId) {

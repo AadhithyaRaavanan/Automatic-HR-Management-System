@@ -46,9 +46,18 @@ export function OnboardingTour({
       if (typeof window !== "undefined") {
         localStorage.setItem("pulse_tutorial_dismissed", "true");
       }
+      let headers: Record<string, string> = { "Content-Type": "application/json" };
+      try {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          headers["Authorization"] = `Bearer ${session.access_token}`;
+        }
+      } catch {}
       await fetch("/api/tutorial/complete", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ reset: false }),
       });
       onOpenChange(false);
