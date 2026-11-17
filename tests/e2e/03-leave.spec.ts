@@ -380,7 +380,7 @@ test.describe("Module 3: Leave Management & Authorization", () => {
     const page = await context.newPage();
 
     await page.goto("/hr/leave");
-    await expect(page.getByRole("heading", { name: /Leave Management & Approvals/i })).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole("heading", { name: /Leave Management Hub/i })).toBeVisible({ timeout: 20000 });
 
     // Find and click approve button for this request
     const approveBtn = page.getByRole("button", { name: /Approve leave/i }).first();

@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
 
     // Fetch the leave request
     const { data: leaveReq, error: fetchErr } = await (supabaseAdmin.from("leave_requests") as any)
-      .select("*, employees(full_name, organization_id)")
+      .select("*")
       .eq("id", requestId)
       .maybeSingle();
 
