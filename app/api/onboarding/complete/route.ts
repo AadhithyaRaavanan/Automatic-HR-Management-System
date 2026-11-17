@@ -67,10 +67,6 @@ export async function POST(request: NextRequest) {
     const uploadedDocs = docs || [];
     const docTypesUploaded = new Set(uploadedDocs.map((d: any) => d.doc_type));
 
-    // Admin accounts are exempt from document requirements and only submit basic details
-    const userRole = (user.app_metadata?.user_role || user.user_metadata?.role || "").toLowerCase();
-    const isUserAdmin = userRole === "admin";
-
     // 3. Validate Mandatory Information
     if (!onbProfile.full_name || !onbProfile.dob || !onbProfile.phone || !onbProfile.personal_email || !onbProfile.current_address || !onbProfile.permanent_address) {
       return NextResponse.json(
@@ -86,85 +82,78 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Standard employee document validations (Admin is exempt from documents)
-    if (!isUserAdmin) {
-      // Photo & Resume checks
-      if (!docTypesUploaded.has("photo")) {
+    // Photo & Resume checks
+    if (!docTypesUploaded.has("photo")) {
+      return NextResponse.json(
+        { error: "Passport-size photo (PDF) is required. Please upload it in Step 1." },
+        { status: 400 }
+      );
+    }
+
+    if (!docTypesUploaded.has("resume")) {
+      return NextResponse.json(
+        { error: "Candidate Resume / CV (PDF) is required. Please upload it under passport-size photo in Step 1." },
+        { status: 400 }
+      );
+    }
+
+    // Educational Qualification check
+    const highestQual = (onbProfile.highest_qualification || "Undergraduate Degree") as HighestQualification;
+    const requiredQualDoc = QUALIFICATION_DOC_MAP[highestQual]?.docType || "cert_undergraduate";
+    if (!docTypesUploaded.has(requiredQualDoc)) {
+      return NextResponse.json(
+        { error: `Missing highest qualification document: ${QUALIFICATION_DOC_MAP[highestQual]?.label || "Certificate"}. Please upload it in Step 2.` },
+        { status: 400 }
+      );
+    }
+
+    // Employment History check
+    if (onbProfile.has_experience) {
+      if (!onbProfile.previous_company_name || !onbProfile.previous_designation) {
         return NextResponse.json(
-          { error: "Passport-size photo (PDF) is required. Please upload it in Step 1." },
+          { error: "Previous employment company and designation are required for experienced candidates." },
           { status: 400 }
         );
       }
 
-      if (!docTypesUploaded.has("resume")) {
+      const hasExpCert = docTypesUploaded.has("experience_cert");
+      const hasExplanation = Boolean(onbProfile.experience_explanation?.trim());
+      if (!hasExpCert && !hasExplanation) {
         return NextResponse.json(
-          { error: "Candidate Resume / CV (PDF) is required. Please upload it under passport-size photo in Step 1." },
-          { status: 400 }
-        );
-      }
-
-      // Educational Qualification check
-      const highestQual = (onbProfile.highest_qualification || "Undergraduate Degree") as HighestQualification;
-      const requiredQualDoc = QUALIFICATION_DOC_MAP[highestQual]?.docType || "cert_undergraduate";
-      if (!docTypesUploaded.has(requiredQualDoc)) {
-        return NextResponse.json(
-          { error: `Missing highest qualification document: ${QUALIFICATION_DOC_MAP[highestQual]?.label || "Certificate"}. Please upload it in Step 2.` },
-          { status: 400 }
-        );
-      }
-
-      // Employment History check
-      if (onbProfile.has_experience) {
-        if (!onbProfile.previous_company_name || !onbProfile.previous_designation) {
-          return NextResponse.json(
-            { error: "Previous employment company and designation are required for experienced candidates." },
-            { status: 400 }
-          );
-        }
-
-        const hasExpCert = docTypesUploaded.has("experience_cert");
-        const hasExplanation = Boolean(onbProfile.experience_explanation?.trim());
-        if (!hasExpCert && !hasExplanation) {
-          return NextResponse.json(
-            { error: "Experience certificate (or an explanation note for HR) is required in Step 3." },
-            { status: 400 }
-          );
-        }
-      }
-
-      // Identity check (PAN is mandatory)
-      if (!onbProfile.pan_number || !docTypesUploaded.has("pan_card")) {
-        return NextResponse.json(
-          { error: "PAN number and PAN Card PDF are mandatory. Please complete Step 4." },
-          { status: 400 }
-        );
-      }
-
-      // Bank Details check
-      if (!onbProfile.bank_account_holder || !onbProfile.bank_account_number || !onbProfile.bank_ifsc || !onbProfile.bank_name) {
-        return NextResponse.json(
-          { error: "Bank account holder, account number, IFSC, and bank name are mandatory. Please complete Step 5." },
-          { status: 400 }
-        );
-      }
-
-      if (!docTypesUploaded.has("bank_proof")) {
-        return NextResponse.json(
-          { error: "Bank proof (passbook front page or cancelled cheque PDF) is mandatory. Please upload it in Step 5." },
+          { error: "Experience certificate (or an explanation note for HR) is required in Step 3." },
           { status: 400 }
         );
       }
     }
 
+    // Identity check (PAN is mandatory)
+    if (!onbProfile.pan_number || !docTypesUploaded.has("pan_card")) {
+      return NextResponse.json(
+        { error: "PAN number and PAN Card PDF are mandatory. Please complete Step 4." },
+        { status: 400 }
+      );
+    }
+
+    // Bank Details check
+    if (!onbProfile.bank_account_holder || !onbProfile.bank_account_number || !onbProfile.bank_ifsc || !onbProfile.bank_name) {
+      return NextResponse.json(
+        { error: "Bank account holder, account number, IFSC, and bank name are mandatory. Please complete Step 5." },
+        { status: 400 }
+      );
+    }
+
+    if (!docTypesUploaded.has("bank_proof")) {
+      return NextResponse.json(
+        { error: "Bank proof (passbook front page or cancelled cheque PDF) is mandatory. Please upload it in Step 5." },
+        { status: 400 }
+      );
+    }
+
     const nowIso = new Date().toISOString();
     const currentStatus = onbProfile.onboarding_status || onbProfile.status || "NOT_STARTED";
-    const nextStatus = isUserAdmin
-      ? "COMPLETED"
-      : currentStatus === "CORRECTION_REQUIRED"
-      ? "RESUBMITTED"
-      : "SUBMITTED";
+    const nextStatus = currentStatus === "CORRECTION_REQUIRED" ? "RESUBMITTED" : "SUBMITTED";
 
-    // 4. Update onboarding profile to SUBMITTED / RESUBMITTED / COMPLETED
+    // 4. Update onboarding profile to SUBMITTED / RESUBMITTED
     await (supabaseAdmin as any)
       .from("onboarding_profiles")
       .update({
@@ -175,17 +164,6 @@ export async function POST(request: NextRequest) {
         updated_at: nowIso,
       })
       .eq("user_id", user.id);
-
-    if (isUserAdmin) {
-      await (supabaseAdmin as any)
-        .from("profiles")
-        .update({ onboarding_completed: true })
-        .eq("id", user.id);
-      await (supabaseAdmin as any)
-        .from("employees")
-        .update({ onboarding_completed: true })
-        .eq("id", user.id);
-    }
 
     // 5. Fetch employee details for notification
     const { data: empRecord } = await (supabaseAdmin.from("employees") as any)

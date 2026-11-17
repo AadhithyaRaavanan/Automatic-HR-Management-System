@@ -1425,7 +1425,7 @@ export default function OnboardingPage() {
                 <div className="p-5 rounded-2xl border border-border-light bg-card-subtle space-y-4">
                   <div>
                     <h4 className="text-xs font-extrabold uppercase tracking-wider text-text-primary">
-                      Last Three Months' Salary Slips (PDFs) <span className="text-status-danger">*</span>
+                      Last Three Months&apos; Salary Slips (PDFs) <span className="text-status-danger">*</span>
                     </h4>
                     <p className="text-xs text-text-secondary">
                       Upload each monthly payslip individually with its corresponding month and year.
@@ -2018,7 +2018,7 @@ export default function OnboardingPage() {
                   className="mt-0.5 rounded border-border-light text-brand-purple focus:ring-brand-purple cursor-pointer"
                 />
                 <span className="text-xs font-bold text-text-primary leading-relaxed">
-                  "I confirm that the information and documents submitted by me are accurate and authentic to the best of my knowledge."
+                  &ldquo;I confirm that the information and documents submitted by me are accurate and authentic to the best of my knowledge.&rdquo;
                 </span>
               </label>
             </div>
