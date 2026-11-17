@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { TrendingUp, Award, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -10,9 +11,15 @@ interface KpiBadgeProps {
   employeeId?: string;
   className?: string;
   showIcon?: boolean;
+  linkable?: boolean;
 }
 
-export function KpiBadge({ employeeId, className, showIcon = true }: KpiBadgeProps) {
+export function KpiBadge({
+  employeeId,
+  className,
+  showIcon = true,
+  linkable = true,
+}: KpiBadgeProps) {
   const { data, isLoading } = useQuery({
     queryKey: ["kpi-summary-badge", employeeId],
     queryFn: async () => {
@@ -42,20 +49,29 @@ export function KpiBadge({ employeeId, className, showIcon = true }: KpiBadgePro
     );
   }
 
-  const { overallScore, hasActivity } = data;
+  const { overallScore, hasActivity, overallScoreRaw } = data;
 
-  if (!hasActivity) {
-    return (
+  if (!hasActivity || overallScoreRaw == null) {
+    const badgeContent = (
       <span
-        title="No activity recorded yet"
+        title="No sufficient KPI data recorded yet"
         className={cn(
-          "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800/60 dark:text-slate-400 border border-slate-200 dark:border-slate-700",
+          "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-card-subtle text-text-tertiary border border-border-light hover:border-brand-purple/40 transition-colors",
           className
         )}
       >
-        0% KPI
+        KPI No data
       </span>
     );
+
+    if (linkable && employeeId) {
+      return (
+        <Link href={`/kpi?employee_id=${encodeURIComponent(employeeId)}`} onClick={(e) => e.stopPropagation()}>
+          {badgeContent}
+        </Link>
+      );
+    }
+    return badgeContent;
   }
 
   let colorClasses = "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800";
@@ -69,11 +85,11 @@ export function KpiBadge({ employeeId, className, showIcon = true }: KpiBadgePro
     icon = <TrendingUp className="w-2.5 h-2.5" />;
   }
 
-  return (
+  const badgeElement = (
     <span
-      title={`Live Performance Index: ${overallScore}%`}
+      title={`Performance Index: ${overallScore}% - Click to view detailed KPI metrics`}
       className={cn(
-        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border shadow-xs transition-colors",
+        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border shadow-xs transition-colors hover:opacity-90 cursor-pointer",
         colorClasses,
         className
       )}
@@ -82,4 +98,14 @@ export function KpiBadge({ employeeId, className, showIcon = true }: KpiBadgePro
       <span>{overallScore}% KPI</span>
     </span>
   );
+
+  if (linkable && employeeId) {
+    return (
+      <Link href={`/kpi?employee_id=${encodeURIComponent(employeeId)}`} onClick={(e) => e.stopPropagation()}>
+        {badgeElement}
+      </Link>
+    );
+  }
+
+  return badgeElement;
 }
