@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { Database } from "@/types/database.types";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { uploadDoc } from "@/lib/onboarding-storage";
 
 export const dynamic = "force-dynamic";
@@ -29,8 +30,18 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    const { data: { user }, error: authErr } = await supabase.auth.getUser();
-    if (authErr || !user) {
+    const authHeader = request.headers.get("Authorization");
+    let user = null;
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.substring(7);
+      const { data: tokenUser } = await supabaseAdmin.auth.getUser(token);
+      user = tokenUser?.user || null;
+    }
+    if (!user) {
+      const { data: cookieUser } = await supabase.auth.getUser();
+      user = cookieUser?.user || null;
+    }
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -53,10 +64,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // PDF filename check
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
+    // Supported file types: PDF, JPG, PNG
+    const lowerName = file.name.toLowerCase();
+    const isAllowedExt =
+      lowerName.endsWith(".pdf") ||
+      lowerName.endsWith(".jpg") ||
+      lowerName.endsWith(".jpeg") ||
+      lowerName.endsWith(".png");
+
+    if (!isAllowedExt) {
       return NextResponse.json(
-        { error: "Invalid file type. Only PDF documents are accepted." },
+        { error: "Invalid file type. Only PDF, JPG, and PNG documents are accepted." },
         { status: 400 }
       );
     }

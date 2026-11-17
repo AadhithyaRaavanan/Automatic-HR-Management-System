@@ -33,6 +33,28 @@ export function validatePdfMagicBytes(buffer: Buffer): boolean {
 }
 
 /**
+ * Detects MIME type and extension from file buffer or filename (PDF, JPG, PNG).
+ */
+export function detectFileMimeAndExtension(buffer: Buffer, fileName: string): { valid: boolean; mime: string; ext: string } {
+  if (buffer && buffer.length >= 4) {
+    if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
+      return { valid: true, mime: "application/pdf", ext: "pdf" };
+    }
+    if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
+      return { valid: true, mime: "image/jpeg", ext: "jpg" };
+    }
+    if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
+      return { valid: true, mime: "image/png", ext: "png" };
+    }
+  }
+  const lower = (fileName || "").toLowerCase();
+  if (lower.endsWith(".pdf")) return { valid: true, mime: "application/pdf", ext: "pdf" };
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return { valid: true, mime: "image/jpeg", ext: "jpg" };
+  if (lower.endsWith(".png")) return { valid: true, mime: "image/png", ext: "png" };
+  return { valid: false, mime: "application/octet-stream", ext: "bin" };
+}
+
+/**
  * Normalizes text to PascalCase or TitleCase with underscores for file and folder naming.
  * Example: "Aadhithya Raavanan" -> "Aadhithya_Raavanan"
  */
@@ -89,7 +111,8 @@ const DOC_TYPE_PREFIX_MAP: Record<string, string> = {
 export function formatDocumentFileName(
   docType: string,
   fullName: string,
-  monthYear?: { month?: string; year?: string }
+  monthYear?: { month?: string; year?: string },
+  ext: string = "pdf"
 ): string {
   const sanitizedName = sanitizeNameForNaming(fullName);
   let prefix = DOC_TYPE_PREFIX_MAP[docType] || docType.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("_");
@@ -99,12 +122,12 @@ export function formatDocumentFileName(
     prefix = `Salary_Slip_${cleanMonth}_${monthYear.year}`;
   }
 
-  return `${prefix}_${sanitizedName}.pdf`;
+  return `${prefix}_${sanitizedName}.${ext}`;
 }
 
 /**
- * Uploads an onboarding PDF document to Supabase Storage and records metadata.
- * Folder format: {EMPLOYEE_ID_EMPLOYEE_NAME}/{DOCUMENT_TYPE_EMPLOYEE_NAME.pdf}
+ * Uploads an onboarding document (PDF, JPG, PNG) to Supabase Storage and records metadata.
+ * Folder format: {EMPLOYEE_ID_EMPLOYEE_NAME}/{DOCUMENT_TYPE_EMPLOYEE_NAME.ext}
  */
 export async function uploadDoc({
   userId,
@@ -119,9 +142,10 @@ export async function uploadDoc({
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
 
-  // 1. Strict PDF magic bytes validation
-  if (!validatePdfMagicBytes(buffer)) {
-    throw new Error("Invalid file content: Document must be a genuine PDF file (%PDF magic header required).");
+  // 1. File type and magic byte inspection
+  const fileInfo = detectFileMimeAndExtension(buffer, fileName);
+  if (!fileInfo.valid) {
+    throw new Error("Invalid file content: Document must be a valid PDF, JPG, or PNG file.");
   }
 
   // 2. Resolve employee ID if not passed
@@ -136,10 +160,15 @@ export async function uploadDoc({
 
   // 3. Generate standardized folder and file names
   const folder = formatEmployeeFolderName(resolvedEmpId, fullName, userId);
-  const standardFileName = formatDocumentFileName(docType, fullName, {
-    month: salaryMonth,
-    year: salaryYear,
-  });
+  const standardFileName = formatDocumentFileName(
+    docType,
+    fullName,
+    {
+      month: salaryMonth,
+      year: salaryYear,
+    },
+    fileInfo.ext
+  );
 
   const storagePath = `${folder}/${standardFileName}`;
 
@@ -147,7 +176,7 @@ export async function uploadDoc({
   const { error: uploadError } = await supabaseAdmin.storage
     .from("onboarding-docs")
     .upload(storagePath, buffer, {
-      contentType: "application/pdf",
+      contentType: fileInfo.mime,
       upsert: true,
     });
 
@@ -173,19 +202,43 @@ export async function uploadDoc({
     docReadableName = `Salary Slip (${salaryMonth} ${salaryYear})`;
   }
 
-  await (supabaseAdmin as any).from("onboarding_documents").insert({
+  // Attempt insert with v2 schema columns
+  const fullPayload: any = {
     user_id: userId,
     doc_type: docType,
     document_name: docReadableName,
     file_name: standardFileName,
     storage_path: storagePath,
     file_size: buffer.length,
-    mime_type: "application/pdf",
+    mime_type: fileInfo.mime,
     document_status: "pending",
     rejection_reason: null,
     salary_month: salaryMonth || null,
     salary_year: salaryYear || null,
-  });
+  };
+
+  const { error: insertErr } = await (supabaseAdmin as any)
+    .from("onboarding_documents")
+    .insert(fullPayload);
+
+  if (insertErr) {
+    // If the schema hasn't had the v2 columns added yet, fall back to base schema
+    console.warn("[uploadDoc] Insert with full schema failed, falling back to base schema:", insertErr.message);
+    const basePayload = {
+      user_id: userId,
+      doc_type: docType,
+      file_name: standardFileName,
+      storage_path: storagePath,
+      file_size: buffer.length,
+      mime_type: fileInfo.mime,
+    };
+    const { error: fallbackErr } = await (supabaseAdmin as any)
+      .from("onboarding_documents")
+      .insert(basePayload);
+    if (fallbackErr) {
+      throw new Error(`Failed to save document metadata: ${fallbackErr.message}`);
+    }
+  }
 
   // 6. Update storage folder in onboarding_profiles
   await (supabaseAdmin as any)

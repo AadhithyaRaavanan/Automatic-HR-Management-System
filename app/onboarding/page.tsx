@@ -253,7 +253,7 @@ export default function OnboardingPage() {
     return documents.filter((d) => d.doc_type === "salary_slip");
   };
 
-  // Upload handler for single PDF document
+  // Upload handler for document (PDF, JPG, PNG)
   const handleUploadFile = async (
     docType: string,
     file: File,
@@ -262,13 +262,20 @@ export default function OnboardingPage() {
   ) => {
     if (!file) return;
 
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
-      toast.error("Only PDF documents are accepted.");
+    const lowerName = file.name.toLowerCase();
+    const isAllowedExt =
+      lowerName.endsWith(".pdf") ||
+      lowerName.endsWith(".jpg") ||
+      lowerName.endsWith(".jpeg") ||
+      lowerName.endsWith(".png");
+
+    if (!isAllowedExt) {
+      toast.error("Please upload a PDF, JPG, or PNG document.");
       return;
     }
 
     if (file.size > 10 * 1024 * 1024) {
-      toast.error("File exceeds 10MB limit. Please upload a smaller PDF.");
+      toast.error("File exceeds 10MB limit. Please upload a smaller file.");
       return;
     }
 
@@ -276,6 +283,12 @@ export default function OnboardingPage() {
     setUploadingDocKey(uploadKey);
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const headers: Record<string, string> = {};
+      if (sessionData?.session?.access_token) {
+        headers["Authorization"] = `Bearer ${sessionData.session.access_token}`;
+      }
+
       const formData = new FormData();
       formData.append("file", file);
       formData.append("docType", docType);
@@ -286,6 +299,7 @@ export default function OnboardingPage() {
 
       const res = await fetch("/api/onboarding/upload", {
         method: "POST",
+        headers,
         body: formData,
       });
 
@@ -297,7 +311,30 @@ export default function OnboardingPage() {
       const resJson = await res.json();
       toast.success("Document uploaded securely.");
 
-      // Refresh documents
+      // Instantly reflect in local state so UI updates without waiting
+      if (resJson?.data) {
+        setDocuments((prev) => {
+          const filtered = prev.filter((d) => d.doc_type !== docType);
+          return [
+            ...filtered,
+            {
+              id: resJson.data.fileName || `${docType}-${Date.now()}`,
+              doc_type: docType,
+              file_name: resJson.data.fileName,
+              storage_path: resJson.data.storagePath,
+              file_size: file.size,
+              signedUrl: resJson.data.signedUrl || "",
+              document_status: "pending",
+              rejection_reason: null,
+              uploaded_at: new Date().toISOString(),
+              salary_month: salaryMonth || null,
+              salary_year: salaryYear || null,
+            },
+          ];
+        });
+      }
+
+      // Refresh documents from backend
       await fetchProfileData();
     } catch (err: any) {
       toast.error(err.message || "Failed to upload document.");
@@ -983,10 +1020,10 @@ export default function OnboardingPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h5 className="text-xs font-extrabold uppercase tracking-wider text-text-primary">
-                      Passport Size Photo (PDF) <span className="text-status-danger">*</span>
+                      Passport Size Photo (PDF / JPG / PNG) <span className="text-status-danger">*</span>
                     </h5>
                     <p className="text-xs text-text-secondary mt-0.5">
-                      Upload a recent, clear passport-style color photograph in genuine PDF format (max 10MB).
+                      Upload a recent, clear passport-style color photograph (PDF, JPG, or PNG format, max 10MB).
                     </p>
                   </div>
                   {getDoc("photo") && (
@@ -1024,10 +1061,10 @@ export default function OnboardingPage() {
                 <div>
                   <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all cursor-pointer shadow-sm">
                     <Upload className="w-3.5 h-3.5" />
-                    <span>{getDoc("photo") ? "Replace Photo PDF" : "Upload Passport Photo PDF"}</span>
+                    <span>{getDoc("photo") ? "Replace Photo" : "Upload Passport Photo"}</span>
                     <input
                       type="file"
-                      accept="application/pdf"
+                      accept="application/pdf,image/jpeg,image/png,image/webp"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) handleUploadFile("photo", file);
@@ -1043,10 +1080,10 @@ export default function OnboardingPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h5 className="text-xs font-extrabold uppercase tracking-wider text-text-primary">
-                      Candidate Resume / Curriculum Vitae (PDF) <span className="text-status-danger">*</span>
+                      Candidate Resume / Curriculum Vitae <span className="text-status-danger">*</span>
                     </h5>
                     <p className="text-xs text-text-secondary mt-0.5">
-                      Upload your updated professional resume in genuine PDF format (max 10MB).
+                      Upload your updated professional resume in PDF, JPG, or PNG format (max 10MB).
                     </p>
                   </div>
                   {getDoc("resume") && (
@@ -1084,10 +1121,10 @@ export default function OnboardingPage() {
                 <div>
                   <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all cursor-pointer shadow-sm">
                     <Upload className="w-3.5 h-3.5" />
-                    <span>{getDoc("resume") ? "Replace Resume PDF" : "Upload Resume PDF"}</span>
+                    <span>{getDoc("resume") ? "Replace Resume" : "Upload Resume"}</span>
                     <input
                       type="file"
-                      accept="application/pdf"
+                      accept="application/pdf,image/jpeg,image/png"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) handleUploadFile("resume", file);
