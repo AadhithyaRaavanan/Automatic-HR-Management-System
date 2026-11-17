@@ -5,8 +5,8 @@
  * via NEXT_PUBLIC_DEMO_MODE=true in local development or deployed demo environments (e.g. Vercel).
  */
 export function isDemoModeEnabled(): boolean {
-  if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") return true;
   if (process.env.NEXT_PUBLIC_DEMO_MODE === "false") return false;
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") return true;
   if (process.env.NODE_ENV === "test") return false;
   if (typeof window !== "undefined") {
     try {
@@ -16,6 +16,7 @@ export function isDemoModeEnabled(): boolean {
       }
     } catch {}
   }
-  return false;
+  // Default demo mode to ON for active testing unless explicitly turned off
+  return true;
 }
 

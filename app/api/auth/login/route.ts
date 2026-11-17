@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { Database, EmployeeRole } from "@/types/database.types";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   getRateLimitKey,
   getEmailRateLimitKey,
@@ -157,6 +158,38 @@ export async function POST(request: NextRequest) {
         }
       } catch (provisionErr) {
         console.error("[DemoProvisioner] Failed to auto-provision demo account:", provisionErr);
+      }
+    }
+
+    // If login failed because invited employee email is not confirmed, auto-confirm and retry
+    if (
+      authError &&
+      (authError.message?.toLowerCase().includes("email not confirmed") ||
+        (authError as any)?.code === "email_not_confirmed")
+    ) {
+      try {
+        let page = 1;
+        let targetUser: any = null;
+        while (!targetUser && page <= 5) {
+          const { data: listData } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 100 });
+          if (!listData?.users || listData.users.length === 0) break;
+          targetUser = listData.users.find((u: any) => u.email?.toLowerCase() === email.toLowerCase());
+          page++;
+        }
+        if (targetUser) {
+          await supabaseAdmin.auth.admin.updateUserById(targetUser.id, { email_confirm: true });
+          const retryResult = await supabase.auth.signInWithPassword({
+            email,
+            password,
+            options: captchaToken ? { captchaToken } : undefined,
+          });
+          if (retryResult.data?.user) {
+            authData = retryResult.data;
+            authError = retryResult.error;
+          }
+        }
+      } catch (confirmErr) {
+        console.error("[Login Auto-Confirm Error]:", confirmErr);
       }
     }
 

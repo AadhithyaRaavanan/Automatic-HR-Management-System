@@ -28,8 +28,18 @@ export async function GET(request: NextRequest) {
       }
     );
 
-    const { data: { user }, error: authErr } = await supabase.auth.getUser();
-    if (authErr || !user) {
+    const authHeader = request.headers.get("Authorization");
+    let user = null;
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.substring(7);
+      const { data: tokenUser } = await supabaseAdmin.auth.getUser(token);
+      user = tokenUser?.user || null;
+    }
+    if (!user) {
+      const { data: cookieUser } = await supabase.auth.getUser();
+      user = cookieUser?.user || null;
+    }
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

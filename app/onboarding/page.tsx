@@ -132,7 +132,29 @@ export default function OnboardingPage() {
   // 1. Load Profile & Existing Progress
   const fetchProfileData = React.useCallback(async () => {
     try {
-      const res = await fetch("/api/onboarding/profile");
+      // If coming from Supabase invite hash (#access_token=...), wait for session
+      let session = null;
+      if (typeof window !== "undefined" && window.location.hash.includes("access_token")) {
+        try {
+          const { data } = await supabase.auth.getSession();
+          session = data?.session;
+          window.history.replaceState(null, "", window.location.pathname);
+        } catch (e) {
+          console.warn("[Onboarding] Hash token error:", e);
+        }
+      }
+
+      if (!session) {
+        const { data } = await supabase.auth.getSession();
+        session = data?.session;
+      }
+
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
+      }
+
+      const res = await fetch("/api/onboarding/profile", { headers });
       if (!res.ok) {
         if (res.status === 401) {
           router.replace("/login");

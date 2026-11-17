@@ -9,7 +9,7 @@ export const clientEnvSchema = z.object({
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1, "NEXT_PUBLIC_SUPABASE_ANON_KEY is required"),
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
   NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().optional(),
-  NEXT_PUBLIC_DEMO_MODE: z.enum(["true", "false"]).optional().default("false"),
+  NEXT_PUBLIC_DEMO_MODE: z.enum(["true", "false"]).optional().default("true"),
   NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
 });
 

@@ -286,6 +286,7 @@ export async function inviteSingleEmployee(
   try {
     await supabaseAdmin.auth.admin.updateUserById(invitedUserId, {
       password: tempPassword,
+      email_confirm: true,
       user_metadata: {
         full_name: normalizedName,
         user_role: role,
