@@ -109,7 +109,7 @@ export function useAttendanceToday() {
       const [{ data: profileData }, { data: memberData }] = await Promise.all([
         supabase
           .from("employees")
-          .select("timezone, work_target_minutes")
+          .select("timezone, work_target_minutes, shift_start_time, shift_end_time")
           .eq("id", user.id)
           .maybeSingle(),
         supabase
@@ -124,8 +124,8 @@ export function useAttendanceToday() {
       const effectiveTz = empProfile?.timezone || userTimezone;
       const effectiveWorkDate = getEmployeeWorkDate(effectiveTz);
       const targetMins = empProfile?.work_target_minutes || 480;
-      const shiftStartTime = memRow?.shift_start_time || "09:00:00";
-      const shiftEndTime = memRow?.shift_end_time || "17:00:00";
+      const shiftStartTime = memRow?.shift_start_time || empProfile?.shift_start_time || "09:00:00";
+      const shiftEndTime = memRow?.shift_end_time || empProfile?.shift_end_time || "17:00:00";
 
       // 1. Fetch today's sessions
       const { data: sessions } = await supabase

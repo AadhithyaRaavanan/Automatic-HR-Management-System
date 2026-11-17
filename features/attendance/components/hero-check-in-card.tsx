@@ -77,7 +77,10 @@ export function HeroCheckInCard({
       onCheckOut?.();
     } else {
       if (lockStatus.isLocked) {
-        toast.error(`Check-in is locked until 5 minutes before your shift (${lockStatus.openTimeString}).`);
+        toast.error(
+          lockStatus.message ||
+            `Check-in is only allowed during your shift hours (${shiftStartTime.slice(0, 5)} - ${shiftEndTime.slice(0, 5)}).`
+        );
         return;
       }
       onCheckIn?.();
@@ -116,11 +119,15 @@ export function HeroCheckInCard({
               {isCheckedIn ? "Active Session" : "Checked Out"}
             </span>
 
-            {/* 5-Min Pre-Check-In Badge */}
+            {/* Shift Lock Status Badge */}
             {!isCheckedIn && lockStatus.isLocked && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-status-warning/10 text-status-warning border border-status-warning/30 animate-in fade-in">
                 <Lock className="w-3 h-3" />
-                <span>Check-in opens at {lockStatus.openTimeString}</span>
+                <span>
+                  {lockStatus.reason === "after_shift"
+                    ? `Shift ended at ${shiftEndTime.slice(0, 5)}`
+                    : `Check-in opens at ${lockStatus.openTimeString}`}
+                </span>
               </span>
             )}
 
@@ -138,7 +145,9 @@ export function HeroCheckInCard({
               {isCheckedIn
                 ? `Session running for ${workDate}`
                 : lockStatus.isLocked
-                ? `Scheduled shift: ${shiftStartTime.slice(0, 5)} - ${shiftEndTime.slice(0, 5)}`
+                ? lockStatus.reason === "after_shift"
+                  ? `Shift ended (${shiftStartTime.slice(0, 5)} - ${shiftEndTime.slice(0, 5)})`
+                  : `Scheduled shift: ${shiftStartTime.slice(0, 5)} - ${shiftEndTime.slice(0, 5)}`
                 : "Ready to start your work day?"}
             </p>
           </div>
@@ -166,7 +175,11 @@ export function HeroCheckInCard({
             ) : lockStatus.isLocked ? (
               <>
                 <Lock className="w-4 h-4" />
-                <span>Check In Locked</span>
+                <span>
+                  {lockStatus.reason === "after_shift"
+                    ? "Outside Shift Hours"
+                    : "Check In Locked"}
+                </span>
               </>
             ) : (
               <>
@@ -178,7 +191,9 @@ export function HeroCheckInCard({
 
           {!isCheckedIn && lockStatus.isLocked && (
             <span className="text-[10px] text-text-tertiary text-right">
-              Opens 5m prior to {shiftStartTime.slice(0, 5)}
+              {lockStatus.reason === "after_shift"
+                ? `Shift: ${shiftStartTime.slice(0, 5)} - ${shiftEndTime.slice(0, 5)}`
+                : `Opens 5m prior to ${shiftStartTime.slice(0, 5)}`}
             </span>
           )}
         </div>

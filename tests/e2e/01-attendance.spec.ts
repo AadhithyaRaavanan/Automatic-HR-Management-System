@@ -52,6 +52,45 @@ test.describe("Module 1: Attendance - API Enforcement & Edge Cases", () => {
     expect(body.code).toBe("NO_ACTIVE_SESSION");
   });
 
+  test("Check-in outside shift hours is rejected with 403 OUTSIDE_SHIFT_HOURS", async ({ request }) => {
+    const session = await loginAndGetSession("employee");
+
+    // Configure employee shift 6 hours away from current local time to ensure outside shift
+    const nowKolkata = new Date();
+    const kolkataHour = parseInt(
+      nowKolkata.toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata", hour12: false, hour: "numeric" })
+    );
+    const startHour = (kolkataHour + 6) % 24;
+    const endHour = (startHour + 8) % 24;
+    const startStr = `${String(startHour).padStart(2, "0")}:00:00`;
+    const endStr = `${String(endHour).padStart(2, "0")}:00:00`;
+
+    await supabaseAdmin
+      .from("employees")
+      .update({ shift_start_time: startStr, shift_end_time: endStr })
+      .eq("id", EMPLOYEE_ID);
+
+    try {
+      const res = await request.post("/api/attendance/check-in", {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        data: {},
+      });
+
+      expect(res.status()).toBe(403);
+      const body = await res.json();
+      expect(body.code).toBe("OUTSIDE_SHIFT_HOURS");
+      expect(body.message).toContain("not allowed outside your shift");
+    } finally {
+      await supabaseAdmin
+        .from("employees")
+        .update({ shift_start_time: "09:00:00", shift_end_time: "17:00:00" })
+        .eq("id", EMPLOYEE_ID);
+    }
+  });
+
   test("Early check-out API returns 409 EARLY_CHECKOUT without confirm_early", async ({ request }) => {
     const session = await loginAndGetSession("employee");
 

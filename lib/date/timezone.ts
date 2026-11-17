@@ -147,18 +147,28 @@ export function getCheckInOpenTime(shiftStartTime: string = "09:00:00"): string 
 }
 
 /**
- * Evaluates whether check-in is currently locked due to 5-min pre-check-in rule
+ * Evaluates whether check-in is currently locked because it is outside shift time.
+ * Supports standard shifts and overnight night shifts across timezones.
  */
 export function evaluatePreCheckInLock(
   shiftStartTime: string = "09:00:00",
   shiftEndTime: string = "17:00:00",
-  timezone: string = "UTC",
+  timezone: string = "Asia/Kolkata",
   currentDate: Date = new Date()
-): { isLocked: boolean; openTimeString: string; isShiftStarted: boolean } {
+): {
+  isLocked: boolean;
+  openTimeString: string;
+  isShiftStarted: boolean;
+  reason?: "before_shift" | "after_shift";
+  message?: string;
+  shiftStartFormatted: string;
+  shiftEndFormatted: string;
+} {
   try {
-    const [startH, startM = 0] = shiftStartTime.split(":").map(Number);
+    const [startH = 9, startM = 0] = (shiftStartTime || "09:00:00").split(":").map(Number);
     const [endH = 17, endM = 0] = (shiftEndTime || "17:00:00").split(":").map(Number);
-    const zoned = toZonedTime(currentDate, timezone || "UTC");
+    const effectiveTz = timezone || "Asia/Kolkata";
+    const zoned = toZonedTime(currentDate, effectiveTz);
     const currentMins = zoned.getHours() * 60 + zoned.getMinutes();
 
     let openMins = startH * 60 + startM - 5;
@@ -169,24 +179,84 @@ export function evaluatePreCheckInLock(
     const crossesMidnight = shiftEndMins < shiftStartMins;
 
     const openTimeString = getCheckInOpenTime(shiftStartTime);
+    const shiftStartFormatted = `${String(startH).padStart(2, "0")}:${String(startM).padStart(2, "0")}`;
+    const shiftEndFormatted = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
 
     if (crossesMidnight) {
       // Night shift e.g. 17:00 to 01:00
-      // Check-in opens at 16:55 and is open until end of shift + 4 hours buffer
-      const isWithinShiftWindow =
-        currentMins >= openMins || currentMins <= shiftEndMins + 240;
-      const isLocked = !isWithinShiftWindow;
+      // Check-in is allowed from 5 mins prior to shift start (16:55) through shift end (01:00)
+      const isWithinShiftWindow = currentMins >= openMins || currentMins <= shiftEndMins;
       const isShiftStarted = currentMins >= shiftStartMins || currentMins <= shiftEndMins;
-      return { isLocked, openTimeString, isShiftStarted };
+
+      if (!isWithinShiftWindow) {
+        const isAfter = currentMins > shiftEndMins && currentMins < 12 * 60;
+        const reason = isAfter ? "after_shift" : "before_shift";
+        const message = isAfter
+          ? `Your shift ended at ${shiftEndFormatted}. Check-in is not allowed outside your shift hours.`
+          : `Check-in is locked until your shift opens at ${openTimeString} (${shiftStartFormatted} - ${shiftEndFormatted}).`;
+        return {
+          isLocked: true,
+          openTimeString,
+          isShiftStarted,
+          reason,
+          message,
+          shiftStartFormatted,
+          shiftEndFormatted,
+        };
+      }
+
+      return {
+        isLocked: false,
+        openTimeString,
+        isShiftStarted,
+        shiftStartFormatted,
+        shiftEndFormatted,
+      };
     } else {
       // Standard daytime shift e.g. 09:00 to 17:00
-      // Check-in opens at openMins (08:55). Before 08:55, it is locked.
-      const isLocked = currentMins < openMins;
+      // Check-in is allowed from 5 mins prior to shift start (08:55) through shift end (17:00)
       const isShiftStarted = currentMins >= shiftStartMins;
-      return { isLocked, openTimeString, isShiftStarted };
+
+      if (currentMins < openMins) {
+        return {
+          isLocked: true,
+          openTimeString,
+          isShiftStarted: false,
+          reason: "before_shift",
+          message: `Check-in is locked until your shift opens at ${openTimeString} (${shiftStartFormatted} - ${shiftEndFormatted}).`,
+          shiftStartFormatted,
+          shiftEndFormatted,
+        };
+      }
+
+      if (currentMins > shiftEndMins) {
+        return {
+          isLocked: true,
+          openTimeString,
+          isShiftStarted: true,
+          reason: "after_shift",
+          message: `Your shift ended at ${shiftEndFormatted}. Check-in is not allowed outside your shift hours.`,
+          shiftStartFormatted,
+          shiftEndFormatted,
+        };
+      }
+
+      return {
+        isLocked: false,
+        openTimeString,
+        isShiftStarted,
+        shiftStartFormatted,
+        shiftEndFormatted,
+      };
     }
   } catch {
-    return { isLocked: false, openTimeString: "08:55 AM", isShiftStarted: true };
+    return {
+      isLocked: false,
+      openTimeString: "08:55 AM",
+      isShiftStarted: true,
+      shiftStartFormatted: "09:00",
+      shiftEndFormatted: "17:00",
+    };
   }
 }
 

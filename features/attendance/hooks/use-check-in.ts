@@ -11,16 +11,25 @@ export function useCheckIn() {
 
   return useMutation({
     mutationFn: async (note?: string) => {
-      const { data, error } = await (supabase.rpc as any)("check_in", {
-        p_note: note || undefined,
+      // 1. Call server API which authoritatively enforces shift hours
+      const res = await fetch("/api/attendance/check-in", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: note || undefined }),
       });
 
-      if (error) {
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        if (res.status === 403 && data.code === "OUTSIDE_SHIFT_HOURS") {
+          throw new Error(data.message || "Check-in is not allowed outside your shift hours.");
+        }
         if (isDemoModeEnabled()) {
           return { check_in_at: new Date().toISOString() };
         }
-        throw new Error(error.message);
+        throw new Error(data.error || data.message || "Failed to check in");
       }
+
       return data;
     },
     onSuccess: (data: any) => {
