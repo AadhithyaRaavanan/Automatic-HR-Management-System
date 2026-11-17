@@ -18,6 +18,10 @@ const TEST_USER_IDS = [
 const EMPLOYEE_ID = "71dce25f-f1de-4148-ad61-6274c61c1ee7";
 const ORG_ID = "00000000-0000-0000-0000-000000000001";
 
+function getTodayKolkata(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+}
+
 async function cleanupTestAttendance() {
   await supabaseAdmin
     .from("attendance_sessions")
@@ -59,8 +63,7 @@ test.describe("Module 1: Attendance - API Enforcement & Edge Cases", () => {
 
     try {
       // Create an active session for employee today
-      const now = new Date();
-      const todayStr = now.toISOString().slice(0, 10);
+      const todayStr = getTodayKolkata();
       const { data: inserted, error } = await supabaseAdmin.from("attendance_sessions").insert({
         employee_id: EMPLOYEE_ID,
         organization_id: ORG_ID,
@@ -137,7 +140,7 @@ test.describe("Module 1: Attendance - API Enforcement & Edge Cases", () => {
       .eq("id", EMPLOYEE_ID);
 
     try {
-      const todayStr = new Date().toISOString().slice(0, 10);
+      const todayStr = getTodayKolkata();
       const { data: inserted } = await supabaseAdmin.from("attendance_sessions").insert({
         employee_id: EMPLOYEE_ID,
         organization_id: ORG_ID,
@@ -181,7 +184,7 @@ test.describe("Module 1: Attendance - UI Punch & Confirmation Dialog", () => {
 
     try {
       // 1. Create active session for employee so UI loads in checked-in state
-      const todayStr = new Date().toISOString().slice(0, 10);
+      const todayStr = getTodayKolkata();
       const { data: inserted } = await supabaseAdmin.from("attendance_sessions").insert({
         employee_id: EMPLOYEE_ID,
         organization_id: ORG_ID,

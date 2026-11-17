@@ -5,6 +5,7 @@ import * as path from "path";
 dotenv.config({ path: path.resolve(process.cwd(), ".env.test") });
 
 export default defineConfig({
+  globalSetup: "./tests/helpers/global-setup.ts",
   testDir: "./tests/e2e",
   fullyParallel: false,
   timeout: 60 * 1000,

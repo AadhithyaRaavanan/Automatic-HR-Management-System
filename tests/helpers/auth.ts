@@ -122,14 +122,14 @@ export async function loginAndGetSession(role: RoleName): Promise<Session> {
   return finalSession;
 }
 
-export async function ensureStorageState(role: RoleName): Promise<string> {
+export async function ensureStorageState(role: RoleName, force: boolean = false): Promise<string> {
   const filePath = getStorageStatePath(role);
 
-  // Re-generate if older than 20 minutes
-  if (fs.existsSync(filePath)) {
+  // Re-generate if force requested or older than 5 minutes
+  if (!force && fs.existsSync(filePath)) {
     const stats = fs.statSync(filePath);
     const ageMinutes = (Date.now() - stats.mtimeMs) / (60 * 1000);
-    if (ageMinutes < 20) {
+    if (ageMinutes < 5) {
       return filePath;
     }
   }
