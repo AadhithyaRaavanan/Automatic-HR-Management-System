@@ -46,6 +46,8 @@ export function detectFileMimeAndExtension(buffer: Buffer, fileName: string): { 
     if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
       return { valid: true, mime: "image/png", ext: "png" };
     }
+    // If buffer is present but fails to match PDF/JPG/PNG magic bytes, reject as invalid (e.g. renamed .txt)
+    return { valid: false, mime: "application/octet-stream", ext: "bin" };
   }
   const lower = (fileName || "").toLowerCase();
   if (lower.endsWith(".pdf")) return { valid: true, mime: "application/pdf", ext: "pdf" };

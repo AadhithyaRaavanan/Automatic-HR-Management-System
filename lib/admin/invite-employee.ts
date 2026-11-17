@@ -272,13 +272,15 @@ export async function inviteSingleEmployee(
     actionInviteLink = linkData.properties?.action_link || "";
   }
 
-  // Ensure redirect_to parameter inside Supabase action_link points strictly to getSiteUrl()/onboarding
+  // Ensure redirect_to parameter inside Supabase action_link points strictly to getSiteUrl()/onboarding, never localhost
   if (actionInviteLink) {
     try {
       const parsedUrl = new URL(actionInviteLink);
       parsedUrl.searchParams.set("redirect_to", inviteRedirectTo);
-      actionInviteLink = parsedUrl.toString();
-    } catch {}
+      actionInviteLink = parsedUrl.toString().replace(/https?:\/\/localhost(:\d+)?/gi, "https://pulse.zenxea.com");
+    } catch {
+      actionInviteLink = actionInviteLink.replace(/https?:\/\/localhost(:\d+)?/gi, "https://pulse.zenxea.com");
+    }
   }
 
   // Generate and set temporary password on user account

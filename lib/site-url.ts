@@ -8,12 +8,8 @@
 export function getSiteUrl(): string {
   const envUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL;
 
-  if (envUrl && envUrl.trim()) {
+  if (envUrl && envUrl.trim() && !envUrl.includes("localhost")) {
     return envUrl.trim().replace(/\/+$/, "");
-  }
-
-  if (process.env.NODE_ENV !== "production") {
-    return "http://localhost:3000";
   }
 
   return "https://pulse.zenxea.com";

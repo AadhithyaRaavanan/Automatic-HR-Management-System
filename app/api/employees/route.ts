@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyAdminRouteCaller } from "@/lib/auth/admin-guard";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import { getStoredUsers, getStoredDepartments, getStoredJobTitles } from "@/lib/storage/demo-store";
 
@@ -16,6 +16,44 @@ export async function GET(request: NextRequest) {
 
   try {
     const isDemo = isDemoModeEnabled();
+
+    // Authenticate caller
+    let user = null;
+    let userRole = "employee";
+    const authHeader = request.headers.get("Authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.replace("Bearer ", "").trim();
+      const { data: userData } = await supabaseAdmin.auth.getUser(token);
+      user = userData?.user || null;
+    }
+    if (!user) {
+      const supabase = await createClient();
+      const { data: cookieUser } = await supabase.auth.getUser();
+      user = cookieUser?.user || null;
+    }
+
+    if (user) {
+      const { data: member } = await supabaseAdmin
+        .from("organization_members")
+        .select("role")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      userRole = (member?.role || user.user_metadata?.role || user.user_metadata?.user_role || "employee").toLowerCase();
+    }
+
+    if (userRole === "employee") {
+      return NextResponse.json({ error: "Forbidden: Employee access denied." }, { status: 403 });
+    }
+
+    let managerDeptId: string | null = null;
+    if (userRole === "manager" && user) {
+      const { data: empRecord } = await (supabaseAdmin as any)
+        .from("employees")
+        .select("department_id")
+        .eq("id", user.id)
+        .maybeSingle();
+      managerDeptId = empRecord?.department_id || null;
+    }
 
     // Query real Supabase database
     let query = (supabaseAdmin as any)
@@ -41,7 +79,9 @@ export async function GET(request: NextRequest) {
       `)
       .order("joined_on", { ascending: false });
 
-    if (departmentId) {
+    if (managerDeptId) {
+      query = query.eq("department_id", managerDeptId);
+    } else if (departmentId) {
       query = query.eq("department_id", departmentId);
     }
     if (category) {
@@ -85,6 +125,10 @@ export async function GET(request: NextRequest) {
           role: u.role || "employee",
         };
       });
+
+      if (managerDeptId) {
+        employeeList = employeeList.filter((e: any) => e.department_id === managerDeptId);
+      }
     }
 
     // Client search filter

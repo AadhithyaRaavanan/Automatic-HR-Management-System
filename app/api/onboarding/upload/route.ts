@@ -6,7 +6,7 @@ import { uploadDoc } from "@/lib/onboarding-storage";
 
 export const dynamic = "force-dynamic";
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB per prompt spec
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB per prompt spec
 
 export async function POST(request: NextRequest) {
   try {
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
       return NextResponse.json(
-        { error: "File exceeds 10MB size limit. Please upload a file smaller than 10MB." },
+        { error: "File exceeds 5MB size limit. Please upload a file smaller than 5MB." },
         { status: 400 }
       );
     }

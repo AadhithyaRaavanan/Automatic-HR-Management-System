@@ -1,13 +1,53 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import { getStoredUsers, getStoredDepartments, getStoredTeams } from "@/lib/storage/demo-store";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const isDemo = isDemoModeEnabled();
+
+    // Authenticate caller
+    let user = null;
+    let userRole = "employee";
+    const authHeader = request.headers.get("Authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.replace("Bearer ", "").trim();
+      const { data: userData } = await supabaseAdmin.auth.getUser(token);
+      user = userData?.user || null;
+    }
+    if (!user) {
+      const supabase = await createClient();
+      const { data: cookieUser } = await supabase.auth.getUser();
+      user = cookieUser?.user || null;
+    }
+
+    if (user) {
+      const { data: member } = await supabaseAdmin
+        .from("organization_members")
+        .select("role")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      userRole = (member?.role || user.user_metadata?.role || user.user_metadata?.user_role || "employee").toLowerCase();
+    }
+
+    // Role gate: employee denied
+    if (userRole === "employee") {
+      return NextResponse.json({ error: "Forbidden: Employee access denied." }, { status: 403 });
+    }
+
+    let managerDeptId: string | null = null;
+    if (userRole === "manager" && user) {
+      const { data: empRecord } = await (supabaseAdmin as any)
+        .from("employees")
+        .select("department_id")
+        .eq("id", user.id)
+        .maybeSingle();
+      managerDeptId = empRecord?.department_id || null;
+    }
 
     // 1. Fetch counts from real database
     const [empsRes, deptsRes, teamsRes, onbRes, internsRes] = await Promise.all([
@@ -62,6 +102,13 @@ export async function GET() {
         team_lead_id: t.leadId || t.teamLeadId || null,
         department_id: t.departmentId || t.deptId || null,
       }));
+    }
+
+    // Scoping for manager
+    if (userRole === "manager" && managerDeptId) {
+      emps = emps.filter((e: any) => e.department_id === managerDeptId);
+      depts = depts.filter((d: any) => d.id === managerDeptId);
+      teams = teams.filter((t: any) => t.department_id === managerDeptId);
     }
 
     const totalEmployees = emps.length;

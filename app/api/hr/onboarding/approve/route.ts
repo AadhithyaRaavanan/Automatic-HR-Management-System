@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json().catch(() => ({}));
-    const { userId } = body;
+    const { userId, note } = body;
 
     if (!userId) {
       return NextResponse.json({ error: "Missing required parameter 'userId'." }, { status: 400 });
@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
         performed_by: reviewerId,
         previous_status: profile.onboarding_status || "SUBMITTED",
         new_status: "COMPLETED",
-        remarks: "HR Admin completed document verification and activated employee profile.",
+        remarks: note?.trim() || "HR Admin completed document verification and activated employee profile.",
       });
     } catch {}
 

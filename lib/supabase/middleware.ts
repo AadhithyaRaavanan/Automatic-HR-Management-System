@@ -315,9 +315,9 @@ export async function updateSession(request: NextRequest) {
       }
     }
 
-    // EMS route guard (HR and Admin only; unauthorized gets /403)
+    // EMS route guard (Admin, HR, Manager allowed; Employee denied gets /403)
     if (pathname.startsWith("/ems") || pathname.startsWith("/employees")) {
-      if (userRole !== "admin" && userRole !== "hr") {
+      if (userRole !== "admin" && userRole !== "hr" && userRole !== "manager") {
         const url = request.nextUrl.clone();
         url.pathname = "/403";
         return NextResponse.redirect(url);

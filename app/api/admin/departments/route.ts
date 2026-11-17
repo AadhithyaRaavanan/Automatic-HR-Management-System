@@ -8,21 +8,46 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    const authHeader = request.headers.get("Authorization");
+    let user = null;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.replace("Bearer ", "").trim();
+      const { data: userData } = await supabaseAdmin.auth.getUser(token);
+      user = userData?.user || null;
+    }
+    if (!user) {
+      const supabase = await createClient();
+      const {
+        data: { user: cookieUser },
+      } = await supabase.auth.getUser();
+      user = cookieUser || null;
+    }
 
     let orgId: string | null = null;
+    let userRole = "employee";
     if (user) {
       const { data: member } = await supabaseAdmin
         .from("organization_members")
-        .select("organization_id, status")
+        .select("organization_id, role, status")
         .eq("user_id", user.id)
         .eq("status", "active")
         .maybeSingle();
       if (member?.organization_id) orgId = member.organization_id;
+      userRole = (member?.role || user.user_metadata?.role || user.user_metadata?.user_role || "employee").toLowerCase();
+    }
+
+    if (userRole === "employee") {
+      return NextResponse.json({ error: "Forbidden: Employee access denied." }, { status: 403 });
+    }
+
+    let managerDeptId: string | null = null;
+    if (userRole === "manager" && user) {
+      const { data: empRecord } = await (supabaseAdmin as any)
+        .from("employees")
+        .select("department_id")
+        .eq("id", user.id)
+        .maybeSingle();
+      managerDeptId = empRecord?.department_id || null;
     }
 
     if (!orgId) {
@@ -30,11 +55,17 @@ export async function GET(request: NextRequest) {
     }
 
     // 1. Fetch departments
-    const { data: depts, error: deptsErr } = await (supabaseAdmin as any)
+    let deptsQuery = (supabaseAdmin as any)
       .from("departments")
       .select("id, name, code, parent_department_id, department_head_id, created_at")
       .eq("organization_id", orgId)
       .order("name");
+
+    if (managerDeptId) {
+      deptsQuery = deptsQuery.eq("id", managerDeptId);
+    }
+
+    const { data: depts, error: deptsErr } = await deptsQuery;
 
     if (deptsErr) {
       return NextResponse.json({ departments: [] });
