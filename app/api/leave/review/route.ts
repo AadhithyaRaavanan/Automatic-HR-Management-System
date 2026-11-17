@@ -67,6 +67,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Role-based review permission scoping
+    const { data: member } = await (supabaseAdmin.from("organization_members") as any)
+      .select("role")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const callerRole = member?.role || "employee";
+    if (callerRole === "employee") {
+      return NextResponse.json(
+        { error: "Forbidden: Employees cannot review leave requests." },
+        { status: 403 }
+      );
+    }
+
+    if (callerRole === "manager") {
+      const { data: empRecord } = await (supabaseAdmin.from("employees") as any)
+        .select("manager_id")
+        .eq("id", leaveReq.employee_id)
+        .maybeSingle();
+
+      if (!empRecord || empRecord.manager_id !== user.id) {
+        return NextResponse.json(
+          { error: "Forbidden: Managers can only review leave requests for their direct reports." },
+          { status: 403 }
+        );
+      }
+    }
+
     const nowIso = new Date().toISOString();
     const targetStatus = action === "approve" ? "approved" : "rejected";
 
@@ -91,18 +119,16 @@ export async function POST(request: NextRequest) {
     if (action === "approve") {
       try {
         const { data: balance } = await (supabaseAdmin.from("leave_balances") as any)
-          .select("used, remaining")
+          .select("used")
           .eq("employee_id", leaveReq.employee_id)
           .eq("leave_type_id", leaveReq.leave_type_id)
           .maybeSingle();
 
         if (balance) {
           const newUsed = Number(balance.used || 0) + Number(leaveReq.total_days);
-          const newRemaining = Math.max(0, Number(balance.remaining || 0) - Number(leaveReq.total_days));
           await (supabaseAdmin.from("leave_balances") as any)
             .update({
               used: newUsed,
-              remaining: newRemaining,
               updated_at: nowIso,
             })
             .eq("employee_id", leaveReq.employee_id)
