@@ -185,12 +185,15 @@ export async function updateSession(request: NextRequest) {
     if (!isPrivilegedAdminOrHr && !canAccessDashboard) {
       if (
         pathname !== "/onboarding" &&
+        !pathname.startsWith("/onboarding") &&
+        !(pathname.startsWith("/settings") && request.nextUrl.searchParams.get("must_change_password") === "true") &&
         !pathname.startsWith("/api") &&
         !pathname.startsWith("/auth") &&
         pathname !== "/login"
       ) {
         const url = request.nextUrl.clone();
         url.pathname = "/onboarding";
+        url.search = "";
         return NextResponse.redirect(url);
       }
     } else if (!isPrivilegedAdminOrHr && canAccessDashboard && pathname === "/onboarding") {
@@ -214,9 +217,12 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url);
       }
 
-      // Restrict user to settings page to change temporary password
-      if (
+      // If user hasn't completed onboarding, allow /onboarding without redirecting to /settings
+      if (!canAccessDashboard && (pathname === "/onboarding" || pathname.startsWith("/onboarding"))) {
+        // Allow access to onboarding
+      } else if (
         !pathname.startsWith("/settings") &&
+        !pathname.startsWith("/onboarding") &&
         !pathname.startsWith("/auth") &&
         !pathname.startsWith("/login")
       ) {
