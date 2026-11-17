@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { AppShell } from "@/components/shell/app-shell";
+import { FEATURES } from "@/lib/features";
 import { createClient } from "@/lib/supabase/client";
 import {
   ScrollText,
@@ -33,6 +34,12 @@ interface AuditEntry {
 }
 
 export default function AuditsAdminPage() {
+  if (!FEATURES.AUDITS) {
+    if (typeof window !== "undefined") {
+      window.location.href = "/dashboard";
+    }
+    return null;
+  }
   const [audits, setAudits] = React.useState<AuditEntry[]>(() => getStoredAudits());
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [searchTerm, setSearchTerm] = React.useState("");

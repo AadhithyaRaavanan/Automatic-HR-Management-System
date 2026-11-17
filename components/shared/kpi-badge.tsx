@@ -4,6 +4,7 @@ import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { TrendingUp, Award, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FEATURES } from "@/lib/features";
 
 interface KpiBadgeProps {
   employeeId?: string;
@@ -12,6 +13,9 @@ interface KpiBadgeProps {
 }
 
 export function KpiBadge({ employeeId, className, showIcon = true }: KpiBadgeProps) {
+  if (!FEATURES.KPI) {
+    return null;
+  }
   const { data, isLoading } = useQuery({
     queryKey: ["kpi-summary-badge", employeeId],
     queryFn: async () => {

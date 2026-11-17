@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { JobTitlesManager } from "@/features/admin/components/job-titles-manager";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import { FEATURES } from "@/lib/features";
 import {
   getStoredDepartments,
   saveStoredDepartments,
@@ -881,9 +882,9 @@ function UsersDirectoryContent() {
                   <th className="py-3.5 px-4">Role</th>
                   <th className="py-3.5 px-4">Company Title</th>
                   <th className="py-3.5 px-4">Department</th>
-                  <th className="py-3.5 px-4">Location</th>
+                  {FEATURES.LOCATIONS && <th className="py-3.5 px-4">Location</th>}
                   <th className="py-3.5 px-4">Timezone</th>
-                  <th className="py-3.5 px-4">Shift</th>
+                  {FEATURES.SHIFTS && <th className="py-3.5 px-4">Shift</th>}
                   <th className="py-3.5 px-4">Status</th>
                   {isAdmin && <th className="py-3.5 px-5 text-right">Actions</th>}
                 </tr>
@@ -941,34 +942,38 @@ function UsersDirectoryContent() {
                           <span className="text-text-tertiary text-xs italic">Unassigned</span>
                         )}
                       </td>
-                      <td className="py-4 px-4 text-xs text-text-secondary font-medium">
-                        {u.location && u.location !== "Unassigned" ? (
-                          `${u.location} (${u.workMode})`
-                        ) : (
-                          <span className="text-text-tertiary text-xs italic">Unassigned</span>
-                        )}
-                      </td>
+                      {FEATURES.LOCATIONS && (
+                        <td className="py-4 px-4 text-xs text-text-secondary font-medium">
+                          {u.location && u.location !== "Unassigned" ? (
+                            `${u.location} (${u.workMode})`
+                          ) : (
+                            <span className="text-text-tertiary text-xs italic">Unassigned</span>
+                          )}
+                        </td>
+                      )}
                       <td className="py-4 px-4 text-xs font-mono text-text-tertiary">
                         {u.timezone}
                       </td>
-                      <td className="py-4 px-4">
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold font-mono",
-                            u.shiftEndTime < u.shiftStartTime
-                              ? "bg-brand-purple/15 text-brand-purple border border-brand-purple/30"
-                              : "bg-card-subtle text-text-secondary border border-border-light"
-                          )}
-                          title={
-                            u.shiftEndTime < u.shiftStartTime
-                              ? "Night Shift (crosses midnight)"
-                              : "Day Shift"
-                          }
-                        >
-                          {u.shiftEndTime < u.shiftStartTime ? "🌙 " : "☀️ "}
-                          {u.shiftStartTime} - {u.shiftEndTime}
-                        </span>
-                      </td>
+                      {FEATURES.SHIFTS && (
+                        <td className="py-4 px-4">
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold font-mono",
+                              u.shiftEndTime < u.shiftStartTime
+                                ? "bg-brand-purple/15 text-brand-purple border border-brand-purple/30"
+                                : "bg-card-subtle text-text-secondary border border-border-light"
+                            )}
+                            title={
+                              u.shiftEndTime < u.shiftStartTime
+                                ? "Night Shift (crosses midnight)"
+                                : "Day Shift"
+                            }
+                          >
+                            {u.shiftEndTime < u.shiftStartTime ? "🌙 " : "☀️ "}
+                            {u.shiftStartTime} - {u.shiftEndTime}
+                          </span>
+                        </td>
+                      )}
                       <td className="py-4 px-4">
                         <StatusPill status={u.status} />
                       </td>
@@ -1197,47 +1202,51 @@ function UsersDirectoryContent() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label
-                htmlFor="invite-shift-start"
-                className="text-xs font-bold text-text-secondary block mb-1 flex items-center gap-1"
-              >
-                <Clock className="w-3 h-3 text-brand-purple" />
-                Shift Start
-              </label>
-              <input
-                id="invite-shift-start"
-                type="time"
-                required
-                value={inviteShiftStart}
-                onChange={(e) => setInviteShiftStart(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
-              />
-            </div>
+          {FEATURES.SHIFTS && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label
+                    htmlFor="invite-shift-start"
+                    className="text-xs font-bold text-text-secondary block mb-1 flex items-center gap-1"
+                  >
+                    <Clock className="w-3 h-3 text-brand-purple" />
+                    Shift Start
+                  </label>
+                  <input
+                    id="invite-shift-start"
+                    type="time"
+                    required
+                    value={inviteShiftStart}
+                    onChange={(e) => setInviteShiftStart(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+                  />
+                </div>
 
-            <div>
-              <label
-                htmlFor="invite-shift-end"
-                className="text-xs font-bold text-text-secondary block mb-1 flex items-center gap-1"
-              >
-                <Clock className="w-3 h-3 text-brand-purple" />
-                Shift End
-              </label>
-              <input
-                id="invite-shift-end"
-                type="time"
-                required
-                value={inviteShiftEnd}
-                onChange={(e) => setInviteShiftEnd(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
-              />
-            </div>
-          </div>
-          {inviteShiftEnd < inviteShiftStart && (
-            <p className="text-[11px] text-brand-purple font-semibold flex items-center gap-1">
-              <span>🌙 Night shift detected (crosses midnight, auto-checkout protected)</span>
-            </p>
+                <div>
+                  <label
+                    htmlFor="invite-shift-end"
+                    className="text-xs font-bold text-text-secondary block mb-1 flex items-center gap-1"
+                  >
+                    <Clock className="w-3 h-3 text-brand-purple" />
+                    Shift End
+                  </label>
+                  <input
+                    id="invite-shift-end"
+                    type="time"
+                    required
+                    value={inviteShiftEnd}
+                    onChange={(e) => setInviteShiftEnd(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+                  />
+                </div>
+              </div>
+              {inviteShiftEnd < inviteShiftStart && (
+                <p className="text-[11px] text-brand-purple font-semibold flex items-center gap-1">
+                  <span>🌙 Night shift detected (crosses midnight, auto-checkout protected)</span>
+                </p>
+              )}
+            </>
           )}
 
           <div>
@@ -1319,47 +1328,51 @@ function UsersDirectoryContent() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label
-                htmlFor="gov-shift-start"
-                className="text-xs font-bold text-text-secondary block mb-1 flex items-center gap-1"
-              >
-                <Clock className="w-3 h-3 text-brand-purple" />
-                Shift Start Time
-              </label>
-              <input
-                id="gov-shift-start"
-                type="time"
-                required
-                value={govShiftStart}
-                onChange={(e) => setGovShiftStart(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
-              />
-            </div>
+          {FEATURES.SHIFTS && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label
+                    htmlFor="gov-shift-start"
+                    className="text-xs font-bold text-text-secondary block mb-1 flex items-center gap-1"
+                  >
+                    <Clock className="w-3 h-3 text-brand-purple" />
+                    Shift Start Time
+                  </label>
+                  <input
+                    id="gov-shift-start"
+                    type="time"
+                    required
+                    value={govShiftStart}
+                    onChange={(e) => setGovShiftStart(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+                  />
+                </div>
 
-            <div>
-              <label
-                htmlFor="gov-shift-end"
-                className="text-xs font-bold text-text-secondary block mb-1 flex items-center gap-1"
-              >
-                <Clock className="w-3 h-3 text-brand-purple" />
-                Shift End Time
-              </label>
-              <input
-                id="gov-shift-end"
-                type="time"
-                required
-                value={govShiftEnd}
-                onChange={(e) => setGovShiftEnd(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
-              />
-            </div>
-          </div>
-          {govShiftEnd < govShiftStart && (
-            <p className="text-[11px] text-brand-purple font-semibold">
-              🌙 Night Shift: Crosses midnight. 23:59 auto-checkout is skipped until scheduled morning end time.
-            </p>
+                <div>
+                  <label
+                    htmlFor="gov-shift-end"
+                    className="text-xs font-bold text-text-secondary block mb-1 flex items-center gap-1"
+                  >
+                    <Clock className="w-3 h-3 text-brand-purple" />
+                    Shift End Time
+                  </label>
+                  <input
+                    id="gov-shift-end"
+                    type="time"
+                    required
+                    value={govShiftEnd}
+                    onChange={(e) => setGovShiftEnd(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+                  />
+                </div>
+              </div>
+              {govShiftEnd < govShiftStart && (
+                <p className="text-[11px] text-brand-purple font-semibold">
+                  🌙 Night Shift: Crosses midnight. 23:59 auto-checkout is skipped until scheduled morning end time.
+                </p>
+              )}
+            </>
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1539,10 +1552,12 @@ function UsersDirectoryContent() {
               </div>
             )}
 
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-text-secondary">Shift Schedule:</span>
-              <span className="font-mono font-bold text-text-primary">{createdCredentials?.shift}</span>
-            </div>
+            {FEATURES.SHIFTS && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-text-secondary">Shift Schedule:</span>
+                <span className="font-mono font-bold text-text-primary">{createdCredentials?.shift}</span>
+              </div>
+            )}
 
             {createdCredentials?.tempPassword && (
               <div className="flex items-center justify-between text-xs bg-brand-purple/5 p-2 rounded-xl border border-brand-purple/20">

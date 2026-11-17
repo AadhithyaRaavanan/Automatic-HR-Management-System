@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { FEATURES } from "@/lib/features";
 import {
   LayoutDashboard,
   Clock,
@@ -175,6 +176,10 @@ export function CurvedSidebar({
     }
     return items
       .filter((item) => {
+        if (item.href === "/kpi" && !FEATURES.KPI) return false;
+        if (item.href === "/admin/locations" && !FEATURES.LOCATIONS) return false;
+        if (item.href === "/admin/shifts" && !FEATURES.SHIFTS) return false;
+        if (item.href === "/admin/audits" && !FEATURES.AUDITS) return false;
         if (!item.roles) return true;
         return item.roles.includes(effectiveRole);
       })

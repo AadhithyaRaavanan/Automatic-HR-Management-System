@@ -7,6 +7,7 @@ import { useLeavePolicies } from "../hooks/use-leave";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { FEATURES } from "@/lib/features";
 
 interface LeavePolicyModalProps {
   open: boolean;
@@ -181,20 +182,22 @@ export function LeavePolicyModal({ open, onOpenChange }: LeavePolicyModalProps) 
                   </div>
                 </div>
 
-                <label className="flex items-center gap-2 pt-1 text-[11px] font-semibold text-text-secondary cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={editedKpiFlags[p.leave_type_id] ?? p.leave_types?.counts_toward_kpi ?? true}
-                    onChange={(e) =>
-                      setEditedKpiFlags((prev) => ({
-                        ...prev,
-                        [p.leave_type_id]: e.target.checked,
-                      }))
-                    }
-                    className="rounded border-border-light text-brand-purple focus:ring-brand-purple"
-                  />
-                  <span>Count toward Leave KPI metric (unchecked excludes sick/statutory leave)</span>
-                </label>
+                {FEATURES.KPI && (
+                  <label className="flex items-center gap-2 pt-1 text-[11px] font-semibold text-text-secondary cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editedKpiFlags[p.leave_type_id] ?? p.leave_types?.counts_toward_kpi ?? true}
+                      onChange={(e) =>
+                        setEditedKpiFlags((prev) => ({
+                          ...prev,
+                          [p.leave_type_id]: e.target.checked,
+                        }))
+                      }
+                      className="rounded border-border-light text-brand-purple focus:ring-brand-purple"
+                    />
+                    <span>Count toward Leave KPI metric (unchecked excludes sick/statutory leave)</span>
+                  </label>
+                )}
               </div>
             );
           })}

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { AppShell } from "@/components/shell/app-shell";
+import { FEATURES } from "@/lib/features";
 import { createClient } from "@/lib/supabase/client";
 import { CalendarClock, Plus, Edit, Trash2, Clock, UserCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -21,6 +22,12 @@ import {
 export type ShiftTemplateItem = DemoShift;
 
 export default function ShiftsAdminPage() {
+  if (!FEATURES.SHIFTS) {
+    if (typeof window !== "undefined") {
+      window.location.href = "/dashboard";
+    }
+    return null;
+  }
   const [shifts, setShifts] = React.useState<ShiftTemplateItem[]>(() => getStoredShifts());
   const [shiftModalOpen, setShiftModalOpen] = React.useState(false);
   const [assignModalOpen, setAssignModalOpen] = React.useState(false);

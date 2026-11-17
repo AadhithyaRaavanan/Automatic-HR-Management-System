@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { FEATURES } from "@/lib/features";
 import { AppShell, useAppSession } from "@/components/shell/app-shell";
 import { BentoCard } from "@/components/bento/bento-card";
 import { StatusPill } from "@/components/shared/status-pill";
@@ -1418,6 +1419,12 @@ function KpiWorkspaceContent() {
 }
 
 export default function KpiPage() {
+  if (!FEATURES.KPI) {
+    if (typeof window !== "undefined") {
+      window.location.href = "/dashboard";
+    }
+    return null;
+  }
   return (
     <AppShell>
       <KpiWorkspaceContent />

@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { Database, EmployeeRole } from "@/types/database.types";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import { applySecurityHeaders } from "@/lib/security/headers";
+import { FEATURES } from "@/lib/features";
 
 export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
@@ -26,6 +27,18 @@ export async function updateSession(request: NextRequest) {
     pathname === "/favicon.ico"
   ) {
     return NextResponse.next();
+  }
+
+  // Feature flag guards: if feature is disabled, redirect server-side to /dashboard
+  if (
+    (!FEATURES.KPI && (pathname === "/kpi" || pathname.startsWith("/kpi/"))) ||
+    (!FEATURES.LOCATIONS && (pathname === "/admin/locations" || pathname.startsWith("/admin/locations/"))) ||
+    (!FEATURES.SHIFTS && (pathname === "/admin/shifts" || pathname.startsWith("/admin/shifts/"))) ||
+    (!FEATURES.AUDITS && (pathname === "/admin/audits" || pathname.startsWith("/admin/audits/")))
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
+    return NextResponse.redirect(url);
   }
 
   let response = NextResponse.next({

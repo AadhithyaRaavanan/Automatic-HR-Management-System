@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { AppShell } from "@/components/shell/app-shell";
+import { FEATURES } from "@/lib/features";
 import { createClient } from "@/lib/supabase/client";
 import { MapPin, Plus, Edit, Trash2, Globe, Clock } from "lucide-react";
 import { toast } from "sonner";
@@ -19,6 +20,12 @@ import {
 export type LocationItem = DemoLocation;
 
 export default function LocationsAdminPage() {
+  if (!FEATURES.LOCATIONS) {
+    if (typeof window !== "undefined") {
+      window.location.href = "/dashboard";
+    }
+    return null;
+  }
   const [locations, setLocations] = React.useState<LocationItem[]>(() => getStoredLocations());
   const [modalOpen, setModalOpen] = React.useState(false);
   const [editingLoc, setEditingLoc] = React.useState<LocationItem | null>(null);

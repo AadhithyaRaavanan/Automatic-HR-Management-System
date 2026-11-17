@@ -1,3 +1,5 @@
+import { FEATURES } from "@/lib/features";
+
 export interface TutorialStep {
   id: string;
   title: string;
@@ -6,7 +8,7 @@ export interface TutorialStep {
   category: string;
 }
 
-export const ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
+const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
   employee: [
     {
       id: "emp-attendance",
@@ -194,3 +196,18 @@ export const ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
     },
   ],
 };
+
+function isStepFeatureEnabled(step: TutorialStep): boolean {
+  if (step.path === "/kpi" && !FEATURES.KPI) return false;
+  if (step.path === "/admin/locations" && !FEATURES.LOCATIONS) return false;
+  if (step.path === "/admin/shifts" && !FEATURES.SHIFTS) return false;
+  if (step.path === "/admin/audits" && !FEATURES.AUDITS) return false;
+  return true;
+}
+
+export const ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = Object.fromEntries(
+  Object.entries(RAW_ROLE_TUTORIAL_STEPS).map(([role, steps]) => [
+    role,
+    steps.filter(isStepFeatureEnabled),
+  ])
+);

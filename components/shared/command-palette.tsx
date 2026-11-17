@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import { useSidebar } from "@/components/shell/sidebar-context";
+import { FEATURES } from "@/lib/features";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -179,16 +180,18 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 <span>Open Tasks & Projects Board</span>
               </Command.Item>
 
-              <Command.Item
-                onSelect={() => {
-                  window.location.href = "/kpi";
-                  onOpenChange(false);
-                }}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-text-primary hover:bg-brand-purple-light/50 hover:text-brand-purple cursor-pointer transition-colors"
-              >
-                <Target className="w-4 h-4 text-brand-purple" />
-                <span>Open KPI Scorecards & Performance</span>
-              </Command.Item>
+              {FEATURES.KPI && (
+                <Command.Item
+                  onSelect={() => {
+                    window.location.href = "/kpi";
+                    onOpenChange(false);
+                  }}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-text-primary hover:bg-brand-purple-light/50 hover:text-brand-purple cursor-pointer transition-colors"
+                >
+                  <Target className="w-4 h-4 text-brand-purple" />
+                  <span>Open KPI Scorecards & Performance</span>
+                </Command.Item>
+              )}
 
               <Command.Item
                 onSelect={() => {

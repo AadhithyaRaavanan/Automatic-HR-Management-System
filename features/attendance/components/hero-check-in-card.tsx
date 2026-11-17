@@ -6,6 +6,7 @@ import { Play, Square, Clock, ShieldCheck, Sparkles, Lock, AlertCircle } from "l
 import { evaluatePreCheckInLock } from "@/lib/date/timezone";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { FEATURES } from "@/lib/features";
 
 interface HeroCheckInCardProps {
   isCheckedIn?: boolean;
@@ -186,7 +187,9 @@ export function HeroCheckInCard({
       <div className="mt-5 pt-4 border-t border-border-light/60 flex items-center justify-between text-xs text-text-tertiary">
         <span className="flex items-center gap-1">
           <ShieldCheck className="w-3.5 h-3.5 text-brand-purple" />
-          Shift: {shiftStartTime.slice(0, 5)} - {shiftEndTime.slice(0, 5)} ({userTimezone})
+          {FEATURES.SHIFTS
+            ? `Shift: ${shiftStartTime.slice(0, 5)} - ${shiftEndTime.slice(0, 5)} (${userTimezone})`
+            : `Timezone: ${userTimezone}`}
         </span>
         <span className="flex items-center gap-1 font-semibold text-brand-purple">
           <Sparkles className="w-3.5 h-3.5" />
