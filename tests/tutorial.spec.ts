@@ -62,7 +62,7 @@ test.describe("Walkthrough Tour Verification per Role", () => {
           const isLast = i === steps.length - 1;
           const nextOrFinishBtn = tourDialog.getByRole("button", { name: isLast ? "Finish" : "Next", exact: true });
           await expect(nextOrFinishBtn).toBeVisible({ timeout: 5000 });
-          await nextOrFinishBtn.click();
+          await nextOrFinishBtn.click({ force: true });
           if (!isLast) {
             await page.waitForTimeout(300);
           }

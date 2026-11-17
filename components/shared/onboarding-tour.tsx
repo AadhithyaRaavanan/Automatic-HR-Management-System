@@ -186,17 +186,20 @@ export function OnboardingTour({
   let cardPositionStyle: React.CSSProperties = {};
 
   if (!isMobile && targetRect) {
-    const spaceBelow = window.innerHeight - targetRect.bottom;
-    const spaceAbove = targetRect.top;
     const cardHeight = 360;
     const cardWidth = 460;
+    const maxTop = Math.max(16, window.innerHeight - cardHeight - 20);
 
     let top = targetRect.bottom + 16;
-    let left = Math.max(16, Math.min(targetRect.left, window.innerWidth - cardWidth - 24));
-
-    if (spaceBelow < cardHeight && spaceAbove > cardHeight) {
-      top = Math.max(16, targetRect.top - cardHeight - 16);
+    if (top > maxTop) {
+      if (targetRect.top - cardHeight - 16 >= 16) {
+        top = targetRect.top - cardHeight - 16;
+      } else {
+        top = maxTop;
+      }
     }
+    top = Math.max(16, Math.min(top, maxTop));
+    const left = Math.max(16, Math.min(targetRect.left, window.innerWidth - cardWidth - 24));
 
     cardPositionStyle = {
       position: "fixed",
