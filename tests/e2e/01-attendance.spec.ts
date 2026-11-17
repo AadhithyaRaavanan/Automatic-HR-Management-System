@@ -88,7 +88,7 @@ test.describe("Module 1: Attendance - API Enforcement & Edge Cases", () => {
       .select("check_out_at")
       .eq("id", inserted.id)
       .single();
-    expect(checkActive.check_out_at).toBeNull();
+    expect(checkActive?.check_out_at).toBeNull();
 
     // Call checkout WITH confirm_early: true
     const confirmRes = await request.post("/api/attendance/checkout", {
@@ -110,8 +110,8 @@ test.describe("Module 1: Attendance - API Enforcement & Edge Cases", () => {
       .select("check_out_at, note")
       .eq("id", inserted.id)
       .single();
-    expect(closedSession.check_out_at).not.toBeNull();
-    expect(closedSession.note).toContain("Doctor appointment");
+    expect(closedSession?.check_out_at).not.toBeNull();
+    expect(closedSession?.note).toContain("Doctor appointment");
   });
 
   test("Night shift crossing midnight calculates shift end on next calendar day", async ({ request }) => {
@@ -199,7 +199,7 @@ test.describe("Module 1: Attendance - UI Punch & Confirmation Dialog", () => {
       .select("check_out_at")
       .eq("id", inserted.id)
       .single();
-    expect(sessionStillActive.check_out_at).toBeNull();
+    expect(sessionStillActive?.check_out_at).toBeNull();
 
     // Click Check Out Now again -> Confirm check-out
     await checkOutBtn.click();
@@ -221,7 +221,7 @@ test.describe("Module 1: Attendance - UI Punch & Confirmation Dialog", () => {
       .select("check_out_at")
       .eq("id", inserted.id)
       .single();
-    expect(sessionClosed.check_out_at).not.toBeNull();
+    expect(sessionClosed?.check_out_at).not.toBeNull();
   });
 });
 

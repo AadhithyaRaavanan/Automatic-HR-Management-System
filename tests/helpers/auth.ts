@@ -13,7 +13,7 @@ export interface RoleCredentials {
   totpSecret?: string;
 }
 
-export function loadEnvTest(): Record<string, string> {
+export function loadEnvTest(): Record<string, string | undefined> {
   const envPath = path.resolve(process.cwd(), ".env.test");
   const envMap: Record<string, string> = {};
   if (fs.existsSync(envPath)) {
