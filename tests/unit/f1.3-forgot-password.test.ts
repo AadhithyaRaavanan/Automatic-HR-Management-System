@@ -3,6 +3,26 @@ import { NextRequest } from "next/server";
 
 vi.mock("server-only", () => ({}));
 
+// Mock Supabase admin client
+vi.mock("@/lib/supabase/admin", () => ({
+  supabaseAdmin: {
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        })),
+      })),
+    })),
+    auth: {
+      admin: {
+        getUserById: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
+        generateLink: vi.fn().mockResolvedValue({ data: { properties: { email_otp: "123456" } }, error: null }),
+      },
+    },
+  },
+  getAdminClient: vi.fn(),
+}));
+
 // Mock Turnstile
 vi.mock("@/lib/auth/turnstile", () => ({
   checkTurnstileRequirements: vi.fn().mockReturnValue({ valid: true }),
