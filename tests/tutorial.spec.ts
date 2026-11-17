@@ -60,7 +60,7 @@ test.describe("Walkthrough Tour Verification per Role", () => {
         // Click Next through every step
         for (let i = 0; i < steps.length; i++) {
           const isLast = i === steps.length - 1;
-          const nextOrFinishBtn = page.getByRole("button", { name: isLast ? /finish/i : /next/i });
+          const nextOrFinishBtn = tourDialog.getByRole("button", { name: isLast ? "Finish" : "Next", exact: true });
           await expect(nextOrFinishBtn).toBeVisible({ timeout: 5000 });
           await nextOrFinishBtn.click();
           if (!isLast) {

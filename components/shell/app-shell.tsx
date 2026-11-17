@@ -265,14 +265,13 @@ export function AppShell({
             (typeof window !== "undefined" &&
               new URLSearchParams(window.location.search).get("must_change_password") === "true");
 
-          // 4. MFA verification finished (session is AAL2 if enrolled or required)
+          // 4. MFA verification finished (session is AAL2 if user has enrolled TOTP)
           let mfaFinished = true;
           try {
             const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
             if (aalData) {
               const hasEnrolledTotp = aalData.nextLevel === "aal2";
-              const mfaRequired = resolvedReqMfa && (resolvedRole === "admin" || resolvedRole === "hr");
-              if (hasEnrolledTotp || mfaRequired) {
+              if (hasEnrolledTotp) {
                 mfaFinished = aalData.currentLevel === "aal2";
               }
             }
