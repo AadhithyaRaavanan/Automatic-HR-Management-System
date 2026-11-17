@@ -28,8 +28,18 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    const { data: { user }, error: authErr } = await supabase.auth.getUser();
-    if (authErr || !user) {
+    const authHeader = request.headers.get("Authorization");
+    let user = null;
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.substring(7);
+      const { data: tokenUser } = await supabaseAdmin.auth.getUser(token);
+      user = tokenUser?.user || null;
+    }
+    if (!user) {
+      const { data: cookieUser } = await supabase.auth.getUser();
+      user = cookieUser?.user || null;
+    }
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -89,6 +99,19 @@ export async function POST(request: NextRequest) {
     // If status was NOT_STARTED or draft, set to IN_PROGRESS
     const nextStatus = currentStatus === "CORRECTION_REQUIRED" ? "CORRECTION_REQUIRED" : "IN_PROGRESS";
 
+    const existingEducation = (existingProfile?.education_details as Record<string, any>) || {};
+    const mergedEducationDetails = {
+      ...existingEducation,
+      ...(education_details || {}),
+      emergency_contact_name: emergency_contact_name || existingEducation.emergency_contact_name || null,
+      emergency_contact_relationship: emergency_contact_relationship || existingEducation.emergency_contact_relationship || null,
+      emergency_contact_phone: emergency_contact_phone || existingEducation.emergency_contact_phone || null,
+      highest_qualification: highest_qualification || existingEducation.highest_qualification || null,
+      bank_branch: bank_branch || existingEducation.bank_branch || null,
+      experience_explanation: experience_explanation || existingEducation.experience_explanation || null,
+      has_experience: has_experience !== undefined ? Boolean(has_experience) : existingEducation.has_experience,
+    };
+
     const upsertData: Record<string, any> = {
       user_id: user.id,
       onboarding_status: nextStatus,
@@ -106,7 +129,7 @@ export async function POST(request: NextRequest) {
       emergency_contact_phone: emergency_contact_phone || null,
       blood_group: blood_group || null,
       highest_qualification: highest_qualification || null,
-      education_details: education_details || {},
+      education_details: mergedEducationDetails,
       has_experience: Boolean(has_experience),
       previous_company_name: previous_company_name || null,
       previous_designation: previous_designation || null,
@@ -128,17 +151,61 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString(),
     };
 
-    const { data: savedProfile, error: upsertErr } = await (supabaseAdmin as any)
+    let savedProfile: any = null;
+    const { data: v2Data, error: upsertErr } = await (supabaseAdmin as any)
       .from("onboarding_profiles")
       .upsert(upsertData, { onConflict: "user_id" })
       .select()
-      .single();
+      .maybeSingle();
 
     if (upsertErr) {
-      return NextResponse.json(
-        { error: `Failed to save onboarding draft: ${upsertErr.message}` },
-        { status: 500 }
-      );
+      console.warn("[POST /api/onboarding/draft] Upsert with full schema failed, falling back to base schema:", upsertErr.message);
+      const basePayload: Record<string, any> = {
+        user_id: user.id,
+        candidate_type: has_experience ? "EXPERIENCED" : "GRADUATE_FRESHER",
+        full_name: resolvedName,
+        dob: dob || null,
+        gender: gender || null,
+        phone: phone || null,
+        personal_email: personal_email || user.email,
+        current_address: current_address || null,
+        permanent_address: permanent_address || null,
+        blood_group: blood_group || null,
+        pan_number: pan_number || null,
+        aadhaar_number: aadhaar_number || null,
+        bank_account_holder: bank_account_holder || null,
+        bank_account_number: bank_account_number || null,
+        bank_ifsc: bank_ifsc || null,
+        bank_name: bank_name || null,
+        uan_number: uan_number || null,
+        education_details: mergedEducationDetails,
+        previous_company_name: previous_company_name || null,
+        previous_designation: previous_designation || null,
+        previous_start_date: previous_start_date || null,
+        previous_end_date: previous_end_date || null,
+        previous_hr_email: previous_hr_email || null,
+        previous_hr_phone: previous_hr_phone || null,
+        previous_employee_id: previous_employee_id || null,
+        status: nextStatus.toLowerCase(),
+        storage_folder: storageFolder,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data: baseData, error: fallbackErr } = await (supabaseAdmin as any)
+        .from("onboarding_profiles")
+        .upsert(basePayload, { onConflict: "user_id" })
+        .select()
+        .maybeSingle();
+
+      if (fallbackErr) {
+        return NextResponse.json(
+          { error: `Failed to save onboarding draft: ${fallbackErr.message}` },
+          { status: 500 }
+        );
+      }
+      savedProfile = baseData;
+    } else {
+      savedProfile = v2Data;
     }
 
     return NextResponse.json({ success: true, profile: savedProfile });

@@ -127,7 +127,18 @@ export default function OnboardingPage() {
   const [uanNumber, setUanNumber] = React.useState("");
 
   // Uploaded Documents List
-  const [documents, setDocuments] = React.useState<OnboardingDocRecord[]>([]);
+  const [documents, setDocuments] = React.useState<OnboardingDocRecord[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = sessionStorage.getItem("onboarding_cached_documents");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
 
   // 1. Load Profile & Existing Progress
   const fetchProfileData = React.useCallback(async () => {
@@ -154,7 +165,10 @@ export default function OnboardingPage() {
         headers["Authorization"] = `Bearer ${session.access_token}`;
       }
 
-      const res = await fetch("/api/onboarding/profile", { headers });
+      const res = await fetch(`/api/onboarding/profile?t=${Date.now()}`, {
+        headers,
+        cache: "no-store",
+      });
       if (!res.ok) {
         if (res.status === 401) {
           router.replace("/login");
@@ -179,6 +193,7 @@ export default function OnboardingPage() {
 
       const p = data.onboardingProfile;
       if (p) {
+        const edu = (p.education_details as any) || {};
         const rawStatus = (p.onboarding_status || p.status || "NOT_STARTED").toUpperCase() as OnboardingWorkflowStatus;
         setWorkflowStatus(rawStatus);
 
@@ -189,16 +204,21 @@ export default function OnboardingPage() {
         if (p.personal_email) setPersonalEmail(p.personal_email);
         if (p.current_address) setCurrentAddress(p.current_address);
         if (p.permanent_address) setPermanentAddress(p.permanent_address);
-        if (p.emergency_contact_name) setEmergencyContactName(p.emergency_contact_name);
-        if (p.emergency_contact_relationship) setEmergencyContactRelationship(p.emergency_contact_relationship);
-        if (p.emergency_contact_phone) setEmergencyContactPhone(p.emergency_contact_phone);
+
+        const emName = p.emergency_contact_name || edu.emergency_contact_name;
+        if (emName) setEmergencyContactName(emName);
+        const emRel = p.emergency_contact_relationship || edu.emergency_contact_relationship;
+        if (emRel) setEmergencyContactRelationship(emRel);
+        const emPhone = p.emergency_contact_phone || edu.emergency_contact_phone;
+        if (emPhone) setEmergencyContactPhone(emPhone);
         if (p.blood_group) setBloodGroup(p.blood_group);
 
-        if (p.highest_qualification) {
-          setHighestQualification(p.highest_qualification as HighestQualification);
-        }
+        const hq = p.highest_qualification || edu.highest_qualification;
+        if (hq) setHighestQualification(hq as HighestQualification);
 
-        if (p.has_experience !== undefined) setHasExperience(Boolean(p.has_experience));
+        const hasExp = p.has_experience !== undefined ? Boolean(p.has_experience) : (edu.has_experience !== undefined ? Boolean(edu.has_experience) : undefined);
+        if (hasExp !== undefined) setHasExperience(hasExp);
+
         if (p.previous_company_name) setPrevCompany(p.previous_company_name);
         if (p.previous_designation) setPrevDesignation(p.previous_designation);
         if (p.previous_start_date) setPrevStartDate(p.previous_start_date);
@@ -206,7 +226,9 @@ export default function OnboardingPage() {
         if (p.previous_hr_email) setPrevHrEmail(p.previous_hr_email);
         if (p.previous_hr_phone) setPrevHrPhone(p.previous_hr_phone);
         if (p.previous_employee_id) setPrevEmployeeId(p.previous_employee_id);
-        if (p.experience_explanation) setExperienceExplanation(p.experience_explanation);
+
+        const expExpl = p.experience_explanation || edu.experience_explanation;
+        if (expExpl) setExperienceExplanation(expExpl);
 
         if (p.pan_number) setPanNumber(p.pan_number);
         if (p.aadhaar_number) setAadhaarNumber(p.aadhaar_number);
@@ -218,12 +240,23 @@ export default function OnboardingPage() {
         }
         if (p.bank_ifsc) setBankIfsc(p.bank_ifsc);
         if (p.bank_name) setBankName(p.bank_name);
-        if (p.bank_branch) setBankBranch(p.bank_branch);
+        const bBranch = p.bank_branch || edu.bank_branch;
+        if (bBranch) setBankBranch(bBranch);
         if (p.uan_number) setUanNumber(p.uan_number);
       }
 
       if (Array.isArray(data.documents)) {
-        setDocuments(data.documents);
+        setDocuments((prev) => {
+          // Merge server docs with any existing uploaded docs so nothing disappears
+          const map = new Map<string, OnboardingDocRecord>();
+          prev.forEach((d) => map.set(d.doc_type, d));
+          data.documents.forEach((d: OnboardingDocRecord) => map.set(d.doc_type, d));
+          const merged = Array.from(map.values());
+          try {
+            sessionStorage.setItem("onboarding_cached_documents", JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
       }
     } catch (err: any) {
       toast.error(err?.message || "Error initializing onboarding session.");
@@ -313,24 +346,26 @@ export default function OnboardingPage() {
 
       // Instantly reflect in local state so UI updates without waiting
       if (resJson?.data) {
+        const newDoc: OnboardingDocRecord = {
+          id: resJson.data.fileName || `${docType}-${Date.now()}`,
+          doc_type: docType,
+          file_name: resJson.data.fileName,
+          storage_path: resJson.data.storagePath,
+          file_size: file.size,
+          signedUrl: resJson.data.signedUrl || "",
+          document_status: "pending",
+          rejection_reason: null,
+          uploaded_at: new Date().toISOString(),
+          salary_month: salaryMonth || null,
+          salary_year: salaryYear || null,
+        };
         setDocuments((prev) => {
           const filtered = prev.filter((d) => d.doc_type !== docType);
-          return [
-            ...filtered,
-            {
-              id: resJson.data.fileName || `${docType}-${Date.now()}`,
-              doc_type: docType,
-              file_name: resJson.data.fileName,
-              storage_path: resJson.data.storagePath,
-              file_size: file.size,
-              signedUrl: resJson.data.signedUrl || "",
-              document_status: "pending",
-              rejection_reason: null,
-              uploaded_at: new Date().toISOString(),
-              salary_month: salaryMonth || null,
-              salary_year: salaryYear || null,
-            },
-          ];
+          const updated = [...filtered, newDoc];
+          try {
+            sessionStorage.setItem("onboarding_cached_documents", JSON.stringify(updated));
+          } catch {}
+          return updated;
         });
       }
 
@@ -347,9 +382,15 @@ export default function OnboardingPage() {
   const handleSaveDraft = async (silent: boolean = false) => {
     setSavingDraft(true);
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (sessionData?.session?.access_token) {
+        headers["Authorization"] = `Bearer ${sessionData.session.access_token}`;
+      }
+
       const res = await fetch("/api/onboarding/draft", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           full_name: fullName,
           dob,
@@ -390,6 +431,7 @@ export default function OnboardingPage() {
 
       if (!silent) toast.success("Progress saved. You can resume anytime.");
     } catch (err: any) {
+      console.warn("[handleSaveDraft] error:", err?.message);
       if (!silent) toast.error(err.message || "Failed to save draft.");
     } finally {
       setSavingDraft(false);
@@ -430,11 +472,11 @@ export default function OnboardingPage() {
       const isUserAdmin = employeeMeta.role === "admin";
       if (!isUserAdmin) {
         if (!getDoc("photo")) {
-          toast.error("Passport-size photo (PDF) is required in Step 1.");
+          toast.error("Passport-size photo (PDF, JPG, or PNG) is required in Step 1.");
           return false;
         }
         if (!getDoc("resume")) {
-          toast.error("Candidate Resume / CV (PDF) is required in Step 1.");
+          toast.error("Candidate Resume / CV (PDF, JPG, or PNG) is required in Step 1.");
           return false;
         }
       }
@@ -445,7 +487,7 @@ export default function OnboardingPage() {
       if (employeeMeta.role === "admin") return true;
       const requiredQualDocType = QUALIFICATION_DOC_MAP[highestQualification]?.docType;
       if (!getDoc(requiredQualDocType)) {
-        toast.error(`Please upload your ${QUALIFICATION_DOC_MAP[highestQualification]?.label || "qualification certificate"} in PDF format.`);
+        toast.error(`Please upload your ${QUALIFICATION_DOC_MAP[highestQualification]?.label || "qualification certificate"} (PDF, JPG, or PNG).`);
         return false;
       }
       return true;
@@ -479,7 +521,7 @@ export default function OnboardingPage() {
         return false;
       }
       if (!getDoc("pan_card")) {
-        toast.error("PAN Card document (PDF) is mandatory.");
+        toast.error("PAN Card document (PDF, JPG, or PNG) is mandatory.");
         return false;
       }
       return true;
@@ -509,7 +551,7 @@ export default function OnboardingPage() {
         return false;
       }
       if (!getDoc("bank_proof")) {
-        toast.error("Bank proof (passbook front page or cancelled cheque PDF) is mandatory.");
+        toast.error("Bank proof (PDF, JPG, or PNG) is mandatory.");
         return false;
       }
       return true;
@@ -520,7 +562,9 @@ export default function OnboardingPage() {
 
   const handleNext = async () => {
     if (!validateStep(currentStep)) return;
-    await handleSaveDraft(true);
+    try {
+      await handleSaveDraft(true);
+    } catch {}
     setCurrentStep((prev) => Math.min(prev + 1, 6));
   };
 
@@ -538,11 +582,19 @@ export default function OnboardingPage() {
     setSubmitting(true);
     try {
       // First save all current draft fields
-      await handleSaveDraft(true);
+      try {
+        await handleSaveDraft(true);
+      } catch {}
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (sessionData?.session?.access_token) {
+        headers["Authorization"] = `Bearer ${sessionData.session.access_token}`;
+      }
 
       const res = await fetch("/api/onboarding/complete", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ declaration: true }),
       });
 
@@ -1175,10 +1227,10 @@ export default function OnboardingPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <h4 className="text-sm font-extrabold text-text-primary">
-                        Mandatory Upload: {QUALIFICATION_DOC_MAP[highestQualification]?.label} (PDF)
+                        Mandatory Upload: {QUALIFICATION_DOC_MAP[highestQualification]?.label} (PDF / JPG / PNG)
                       </h4>
                       <p className="text-xs text-text-secondary mt-0.5">
-                        Please upload your genuine {highestQualification} certificate or provisional proof in PDF format (max 10MB).
+                        Please upload your genuine {highestQualification} certificate or provisional proof in PDF, JPG, or PNG format (max 10MB).
                       </p>
                     </div>
                     {getDoc(QUALIFICATION_DOC_MAP[highestQualification]?.docType) && (
@@ -1225,14 +1277,14 @@ export default function OnboardingPage() {
                       <Upload className="w-3.5 h-3.5" />
                       <span>
                         {uploadingDocKey === QUALIFICATION_DOC_MAP[highestQualification]?.docType
-                          ? "Uploading PDF..."
+                          ? "Uploading..."
                           : getDoc(QUALIFICATION_DOC_MAP[highestQualification]?.docType)
-                          ? "Replace Certificate PDF"
-                          : "Upload Certificate PDF"}
+                          ? "Replace Certificate"
+                          : "Upload Certificate"}
                       </span>
                       <input
                         type="file"
-                        accept="application/pdf"
+                        accept="application/pdf,image/jpeg,image/png,image/webp"
                         disabled={uploadingDocKey !== null}
                         onChange={(e) => {
                           const file = e.target.files?.[0];
@@ -1264,7 +1316,7 @@ export default function OnboardingPage() {
                     <span>Upload Optional Proof</span>
                     <input
                       type="file"
-                      accept="application/pdf"
+                      accept="application/pdf,image/jpeg,image/png,image/webp"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) handleUploadFile("additional_cert", file);
@@ -1467,10 +1519,10 @@ export default function OnboardingPage() {
 
                   <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all cursor-pointer shadow-sm">
                     <Upload className="w-3.5 h-3.5" />
-                    <span>Upload Experience Certificate PDF</span>
+                    <span>Upload Experience Certificate (PDF / JPG / PNG)</span>
                     <input
                       type="file"
-                      accept="application/pdf"
+                      accept="application/pdf,image/jpeg,image/png,image/webp"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) handleUploadFile("experience_cert", file);
@@ -1484,7 +1536,7 @@ export default function OnboardingPage() {
                 <div className="p-5 rounded-2xl border border-border-light bg-card-subtle space-y-4">
                   <div>
                     <h4 className="text-xs font-extrabold uppercase tracking-wider text-text-primary">
-                      Last Three Months&apos; Salary Slips (PDFs) <span className="text-status-danger">*</span>
+                      Last Three Months&apos; Salary Slips (PDF / JPG / PNG) <span className="text-status-danger">*</span>
                     </h4>
                     <p className="text-xs text-text-secondary">
                       Upload each monthly payslip individually with its corresponding month and year.
@@ -1522,7 +1574,7 @@ export default function OnboardingPage() {
                       <span>Upload Slip ({selectedSlipMonth} {selectedSlipYear})</span>
                       <input
                         type="file"
-                        accept="application/pdf"
+                        accept="application/pdf,image/jpeg,image/png,image/webp"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
                           if (file) handleUploadFile("salary_slip", file, selectedSlipMonth, selectedSlipYear);
@@ -1635,14 +1687,14 @@ export default function OnboardingPage() {
 
                   <div>
                     <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1.5">
-                      Upload PAN Card PDF <span className="text-status-danger">*</span>
+                      Upload PAN Card (PDF / JPG / PNG) <span className="text-status-danger">*</span>
                     </label>
                     <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all cursor-pointer shadow-sm w-full justify-center">
                       <Upload className="w-3.5 h-3.5" />
-                      <span>{getDoc("pan_card") ? "Replace PAN PDF" : "Upload PAN Card PDF"}</span>
+                      <span>{getDoc("pan_card") ? "Replace PAN Card" : "Upload PAN Card"}</span>
                       <input
                         type="file"
-                        accept="application/pdf"
+                        accept="application/pdf,image/jpeg,image/png,image/webp"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
                           if (file) handleUploadFile("pan_card", file);
@@ -1710,14 +1762,14 @@ export default function OnboardingPage() {
 
                   <div>
                     <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1.5">
-                      Upload Aadhaar PDF (Optional)
+                      Upload Aadhaar (PDF / JPG / PNG) (Optional)
                     </label>
                     <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-card hover:bg-card-subtle border border-border-light text-text-primary text-xs font-bold transition-all cursor-pointer shadow-sm w-full justify-center">
                       <Upload className="w-3.5 h-3.5 text-brand-purple" />
-                      <span>{getDoc("aadhaar_card") ? "Replace Aadhaar PDF" : "Upload Aadhaar PDF"}</span>
+                      <span>{getDoc("aadhaar_card") ? "Replace Aadhaar" : "Upload Aadhaar"}</span>
                       <input
                         type="file"
-                        accept="application/pdf"
+                        accept="application/pdf,image/jpeg,image/png,image/webp"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
                           if (file) handleUploadFile("aadhaar_card", file);
@@ -1891,10 +1943,10 @@ export default function OnboardingPage() {
 
               <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all cursor-pointer shadow-sm">
                 <Upload className="w-3.5 h-3.5" />
-                <span>{getDoc("bank_proof") ? "Replace Bank Proof PDF" : "Upload Bank Proof PDF"}</span>
+                <span>{getDoc("bank_proof") ? "Replace Bank Proof" : "Upload Bank Proof (PDF / JPG / PNG)"}</span>
                 <input
                   type="file"
-                  accept="application/pdf"
+                  accept="application/pdf,image/jpeg,image/png,image/webp"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) handleUploadFile("bank_proof", file);

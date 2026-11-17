@@ -75,8 +75,34 @@ export async function GET(request: NextRequest) {
       .eq("id", user.id)
       .maybeSingle();
 
-    // Fetch uploaded documents with signed URLs and status
-    const documents = await listCandidateDocs(user.id).catch(() => []);
+    // Fetch uploaded documents with signed URLs and status (with direct DB fallback)
+    let documents: any[] = [];
+    try {
+      documents = await listCandidateDocs(user.id);
+    } catch (docErr: any) {
+      console.warn("[GET /api/onboarding/profile] listCandidateDocs failed, trying direct db fallback:", docErr?.message);
+      try {
+        const { data: rawDocs } = await (supabaseAdmin as any)
+          .from("onboarding_documents")
+          .select("*")
+          .eq("user_id", user.id);
+        if (rawDocs && rawDocs.length > 0) {
+          documents = rawDocs.map((d: any) => ({
+            id: d.id,
+            doc_type: d.doc_type,
+            file_name: d.file_name,
+            storage_path: d.storage_path,
+            file_size: Number(d.file_size || 0),
+            document_status: d.document_status || "pending",
+            rejection_reason: d.rejection_reason || null,
+            uploaded_at: d.uploaded_at,
+            signedUrl: "",
+            salary_month: d.salary_month || null,
+            salary_year: d.salary_year || null,
+          }));
+        }
+      } catch {}
+    }
 
     const employeeIdFormatted = employee?.id
       ? `EMP-${employee.id.slice(0, 6).toUpperCase()}`
@@ -84,24 +110,33 @@ export async function GET(request: NextRequest) {
 
     const userRole = (user.app_metadata?.user_role || user.user_metadata?.role || "employee").toLowerCase();
 
-    return NextResponse.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        fullName: employee?.full_name || user.user_metadata?.full_name || "",
-        employeeId: employeeIdFormatted,
-        rawEmployeeId: employee?.id || user.id,
-        department: employee?.departments?.name || "General",
-        designation: employee?.job_titles?.title_name || "Employee",
-        role: userRole,
+    return NextResponse.json(
+      {
+        user: {
+          id: user.id,
+          email: user.email,
+          fullName: employee?.full_name || user.user_metadata?.full_name || "",
+          employeeId: employeeIdFormatted,
+          rawEmployeeId: employee?.id || user.id,
+          department: employee?.departments?.name || "General",
+          designation: employee?.job_titles?.title_name || "Employee",
+          role: userRole,
+        },
+        profile: {
+          onboarding_completed: Boolean(profile?.onboarding_completed || employee?.onboarding_completed),
+          tutorial_completed: Boolean(profile?.tutorial_completed),
+        },
+        onboardingProfile: onboardingProfile || null,
+        documents,
       },
-      profile: {
-        onboarding_completed: Boolean(profile?.onboarding_completed || employee?.onboarding_completed),
-        tutorial_completed: Boolean(profile?.tutorial_completed),
-      },
-      onboardingProfile: onboardingProfile || null,
-      documents,
-    });
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json(
       { error: err?.message || "Failed to load onboarding profile." },

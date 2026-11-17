@@ -29,8 +29,18 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    const { data: { user }, error: authErr } = await supabase.auth.getUser();
-    if (authErr || !user) {
+    const authHeader = request.headers.get("Authorization");
+    let user = null;
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.substring(7);
+      const { data: tokenUser } = await supabaseAdmin.auth.getUser(token);
+      user = tokenUser?.user || null;
+    }
+    if (!user) {
+      const { data: cookieUser } = await supabase.auth.getUser();
+      user = cookieUser?.user || null;
+    }
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -68,6 +78,11 @@ export async function POST(request: NextRequest) {
     const docTypesUploaded = new Set(uploadedDocs.map((d: any) => d.doc_type));
 
     // 3. Validate Mandatory Information
+    const edu = (onbProfile.education_details as any) || {};
+    const emergencyName = onbProfile.emergency_contact_name || edu.emergency_contact_name;
+    const emergencyRel = onbProfile.emergency_contact_relationship || edu.emergency_contact_relationship;
+    const emergencyPhone = onbProfile.emergency_contact_phone || edu.emergency_contact_phone;
+
     if (!onbProfile.full_name || !onbProfile.dob || !onbProfile.phone || !onbProfile.personal_email || !onbProfile.current_address || !onbProfile.permanent_address) {
       return NextResponse.json(
         { error: "Mandatory personal information is incomplete. Please complete Step 1." },
@@ -75,7 +90,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!onbProfile.emergency_contact_name || !onbProfile.emergency_contact_relationship || !onbProfile.emergency_contact_phone) {
+    if (!emergencyName || !emergencyRel || !emergencyPhone) {
       return NextResponse.json(
         { error: "Emergency contact details are required. Please complete Step 1." },
         { status: 400 }
@@ -85,20 +100,20 @@ export async function POST(request: NextRequest) {
     // Photo & Resume checks
     if (!docTypesUploaded.has("photo")) {
       return NextResponse.json(
-        { error: "Passport-size photo (PDF) is required. Please upload it in Step 1." },
+        { error: "Passport-size photo (PDF, JPG, or PNG) is required. Please upload it in Step 1." },
         { status: 400 }
       );
     }
 
     if (!docTypesUploaded.has("resume")) {
       return NextResponse.json(
-        { error: "Candidate Resume / CV (PDF) is required. Please upload it under passport-size photo in Step 1." },
+        { error: "Candidate Resume / CV (PDF, JPG, or PNG) is required. Please upload it under passport-size photo in Step 1." },
         { status: 400 }
       );
     }
 
     // Educational Qualification check
-    const highestQual = (onbProfile.highest_qualification || "Undergraduate Degree") as HighestQualification;
+    const highestQual = (onbProfile.highest_qualification || edu.highest_qualification || "Undergraduate Degree") as HighestQualification;
     const requiredQualDoc = QUALIFICATION_DOC_MAP[highestQual]?.docType || "cert_undergraduate";
     if (!docTypesUploaded.has(requiredQualDoc)) {
       return NextResponse.json(
@@ -108,7 +123,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Employment History check
-    if (onbProfile.has_experience) {
+    const hasExp = onbProfile.has_experience !== undefined ? onbProfile.has_experience : edu.has_experience;
+    if (hasExp) {
       if (!onbProfile.previous_company_name || !onbProfile.previous_designation) {
         return NextResponse.json(
           { error: "Previous employment company and designation are required for experienced candidates." },
@@ -117,7 +133,7 @@ export async function POST(request: NextRequest) {
       }
 
       const hasExpCert = docTypesUploaded.has("experience_cert");
-      const hasExplanation = Boolean(onbProfile.experience_explanation?.trim());
+      const hasExplanation = Boolean((onbProfile.experience_explanation || edu.experience_explanation)?.trim());
       if (!hasExpCert && !hasExplanation) {
         return NextResponse.json(
           { error: "Experience certificate (or an explanation note for HR) is required in Step 3." },
@@ -129,7 +145,7 @@ export async function POST(request: NextRequest) {
     // Identity check (PAN is mandatory)
     if (!onbProfile.pan_number || !docTypesUploaded.has("pan_card")) {
       return NextResponse.json(
-        { error: "PAN number and PAN Card PDF are mandatory. Please complete Step 4." },
+        { error: "PAN number and PAN Card document are mandatory. Please complete Step 4." },
         { status: 400 }
       );
     }
@@ -144,7 +160,7 @@ export async function POST(request: NextRequest) {
 
     if (!docTypesUploaded.has("bank_proof")) {
       return NextResponse.json(
-        { error: "Bank proof (passbook front page or cancelled cheque PDF) is mandatory. Please upload it in Step 5." },
+        { error: "Bank proof (passbook front page or cancelled cheque) is mandatory. Please upload it in Step 5." },
         { status: 400 }
       );
     }
@@ -154,7 +170,7 @@ export async function POST(request: NextRequest) {
     const nextStatus = currentStatus === "CORRECTION_REQUIRED" ? "RESUBMITTED" : "SUBMITTED";
 
     // 4. Update onboarding profile to SUBMITTED / RESUBMITTED
-    await (supabaseAdmin as any)
+    const { error: fullUpdateErr } = await (supabaseAdmin as any)
       .from("onboarding_profiles")
       .update({
         onboarding_status: nextStatus,
@@ -164,6 +180,18 @@ export async function POST(request: NextRequest) {
         updated_at: nowIso,
       })
       .eq("user_id", user.id);
+
+    if (fullUpdateErr) {
+      // Fallback for base schema
+      await (supabaseAdmin as any)
+        .from("onboarding_profiles")
+        .update({
+          status: nextStatus.toLowerCase(),
+          submitted_at: nowIso,
+          updated_at: nowIso,
+        })
+        .eq("user_id", user.id);
+    }
 
     // 5. Fetch employee details for notification
     const { data: empRecord } = await (supabaseAdmin.from("employees") as any)
