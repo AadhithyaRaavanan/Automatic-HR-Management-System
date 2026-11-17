@@ -114,23 +114,17 @@ export function AppShell({
 
   React.useEffect(() => {
     setMounted(true);
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const isAuto =
-        params.get("tour") === "auto" ||
-        sessionStorage.getItem("pulse_auto_start_tour") === "true";
-      if (isAuto) {
-        localStorage.removeItem("pulse_tutorial_dismissed");
-        sessionStorage.removeItem("pulse_auto_start_tour");
-        if (params.get("tour") === "auto") {
-          params.delete("tour");
-          const cleanQuery = params.toString() ? `?${params.toString()}` : "";
-          window.history.replaceState(null, "", window.location.pathname + cleanQuery);
+    const handleManualTour = () => {
+      if (sessionState.userRole !== "admin") {
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("pulse_tutorial_step_index", "0");
         }
         setTourOpen(true);
       }
-    }
-  }, []);
+    };
+    window.addEventListener("pulse:start-tour", handleManualTour);
+    return () => window.removeEventListener("pulse:start-tour", handleManualTour);
+  }, [sessionState.userRole]);
 
   React.useEffect(() => {
     let active = true;
@@ -226,30 +220,6 @@ export function AppShell({
             }
           }
 
-          const isAutoTour =
-            typeof window !== "undefined" &&
-            (new URLSearchParams(window.location.search).get("tour") === "auto" ||
-              sessionStorage.getItem("pulse_auto_start_tour") === "true");
-
-          if (isAutoTour) {
-            shouldOpenTour = true;
-          } else {
-            const dismissed = typeof window !== "undefined" ? localStorage.getItem("pulse_tutorial_dismissed") : null;
-            if (dismissed !== "true") {
-              try {
-                const { data: prof } = await (supabase as any)
-                  .from("profiles")
-                  .select("tutorial_completed")
-                  .eq("id", user.id)
-                  .maybeSingle();
-
-                if (prof && prof.tutorial_completed === false) {
-                  shouldOpenTour = true;
-                }
-              } catch {}
-            }
-          }
-
           if (resolvedOrgId) {
             const { data: orgData } = await (supabase as any)
               .from("organizations")
@@ -259,6 +229,63 @@ export function AppShell({
             if (orgData && typeof orgData.require_mfa_for_privileged === "boolean") {
               resolvedReqMfa = orgData.require_mfa_for_privileged;
             }
+          }
+
+          // Strict server-controlled auto-start check:
+          // 1. Role is employee, manager, or hr (Admin gets NO tour)
+          const isEligibleRole =
+            resolvedRole === "employee" ||
+            resolvedRole === "manager" ||
+            resolvedRole === "hr";
+
+          // 2. profiles.tutorial_completed = false
+          let tutorialCompleted = true;
+          let onboardingCompleted = false;
+          try {
+            const { data: prof } = await (supabase as any)
+              .from("profiles")
+              .select("tutorial_completed, onboarding_completed")
+              .eq("id", user.id)
+              .maybeSingle();
+
+            if (prof) {
+              tutorialCompleted = prof.tutorial_completed === true;
+              if (prof.onboarding_completed === true) onboardingCompleted = true;
+            }
+          } catch {}
+
+          if (empProfile?.onboarding_completed === true || Boolean(empProfile?.onboarding_completed_at)) {
+            onboardingCompleted = true;
+          }
+
+          // 3. must_change_password is false
+          const mustChangePassword =
+            (user.user_metadata as any)?.must_change_password === true ||
+            (user.app_metadata as any)?.must_change_password === true ||
+            (typeof window !== "undefined" &&
+              new URLSearchParams(window.location.search).get("must_change_password") === "true");
+
+          // 4. MFA verification finished (session is AAL2 if enrolled or required)
+          let mfaFinished = true;
+          try {
+            const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+            if (aalData) {
+              const hasEnrolledTotp = aalData.nextLevel === "aal2";
+              const mfaRequired = resolvedReqMfa && (resolvedRole === "admin" || resolvedRole === "hr");
+              if (hasEnrolledTotp || mfaRequired) {
+                mfaFinished = aalData.currentLevel === "aal2";
+              }
+            }
+          } catch {}
+
+          if (
+            isEligibleRole &&
+            !tutorialCompleted &&
+            onboardingCompleted &&
+            !mustChangePassword &&
+            mfaFinished
+          ) {
+            shouldOpenTour = true;
           }
         }
       } catch {
@@ -322,7 +349,9 @@ export function AppShell({
           suppressHydrationWarning
         >
           {/* Left Docked Curved Sidebar */}
-          <CurvedSidebar userRole={userRole} />
+          <div data-tour="nav-sidebar">
+            <CurvedSidebar userRole={userRole} />
+          </div>
 
           {/* Main Full-Width Application Area */}
           <div className="flex-1 flex flex-col min-w-0 px-4 sm:px-6 md:px-8 lg:px-10 py-5 pb-20 md:pb-8">
@@ -360,8 +389,8 @@ export function AppShell({
           {/* 3-Hour Post-Logout Auto Signout Enforcer */}
           <AutoSignoutListener />
 
-          {/* First-Login Onboarding Tour */}
-          {mounted && sessionState.userId && (
+          {/* First-Login Onboarding Tour (Employee, Manager, HR only - Admin gets NO tour) */}
+          {mounted && sessionState.userId && sessionState.userRole !== "admin" && (
             <OnboardingTour
               open={tourOpen}
               onOpenChange={setTourOpen}

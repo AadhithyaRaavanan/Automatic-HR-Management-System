@@ -125,19 +125,7 @@ function SettingsPageContent() {
         console.warn("[Password Update] Note:", clientErr.message);
       }
 
-      // 3. Reset tutorial completion status so walkthrough plays automatically
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("pulse_tutorial_dismissed");
-        sessionStorage.setItem("pulse_auto_start_tour", "true");
-      }
-
-      await fetch("/api/tutorial/complete", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ reset: true }),
-      }).catch(() => {});
-
-      // 4. Immediately dismiss banner and remove query param from URL
+      // 3. Immediately dismiss banner and remove query param from URL
       setShowMustChangeBanner(false);
       if (typeof window !== "undefined") {
         const url = new URL(window.location.href);
@@ -265,6 +253,7 @@ function SettingsPageContent() {
       )}
 
       {/* Bento Grid */}
+      <div data-tour="settings-security">
       <BentoGrid>
         {/* Privacy Notice Banner Card */}
         <BentoCard
@@ -633,6 +622,7 @@ function SettingsPageContent() {
           </form>
         </BentoCard>
       </BentoGrid>
+      </div>
     </div>
   );
 }

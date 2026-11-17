@@ -32,7 +32,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
-import { GuidedTourOverlay } from "@/components/tutorial/guided-tour-overlay";
 import { cn } from "@/lib/utils";
 
 const DOC_TYPE_LABELS: Record<string, string> = {
@@ -112,18 +111,11 @@ function ProfilePageContent() {
     }>
   >([]);
 
-  const handleReplayTutorial = async () => {
+  const handleReplayTutorial = () => {
     if (typeof window !== "undefined") {
-      localStorage.removeItem("pulse_tutorial_dismissed");
+      sessionStorage.setItem("pulse_tutorial_step_index", "0");
+      window.dispatchEvent(new CustomEvent("pulse:start-tour"));
     }
-    try {
-      await fetch("/api/tutorial/complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reset: true }),
-      });
-    } catch {}
-    setTourOpen(true);
   };
 
   const resolveAvatarSignedUrl = React.useCallback(
@@ -478,6 +470,7 @@ function ProfilePageContent() {
 
       <BentoGrid>
         {/* Avatar & Identity Card */}
+        <div data-tour="profile-card" className="lg:col-span-4">
         <BentoCard
           title={
             <div className="flex items-center gap-2">
@@ -486,7 +479,7 @@ function ProfilePageContent() {
             </div>
           }
           subtitle="Private tenant-isolated storage"
-          className="lg:col-span-4 p-6 flex flex-col justify-between space-y-5"
+          className="w-full p-6 flex flex-col justify-between space-y-5"
         >
           <div className="flex flex-col items-center text-center space-y-4 py-2">
             <div className="relative">
@@ -560,14 +553,16 @@ function ProfilePageContent() {
               {uploadingAvatar ? "Compressing & Uploading..." : "Change Profile Photo"}
             </button>
 
-            <button
-              type="button"
-              onClick={handleReplayTutorial}
-              className="w-full py-2.5 px-4 rounded-xl bg-card border border-brand-purple/30 hover:bg-brand-purple/5 text-xs font-bold text-brand-purple cursor-pointer transition-colors flex items-center justify-center gap-1.5"
-            >
-              <Compass className="w-3.5 h-3.5" />
-              <span>Replay Workplace Tutorial</span>
-            </button>
+            {userRole !== "admin" && (
+              <button
+                type="button"
+                onClick={handleReplayTutorial}
+                className="w-full py-2.5 px-4 rounded-xl bg-card border border-brand-purple/30 hover:bg-brand-purple/5 text-xs font-bold text-brand-purple cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+              >
+                <Compass className="w-3.5 h-3.5" />
+                <span>Replay Workplace Tutorial</span>
+              </button>
+            )}
 
             {avatarPath && (
               <p className="text-[11px] text-status-success-text flex items-center gap-1">
@@ -577,6 +572,7 @@ function ProfilePageContent() {
             )}
           </div>
         </BentoCard>
+        </div>
 
         {/* Editable Personal Info Form */}
         <BentoCard
@@ -917,8 +913,6 @@ function ProfilePageContent() {
           )}
         </BentoCard>
       </BentoGrid>
-
-      <GuidedTourOverlay forceOpen={tourOpen} userRole={userRole} onClose={() => setTourOpen(false)} />
     </div>
   );
 }

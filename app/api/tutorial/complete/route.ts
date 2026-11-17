@@ -42,24 +42,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json().catch(() => ({}));
-    const isReset = body.reset === true;
-    const targetStatus = isReset ? false : true;
-
+    // Mark tutorial_completed = true (server-side, verified with user's token)
     await Promise.all([
-      (supabaseAdmin as any).from("profiles").upsert({
-        id: user.id,
-        user_id: user.id,
-        tutorial_completed: targetStatus,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "id" }),
-      (supabaseAdmin as any).from("employees").update({
-        tutorial_completed: targetStatus,
-        updated_at: new Date().toISOString(),
-      }).eq("id", user.id),
+      (supabaseAdmin as any).from("profiles").upsert(
+        {
+          id: user.id,
+          user_id: user.id,
+          tutorial_completed: true,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" }
+      ),
+      (supabaseAdmin as any)
+        .from("employees")
+        .update({
+          tutorial_completed: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id),
     ]);
 
-    return NextResponse.json({ success: true, tutorial_completed: targetStatus });
+    return NextResponse.json({ success: true, tutorial_completed: true });
   } catch (err: any) {
     return NextResponse.json(
       { error: err?.message || "Failed to update tutorial status." },
