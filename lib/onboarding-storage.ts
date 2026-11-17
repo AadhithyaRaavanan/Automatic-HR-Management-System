@@ -12,6 +12,7 @@ export interface UploadDocParams {
 }
 
 export interface UploadDocResult {
+  documentId?: string;
   storagePath: string;
   storageFolder: string;
   signedUrl: string;
