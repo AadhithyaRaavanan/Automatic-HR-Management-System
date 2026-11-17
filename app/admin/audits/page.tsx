@@ -33,13 +33,7 @@ interface AuditEntry {
   new_data?: any;
 }
 
-export default function AuditsAdminPage() {
-  if (!FEATURES.AUDITS) {
-    if (typeof window !== "undefined") {
-      window.location.href = "/dashboard";
-    }
-    return null;
-  }
+function AuditsAdminPageContent() {
   const [audits, setAudits] = React.useState<AuditEntry[]>(() => getStoredAudits());
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [searchTerm, setSearchTerm] = React.useState("");
@@ -323,5 +317,15 @@ export default function AuditsAdminPage() {
       </div>
     </AppShell>
   );
+}
+
+export default function AuditsAdminPage() {
+  if (!FEATURES.AUDITS) {
+    if (typeof window !== "undefined") {
+      window.location.href = "/dashboard";
+    }
+    return null;
+  }
+  return <AuditsAdminPageContent />;
 }
 

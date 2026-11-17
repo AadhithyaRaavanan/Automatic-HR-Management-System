@@ -19,13 +19,7 @@ import {
 
 export type LocationItem = DemoLocation;
 
-export default function LocationsAdminPage() {
-  if (!FEATURES.LOCATIONS) {
-    if (typeof window !== "undefined") {
-      window.location.href = "/dashboard";
-    }
-    return null;
-  }
+function LocationsAdminPageContent() {
   const [locations, setLocations] = React.useState<LocationItem[]>(() => getStoredLocations());
   const [modalOpen, setModalOpen] = React.useState(false);
   const [editingLoc, setEditingLoc] = React.useState<LocationItem | null>(null);
@@ -401,4 +395,14 @@ export default function LocationsAdminPage() {
       </div>
     </AppShell>
   );
+}
+
+export default function LocationsAdminPage() {
+  if (!FEATURES.LOCATIONS) {
+    if (typeof window !== "undefined") {
+      window.location.href = "/dashboard";
+    }
+    return null;
+  }
+  return <LocationsAdminPageContent />;
 }

@@ -13,9 +13,6 @@ interface KpiBadgeProps {
 }
 
 export function KpiBadge({ employeeId, className, showIcon = true }: KpiBadgeProps) {
-  if (!FEATURES.KPI) {
-    return null;
-  }
   const { data, isLoading } = useQuery({
     queryKey: ["kpi-summary-badge", employeeId],
     queryFn: async () => {
@@ -24,9 +21,13 @@ export function KpiBadge({ employeeId, className, showIcon = true }: KpiBadgePro
       if (!res.ok) return null;
       return res.json();
     },
-    enabled: Boolean(employeeId),
+    enabled: Boolean(employeeId && FEATURES.KPI),
     staleTime: 60_000,
   });
+
+  if (!FEATURES.KPI) {
+    return null;
+  }
 
   if (!employeeId || isLoading || !data) {
     return (

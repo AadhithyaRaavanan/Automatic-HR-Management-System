@@ -21,13 +21,7 @@ import {
 
 export type ShiftTemplateItem = DemoShift;
 
-export default function ShiftsAdminPage() {
-  if (!FEATURES.SHIFTS) {
-    if (typeof window !== "undefined") {
-      window.location.href = "/dashboard";
-    }
-    return null;
-  }
+function ShiftsAdminPageContent() {
   const [shifts, setShifts] = React.useState<ShiftTemplateItem[]>(() => getStoredShifts());
   const [shiftModalOpen, setShiftModalOpen] = React.useState(false);
   const [assignModalOpen, setAssignModalOpen] = React.useState(false);
@@ -593,4 +587,14 @@ export default function ShiftsAdminPage() {
       </div>
     </AppShell>
   );
+}
+
+export default function ShiftsAdminPage() {
+  if (!FEATURES.SHIFTS) {
+    if (typeof window !== "undefined") {
+      window.location.href = "/dashboard";
+    }
+    return null;
+  }
+  return <ShiftsAdminPageContent />;
 }
