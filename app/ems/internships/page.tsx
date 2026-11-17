@@ -62,7 +62,7 @@ export default function EmsInternshipsPage() {
             <GraduationCap className="w-10 h-10 text-text-muted mx-auto mb-2 opacity-50" />
             <h3 className="text-sm font-semibold text-text-primary">No Active Internships</h3>
             <p className="text-xs text-text-secondary mt-1">
-              When employees are provisioned with the "Intern" category, they automatically appear here.
+              When employees are provisioned with the &quot;Intern&quot; category, they automatically appear here.
             </p>
           </div>
         ) : (

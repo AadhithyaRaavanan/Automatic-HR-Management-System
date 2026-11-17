@@ -452,7 +452,7 @@ export default function NewEmployeeWizardPage() {
                     </p>
                   </div>
                   <p className="text-[11px] text-text-muted pt-2 border-t border-border-light">
-                    Clicking "Confirm & Provision Account" creates the Supabase Auth user, generates a unique business ID
+                    Clicking &quot;Confirm &amp; Provision Account&quot; creates the Supabase Auth user, generates a unique business ID
                     (`ZX-EMP-XXX` or `ZX-INT-XXX`), and sets up their initial onboarding profile.
                   </p>
                 </div>
