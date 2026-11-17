@@ -7,6 +7,7 @@ import { CurvedSidebar } from "@/components/shell/curved-sidebar";
 import { TopNavBar } from "@/components/shell/top-nav-bar";
 import { BottomTabBar } from "@/components/shell/bottom-tab-bar";
 import { OnboardingTour } from "@/components/shared/onboarding-tour";
+import { SidebarProvider } from "@/components/shell/sidebar-context";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { isDemoModeEnabled } from "@/lib/config/demo";
@@ -83,37 +84,6 @@ function getInitialSession(propRole?: AppUserRole): AppSessionState {
       requireMfaForPrivileged: true,
     };
   }
-  if (cachedSession) {
-    return cachedSession;
-  }
-  if (typeof window !== "undefined") {
-    try {
-      const stored = localStorage.getItem("remotehr_cached_session");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed?.userRole) {
-          cachedSession = parsed;
-          return parsed;
-        }
-      }
-      const storedRole =
-        (localStorage.getItem("remotehr_cached_role") as AppUserRole | null) ||
-        getCookieRole();
-      if (storedRole && ["employee", "manager", "hr", "admin"].includes(storedRole)) {
-        return {
-          userId: null,
-          organizationId: null,
-          userRole: storedRole,
-          fullName: null,
-          timezone: "UTC",
-          isLoaded: true,
-          departmentName: null,
-          jobTitleName: null,
-          requireMfaForPrivileged: true,
-        };
-      }
-    } catch {}
-  }
   const defaultRole: AppUserRole = isDemoModeEnabled() ? "admin" : "employee";
   return {
     userId: null,
@@ -135,10 +105,15 @@ export function AppShell({
   primaryActionLabel = "Quick Check-in",
   className,
 }: AppShellProps) {
+  const [mounted, setMounted] = React.useState(false);
   const [sessionState, setSessionState] = React.useState<AppSessionState>(() =>
     getInitialSession(propUserRole)
   );
   const [tourOpen, setTourOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   React.useEffect(() => {
     let active = true;
@@ -302,60 +277,59 @@ export function AppShell({
   const userRole = propUserRole || sessionState.userRole;
 
   return (
-    <AppSessionContext.Provider value={{ ...sessionState, userRole }}>
-      <div className="min-h-screen w-full bg-shell flex flex-col md:flex-row transition-colors duration-300 relative">
-        {/* Left Docked Curved Sidebar */}
-        <CurvedSidebar userRole={userRole} />
+    <SidebarProvider>
+      <AppSessionContext.Provider value={{ ...sessionState, userRole }}>
+        <div
+          className="min-h-screen w-full bg-shell flex flex-col md:flex-row transition-colors duration-300 relative"
+          suppressHydrationWarning
+        >
+          {/* Left Docked Curved Sidebar */}
+          <CurvedSidebar userRole={userRole} />
 
-        {/* Main Full-Width Application Area */}
-        <div className="flex-1 flex flex-col min-w-0 px-4 sm:px-6 md:px-8 lg:px-10 py-5 pb-20 md:pb-8">
-          <TopNavBar
-            userRole={userRole}
-            onPrimaryAction={onPrimaryAction}
-            primaryActionLabel={primaryActionLabel}
-          />
-
-          <main className={cn("flex-1 w-full flex flex-col min-w-0", className)}>
-            {/* Warning banner when organization has disabled mandatory MFA for privileged accounts */}
-            {sessionState.isLoaded && sessionState.requireMfaForPrivileged === false && (
-              <div
-                className="mb-4 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 flex items-center justify-between gap-3 text-xs font-semibold shadow-sm"
-                role="alert"
-                data-testid="mfa-disabled-warning-banner"
-              >
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                  <span>
-                    <strong>Security Warning:</strong> Mandatory Two-Factor Authentication (MFA) for privileged accounts is currently disabled for this organization.
-                  </span>
+          {/* Main Full-Width Application Area */}
+          <div className="flex-1 flex flex-col min-w-0 px-4 sm:px-6 md:px-8 lg:px-10 py-5 pb-20 md:pb-8">
+            <main className={cn("flex-1 w-full flex flex-col min-w-0", className)}>
+              {/* Warning banner when organization has disabled mandatory MFA for privileged accounts */}
+              {mounted && sessionState.isLoaded && sessionState.requireMfaForPrivileged === false && (
+                <div
+                  className="mb-4 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 flex items-center justify-between gap-3 text-xs font-semibold shadow-sm"
+                  role="alert"
+                  data-testid="mfa-disabled-warning-banner"
+                >
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span>
+                      <strong>Security Warning:</strong> Mandatory Two-Factor Authentication (MFA) for privileged accounts is currently disabled for this organization.
+                    </span>
+                  </div>
+                  {userRole === "admin" && (
+                    <Link
+                      href="/settings"
+                      className="underline text-amber-900 dark:text-amber-100 font-bold hover:opacity-80 shrink-0 text-[11px]"
+                    >
+                      Configure in Settings →
+                    </Link>
+                  )}
                 </div>
-                {userRole === "admin" && (
-                  <Link
-                    href="/settings"
-                    className="underline text-amber-900 dark:text-amber-100 font-bold hover:opacity-80 shrink-0 text-[11px]"
-                  >
-                    Configure in Settings →
-                  </Link>
-                )}
-              </div>
-            )}
-            {children}
-          </main>
+              )}
+              {children}
+            </main>
+          </div>
+
+          {/* Mobile Bottom Navigation Bar */}
+          <BottomTabBar userRole={userRole} />
+
+          {/* First-Login Onboarding Tour */}
+          {mounted && sessionState.userId && (
+            <OnboardingTour
+              open={tourOpen}
+              onOpenChange={setTourOpen}
+              userRole={userRole}
+              fullName={sessionState.fullName}
+            />
+          )}
         </div>
-
-        {/* Mobile Bottom Navigation Bar */}
-        <BottomTabBar userRole={userRole} />
-
-        {/* First-Login Onboarding Tour */}
-        {sessionState.userId && (
-          <OnboardingTour
-            open={tourOpen}
-            onOpenChange={setTourOpen}
-            userRole={userRole}
-            fullName={sessionState.fullName}
-          />
-        )}
-      </div>
-    </AppSessionContext.Provider>
+      </AppSessionContext.Provider>
+    </SidebarProvider>
   );
 }

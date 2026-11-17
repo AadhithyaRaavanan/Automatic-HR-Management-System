@@ -16,9 +16,13 @@ import {
   CheckCircle2,
   Target,
   X,
+  PanelLeft,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import { useSidebar } from "@/components/shell/sidebar-context";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -27,6 +31,7 @@ interface CommandPaletteProps {
 
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const { setTheme, theme } = useTheme();
+  const { isCollapsed, toggleSidebar, setCollapsed } = useSidebar();
 
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -107,6 +112,51 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             </Command.Group>
 
             <Command.Group heading="Navigation & Views" className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-text-tertiary mt-2">
+              <Command.Item
+                onSelect={() => {
+                  toggleSidebar();
+                  onOpenChange(false);
+                  toast.info(isCollapsed ? "Sidebar expanded" : "Sidebar collapsed");
+                }}
+                className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-text-primary hover:bg-brand-purple-light/50 hover:text-brand-purple cursor-pointer transition-colors"
+              >
+                <div className="flex items-center gap-2.5">
+                  <PanelLeft className="w-4 h-4 text-brand-purple" />
+                  <span>
+                    {isCollapsed
+                      ? "Expand Sidebar (Show Labels & Icons)"
+                      : "Collapse Sidebar (Compact Icons Only)"}
+                  </span>
+                </div>
+                <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-card border border-border-light text-text-tertiary">
+                  ⌘B
+                </kbd>
+              </Command.Item>
+
+              <Command.Item
+                onSelect={() => {
+                  setCollapsed(false);
+                  onOpenChange(false);
+                  toast.info("Sidebar expanded");
+                }}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-text-primary hover:bg-brand-purple-light/50 hover:text-brand-purple cursor-pointer transition-colors"
+              >
+                <PanelLeftOpen className="w-4 h-4 text-brand-purple" />
+                <span>Expand Sidebar Navigation</span>
+              </Command.Item>
+
+              <Command.Item
+                onSelect={() => {
+                  setCollapsed(true);
+                  onOpenChange(false);
+                  toast.info("Sidebar collapsed");
+                }}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-text-primary hover:bg-brand-purple-light/50 hover:text-brand-purple cursor-pointer transition-colors"
+              >
+                <PanelLeftClose className="w-4 h-4 text-brand-purple" />
+                <span>Collapse Sidebar Navigation</span>
+              </Command.Item>
+
               <Command.Item
                 onSelect={() => {
                   window.location.href = "/attendance";

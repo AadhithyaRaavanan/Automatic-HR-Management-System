@@ -1,5 +1,8 @@
 import { Resend } from "resend";
-import nodemailer from "nodemailer";
+let nodemailer: any = null;
+try {
+  nodemailer = require("nodemailer");
+} catch {}
 import { getSiteUrl } from "@/lib/site-url";
 
 const resendApiKey = process.env.RESEND_API_KEY;
@@ -285,7 +288,7 @@ export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
           <div class="security-box">
             <div class="security-title">Anti-Phishing Security Notice</div>
             <p class="security-text">
-              Pulse administrators will never ask for your password, TOTP code, or multi-factor authentication setup key. Always verify that your browser address bar points to your organization's legitimate domain before entering credentials.
+              Pulse administrators will never ask for your password, TOTP code, or multi-factor authentication setup key. Zero Invasive Monitoring policy is strictly enforced. Always verify that your browser address bar points to your organization's legitimate domain before entering credentials.
             </p>
           </div>
         </div>
@@ -382,11 +385,11 @@ export async function sendWelcomeCredentialsEmail(params: SendInviteEmailParams)
   if (process.env.NODE_ENV === "production") {
     return {
       success: false,
-      error: "Email delivery service unavailable: neither SMTP (Hostinger) nor RESEND_API_KEY is configured in production environment.",
+      error: "RESEND_API_KEY is not configured in production environment.",
     };
   }
 
-  console.warn(`[Simulated Email to ${to}] SMTP/Resend not configured. Subject: ${subject}`);
+  console.warn(`[Resend Simulated Email to ${to}] SMTP/Resend not configured. Subject: ${subject}`);
   return { success: true, simulated: true, messageId: `sim_${Date.now()}` };
 }
 
