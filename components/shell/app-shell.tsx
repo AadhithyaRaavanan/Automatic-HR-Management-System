@@ -239,18 +239,18 @@ export function AppShell({
             resolvedRole === "hr";
 
           // 2. profiles.tutorial_completed = false
-          let tutorialCompleted = true;
+          let tutorialCompleted = false;
           let onboardingCompleted = false;
           try {
-            const { data: prof } = await (supabase as any)
-              .from("profiles")
-              .select("tutorial_completed, onboarding_completed")
-              .eq("id", user.id)
-              .maybeSingle();
-
-            if (prof) {
-              tutorialCompleted = prof.tutorial_completed === true;
-              if (prof.onboarding_completed === true) onboardingCompleted = true;
+            const res = await fetch("/api/tutorial/complete", {
+              headers: session?.access_token
+                ? { Authorization: `Bearer ${session.access_token}` }
+                : {},
+            });
+            if (res.ok) {
+              const statusData = await res.json();
+              tutorialCompleted = statusData.tutorial_completed === true;
+              onboardingCompleted = statusData.onboarding_completed === true;
             }
           } catch {}
 

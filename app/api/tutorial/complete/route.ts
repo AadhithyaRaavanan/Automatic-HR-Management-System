@@ -5,39 +5,82 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
+function getSupabaseClient(request: NextRequest) {
+  let response = NextResponse.next();
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet: Array<{ name: string; value: string; options?: any }>) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          response = NextResponse.next();
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          );
+        },
+      },
+    }
+  );
+  return { supabase, response };
+}
+
+async function resolveUser(request: NextRequest) {
+  const authHeader = request.headers.get("Authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.substring(7);
+    const { data: tokenUser } = await supabaseAdmin.auth.getUser(token);
+    if (tokenUser?.user) return tokenUser.user;
+  }
+  const { supabase } = getSupabaseClient(request);
+  const { data: cookieUser } = await supabase.auth.getUser();
+  return cookieUser?.user || null;
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const user = await resolveUser(request);
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: prof } = await (supabaseAdmin as any)
+      .from("profiles")
+      .select("tutorial_completed, onboarding_completed")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const { data: emp } = await (supabaseAdmin as any)
+      .from("employees")
+      .select("tutorial_completed, onboarding_completed, onboarding_completed_at")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const tutorial_completed =
+      prof?.tutorial_completed === true || emp?.tutorial_completed === true;
+    const onboarding_completed =
+      prof?.onboarding_completed === true ||
+      emp?.onboarding_completed === true ||
+      Boolean(emp?.onboarding_completed_at);
+
+    return NextResponse.json({
+      tutorial_completed,
+      onboarding_completed,
+    });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: err?.message || "Failed to fetch tutorial status." },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
-    let response = NextResponse.next();
-    const supabase = createServerClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll();
-          },
-          setAll(cookiesToSet: Array<{ name: string; value: string; options?: any }>) {
-            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-            response = NextResponse.next();
-            cookiesToSet.forEach(({ name, value, options }) =>
-              response.cookies.set(name, value, options)
-            );
-          },
-        },
-      }
-    );
-
-    const authHeader = request.headers.get("Authorization");
-    let user = null;
-    if (authHeader?.startsWith("Bearer ")) {
-      const token = authHeader.substring(7);
-      const { data: tokenUser } = await supabaseAdmin.auth.getUser(token);
-      user = tokenUser?.user || null;
-    }
-    if (!user) {
-      const { data: cookieUser } = await supabase.auth.getUser();
-      user = cookieUser?.user || null;
-    }
+    const user = await resolveUser(request);
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

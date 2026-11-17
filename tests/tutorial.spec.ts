@@ -47,7 +47,7 @@ test.describe("Walkthrough Tour Verification per Role", () => {
       const page = await context.newPage();
 
       try {
-        await page.goto("/dashboard");
+        await page.goto("/");
         await page.waitForLoadState("domcontentloaded");
 
         // Assert tour dialog starts
