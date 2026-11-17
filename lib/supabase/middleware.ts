@@ -96,7 +96,10 @@ export async function updateSession(request: NextRequest) {
   const isTokenValid = !!claims && (!claims.exp || claims.exp * 1000 > Date.now());
   const aal = claims?.aal || "aal1";
   const userEmail = (claims?.email || "") as string;
-  let userRole = (claims?.user_role || claims?.app_metadata?.user_role) as EmployeeRole | undefined;
+  let userRole = (claims?.user_role ||
+    claims?.app_metadata?.user_role ||
+    claims?.user_metadata?.role ||
+    claims?.user_metadata?.user_role) as EmployeeRole | undefined;
 
   // In demo mode: if role claim is missing from JWT, resolve dynamically from demo preset email
   if (!userRole && isDemoModeEnabled() && userEmail) {
