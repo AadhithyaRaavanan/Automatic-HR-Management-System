@@ -541,6 +541,7 @@ function HolidaysPageContent() {
       <BentoGrid>
         {/* Holidays List & Add Form */}
         <BentoCard
+          data-tour="holidays-calendar"
           title={
             <div className="flex items-center gap-2">
               <CalendarDays className="w-4 h-4 text-brand-purple" />

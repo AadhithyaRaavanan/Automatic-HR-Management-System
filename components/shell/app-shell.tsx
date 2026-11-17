@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Laptop } from "lucide-react";
 import { CurvedSidebar } from "@/components/shell/curved-sidebar";
 import { TopNavBar } from "@/components/shell/top-nav-bar";
 import { BottomTabBar } from "@/components/shell/bottom-tab-bar";
@@ -110,7 +110,19 @@ export function AppShell({
   const [sessionState, setSessionState] = React.useState<AppSessionState>(() =>
     getInitialSession(propUserRole)
   );
-  const [tourOpen, setTourOpen] = React.useState(false);
+  const [tourOpen, setTourOpen] = React.useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("pulse_tutorial_active") === "true";
+    }
+    return false;
+  });
+
+  const handleTourOpenChange = React.useCallback((open: boolean) => {
+    if (!open && typeof window !== "undefined") {
+      sessionStorage.removeItem("pulse_tutorial_active");
+    }
+    setTourOpen(open);
+  }, []);
 
   React.useEffect(() => {
     setMounted(true);
@@ -118,6 +130,7 @@ export function AppShell({
       if (sessionState.userRole !== "admin") {
         if (typeof window !== "undefined") {
           sessionStorage.setItem("pulse_tutorial_step_index", "0");
+          sessionStorage.setItem("pulse_tutorial_active", "true");
         }
         setTourOpen(true);
       }
@@ -328,6 +341,9 @@ export function AppShell({
 
       setSessionState(nextSession);
       if (shouldOpenTour) {
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("pulse_tutorial_active", "true");
+        }
         setTourOpen(true);
       }
     }
@@ -382,8 +398,19 @@ export function AppShell({
             </main>
           </div>
 
-          {/* Mobile Bottom Navigation Bar */}
-          <BottomTabBar userRole={userRole} />
+          {/* Mobile Access Gate: Restrict access on mobile screens */}
+          <div className="fixed inset-0 z-[10000] bg-surface-ground flex flex-col items-center justify-center p-6 text-center md:hidden">
+            <div className="w-16 h-16 rounded-2xl bg-brand-purple/10 border border-brand-purple/20 flex items-center justify-center text-brand-purple mb-4 shadow-sm">
+              <Laptop className="w-8 h-8" />
+            </div>
+            <h1 className="text-xl font-bold text-text-primary tracking-tight mb-2">Desktop Workstation Required</h1>
+            <p className="text-sm text-text-secondary max-w-sm mb-6 leading-relaxed">
+              Pulse HRMS is optimized exclusively for desktop and laptop computers to support enterprise attendance governance, document verification, and productivity workflows.
+            </p>
+            <div className="px-4 py-2.5 rounded-xl bg-card border border-border-light text-xs font-semibold text-text-muted">
+              Please access <span className="text-brand-purple font-bold">pulse.zenxea.com</span> from your computer.
+            </div>
+          </div>
 
           {/* 3-Hour Post-Logout Auto Signout Enforcer */}
           <AutoSignoutListener />
@@ -392,7 +419,7 @@ export function AppShell({
           {mounted && sessionState.userId && sessionState.userRole !== "admin" && (
             <OnboardingTour
               open={tourOpen}
-              onOpenChange={setTourOpen}
+              onOpenChange={handleTourOpenChange}
               userRole={userRole}
               fullName={sessionState.fullName}
             />

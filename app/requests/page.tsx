@@ -334,7 +334,7 @@ function RequestsPageContent() {
       </section>
 
       {/* Module Switcher Tabs */}
-      <div className="flex flex-wrap items-center gap-2 p-1.5 bg-card-subtle border border-border-light rounded-2xl w-fit">
+      <div data-tour="requests-form" className="flex flex-wrap items-center gap-2 p-1.5 bg-card-subtle border border-border-light rounded-2xl w-fit">
         <button
           type="button"
           onClick={() => setInboxModule("regularization")}
@@ -428,7 +428,7 @@ function RequestsPageContent() {
 
       {/* Regularization Inbox */}
       {inboxModule === "regularization" && (
-        <div>
+        <div data-tour="approvals-queue" data-tour-hr="hr-requests-queue">
           {isLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {[1, 2, 3].map((i) => (

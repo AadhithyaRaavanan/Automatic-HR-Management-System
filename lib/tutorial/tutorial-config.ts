@@ -33,12 +33,12 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
       route: "/",
       selector: '[data-tour="nav-sidebar"]',
       body: "Use the primary sidebar to jump between Attendance, Tasks, Leave, Requests, and Holidays. On desktop, press ⌘B or Ctrl+B to collapse the sidebar whenever you want more screen room.",
-      tip: "On mobile devices, use the bottom navigation tab bar for immediate one-tap access.",
+      tip: "Press ⌘B or Ctrl+B on your keyboard anytime to toggle the sidebar navigation.",
     },
     {
       id: "emp-attendance-punch",
       title: "Check-In & Live Work Timer",
-      route: "/attendance",
+      route: "/",
       selector: '[data-tour="punch-card"]',
       body: "Punch in at the start of your workday to start your official work session. The live countdown timer tracks your active hours against your daily 8-hour target, showing both elapsed time and remaining balance.",
       tip: "Daily check-in unlocks 5 minutes prior to your assigned shift start time.",
@@ -46,7 +46,7 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
     {
       id: "emp-attendance-breaks",
       title: "Workplace Breaks Policy",
-      route: "/attendance",
+      route: "/",
       selector: '[data-tour="attendance-breaks"]',
       body: "Pulse provides built-in allowances for your daily rest: one 15-minute Short Break and one 1-hour Lunch Break. Click 'Take Break' when stepping away, and click 'Resume Work' as soon as you return so your timer pauses and resumes accurately.",
       tip: "Taking recorded breaks ensures your timesheet is compliant and lets teammates know when you are away from keyboard.",
@@ -54,7 +54,7 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
     {
       id: "emp-attendance-checkout",
       title: "Check-Out & Early Departure Dialog",
-      route: "/attendance",
+      route: "/",
       selector: '[data-tour="punch-checkout"]',
       body: "When wrapping up your workday, click 'Check Out Now'. If you attempt to check out before your scheduled shift end, an Early Check-Out confirmation dialog will calculate your early minutes and prompt for an optional reason. Click Cancel to keep working, or Confirm to punch out.",
       tip: "Departures before shift end are recorded with early checkout flags for transparent payroll verification.",
@@ -152,7 +152,7 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
     {
       id: "mgr-attendance-punch",
       title: "Punching In & Shift Timer",
-      route: "/attendance",
+      route: "/",
       selector: '[data-tour="punch-card"]',
       body: "Managers follow the same attendance rules as team members. Punch in at the start of your shift to begin your active work timer, tracking elapsed minutes against your daily 8-hour target.",
       tip: "Check-in unlocks 5 minutes before your shift start time.",
@@ -160,7 +160,7 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
     {
       id: "mgr-attendance-breaks",
       title: "Break Tracking & Availability",
-      route: "/attendance",
+      route: "/",
       selector: '[data-tour="attendance-breaks"]',
       body: "Use the 15-minute Short Break and 1-hour Lunch Break controls when stepping away from your workspace. Taking recorded breaks ensures accurate timesheet records and signals your availability to your team.",
       tip: "Remember to click Resume Work when returning from breaks to continue logging active hours.",
@@ -168,7 +168,7 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
     {
       id: "mgr-attendance-checkout",
       title: "Check-Out & Early Departure Dialog",
-      route: "/attendance",
+      route: "/",
       selector: '[data-tour="punch-checkout"]',
       body: "When completing your shift, click 'Check Out Now'. If departing before scheduled shift end, the Early Check-Out modal will display your early minutes and allow you to submit an optional departure reason.",
       tip: "Cancel keeps your punch active; Confirm saves early checkout flags for audit compliance.",
@@ -177,7 +177,7 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
       id: "mgr-team-presence",
       title: "Team Presence & Attendance Visibility",
       route: "/attendance",
-      selector: '[data-tour="attendance-team-table"]',
+      selector: '[data-tour="attendance-timesheet"]',
       body: "As a manager, you have full attendance visibility into your department. See in real time who is currently working, on lunch, on break, or offline, allowing you to balance workloads and coordinate handoffs effectively.",
       tip: "Filter by department or shift schedule to track team attendance patterns over time.",
     },
@@ -274,7 +274,7 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
     {
       id: "hr-attendance-punch",
       title: "Personal Attendance Tracking",
-      route: "/attendance",
+      route: "/",
       selector: '[data-tour="punch-card"]',
       body: "HR team members track their working hours using the same standard punch controls: check in at the start of your shift, log your breaks, and track your daily 8-hour target.",
       tip: "Check-in unlocks 5 minutes prior to scheduled shift start time.",
@@ -282,7 +282,7 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
     {
       id: "hr-attendance-breaks",
       title: "Break Compliance & Session Logging",
-      route: "/attendance",
+      route: "/",
       selector: '[data-tour="attendance-breaks"]',
       body: "Log your 15-minute Short Break and 1-hour Lunch Break using the one-click break buttons. Clicking Resume Work returns your session to active work status.",
       tip: "Break logging ensures transparent timesheet audit trails.",
@@ -290,7 +290,7 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
     {
       id: "hr-attendance-checkout",
       title: "Check-Out & Early Departure Dialog",
-      route: "/attendance",
+      route: "/",
       selector: '[data-tour="punch-checkout"]',
       body: "Click Check Out Now when finishing your workday. If departing before your shift ends, the Early Check-Out dialog appears with the calculated early duration and optional departure note.",
       tip: "Early checkouts are saved to the attendance record for payroll compliance reviews.",

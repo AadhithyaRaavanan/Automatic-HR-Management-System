@@ -61,6 +61,19 @@ export function OnboardingTour({
     }
   }, [open, stepIndex]);
 
+  // Pre-fetch all tour routes immediately on open for instant tab transitions
+  React.useEffect(() => {
+    if (open && typeof window !== "undefined") {
+      steps.forEach((s) => {
+        if (s.route) {
+          try {
+            router.prefetch(s.route);
+          } catch {}
+        }
+      });
+    }
+  }, [open, steps, router]);
+
   // Navigate to target route if needed
   React.useEffect(() => {
     if (!open || !currentStep) return;
@@ -69,16 +82,19 @@ export function OnboardingTour({
     }
   }, [open, currentStep, pathname, router]);
 
-  // Calculate target element rect for spotlight
+  // Calculate target element rect for spotlight with continuous smooth detection
   React.useEffect(() => {
     if (!open || !currentStep) {
       setTargetRect(null);
       return;
     }
 
-    let timer: NodeJS.Timeout;
+    let cancelled = false;
+    let attempts = 0;
+    const maxAttempts = 25; // 25 * 60ms = 1.5s polling window across route changes
 
-    const updateRect = () => {
+    const checkTarget = () => {
+      if (cancelled) return;
       if (!currentStep.selector) {
         setTargetRect(null);
         return;
@@ -94,20 +110,32 @@ export function OnboardingTour({
           return;
         }
       }
-      // Fallback: missing element or slow load
-      setTargetRect(null);
+      attempts++;
+      if (attempts < maxAttempts) {
+        setTimeout(checkTarget, 60);
+      } else {
+        setTargetRect(null);
+      }
     };
 
-    updateRect();
-    // Re-check shortly after route transitions or animations settle
-    timer = setTimeout(updateRect, 300);
+    checkTarget();
 
-    const handleWindowChange = () => updateRect();
+    const handleWindowChange = () => {
+      if (!currentStep.selector) return;
+      const el = document.querySelector(currentStep.selector);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          setTargetRect(rect);
+        }
+      }
+    };
+
     window.addEventListener("resize", handleWindowChange);
     window.addEventListener("scroll", handleWindowChange, true);
 
     return () => {
-      clearTimeout(timer);
+      cancelled = true;
       window.removeEventListener("resize", handleWindowChange);
       window.removeEventListener("scroll", handleWindowChange, true);
     };
@@ -211,6 +239,7 @@ export function OnboardingTour({
   }
 
   const progressPercent = Math.round(((stepIndex + 1) / steps.length) * 100);
+  const isNavigating = Boolean(currentStep?.route && pathname !== currentStep.route);
 
   return (
     <div
@@ -235,6 +264,7 @@ export function OnboardingTour({
                 height={targetRect.height + 12}
                 rx={10}
                 fill="black"
+                className="transition-all duration-300 ease-out"
               />
             </mask>
           </defs>
@@ -255,7 +285,7 @@ export function OnboardingTour({
             stroke="#818cf8"
             strokeWidth="2.5"
             strokeDasharray="6 4"
-            className="animate-pulse"
+            className="animate-pulse transition-all duration-300 ease-out"
           />
         </svg>
       ) : (
@@ -269,7 +299,7 @@ export function OnboardingTour({
       <div
         style={cardPositionStyle}
         className={cn(
-          "z-[9999] bg-card border border-border-light shadow-2xl rounded-2xl p-5 md:p-6 transition-all duration-200 overflow-y-auto",
+          "z-[9999] bg-card border border-border-light shadow-2xl rounded-2xl p-5 md:p-6 transition-all duration-300 ease-out overflow-y-auto",
           (isMobile || !targetRect) &&
             "fixed inset-x-4 bottom-4 md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:max-w-lg md:w-full"
         )}
@@ -284,6 +314,12 @@ export function OnboardingTour({
             <span className="uppercase tracking-wider text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-card-subtle border border-border-light text-text-secondary">
               {roleKey}
             </span>
+            {isNavigating && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-brand-purple/10 text-brand-purple border border-brand-purple/20 animate-pulse">
+                <Sparkles className="w-3 h-3 animate-spin" />
+                <span>Loading view...</span>
+              </span>
+            )}
           </div>
           <button
             type="button"

@@ -425,7 +425,7 @@ function TasksWorkspaceContent() {
       </div>
 
       {/* Controls & Filters */}
-      <div className="bg-card rounded-[24px] p-4 border border-border-light shadow-card space-y-3">
+      <div data-tour="tasks-board" className="bg-card rounded-[24px] p-4 border border-border-light shadow-card space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             {/* Scope Toggle for Manager/HR/Admin */}

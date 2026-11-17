@@ -153,7 +153,7 @@ export function HeroCheckInCard({
           </div>
         </div>
 
-        <div className="flex flex-col items-end gap-1.5 w-full sm:w-auto">
+        <div data-tour="punch-checkout" className="flex flex-col items-end gap-1.5 w-full sm:w-auto">
           <button
             type="button"
             onClick={handleToggle}

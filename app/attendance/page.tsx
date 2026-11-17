@@ -358,6 +358,8 @@ function AttendanceCalendarContent() {
         <BentoCard
           title="Monthly Timesheet Grid"
           subtitle="Click any date to inspect shift punches and holidays"
+          data-tour="attendance-timesheet"
+          data-tour-team="attendance-team-table"
           className="lg:col-span-8 p-6"
         >
           <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-text-tertiary uppercase pb-3 border-b border-border-light/60">

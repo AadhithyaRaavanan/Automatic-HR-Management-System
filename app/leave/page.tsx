@@ -53,6 +53,7 @@ export default function LeavePage() {
             </button>
 
             <button
+              data-tour="leave-apply"
               type="button"
               onClick={() => setApplyModalOpen(true)}
               className="px-4 py-2 rounded-full bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95"

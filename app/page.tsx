@@ -171,21 +171,25 @@ function DashboardContent({
       </section>
 
       {/* Row 1: Hero Action Card & Quick Metrics */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <div data-tour="dashboard-hero" className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         <div className="lg:col-span-6 space-y-5">
-          <HeroCheckInCard
-            isCheckedIn={isCheckedIn}
-            activeTime={timer.formattedTime}
-            workDate={data?.workDate || "Today"}
-            targetMinutes={targetMinutes}
-            shiftStartTime={data?.shiftStartTime || "09:00:00"}
-            shiftEndTime={data?.shiftEndTime || "17:00:00"}
-            userTimezone={data?.timezone || timezone || "UTC"}
-            isLoading={checkInMutation.isPending || isCheckingOut || checkOutMutation.isPending || isLoading}
-            onCheckIn={() => checkInMutation.mutate("Shift check-in")}
-            onCheckOut={onCheckOut || (() => checkOutMutation.mutate())}
-          />
-          <BreakControlCard isCheckedIn={isCheckedIn} />
+          <div data-tour="punch-card">
+            <HeroCheckInCard
+              isCheckedIn={isCheckedIn}
+              activeTime={timer.formattedTime}
+              workDate={data?.workDate || "Today"}
+              targetMinutes={targetMinutes}
+              shiftStartTime={data?.shiftStartTime || "09:00:00"}
+              shiftEndTime={data?.shiftEndTime || "17:00:00"}
+              userTimezone={data?.timezone || timezone || "UTC"}
+              isLoading={checkInMutation.isPending || isCheckingOut || checkOutMutation.isPending || isLoading}
+              onCheckIn={() => checkInMutation.mutate("Shift check-in")}
+              onCheckOut={onCheckOut || (() => checkOutMutation.mutate())}
+            />
+          </div>
+          <div data-tour="attendance-breaks">
+            <BreakControlCard isCheckedIn={isCheckedIn} />
+          </div>
         </div>
 
         <div className="lg:col-span-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
