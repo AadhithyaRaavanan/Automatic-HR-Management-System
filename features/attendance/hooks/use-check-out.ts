@@ -1,28 +1,56 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { formatDurationMinutes } from "@/lib/date/timezone";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 
-export function useCheckOut() {
+export interface CheckOutParams {
+  confirm_early?: boolean;
+  reason?: string;
+}
+
+export interface EarlyCheckOutPayload {
+  error: string;
+  code: string;
+  shift_end_time: string;
+  minutes_early: number;
+  formatted_early: string;
+  message: string;
+}
+
+export function useCheckOut(options?: {
+  onEarlyCheckOutRequired?: (payload: EarlyCheckOutPayload) => void;
+}) {
   const queryClient = useQueryClient();
-  const supabase = createClient();
 
   return useMutation({
-    mutationFn: async () => {
-      const { data, error } = await (supabase.rpc as any)("check_out");
+    mutationFn: async (params?: CheckOutParams) => {
+      const res = await fetch("/api/attendance/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params || {}),
+      });
 
-      if (error) {
+      const data = await res.json();
+
+      if (res.status === 409 && data.code === "EARLY_CHECKOUT") {
+        const err: any = new Error(data.message || "Early checkout confirmation required");
+        err.code = "EARLY_CHECKOUT";
+        err.payload = data;
+        throw err;
+      }
+
+      if (!res.ok) {
         if (isDemoModeEnabled()) {
           return {
             duration_minutes: 480,
             work_date: new Date().toISOString().slice(0, 10),
           };
         }
-        throw new Error(error.message);
+        throw new Error(data.error || "Failed to check out");
       }
+
       return data;
     },
     onSuccess: (data: any) => {
@@ -35,7 +63,13 @@ export function useCheckOut() {
       });
       queryClient.invalidateQueries({ queryKey: ["attendance"] });
     },
-    onError: (err: Error) => {
+    onError: (err: any) => {
+      if (err.code === "EARLY_CHECKOUT") {
+        if (options?.onEarlyCheckOutRequired) {
+          options.onEarlyCheckOutRequired(err.payload);
+          return;
+        }
+      }
       toast.error(err.message || "Failed to check out");
     },
   });

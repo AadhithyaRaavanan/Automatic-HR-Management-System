@@ -38,7 +38,11 @@ Thumbs.db
 *.crt
 
 # vercel
+# Playwright auth state
+tests/.auth/
+
 .vercel
+
 
 # typescript & turbo
 *.tsbuildinfo

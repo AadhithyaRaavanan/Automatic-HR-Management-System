@@ -190,4 +190,72 @@ export function evaluatePreCheckInLock(
   }
 }
 
+/**
+ * Evaluates whether checkout is early relative to shift end in Asia/Kolkata timezone.
+ * Handles overnight shifts (e.g. 17:00 to 01:00 where end falls on the next calendar day).
+ */
+export function evaluateEarlyCheckout(
+  checkInAtIso: string,
+  shiftStartTime: string = "09:00:00",
+  shiftEndTime: string = "17:00:00",
+  timezone: string = "Asia/Kolkata",
+  now: Date = new Date()
+): {
+  isEarly: boolean;
+  minutesEarly: number;
+  shiftEndTimeFormatted: string;
+  formattedEarly: string;
+  dialogMessage: string;
+} {
+  try {
+    const [startH = 9, startM = 0] = (shiftStartTime || "09:00:00").split(":").map(Number);
+    const [endH = 17, endM = 0] = (shiftEndTime || "17:00:00").split(":").map(Number);
+
+    const effectiveTz = timezone || "Asia/Kolkata";
+    const checkInDate = new Date(checkInAtIso);
+    const checkInZoned = toZonedTime(checkInDate, effectiveTz);
+    const workDateStr = format(checkInZoned, "yyyy-MM-dd");
+
+    const isNight = (endH * 60 + endM) < (startH * 60 + startM);
+    let shiftEndDateStr = workDateStr;
+    if (isNight) {
+      const nextDay = new Date(checkInZoned.getTime() + 24 * 60 * 60 * 1000);
+      shiftEndDateStr = format(nextDay, "yyyy-MM-dd");
+    }
+
+    const endHStr = String(endH).padStart(2, "0");
+    const endMStr = String(endM).padStart(2, "0");
+    const shiftEndTimeFormatted = `${endHStr}:${endMStr}`;
+
+    const shiftEndIso = `${shiftEndDateStr}T${shiftEndTimeFormatted}:00`;
+    const shiftEndUtc = fromZonedTime(shiftEndIso, effectiveTz);
+
+    const diffMs = shiftEndUtc.getTime() - now.getTime();
+    const isEarly = diffMs > 0;
+    const minutesEarly = isEarly ? Math.ceil(diffMs / 60000) : 0;
+
+    const hours = Math.floor(minutesEarly / 60);
+    const mins = minutesEarly % 60;
+    const formattedEarly = `${hours} h ${mins} m`;
+    const dialogMessage = `Your shift ends at ${shiftEndTimeFormatted}. You are checking out ${formattedEarly} early. Check out anyway?`;
+
+    return {
+      isEarly,
+      minutesEarly,
+      shiftEndTimeFormatted,
+      formattedEarly,
+      dialogMessage,
+    };
+  } catch {
+    return {
+      isEarly: false,
+      minutesEarly: 0,
+      shiftEndTimeFormatted: "17:00",
+      formattedEarly: "0 h 0 m",
+      dialogMessage: "",
+    };
+  }
+}
+
+
 

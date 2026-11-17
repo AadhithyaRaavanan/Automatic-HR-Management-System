@@ -30,6 +30,7 @@ import { createClient } from "@/lib/supabase/client";
 import { formatDurationMinutes, formatTimeInTimezone } from "@/lib/date/timezone";
 import { getTamilMonthInfo } from "@/lib/date/holidays-tn";
 import { getTaskDueState, TaskRecord } from "@/features/tasks/hooks/use-tasks";
+import { EarlyCheckOutDialog } from "@/components/attendance/early-checkout-dialog";
 import {
   Clock,
   Calendar,
@@ -55,8 +56,12 @@ interface UpcomingHolidayRow {
 
 function DashboardContent({
   onTogglePunch,
+  onCheckOut,
+  isCheckingOut = false,
 }: {
   onTogglePunch: () => void;
+  onCheckOut?: () => void;
+  isCheckingOut?: boolean;
 }) {
   const router = useRouter();
   const { userId, fullName, timezone } = useAppSession();
@@ -176,9 +181,9 @@ function DashboardContent({
             shiftStartTime={data?.shiftStartTime || "09:00:00"}
             shiftEndTime={data?.shiftEndTime || "17:00:00"}
             userTimezone={data?.timezone || timezone || "UTC"}
-            isLoading={checkInMutation.isPending || checkOutMutation.isPending || isLoading}
+            isLoading={checkInMutation.isPending || isCheckingOut || checkOutMutation.isPending || isLoading}
             onCheckIn={() => checkInMutation.mutate("Shift check-in")}
-            onCheckOut={() => checkOutMutation.mutate()}
+            onCheckOut={onCheckOut || (() => checkOutMutation.mutate())}
           />
           <BreakControlCard isCheckedIn={isCheckedIn} />
         </div>
@@ -531,8 +536,27 @@ function DashboardContent({
 export default function EmployeeDashboardPage() {
   const { data } = useAttendanceToday();
   const checkInMutation = useCheckIn();
-  const checkOutMutation = useCheckOut();
   const isCheckedIn = Boolean(data?.activeSession);
+
+  const [earlyCheckOutData, setEarlyCheckOutData] = React.useState<{
+    open: boolean;
+    shiftEndTime: string;
+    formattedEarly: string;
+  }>({
+    open: false,
+    shiftEndTime: "17:00",
+    formattedEarly: "0 h 0 m",
+  });
+
+  const checkOutMutation = useCheckOut({
+    onEarlyCheckOutRequired: (payload) => {
+      setEarlyCheckOutData({
+        open: true,
+        shiftEndTime: payload.shift_end_time,
+        formattedEarly: payload.formatted_early,
+      });
+    },
+  });
 
   const handleTogglePunch = () => {
     if (isCheckedIn) {
@@ -542,12 +566,36 @@ export default function EmployeeDashboardPage() {
     }
   };
 
+  const handleConfirmEarly = (reason?: string) => {
+    checkOutMutation.mutate(
+      { confirm_early: true, reason },
+      {
+        onSettled: () => {
+          setEarlyCheckOutData((prev) => ({ ...prev, open: false }));
+        },
+      }
+    );
+  };
+
   return (
     <AppShell
       primaryActionLabel={isCheckedIn ? "Check Out" : "Quick Check-in"}
       onPrimaryAction={handleTogglePunch}
     >
-      <DashboardContent onTogglePunch={handleTogglePunch} />
+      <DashboardContent
+        onTogglePunch={handleTogglePunch}
+        onCheckOut={() => checkOutMutation.mutate()}
+        isCheckingOut={checkOutMutation.isPending}
+      />
+      <EarlyCheckOutDialog
+        open={earlyCheckOutData.open}
+        onOpenChange={(open) => setEarlyCheckOutData((prev) => ({ ...prev, open }))}
+        shiftEndTime={earlyCheckOutData.shiftEndTime}
+        formattedEarly={earlyCheckOutData.formattedEarly}
+        isPending={checkOutMutation.isPending}
+        onConfirm={handleConfirmEarly}
+        onCancel={() => setEarlyCheckOutData((prev) => ({ ...prev, open: false }))}
+      />
     </AppShell>
   );
 }
