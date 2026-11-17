@@ -135,7 +135,7 @@ export default function OnboardingPage() {
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed) && parsed.length > 0) return parsed;
         }
-      } catch {}
+      } catch { }
     }
     return [];
   });
@@ -254,7 +254,7 @@ export default function OnboardingPage() {
           const merged = Array.from(map.values());
           try {
             sessionStorage.setItem("onboarding_cached_documents", JSON.stringify(merged));
-          } catch {}
+          } catch { }
           return merged;
         });
       }
@@ -364,7 +364,7 @@ export default function OnboardingPage() {
           const updated = [...filtered, newDoc];
           try {
             sessionStorage.setItem("onboarding_cached_documents", JSON.stringify(updated));
-          } catch {}
+          } catch { }
           return updated;
         });
       }
@@ -564,7 +564,7 @@ export default function OnboardingPage() {
     if (!validateStep(currentStep)) return;
     try {
       await handleSaveDraft(true);
-    } catch {}
+    } catch { }
     setCurrentStep((prev) => Math.min(prev + 1, 6));
   };
 
@@ -584,7 +584,7 @@ export default function OnboardingPage() {
       // First save all current draft fields
       try {
         await handleSaveDraft(true);
-      } catch {}
+      } catch { }
 
       const { data: sessionData } = await supabase.auth.getSession();
       const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -595,7 +595,38 @@ export default function OnboardingPage() {
       const res = await fetch("/api/onboarding/complete", {
         method: "POST",
         headers,
-        body: JSON.stringify({ declaration: true }),
+        body: JSON.stringify({
+          declaration: true,
+          highest_qualification: highestQualification,
+          full_name: fullName,
+          dob,
+          gender,
+          phone,
+          personal_email: personalEmail,
+          current_address: currentAddress,
+          permanent_address: permanentAddress,
+          emergency_contact_name: emergencyContactName,
+          emergency_contact_relationship: emergencyContactRelationship,
+          emergency_contact_phone: emergencyContactPhone,
+          blood_group: bloodGroup,
+          has_experience: hasExperience,
+          previous_company_name: prevCompany,
+          previous_designation: prevDesignation,
+          previous_start_date: prevStartDate,
+          previous_end_date: prevEndDate,
+          previous_hr_email: prevHrEmail,
+          previous_hr_phone: prevHrPhone,
+          previous_employee_id: prevEmployeeId,
+          experience_explanation: experienceExplanation,
+          pan_number: panNumber,
+          aadhaar_number: aadhaarNumber,
+          bank_account_holder: bankAccountHolder,
+          bank_account_number: bankAccountNumber,
+          bank_ifsc: bankIfsc,
+          bank_name: bankName,
+          bank_branch: bankBranch,
+          uan_number: uanNumber,
+        }),
       });
 
       if (!res.ok) {
@@ -830,8 +861,8 @@ export default function OnboardingPage() {
                     isCurrent
                       ? "bg-brand-purple-light/50 border border-brand-purple/40 text-brand-purple font-extrabold"
                       : isPast
-                      ? "text-text-primary font-bold hover:bg-card-subtle"
-                      : "text-text-tertiary font-medium opacity-60"
+                        ? "text-text-primary font-bold hover:bg-card-subtle"
+                        : "text-text-tertiary font-medium opacity-60"
                   )}
                 >
                   <div
@@ -840,8 +871,8 @@ export default function OnboardingPage() {
                       isCurrent
                         ? "bg-brand-purple text-white font-extrabold"
                         : isPast
-                        ? "bg-status-success text-white"
-                        : "bg-card-subtle border border-border-light text-text-tertiary"
+                          ? "bg-status-success text-white"
+                          : "bg-card-subtle border border-border-light text-text-tertiary"
                     )}
                   >
                     {isPast ? <Check className="w-3.5 h-3.5" /> : s.num}
@@ -1279,8 +1310,8 @@ export default function OnboardingPage() {
                         {uploadingDocKey === QUALIFICATION_DOC_MAP[highestQualification]?.docType
                           ? "Uploading..."
                           : getDoc(QUALIFICATION_DOC_MAP[highestQualification]?.docType)
-                          ? "Replace Certificate"
-                          : "Upload Certificate"}
+                            ? "Replace Certificate"
+                            : "Upload Certificate"}
                       </span>
                       <input
                         type="file"
@@ -2073,7 +2104,7 @@ export default function OnboardingPage() {
                 {/* 2. Highest Qualification */}
                 <div className="p-3 rounded-xl bg-card border border-border-light flex items-center justify-between text-xs">
                   <span className="font-bold">{highestQualification} Certificate</span>
-                  {getDoc(QUALIFICATION_DOC_MAP[highestQualification]?.docType) ? (
+                  {getDoc(QUALIFICATION_DOC_MAP[highestQualification]?.docType) || getDoc("cert_12th") || getDoc("cert_10th") || getDoc("cert_undergraduate") || getDoc("cert_diploma") || getDoc("cert_postgraduate") ? (
                     <span className="text-status-success font-bold flex items-center gap-1">
                       <Check className="w-3.5 h-3.5" /> Uploaded
                     </span>

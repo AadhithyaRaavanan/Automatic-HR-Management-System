@@ -79,11 +79,17 @@ export async function POST(request: NextRequest) {
 
     // 3. Validate Mandatory Information
     const edu = (onbProfile.education_details as any) || {};
-    const emergencyName = onbProfile.emergency_contact_name || edu.emergency_contact_name;
-    const emergencyRel = onbProfile.emergency_contact_relationship || edu.emergency_contact_relationship;
-    const emergencyPhone = onbProfile.emergency_contact_phone || edu.emergency_contact_phone;
+    const emergencyName = payload.emergency_contact_name || onbProfile.emergency_contact_name || edu.emergency_contact_name;
+    const emergencyRel = payload.emergency_contact_relationship || onbProfile.emergency_contact_relationship || edu.emergency_contact_relationship;
+    const emergencyPhone = payload.emergency_contact_phone || onbProfile.emergency_contact_phone || edu.emergency_contact_phone;
+    const resolvedFullName = payload.full_name || onbProfile.full_name;
+    const resolvedDob = payload.dob || onbProfile.dob;
+    const resolvedPhone = payload.phone || onbProfile.phone;
+    const resolvedPersonalEmail = payload.personal_email || onbProfile.personal_email;
+    const resolvedCurrentAddress = payload.current_address || onbProfile.current_address;
+    const resolvedPermanentAddress = payload.permanent_address || onbProfile.permanent_address;
 
-    if (!onbProfile.full_name || !onbProfile.dob || !onbProfile.phone || !onbProfile.personal_email || !onbProfile.current_address || !onbProfile.permanent_address) {
+    if (!resolvedFullName || !resolvedDob || !resolvedPhone || !resolvedPersonalEmail || !resolvedCurrentAddress || !resolvedPermanentAddress) {
       return NextResponse.json(
         { error: "Mandatory personal information is incomplete. Please complete Step 1." },
         { status: 400 }
@@ -113,9 +119,38 @@ export async function POST(request: NextRequest) {
     }
 
     // Educational Qualification check
-    const highestQual = (onbProfile.highest_qualification || edu.highest_qualification || "Undergraduate Degree") as HighestQualification;
-    const requiredQualDoc = QUALIFICATION_DOC_MAP[highestQual]?.docType || "cert_undergraduate";
-    if (!docTypesUploaded.has(requiredQualDoc)) {
+    const highestQual = (
+      payload.highest_qualification ||
+      onbProfile.highest_qualification ||
+      edu.highest_qualification ||
+      (docTypesUploaded.has("cert_12th") ? "12th Standard" : "Undergraduate Degree")
+    ) as HighestQualification;
+    const requiredQualDoc = QUALIFICATION_DOC_MAP[highestQual]?.docType;
+
+    const QUAL_DOC_TYPES = new Set([
+      "cert_12th",
+      "cert_10th",
+      "cert_diploma",
+      "cert_undergraduate",
+      "cert_postgraduate",
+      "cert_doctorate",
+      "cert_other",
+      "12th_mark_sheet",
+      "12th_marksheet",
+      "marksheet",
+      "education_cert",
+      "qualification_proof",
+    ]);
+
+    const hasSpecificDoc = requiredQualDoc ? docTypesUploaded.has(requiredQualDoc) : false;
+    const hasAnyQualDoc = uploadedDocs.some(
+      (d: any) =>
+        QUAL_DOC_TYPES.has(d.doc_type) ||
+        (d.doc_type && d.doc_type.startsWith("cert_")) ||
+        (d.file_name && (d.file_name.toLowerCase().includes("12th") || d.file_name.toLowerCase().includes("certificate") || d.file_name.toLowerCase().includes("mark")))
+    );
+
+    if (!hasSpecificDoc && !hasAnyQualDoc) {
       return NextResponse.json(
         { error: `Missing highest qualification document: ${QUALIFICATION_DOC_MAP[highestQual]?.label || "Certificate"}. Please upload it in Step 2.` },
         { status: 400 }
@@ -143,7 +178,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Identity check (PAN is mandatory)
-    if (!onbProfile.pan_number || !docTypesUploaded.has("pan_card")) {
+    const resolvedPan = payload.pan_number || onbProfile.pan_number;
+    if (!resolvedPan || !docTypesUploaded.has("pan_card")) {
       return NextResponse.json(
         { error: "PAN number and PAN Card document are mandatory. Please complete Step 4." },
         { status: 400 }
@@ -151,7 +187,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Bank Details check
-    if (!onbProfile.bank_account_holder || !onbProfile.bank_account_number || !onbProfile.bank_ifsc || !onbProfile.bank_name) {
+    const resolvedHolder = payload.bank_account_holder || onbProfile.bank_account_holder;
+    const resolvedAccount = payload.bank_account_number || onbProfile.bank_account_number;
+    const resolvedIfsc = payload.bank_ifsc || onbProfile.bank_ifsc;
+    const resolvedBank = payload.bank_name || onbProfile.bank_name;
+
+    if (!resolvedHolder || !resolvedAccount || !resolvedIfsc || !resolvedBank) {
       return NextResponse.json(
         { error: "Bank account holder, account number, IFSC, and bank name are mandatory. Please complete Step 5." },
         { status: 400 }
@@ -169,10 +210,36 @@ export async function POST(request: NextRequest) {
     const currentStatus = onbProfile.onboarding_status || onbProfile.status || "NOT_STARTED";
     const nextStatus = currentStatus === "CORRECTION_REQUIRED" ? "RESUBMITTED" : "SUBMITTED";
 
+    const mergedEdu = {
+      ...edu,
+      highest_qualification: highestQual,
+      emergency_contact_name: emergencyName,
+      emergency_contact_relationship: emergencyRel,
+      emergency_contact_phone: emergencyPhone,
+      bank_branch: payload.bank_branch || onbProfile.bank_branch || edu.bank_branch,
+    };
+
     // 4. Update onboarding profile to SUBMITTED / RESUBMITTED
     const { error: fullUpdateErr } = await (supabaseAdmin as any)
       .from("onboarding_profiles")
       .update({
+        full_name: resolvedFullName,
+        dob: resolvedDob,
+        gender: payload.gender || onbProfile.gender,
+        phone: resolvedPhone,
+        personal_email: resolvedPersonalEmail,
+        current_address: resolvedCurrentAddress,
+        permanent_address: resolvedPermanentAddress,
+        blood_group: payload.blood_group || onbProfile.blood_group,
+        pan_number: resolvedPan,
+        aadhaar_number: payload.aadhaar_number || onbProfile.aadhaar_number,
+        bank_account_holder: resolvedHolder,
+        bank_account_number: resolvedAccount,
+        bank_ifsc: resolvedIfsc,
+        bank_name: resolvedBank,
+        uan_number: payload.uan_number || onbProfile.uan_number,
+        highest_qualification: highestQual,
+        education_details: mergedEdu,
         onboarding_status: nextStatus,
         status: nextStatus.toLowerCase(),
         declaration_agreed: true,
@@ -186,6 +253,22 @@ export async function POST(request: NextRequest) {
       await (supabaseAdmin as any)
         .from("onboarding_profiles")
         .update({
+          full_name: resolvedFullName,
+          dob: resolvedDob,
+          gender: payload.gender || onbProfile.gender,
+          phone: resolvedPhone,
+          personal_email: resolvedPersonalEmail,
+          current_address: resolvedCurrentAddress,
+          permanent_address: resolvedPermanentAddress,
+          blood_group: payload.blood_group || onbProfile.blood_group,
+          pan_number: resolvedPan,
+          aadhaar_number: payload.aadhaar_number || onbProfile.aadhaar_number,
+          bank_account_holder: resolvedHolder,
+          bank_account_number: resolvedAccount,
+          bank_ifsc: resolvedIfsc,
+          bank_name: resolvedBank,
+          uan_number: payload.uan_number || onbProfile.uan_number,
+          education_details: mergedEdu,
           status: nextStatus.toLowerCase(),
           submitted_at: nowIso,
           updated_at: nowIso,
