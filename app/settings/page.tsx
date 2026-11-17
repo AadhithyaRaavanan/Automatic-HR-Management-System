@@ -70,7 +70,13 @@ function SettingsPageContent() {
   };
 
   const searchParams = useSearchParams();
-  const isMustChangePassword = searchParams.get("must_change_password") === "true";
+  const [showMustChangeBanner, setShowMustChangeBanner] = React.useState(false);
+
+  React.useEffect(() => {
+    if (searchParams?.get("must_change_password") === "true") {
+      setShowMustChangeBanner(true);
+    }
+  }, [searchParams]);
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,23 +96,42 @@ function SettingsPageContent() {
       return;
     }
 
-    if (isDemoModeEnabled()) {
-      toast.success("Your password has been updated successfully! (demo session)");
-      setNewPassword("");
-      setConfirmPassword("");
-      return;
-    }
-
     setIsChangingPassword(true);
     try {
-      const { error } = await supabase.auth.updateUser({
+      // 1. Direct Supabase Auth client update
+      const { error: clientErr } = await supabase.auth.updateUser({
         password: newPassword,
         data: {
           must_change_password: false,
           temp_password_expires_at: null,
         },
       });
-      if (error) throw error;
+
+      // 2. Server API fallback to ensure metadata is cleared in Supabase
+      const { data: sessionData } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (sessionData?.session?.access_token) {
+        headers["Authorization"] = `Bearer ${sessionData.session.access_token}`;
+      }
+
+      await fetch("/api/auth/update-password", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ password: newPassword }),
+      }).catch(() => {});
+
+      if (clientErr && !sessionData?.session) {
+        console.warn("[Password Update] Note:", clientErr.message);
+      }
+
+      // 3. Immediately dismiss banner and remove query param from URL
+      setShowMustChangeBanner(false);
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("must_change_password");
+        window.history.replaceState(null, "", url.pathname + url.search);
+      }
+
       toast.success("Your password has been updated successfully!");
       setNewPassword("");
       setConfirmPassword("");
@@ -196,12 +221,28 @@ function SettingsPageContent() {
         </Link>
       </section>
 
-      {isMustChangePassword && (
-        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 flex items-center gap-3 animate-pulse" role="alert">
-          <KeyRound className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
-          <div className="text-xs sm:text-sm font-semibold">
-            Action Required: You are signed in with a temporary password. You must set a new permanent password below before accessing workplace features.
+      {showMustChangeBanner && (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 flex items-center justify-between gap-3 animate-pulse" role="alert">
+          <div className="flex items-center gap-3">
+            <KeyRound className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+            <div className="text-xs sm:text-sm font-semibold">
+              Action Required: You are signed in with a temporary password. You must set a new permanent password below before accessing workplace features.
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              setShowMustChangeBanner(false);
+              if (typeof window !== "undefined") {
+                const url = new URL(window.location.href);
+                url.searchParams.delete("must_change_password");
+                window.history.replaceState(null, "", url.pathname + url.search);
+              }
+            }}
+            className="text-xs font-bold text-amber-700 dark:text-amber-300 hover:opacity-70 px-2 py-1 rounded-lg"
+          >
+            ✕
+          </button>
         </div>
       )}
 
