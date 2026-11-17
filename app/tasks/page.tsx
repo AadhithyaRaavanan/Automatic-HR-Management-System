@@ -134,6 +134,8 @@ function TasksWorkspaceContent() {
   React.useEffect(() => {
     if (userRole === "employee") {
       setScope("mine");
+    } else if (userRole === "manager" || userRole === "hr" || userRole === "admin") {
+      setScope("team");
     }
   }, [userRole]);
 
