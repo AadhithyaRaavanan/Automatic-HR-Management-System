@@ -181,9 +181,9 @@ function TasksWorkspaceContent() {
       return employees;
     }
     if (userRole === "hr") {
-      // HR can assign to HR (self/peers) and Employee (cannot assign to admin or manager)
+      // HR can assign to HR (self/peers), Manager, and Employee (cannot assign to admin)
       return employees.filter(
-        (e) => e.id === userId || e.role === "employee" || e.role === "hr"
+        (e) => e.id === userId || e.role === "employee" || e.role === "hr" || e.role === "manager"
       );
     }
     if (userRole === "manager") {

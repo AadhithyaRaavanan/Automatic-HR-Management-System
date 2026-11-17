@@ -337,6 +337,7 @@ function KpiContent() {
         </button>
         <button
           type="button"
+          data-tour="kpi-reviews-tab"
           onClick={() => setActiveTab("reviews")}
           className={cn(
             "px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2",
@@ -350,6 +351,7 @@ function KpiContent() {
         </button>
         <button
           type="button"
+          data-tour="kpi-goals-tab"
           onClick={() => setActiveTab("goals")}
           className={cn(
             "px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2",
@@ -364,7 +366,7 @@ function KpiContent() {
       </div>
 
       {/* Filter Bar */}
-      <div className="p-4 rounded-2xl bg-card border border-border-light shadow-card space-y-3">
+      <div data-tour="kpi-filters" className="p-4 rounded-2xl bg-card border border-border-light shadow-card space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2.5">
             {/* Person selector for managers/HR/admin */}
@@ -451,7 +453,7 @@ function KpiContent() {
       {activeTab === "metrics" && (
         <div className="space-y-6">
           {/* Overall Performance Card */}
-          <div className="p-6 rounded-[28px] bg-gradient-to-br from-card to-card-subtle border border-border-light shadow-card flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div data-tour="kpi-overview" className="p-6 rounded-[28px] bg-gradient-to-br from-card to-card-subtle border border-border-light shadow-card flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-extrabold uppercase tracking-wider text-text-tertiary">
@@ -510,7 +512,7 @@ function KpiContent() {
 
           {/* Metric Cards Grid */}
           {currentMetrics ? (
-            <div className="space-y-6">
+            <div data-tour="kpi-metrics-grid" className="space-y-6">
               {/* Category: Attendance */}
               <div>
                 <h3 className="text-xs font-extrabold uppercase tracking-wider text-text-secondary mb-3 flex items-center gap-1.5">
@@ -604,6 +606,7 @@ function KpiContent() {
             {isManagerOrAdmin && effectiveEmpId !== userId && (
               <button
                 type="button"
+                data-tour="kpi-add-review"
                 onClick={() => setCreateReviewOpen(true)}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold transition-colors cursor-pointer"
               >

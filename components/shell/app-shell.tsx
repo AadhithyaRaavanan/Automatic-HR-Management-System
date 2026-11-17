@@ -2,16 +2,22 @@
 
 import * as React from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { AlertTriangle, Laptop } from "lucide-react";
 import { CurvedSidebar } from "@/components/shell/curved-sidebar";
 import { TopNavBar } from "@/components/shell/top-nav-bar";
 import { BottomTabBar } from "@/components/shell/bottom-tab-bar";
-import { OnboardingTour } from "@/components/shared/onboarding-tour";
 import { AutoSignoutListener } from "@/components/shared/auto-signout-listener";
+
+const OnboardingTour = dynamic(
+  () => import("@/components/shared/onboarding-tour").then((m) => m.OnboardingTour),
+  { ssr: false }
+);
 import { SidebarProvider } from "@/components/shell/sidebar-context";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import { FEATURES } from "@/lib/features";
 
 export type AppUserRole = "employee" | "team_lead" | "manager" | "hr" | "admin";
 
@@ -67,7 +73,7 @@ export function clearAppSessionCache() {
       localStorage.removeItem("remotehr_cached_session");
       localStorage.removeItem("remotehr_cached_role");
       document.cookie = "remotehr_role=; path=/; max-age=0; SameSite=Lax";
-    } catch {}
+    } catch { }
   }
 }
 
@@ -110,6 +116,8 @@ export function AppShell({
   const [sessionState, setSessionState] = React.useState<AppSessionState>(() =>
     getInitialSession(propUserRole)
   );
+  const [userTutorialVersion, setUserTutorialVersion] = React.useState<number>(0);
+  const [isExistingUserTour, setIsExistingUserTour] = React.useState<boolean>(false);
   const [tourOpen, setTourOpen] = React.useState<boolean>(() => {
     if (typeof window !== "undefined") {
       return sessionStorage.getItem("pulse_tutorial_active") === "true";
@@ -251,8 +259,9 @@ export function AppShell({
             resolvedRole === "manager" ||
             resolvedRole === "hr";
 
-          // 2. profiles.tutorial_completed = false
+          // 2. profiles.tutorial_completed & version check
           let tutorialCompleted = false;
+          let tutorialVersion = 0;
           let onboardingCompleted = false;
           try {
             const res = await fetch("/api/tutorial/complete", {
@@ -263,9 +272,10 @@ export function AppShell({
             if (res.ok) {
               const statusData = await res.json();
               tutorialCompleted = statusData.tutorial_completed === true;
+              tutorialVersion = Number(statusData.tutorial_version) || 0;
               onboardingCompleted = statusData.onboarding_completed === true;
             }
-          } catch {}
+          } catch { }
 
           if (empProfile?.onboarding_completed === true || Boolean(empProfile?.onboarding_completed_at)) {
             onboardingCompleted = true;
@@ -288,16 +298,25 @@ export function AppShell({
                 mfaFinished = aalData.currentLevel === "aal2";
               }
             }
-          } catch {}
+          } catch { }
 
           if (
             isEligibleRole &&
-            !tutorialCompleted &&
             onboardingCompleted &&
             !mustChangePassword &&
             mfaFinished
           ) {
-            shouldOpenTour = true;
+            if (!tutorialCompleted) {
+              // Brand-new user: full tour
+              shouldOpenTour = true;
+              setIsExistingUserTour(false);
+              setUserTutorialVersion(0);
+            } else if (FEATURES.KPI && tutorialVersion < 2) {
+              // Existing user: "What's new in KPI" mini-tour once
+              shouldOpenTour = true;
+              setIsExistingUserTour(true);
+              setUserTutorialVersion(tutorialVersion);
+            }
           }
         }
       } catch {
@@ -336,7 +355,7 @@ export function AppShell({
           localStorage.setItem("remotehr_cached_session", JSON.stringify(nextSession));
           localStorage.setItem("remotehr_cached_role", finalRole);
           document.cookie = `remotehr_role=${finalRole}; path=/; max-age=2592000; SameSite=Lax`;
-        } catch {}
+        } catch { }
       }
 
       setSessionState(nextSession);
@@ -422,6 +441,8 @@ export function AppShell({
               onOpenChange={handleTourOpenChange}
               userRole={userRole}
               fullName={sessionState.fullName}
+              userTutorialVersion={userTutorialVersion}
+              isExistingUser={isExistingUserTour}
             />
           )}
         </div>

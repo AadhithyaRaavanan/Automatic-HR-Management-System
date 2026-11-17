@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
 
     const { data: prof } = await (supabaseAdmin as any)
       .from("profiles")
-      .select("tutorial_completed, onboarding_completed")
+      .select("tutorial_completed, tutorial_version, onboarding_completed")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
 
     const tutorial_completed =
       prof?.tutorial_completed === true || emp?.tutorial_completed === true;
+    const tutorial_version = Number(prof?.tutorial_version) || 0;
     const onboarding_completed =
       prof?.onboarding_completed === true ||
       emp?.onboarding_completed === true ||
@@ -68,6 +69,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       tutorial_completed,
+      tutorial_version,
       onboarding_completed,
     });
   } catch (err: any) {
@@ -85,13 +87,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Mark tutorial_completed = true (server-side, verified with user's token)
+    let targetVersion = 2;
+    try {
+      const body = await request.json();
+      if (typeof body.tutorial_version === "number") {
+        targetVersion = body.tutorial_version;
+      }
+    } catch {}
+
+    // Mark tutorial_completed = true and save tutorial_version
     await Promise.all([
       (supabaseAdmin as any).from("profiles").upsert(
         {
           id: user.id,
           user_id: user.id,
           tutorial_completed: true,
+          tutorial_version: targetVersion,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "id" }
@@ -105,7 +116,7 @@ export async function POST(request: NextRequest) {
         .eq("id", user.id),
     ]);
 
-    return NextResponse.json({ success: true, tutorial_completed: true });
+    return NextResponse.json({ success: true, tutorial_completed: true, tutorial_version: targetVersion });
   } catch (err: any) {
     return NextResponse.json(
       { error: err?.message || "Failed to update tutorial status." },

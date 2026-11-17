@@ -2,7 +2,12 @@
 
 import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { ROLE_TUTORIAL_STEPS, TutorialStep } from "@/lib/tutorial/tutorial-config";
+import {
+  ROLE_TUTORIAL_STEPS,
+  TutorialStep,
+  TUTORIAL_VERSION,
+  getTutorialStepsForUser,
+} from "@/lib/tutorial/tutorial-config";
 import { ChevronRight, ChevronLeft, Check, X, Sparkles, Compass } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -13,6 +18,8 @@ interface OnboardingTourProps {
   onOpenChange: (open: boolean) => void;
   userRole: "employee" | "team_lead" | "manager" | "hr" | "admin";
   fullName?: string | null;
+  userTutorialVersion?: number;
+  isExistingUser?: boolean;
   onCompleted?: () => void;
 }
 
@@ -22,6 +29,8 @@ export function OnboardingTour({
   open,
   onOpenChange,
   userRole = "employee",
+  userTutorialVersion = 0,
+  isExistingUser = false,
   onCompleted,
 }: OnboardingTourProps) {
   const router = useRouter();
@@ -30,7 +39,9 @@ export function OnboardingTour({
   const [targetRect, setTargetRect] = React.useState<DOMRect | null>(null);
 
   const roleKey = (userRole || "employee").toLowerCase();
-  const steps: TutorialStep[] = ROLE_TUTORIAL_STEPS[roleKey] || [];
+  const steps: TutorialStep[] = React.useMemo(() => {
+    return getTutorialStepsForUser(roleKey, userTutorialVersion, isExistingUser);
+  }, [roleKey, userTutorialVersion, isExistingUser]);
 
   // Resume at saved step index if valid
   const [stepIndex, setStepIndex] = React.useState<number>(() => {
@@ -163,7 +174,7 @@ export function OnboardingTour({
       await fetch("/api/tutorial/complete", {
         method: "POST",
         headers,
-        body: JSON.stringify({ reset: false }),
+        body: JSON.stringify({ reset: false, tutorial_version: TUTORIAL_VERSION }),
       });
 
       onOpenChange(false);

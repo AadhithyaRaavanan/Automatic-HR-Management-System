@@ -1,5 +1,7 @@
 import { FEATURES } from "@/lib/features";
 
+export const TUTORIAL_VERSION = 2;
+
 export interface TutorialStep {
   id: string;
   title: string;
@@ -7,6 +9,7 @@ export interface TutorialStep {
   selector?: string;
   body: string;
   tip: string;
+  minVersion?: number;
 }
 
 const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
@@ -69,11 +72,11 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
     },
     {
       id: "emp-tasks",
-      title: "Tasks, Kanban & Pipeline",
+      title: "Tasks, Kanban & Time Estimates",
       route: "/tasks",
       selector: '[data-tour="tasks-board"]',
-      body: "Track your deliverables in an interactive Kanban board or structured list view. Advance tasks through the four pipeline stages: To Do, In Progress, Under Review, and Completed. Click any task to edit details or inspect due dates.",
-      tip: "Pay attention to priority tags (High, Medium, Low) and due dates to keep client deliverables on schedule.",
+      body: "Track deliverables on the interactive Kanban board or list view. When you assign a task to yourself, Pulse marks it Self-Assigned and automatically places it in Progress. Tasks assigned by managers start in To Do with an instant '✓ Accept Task' button. Set realistic estimates using the Hours & Minutes duration picker with quick presets (30m, 1h, 2h, 4h, 8h).",
+      tip: "Subordinates only need one click on '✓ Accept Task' to accept delegated work and begin execution.",
     },
     {
       id: "emp-leave",
@@ -98,6 +101,33 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
       selector: '[data-tour="holidays-calendar"]',
       body: "View all approved national and corporate holidays for the calendar year. Pulse automatically reconciles official holidays when calculating your leave days, ensuring you are never charged leave on an official holiday.",
       tip: "Official holidays are managed by HR and reflect across your organization's schedule.",
+    },
+    {
+      id: "emp-kpi-metrics",
+      title: "KPI & Performance Metrics",
+      route: "/kpi",
+      selector: '[data-tour="kpi-overview"]',
+      body: "Track your live performance across Attendance, Hours, and Task execution. Each metric is computed on its own with clear targets. If a metric displays 'No data', it simply means no activity has been recorded yet for that cycle—you are never penalized with a false 0%. Approved leaves and holidays count as target met and are not counted against your hours.",
+      tip: "KPIs are designed as an objective conversation starter with your manager, not a one-size-fits-all verdict.",
+      minVersion: 2,
+    },
+    {
+      id: "emp-kpi-reviews",
+      title: "Manager Reviews & Feedback",
+      route: "/kpi",
+      selector: '[data-tour="kpi-reviews-tab"]',
+      body: "Switch to the Manager Reviews tab to inspect feedback from your supervisors. Each review evaluates Quality, Communication, Initiative, and Teamwork on a 1-5 scale, accompanied by a mandatory feedback note detailing achievements and areas for growth.",
+      tip: "You can compare your overall performance trend against the previous cycle directly from the top summary card.",
+      minVersion: 2,
+    },
+    {
+      id: "emp-kpi-goals",
+      title: "Performance Goals & Milestones",
+      route: "/kpi",
+      selector: '[data-tour="kpi-goals-tab"]',
+      body: "Under the Goals tab, track milestones assigned for your review cycle. You can update your goal status between Not Started, On Track, At Risk, and Done at any time, and attach personal progress notes.",
+      tip: "Keep your goal statuses updated before one-on-one reviews to showcase your progress.",
+      minVersion: 2,
     },
     {
       id: "emp-profile",
@@ -186,7 +216,7 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
       title: "Team Task Delegation & Kanban Pipeline",
       route: "/tasks",
       selector: '[data-tour="tasks-board"]',
-      body: "Create, assign, and track deliverables across your entire team. Move cards through To Do, In Progress, Under Review, and Completed. Review deliverables submitted by direct reports before marking them complete.",
+      body: "Delegate deliverables to yourself and direct reports. Use the Hours & Minutes duration selector with presets (30m, 1h, 2h, 4h, 8h) to define realistic timelines. Tasks assigned to reports start in To Do awaiting their acceptance, while self-assigned tasks move directly to In Progress.",
       tip: "Filter by Assignee to inspect workload balance and unblock team bottlenecks.",
     },
     {
@@ -220,6 +250,42 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
       selector: '[data-tour="holidays-calendar"]',
       body: "View all organization holidays to anticipate team availability and plan sprint milestones. Official holidays are automatically excluded when deducting employee leave balances.",
       tip: "Leave requests spanning a company holiday deduct only net working days.",
+    },
+    {
+      id: "mgr-kpi-overview",
+      title: "Team KPI Analytics & Scoped Filters",
+      route: "/kpi",
+      selector: '[data-tour="kpi-filters"]',
+      body: "As a manager, you have full performance visibility into your department and direct reports. Use the filter bar to switch between team members, select employee types (Full-Time, Part-Time, Intern, Contract), and adjust date ranges between Week, Month, Quarter, or Custom.",
+      tip: "Your view is automatically scoped to your team, preserving confidentiality while preventing self-reviews.",
+      minVersion: 2,
+    },
+    {
+      id: "mgr-kpi-reviews",
+      title: "Conducting Manager Reviews",
+      route: "/kpi",
+      selector: '[data-tour="kpi-add-review"]',
+      body: "Click 'Add Review' under the Manager Reviews tab to submit qualitative performance assessments. Rate Quality, Communication, Initiative, and Teamwork from 1 to 5 stars. Every review strictly REQUIRES a comprehensive note (minimum 5 characters) explaining your assessment.",
+      tip: "Reviews are immediately visible to the employee on their dashboard to guide their professional growth.",
+      minVersion: 2,
+    },
+    {
+      id: "mgr-kpi-adjustments",
+      title: "Metric Adjustments & Objective Logging",
+      route: "/kpi",
+      selector: '[data-tour="kpi-metrics-grid"]',
+      body: "If exceptional circumstances warrant overriding an automated metric—such as verified hardware failure or emergency dispatch—click 'Adjust' on any card. Every adjustment REQUIRES a documented reason of at least 5 characters, which is permanently displayed alongside the adjusted metric.",
+      tip: "Transparent adjustment logs prevent audit discrepancies and ensure fair performance evaluations.",
+      minVersion: 2,
+    },
+    {
+      id: "mgr-kpi-queues",
+      title: "Review Queue KPI Badges & Export",
+      route: "/requests",
+      selector: '[data-tour="approvals-queue"]',
+      body: "When reviewing leave or punch correction requests, a small KPI badge appears beside each applicant's name. Click it to inspect their live performance index before making approval decisions. You can also click 'Export CSV' on the KPI page to download report sheets.",
+      tip: "KPI badges only appear when the KPI feature is active, respecting team scoping rules.",
+      minVersion: 2,
     },
     {
       id: "mgr-profile",
@@ -332,7 +398,7 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
       title: "HR Deliverables & Task Management",
       route: "/tasks",
       selector: '[data-tour="tasks-board"]',
-      body: "Manage HR operational initiatives, onboarding pipelines, and compliance deadlines using Kanban boards and lists. Assign deliverables, set due dates, and track completion progress.",
+      body: "Manage HR operational initiatives, onboarding pipelines, and compliance deadlines. Delegate deliverables across HR, managers, or employees using the Hours & Minutes selector with presets. Delegated tasks start in To Do for acceptance, while self-assigned tasks move directly to In Progress.",
       tip: "Use priority badges to highlight time-critical compliance tasks.",
     },
     {
@@ -342,6 +408,33 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
       selector: '[data-tour="holidays-management"]',
       body: "As HR, you have full privileges to add, update, or remove company and national holidays. Adding holidays immediately recalculates holiday allowances across active leave applications.",
       tip: "Set up the yearly holiday calendar early so leave balances compute seamlessly.",
+    },
+    {
+      id: "hr-kpi-analytics",
+      title: "Company-Wide KPI & Performance Governance",
+      route: "/kpi",
+      selector: '[data-tour="kpi-filters"]',
+      body: "HR administrators have organization-wide visibility across all business units. Filter by department, designation, employee type, or individual staff member. The team benchmark card provides an objective organization average to evaluate company health.",
+      tip: "Export complete performance rosters to CSV with one click for executive compensation reviews.",
+      minVersion: 2,
+    },
+    {
+      id: "hr-kpi-reviews-adjustments",
+      title: "Governing Reviews & Metric Overrides",
+      route: "/kpi",
+      selector: '[data-tour="kpi-overview"]',
+      body: "Audit manager reviews and authorize metric adjustments when discrepancies arise. HR enforces mandatory 5-character justification notes on all reviews and overrides, maintaining complete transparency.",
+      tip: "All review notes and adjustment justifications are cryptographically linked to the author's session.",
+      minVersion: 2,
+    },
+    {
+      id: "hr-kpi-queues",
+      title: "Leave & Regularization KPI Badges",
+      route: "/hr/leave",
+      selector: '[data-tour="hr-leave-queue"]',
+      body: "In both the Leave and Regularization review queues, a KPI badge beside each employee's name links directly to their detailed performance report. Review applicant punctuality and task completion rates before approving extended leaves.",
+      tip: "The KPI badge automatically hides if the KPI module is disabled, ensuring zero UI clutter.",
+      minVersion: 2,
     },
     {
       id: "hr-reports",
@@ -389,6 +482,7 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
 
 function isStepFeatureEnabled(step: TutorialStep): boolean {
   if (step.route === "/kpi" && !FEATURES.KPI) return false;
+  if (step.id.includes("kpi") && !FEATURES.KPI) return false;
   if (step.route === "/admin/locations" && !FEATURES.LOCATIONS) return false;
   if (step.route === "/admin/shifts" && !FEATURES.SHIFTS) return false;
   if (step.route === "/admin/audits" && !FEATURES.AUDITS) return false;
@@ -401,3 +495,19 @@ export const ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = Object.fromEn
     steps.filter(isStepFeatureEnabled),
   ])
 );
+
+export function getTutorialStepsForUser(
+  role: string,
+  userTutorialVersion = 0,
+  isCompleted = false
+): TutorialStep[] {
+  const allRoleSteps = ROLE_TUTORIAL_STEPS[role] || [];
+  if (isCompleted) {
+    // Existing user mini-tour: only show steps added in newer versions when feature is on
+    if (FEATURES.KPI && userTutorialVersion < TUTORIAL_VERSION) {
+      return allRoleSteps.filter((s) => (s.minVersion || 1) > userTutorialVersion);
+    }
+    return [];
+  }
+  return allRoleSteps;
+}

@@ -20,11 +20,12 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // 1. Instant Fast-Path for static assets and public routes that don't need auth checks
+  // 1. Instant Fast-Path for static assets, images, fonts, and public routes that don't need auth checks
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api") ||
-    pathname === "/favicon.ico"
+    pathname === "/favicon.ico" ||
+    /\.(svg|png|jpg|jpeg|gif|webp|woff|woff2|ttf|eot|ico)$/i.test(pathname)
   ) {
     return NextResponse.next();
   }

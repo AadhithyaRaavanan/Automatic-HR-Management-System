@@ -272,6 +272,8 @@ export function CurvedSidebar({
               <div key={item.href} className="relative group shrink-0">
                 <Link
                   href={item.href}
+                  onMouseEnter={() => router.prefetch(item.href)}
+                  onFocus={() => router.prefetch(item.href)}
                   className={cn(
                     "relative flex items-center justify-center w-8 h-8 lg:w-8.5 lg:h-8.5 rounded-xl transition-all duration-150",
                     isActive
@@ -313,6 +315,8 @@ export function CurvedSidebar({
             <Link
               key={item.href}
               href={item.href}
+              onMouseEnter={() => router.prefetch(item.href)}
+              onFocus={() => router.prefetch(item.href)}
               className={cn(
                 "flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-150 w-full group select-none shrink-0",
                 isActive
