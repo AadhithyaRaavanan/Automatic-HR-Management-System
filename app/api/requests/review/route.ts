@@ -133,20 +133,14 @@ export async function POST(request: NextRequest) {
     // If approved, update attendance_sessions / attendance_days if needed
     if (action === "approve") {
       try {
-        const { data: existingDay } = await (supabaseAdmin.from("attendance_days") as any)
-          .select("id")
-          .eq("employee_id", regReq.employee_id)
-          .eq("work_date", regReq.work_date)
-          .maybeSingle();
-
-        if (existingDay) {
-          await (supabaseAdmin.from("attendance_days") as any)
-            .update({
-              status: "present",
-              updated_at: nowIso,
-            })
-            .eq("id", existingDay.id);
-        }
+        await (supabaseAdmin.from("attendance_days") as any)
+          .upsert({
+            employee_id: regReq.employee_id,
+            work_date: regReq.work_date,
+            status: "present",
+            total_minutes: 480,
+            updated_at: nowIso,
+          });
       } catch (attErr) {
         console.warn("[Attendance Session Update via Regularization]:", attErr);
       }

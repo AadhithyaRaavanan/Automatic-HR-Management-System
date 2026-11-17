@@ -40,10 +40,10 @@ test.describe("Module 4: Regularization Requests & Authorization", () => {
     const page = await context.newPage();
 
     await page.goto("/requests");
-    await expect(page.getByRole("heading", { name: /Requests & Corrections/i })).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole("heading", { name: /Approvals, Requests & Delegations|Manager Approvals/i })).toBeVisible({ timeout: 20000 });
 
     // Open correction modal
-    await page.getByRole("button", { name: /Request Correction/i }).first().click();
+    await page.getByRole("button", { name: /Apply Correction/i }).first().click();
     await expect(page.getByRole("heading", { name: /Request Attendance Correction/i })).toBeVisible();
 
     // 1. Future date validation
