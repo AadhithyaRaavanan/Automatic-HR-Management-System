@@ -1799,8 +1799,8 @@ export default function OnboardingPage() {
                     <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1.5">
                       Upload Aadhaar (PDF / JPG / PNG) <span className="text-status-danger">*</span>
                     </label>
-                    <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-card hover:bg-card-subtle border border-border-light text-text-primary text-xs font-bold transition-all cursor-pointer shadow-sm w-full justify-center">
-                      <Upload className="w-3.5 h-3.5 text-brand-purple" />
+                    <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all cursor-pointer shadow-sm w-full justify-center">
+                      <Upload className="w-3.5 h-3.5" />
                       <span>{getDoc("aadhaar_card") ? "Replace Aadhaar" : "Upload Aadhaar"}</span>
                       <input
                         type="file"
