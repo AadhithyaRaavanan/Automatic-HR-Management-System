@@ -359,6 +359,17 @@ export default function HROnboardingPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <a
+              href="https://drive.google.com/drive/folders/1lDOzwBbZa4FG1M3pRzQDj7cNt8RJ-mdZ?usp=sharing"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 rounded-xl bg-card border border-border-light hover:bg-card-subtle text-xs font-bold text-text-primary transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+            >
+              <FolderOpen className="w-3.5 h-3.5 text-brand-purple" />
+              <span>Google Drive</span>
+              <ExternalLink className="w-3 h-3 text-text-tertiary" />
+            </a>
+
             <button
               type="button"
               onClick={loadCandidates}

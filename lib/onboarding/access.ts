@@ -73,12 +73,12 @@ export async function getOnboardingGate(
     return "ALLOWED";
   }
 
-  // 2. Fetch onboarding profile, employee record, and uploaded documents
+  // 2. Fetch onboarding profile and employee record
   try {
-    const [profRes, empRes, docsRes] = await Promise.all([
+    const [profRes, empRes] = await Promise.all([
       (supabaseAdmin as any)
         .from("onboarding_profiles")
-        .select("status, onboarding_status")
+        .select("status, education_details")
         .eq("user_id", userId)
         .maybeSingle(),
       (supabaseAdmin as any)
@@ -86,27 +86,22 @@ export async function getOnboardingGate(
         .select("status, onboarding_completed")
         .eq("id", userId)
         .maybeSingle(),
-      (supabaseAdmin as any)
-        .from("onboarding_documents")
-        .select("document_status")
-        .eq("user_id", userId),
     ]);
 
     const onbProf = profRes.data;
     const emp = empRes.data;
-    const docs = docsRes.data || [];
 
     const statusLower = (onbProf?.status || "").toLowerCase();
-    const onbStatusUpper = (onbProf?.onboarding_status || "").toUpperCase();
 
-    // Any rejected document or profile changes_requested
-    const hasRejectedDoc = docs.some(
-      (d: any) => d.document_status === "rejected"
+    // Any rejected document in verified_docs
+    const verifiedDocs = (onbProf?.education_details?.verified_docs) || {};
+    const hasRejectedDoc = Object.values(verifiedDocs).some(
+      (d: any) => d?.status === "rejected"
     );
+
     if (
       statusLower === "changes_requested" ||
       statusLower === "rejected" ||
-      onbStatusUpper === "CORRECTION_REQUIRED" ||
       hasRejectedDoc
     ) {
       return "CHANGES_REQUESTED";
@@ -129,9 +124,8 @@ export async function getOnboardingGate(
     // Submitted, awaiting HR review
     if (
       statusLower === "submitted" ||
-      onbStatusUpper === "SUBMITTED" ||
-      onbStatusUpper === "RESUBMITTED" ||
-      onbStatusUpper === "UNDER_REVIEW"
+      statusLower === "under_review" ||
+      statusLower === "resubmitted"
     ) {
       return "PENDING_APPROVAL";
     }

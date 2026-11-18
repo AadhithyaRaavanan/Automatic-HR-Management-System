@@ -57,8 +57,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Server-side strict check: Final approval is blocked unless EVERY document is individually approved
-    const unapprovedDocs = uploadedDocs.filter((d: any) => d.document_status !== "approved");
+    const verifiedDocsMap = (profile.education_details?.verified_docs) || {};
+
+    // Server-side check: Final approval is blocked unless EVERY document is individually approved
+    const unapprovedDocs = uploadedDocs.filter((d: any) => {
+      const status = d.document_status || verifiedDocsMap[d.id]?.status;
+      return status !== "approved";
+    });
+
     if (unapprovedDocs.length > 0) {
       return NextResponse.json(
         {
@@ -70,20 +76,32 @@ export async function POST(request: NextRequest) {
 
     const nowIso = new Date().toISOString();
 
-    // 3. Update onboarding_profiles to approved and record approved_by, approved_at
-    await (supabaseAdmin as any)
-      .from("onboarding_profiles")
-      .update({
-        onboarding_status: "COMPLETED",
-        status: "approved",
+    // 3. Update onboarding_profiles to approved and record approval metadata
+    const updatedEducation = {
+      ...(profile.education_details || {}),
+      verified_docs: verifiedDocsMap,
+      approval_meta: {
         approved_by: reviewerId,
         approved_at: nowIso,
         verified_by: reviewerId,
         verified_at: nowIso,
         completed_at: nowIso,
+      },
+    };
+
+    const { error: profUpdateErr } = await (supabaseAdmin as any)
+      .from("onboarding_profiles")
+      .update({
+        status: "approved",
+        education_details: updatedEducation,
         updated_at: nowIso,
       })
       .eq("user_id", userId);
+
+    if (profUpdateErr) {
+      console.error("[approve] Failed to update onboarding_profile:", profUpdateErr);
+      throw new Error("Failed to update onboarding profile status.");
+    }
 
     // 4. Update profiles, employees (status = 'active', onboarding_completed = true), and app_metadata claim
     await Promise.all([
@@ -174,10 +192,12 @@ export async function POST(request: NextRequest) {
 
           if (emailRes.success) {
             emailSent = true;
-            await (supabaseAdmin as any)
-              .from("onboarding_profiles")
-              .update({ approval_email_sent_at: nowIso })
-              .eq("user_id", userId);
+            try {
+              await (supabaseAdmin as any)
+                .from("onboarding_profiles")
+                .update({ approval_email_sent_at: nowIso })
+                .eq("user_id", userId);
+            } catch {}
           } else {
             console.warn("[Onboarding Approval Email Warning]:", emailRes.error);
           }

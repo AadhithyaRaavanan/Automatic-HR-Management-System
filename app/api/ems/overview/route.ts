@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
         .select("id, name, team_lead_id, department_id"),
       (supabaseAdmin as any)
         .from("onboarding_profiles")
-        .select("id, status, onboarding_status")
+        .select("id, status")
         .eq("status", "submitted"),
       (supabaseAdmin as any)
         .from("internships")

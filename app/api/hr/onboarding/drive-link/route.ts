@@ -10,7 +10,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const driveUrl = process.env.ONBOARDING_DRIVE_FOLDER_URL;
+    const driveUrl =
+      process.env.ONBOARDING_DRIVE_FOLDER_URL ||
+      "https://drive.google.com/drive/folders/1lDOzwBbZa4FG1M3pRzQDj7cNt8RJ-mdZ?usp=sharing";
     if (driveUrl && driveUrl.trim()) {
       return NextResponse.json({
         configured: true,

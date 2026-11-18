@@ -422,12 +422,12 @@ export async function POST(request: NextRequest) {
     } else {
       const { data: onbProf } = await (supabase as any)
         .from("onboarding_profiles")
-        .select("onboarding_status, status")
+        .select("status")
         .eq("user_id", authData.user.id)
         .maybeSingle();
 
-      const onbStatus = (onbProf?.onboarding_status || onbProf?.status || "").toUpperCase();
-      if (["SUBMITTED", "RESUBMITTED", "UNDER_REVIEW", "VERIFIED", "COMPLETED"].includes(onbStatus)) {
+      const onbStatus = (onbProf?.status || "").toUpperCase();
+      if (["SUBMITTED", "RESUBMITTED", "UNDER_REVIEW", "VERIFIED", "COMPLETED", "APPROVED"].includes(onbStatus)) {
         canAccessDashboard = true;
       } else {
         const { data: prof } = await (supabase as any)

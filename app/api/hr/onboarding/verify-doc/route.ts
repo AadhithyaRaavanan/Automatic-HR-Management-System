@@ -59,27 +59,64 @@ export async function POST(request: NextRequest) {
     const nowIso = new Date().toISOString();
     const newStatus = action === "approve" ? "approved" : "rejected";
 
-    // 2. Update document status
-    await (supabaseAdmin as any)
-      .from("onboarding_documents")
-      .update({
-        document_status: newStatus,
-        rejection_reason: action === "reject" ? rejectionReason.trim() : null,
-        reviewed_by: reviewerId,
-        reviewed_at: nowIso,
-      })
-      .eq("id", documentId);
+    // 2. Update document status in onboarding_documents (if column exists)
+    try {
+      await (supabaseAdmin as any)
+        .from("onboarding_documents")
+        .update({
+          document_status: newStatus,
+          rejection_reason: action === "reject" ? rejectionReason.trim() : null,
+          reviewed_by: reviewerId,
+          reviewed_at: nowIso,
+        })
+        .eq("id", documentId);
+    } catch {}
 
-    // 3. If rejected, update candidate's onboarding status to changes_requested / CORRECTION_REQUIRED and notify them
-    if (action === "reject") {
+    // Store verified document state inside profile JSONB so it is guaranteed to persist regardless of schema column migrations
+    try {
+      const { data: currentProf } = await (supabaseAdmin as any)
+        .from("onboarding_profiles")
+        .select("education_details")
+        .eq("user_id", doc.user_id)
+        .maybeSingle();
+
+      const existingVerified = currentProf?.education_details?.verified_docs || {};
+      const updatedEducationDetails = {
+        ...(currentProf?.education_details || {}),
+        verified_docs: {
+          ...existingVerified,
+          [documentId]: {
+            status: newStatus,
+            rejection_reason: action === "reject" ? rejectionReason.trim() : null,
+            reviewed_by: reviewerId,
+            reviewed_at: nowIso,
+          },
+        },
+      };
+
       await (supabaseAdmin as any)
         .from("onboarding_profiles")
         .update({
-          onboarding_status: "CORRECTION_REQUIRED",
-          status: "changes_requested",
+          education_details: updatedEducationDetails,
           updated_at: nowIso,
+          ...(action === "reject" ? { status: "changes_requested" } : {}),
         })
         .eq("user_id", doc.user_id);
+    } catch (profErr) {
+      console.warn("[verify-doc] profile verified_docs update warning:", profErr);
+    }
+
+    // 3. If rejected, update candidate's onboarding status to changes_requested and notify them
+    if (action === "reject") {
+      try {
+        await (supabaseAdmin as any)
+          .from("onboarding_profiles")
+          .update({
+            status: "changes_requested",
+            updated_at: nowIso,
+          })
+          .eq("user_id", doc.user_id);
+      } catch {}
 
       // Audit Log
       try {
@@ -138,22 +175,24 @@ export async function POST(request: NextRequest) {
         console.warn("[Document Approval Notification Error]:", notifErr);
       }
 
-      // Update onboarding status to UNDER_REVIEW if currently SUBMITTED/RESUBMITTED
-      const { data: prof } = await (supabaseAdmin as any)
-        .from("onboarding_profiles")
-        .select("onboarding_status")
-        .eq("user_id", doc.user_id)
-        .maybeSingle();
-
-      if (["SUBMITTED", "RESUBMITTED"].includes(prof?.onboarding_status)) {
-        await (supabaseAdmin as any)
+      // Optional: keep status under_review if currently submitted
+      try {
+        const { data: prof } = await (supabaseAdmin as any)
           .from("onboarding_profiles")
-          .update({
-            onboarding_status: "UNDER_REVIEW",
-            updated_at: nowIso,
-          })
-          .eq("user_id", doc.user_id);
-      }
+          .select("status")
+          .eq("user_id", doc.user_id)
+          .maybeSingle();
+
+        if (prof?.status === "submitted") {
+          await (supabaseAdmin as any)
+            .from("onboarding_profiles")
+            .update({
+              status: "under_review",
+              updated_at: nowIso,
+            })
+            .eq("user_id", doc.user_id);
+        }
+      } catch {}
     }
 
     return NextResponse.json({

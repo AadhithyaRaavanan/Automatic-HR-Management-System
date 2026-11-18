@@ -263,7 +263,9 @@ export async function uploadDoc({
   const signedUrl = await getSignedUrl(storagePath, 3600);
 
   // 8. Google Drive parent URL reference
-  const driveFolderUrl = process.env.ONBOARDING_DRIVE_FOLDER_URL || null;
+  const driveFolderUrl =
+    process.env.ONBOARDING_DRIVE_FOLDER_URL ||
+    "https://drive.google.com/drive/folders/1lDOzwBbZa4FG1M3pRzQDj7cNt8RJ-mdZ?usp=sharing";
 
   return {
     documentId,
@@ -313,15 +315,24 @@ export async function listCandidateDocs(userId: string): Promise<Array<{
   salary_month?: string | null;
   salary_year?: string | null;
 }>> {
-  const { data: docs, error } = await (supabaseAdmin as any)
-    .from("onboarding_documents")
-    .select("*")
-    .eq("user_id", userId)
-    .order("uploaded_at", { ascending: false });
+  const [{ data: docs, error }, { data: profile }] = await Promise.all([
+    (supabaseAdmin as any)
+      .from("onboarding_documents")
+      .select("*")
+      .eq("user_id", userId)
+      .order("uploaded_at", { ascending: false }),
+    (supabaseAdmin as any)
+      .from("onboarding_profiles")
+      .select("education_details")
+      .eq("user_id", userId)
+      .maybeSingle(),
+  ]);
 
   if (error) {
     throw new Error(`Failed to list candidate documents: ${error.message}`);
   }
+
+  const verifiedDocsMap = (profile?.education_details?.verified_docs) || {};
 
   const results = await Promise.all(
     (docs || []).map(async (doc: any) => {
@@ -329,14 +340,16 @@ export async function listCandidateDocs(userId: string): Promise<Array<{
       try {
         signedUrl = await getSignedUrl(doc.storage_path, 3600);
       } catch {}
+      const docStatus = doc.document_status || verifiedDocsMap[doc.id]?.status || "pending";
+      const docRejectionReason = doc.rejection_reason || verifiedDocsMap[doc.id]?.rejection_reason || null;
       return {
         id: doc.id,
         doc_type: doc.doc_type,
         file_name: doc.file_name,
         storage_path: doc.storage_path,
         file_size: Number(doc.file_size || 0),
-        document_status: doc.document_status || "pending",
-        rejection_reason: doc.rejection_reason || null,
+        document_status: docStatus,
+        rejection_reason: docRejectionReason,
         uploaded_at: doc.uploaded_at,
         signedUrl,
         salary_month: doc.salary_month || null,

@@ -46,11 +46,11 @@ export async function POST(request: NextRequest) {
     // Check existing onboarding profile
     const { data: existingProfile } = await (supabaseAdmin as any)
       .from("onboarding_profiles")
-      .select("onboarding_status, status")
+      .select("status")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    const currentStatus = existingProfile?.onboarding_status || existingProfile?.status || "NOT_STARTED";
+    const currentStatus = existingProfile?.status || "NOT_STARTED";
     // If SUBMITTED, UNDER_REVIEW, VERIFIED, or COMPLETED, lock normal draft editing
     if (["SUBMITTED", "UNDER_REVIEW", "VERIFIED", "COMPLETED", "submitted", "approved"].includes(currentStatus)) {
       return NextResponse.json(

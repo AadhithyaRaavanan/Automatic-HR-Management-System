@@ -58,7 +58,6 @@ export async function POST(request: NextRequest) {
       .from("onboarding_profiles")
       .update({
         status: "changes_requested",
-        onboarding_status: "CORRECTION_REQUIRED",
         updated_at: nowIso,
       })
       .eq("user_id", userId);

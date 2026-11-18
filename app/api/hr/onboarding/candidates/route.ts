@@ -68,6 +68,7 @@ export async function GET(request: NextRequest) {
       (candidates || []).map(async (c: any) => {
         const emp = empMap.get(c.user_id);
         const rawDocs = docsByUserId.get(c.user_id) || [];
+        const verifiedDocsMap = (c.education_details?.verified_docs) || {};
 
         // Resolve signed URLs for each doc
         const docsWithUrls = await Promise.all(
@@ -76,6 +77,8 @@ export async function GET(request: NextRequest) {
             try {
               signedUrl = await getSignedUrl(doc.storage_path, 3600);
             } catch {}
+            const docStatus = doc.document_status || verifiedDocsMap[doc.id]?.status || "pending";
+            const docRejectionReason = doc.rejection_reason || verifiedDocsMap[doc.id]?.rejection_reason || null;
             return {
               id: doc.id,
               doc_type: doc.doc_type,
@@ -83,8 +86,8 @@ export async function GET(request: NextRequest) {
               file_name: doc.file_name,
               storage_path: doc.storage_path,
               file_size: Number(doc.file_size || 0),
-              document_status: doc.document_status || "pending",
-              rejection_reason: doc.rejection_reason || null,
+              document_status: docStatus,
+              rejection_reason: docRejectionReason,
               salary_month: doc.salary_month || null,
               salary_year: doc.salary_year || null,
               uploaded_at: doc.uploaded_at,
@@ -122,7 +125,9 @@ export async function GET(request: NextRequest) {
           documents: docsWithUrls,
           approved_docs_count: approvedCount,
           total_docs_count: uploadedCount,
-          drive_folder_url: process.env.ONBOARDING_DRIVE_FOLDER_URL || null,
+          drive_folder_url:
+            process.env.ONBOARDING_DRIVE_FOLDER_URL ||
+            "https://drive.google.com/drive/folders/1lDOzwBbZa4FG1M3pRzQDj7cNt8RJ-mdZ?usp=sharing",
           storage_folder: c.storage_folder || null,
           personal_details: {
             dob: c.dob,
