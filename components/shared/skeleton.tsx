@@ -183,7 +183,7 @@ export function ProfilePageSkeleton() {
 export function KpiPageSkeleton() {
   return (
     <AppShell>
-      <div className="space-y-6 max-w-[1280px] mx-auto pb-16">
+      <div className="w-full space-y-6 pb-16">
         {/* Header Skeleton */}
         <div className="flex items-center justify-between pt-1 pb-4">
           <div className="space-y-2">

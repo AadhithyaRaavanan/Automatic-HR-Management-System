@@ -23,7 +23,6 @@ import {
   Calendar,
   CheckCircle2,
   Edit3,
-  UserCheck,
 } from "lucide-react";
 
 import { KpiToolbar, KpiTab, PeriodPreset } from "@/features/kpi/components/kpi-toolbar";
@@ -446,30 +445,33 @@ function KpiContent() {
   const doneGoals = goalsList.filter((g: any) => g.status === "done").length;
 
   return (
-    <div className="w-full max-w-[1280px] mx-auto space-y-6 pb-16">
-      {/* 1. Standardized Desktop Page Header */}
-      <PageHeader
-        title={
-          <div className="flex items-center gap-2.5">
-            <BarChart3 className="w-6 h-6 text-brand-purple" />
-            <span>Performance & KPI Analytics</span>
-          </div>
-        }
-        subtitle="Data-grounded performance metrics, manager reviews, and goal tracking."
-        action={
+    <div className="w-full space-y-6">
+      {/* 1. Page Header matching Tasks and Attendance */}
+      <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight flex items-center gap-2.5">
+            <BarChart3 className="w-7 h-7 text-brand-purple" />
+            <span>Performance &amp; KPI Analytics</span>
+          </h1>
+          <p className="text-xs sm:text-sm text-text-secondary mt-1">
+            Data-grounded performance metrics, manager reviews, and goal tracking.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={handleExportCsv}
             disabled={kpiLoading || !kpiData}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-card border border-border-light text-xs font-bold text-text-primary hover:bg-card-subtle transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-border-light text-xs font-bold text-text-primary hover:bg-card-subtle transition-colors shadow-xs cursor-pointer disabled:opacity-50"
           >
             <Download className="w-4 h-4 text-brand-purple" />
             <span>Export CSV</span>
           </button>
-        }
-      />
+        </div>
+      </section>
 
-      {/* 2. Unified Sticky Toolbar */}
+      {/* 2. Unified Sticky Toolbar spanning full width */}
       <KpiToolbar
         activeTab={activeTab}
         onTabChange={setActiveTab}
