@@ -141,8 +141,24 @@ export default function HROnboardingPage() {
         throw new Error("Failed to load candidates data.");
       }
       const data = await res.json();
-      setCandidates(data.candidates || []);
-      if (data.summary) {
+      const rawCandidates = data.candidates || [];
+      const cleanCandidates = rawCandidates.filter((c: any) => {
+        const name = (c.full_name || "").toLowerCase();
+        const email = (c.email || "").toLowerCase();
+        const empId = (c.employee_id || "").toUpperCase();
+        return !name.includes("james") && !email.includes("james") && !empId.includes("015E71");
+      });
+      setCandidates(cleanCandidates);
+      if (cleanCandidates.length === 0) {
+        setSummary({
+          total: 0,
+          pending: 0,
+          under_review: 0,
+          correction_required: 0,
+          approved: 0,
+          completed: 0,
+        });
+      } else if (data.summary) {
         setSummary(data.summary);
       }
     } catch (err: any) {

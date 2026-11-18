@@ -50,6 +50,7 @@ export async function GET() {
     uptime: Math.floor(process.uptime()),
     checks: {
       database: dbStatus,
+      supabaseHost: process.env.NEXT_PUBLIC_SUPABASE_URL ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).host : "none",
       redis: redisStatus,
       timestamp: new Date().toISOString(),
     },

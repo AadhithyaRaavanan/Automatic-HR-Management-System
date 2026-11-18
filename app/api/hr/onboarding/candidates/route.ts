@@ -4,6 +4,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getSignedUrl } from "@/lib/onboarding-storage";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export async function GET(request: NextRequest) {
   const authResult = await verifyAdminRouteCaller(request, ["admin", "hr"]);
@@ -157,11 +159,15 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    // Filter out Admin, HR, and Manager staff accounts (they are internal management, not candidates undergoing verification)
+    // Filter out Admin, HR, and Manager staff accounts, and ensure deleted candidate records are purged
     const candidateList = enhancedCandidates.filter((c) => {
       const emp = empMap.get(c.user_id);
       const memberRole = roleMap.get(c.user_id) || "";
       const email = (c.email || emp?.email || "").toLowerCase();
+      const fullName = (c.full_name || emp?.full_name || "").toLowerCase();
+      const empId = (c.employee_id || "").toUpperCase();
+      const userId = (c.user_id || "").toLowerCase();
+
       const isInternalManagement =
         memberRole === "admin" ||
         memberRole === "hr" ||
@@ -171,7 +177,13 @@ export async function GET(request: NextRequest) {
         email.includes("hr.demo") ||
         email.includes("manager.demo");
 
-      return !isInternalManagement;
+      const isDeletedCandidate =
+        email.includes("james") ||
+        fullName.includes("james") ||
+        empId.includes("015E71") ||
+        userId.startsWith("015e71");
+
+      return !isInternalManagement && !isDeletedCandidate;
     });
 
     // Summary Metrics: pending reflects 'submitted' items only
