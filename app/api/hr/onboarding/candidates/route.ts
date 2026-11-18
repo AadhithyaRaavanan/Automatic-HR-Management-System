@@ -159,14 +159,11 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    // Filter out Admin, HR, and Manager staff accounts, and ensure deleted candidate records are purged
+    // Filter out Admin, HR, and Manager staff accounts (internal management accounts are not candidates undergoing verification)
     const candidateList = enhancedCandidates.filter((c) => {
       const emp = empMap.get(c.user_id);
       const memberRole = roleMap.get(c.user_id) || "";
       const email = (c.email || emp?.email || "").toLowerCase();
-      const fullName = (c.full_name || emp?.full_name || "").toLowerCase();
-      const empId = (c.employee_id || "").toUpperCase();
-      const userId = (c.user_id || "").toLowerCase();
 
       const isInternalManagement =
         memberRole === "admin" ||
@@ -177,13 +174,7 @@ export async function GET(request: NextRequest) {
         email.includes("hr.demo") ||
         email.includes("manager.demo");
 
-      const isDeletedCandidate =
-        email.includes("james") ||
-        fullName.includes("james") ||
-        empId.includes("015E71") ||
-        userId.startsWith("015e71");
-
-      return !isInternalManagement && !isDeletedCandidate;
+      return !isInternalManagement;
     });
 
     // Summary Metrics: pending reflects 'submitted' items only
