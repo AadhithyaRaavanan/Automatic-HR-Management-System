@@ -204,9 +204,11 @@ export default function HROnboardingPage() {
             }
             return d;
           });
+          const currentApproved = updatedDocs.filter((d) => d.document_status === "approved").length;
           return {
             ...prev,
             documents: updatedDocs,
+            approved_docs_count: currentApproved,
             onboarding_status: action === "reject" ? "CORRECTION_REQUIRED" : "UNDER_REVIEW",
           };
         });
@@ -613,7 +615,7 @@ export default function HROnboardingPage() {
                 <h4 className="text-xs font-extrabold uppercase tracking-wider text-text-primary flex items-center justify-between">
                   <span>Submitted Documents ({selectedCandidate.documents.length})</span>
                   <span className="text-[11px] font-bold text-text-tertiary">
-                    {selectedCandidate.approved_docs_count} of {selectedCandidate.documents.length} Approved
+                    {selectedCandidate.documents.filter(d => d.document_status === "approved").length} of {selectedCandidate.documents.length} Approved
                   </span>
                 </h4>
 
@@ -685,10 +687,10 @@ export default function HROnboardingPage() {
                                 disabled={reviewingDocId === doc.id || isApproved}
                                 onClick={() => handleVerifyDoc(doc.id, "approve")}
                                 className={cn(
-                                  "px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-sm",
+                                  "px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm",
                                   isApproved
-                                    ? "bg-status-success text-white opacity-80 cursor-default"
-                                    : "bg-status-success/10 text-status-success hover:bg-status-success hover:text-white"
+                                    ? "bg-emerald-600 text-white cursor-default"
+                                    : "bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white cursor-pointer border border-emerald-200"
                                 )}
                               >
                                 <Check className="w-3.5 h-3.5" />
@@ -706,10 +708,10 @@ export default function HROnboardingPage() {
                                   }))
                                 }
                                 className={cn(
-                                  "px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-sm",
+                                  "px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm",
                                   isRejected
-                                    ? "bg-status-danger text-white opacity-80"
-                                    : "bg-status-danger/10 text-status-danger hover:bg-status-danger hover:text-white"
+                                    ? "bg-rose-600 text-white cursor-default"
+                                    : "bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white border border-rose-200"
                                 )}
                               >
                                 <X className="w-3.5 h-3.5" />

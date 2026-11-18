@@ -121,9 +121,20 @@ export async function POST(request: NextRequest) {
         .update({
           status: "active",
           onboarding_completed: true,
+          shift_start_time: "09:00:00",
+          shift_end_time: "18:00:00",
+          timezone: "Asia/Kolkata",
           updated_at: nowIso,
         })
         .eq("id", userId),
+      (supabaseAdmin as any)
+        .from("organization_members")
+        .update({
+          shift_start_time: "09:00:00",
+          shift_end_time: "18:00:00",
+          updated_at: nowIso,
+        })
+        .eq("user_id", userId),
       supabaseAdmin.auth.admin.updateUserById(userId, {
         app_metadata: {
           onboarding_approved: true,

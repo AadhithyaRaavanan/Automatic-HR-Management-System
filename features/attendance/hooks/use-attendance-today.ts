@@ -121,11 +121,11 @@ export function useAttendanceToday() {
 
       const empProfile = profileData as EmployeeProfileRow | null;
       const memRow = memberData as any;
-      const effectiveTz = empProfile?.timezone || userTimezone;
+      const effectiveTz = empProfile?.timezone || (userTimezone && userTimezone !== "UTC" ? userTimezone : "Asia/Kolkata");
       const effectiveWorkDate = getEmployeeWorkDate(effectiveTz);
       const targetMins = empProfile?.work_target_minutes || 480;
       const shiftStartTime = memRow?.shift_start_time || empProfile?.shift_start_time || "09:00:00";
-      const shiftEndTime = memRow?.shift_end_time || empProfile?.shift_end_time || "17:00:00";
+      const shiftEndTime = memRow?.shift_end_time || empProfile?.shift_end_time || "18:00:00";
 
       // 1. Fetch today's sessions
       const { data: sessions } = await supabase

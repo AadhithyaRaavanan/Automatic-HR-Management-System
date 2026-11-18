@@ -12,7 +12,6 @@ import {
   CheckSquare,
   UserCheck,
   Target,
-  Sparkles,
   AlertCircle,
   Lock,
 } from "lucide-react";
@@ -59,7 +58,7 @@ const GROUP_METADATA: Record<
   announcements: {
     label: "Announcements & Holidays",
     description: "Company-wide holidays and workplace broadcasts",
-    icon: Sparkles,
+    icon: Calendar,
   },
   security: {
     label: "Security & Credentials",

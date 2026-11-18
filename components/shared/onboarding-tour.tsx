@@ -8,7 +8,7 @@ import {
   TUTORIAL_VERSION,
   getTutorialStepsForUser,
 } from "@/lib/tutorial/tutorial-config";
-import { ChevronRight, ChevronLeft, Check, X, Sparkles, Compass } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, X, Compass } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
@@ -334,7 +334,7 @@ export function OnboardingTour({
             </span>
             {isNavigating && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-brand-purple/10 text-brand-purple border border-brand-purple/20 animate-pulse">
-                <Sparkles className="w-3 h-3 animate-spin" />
+                <Compass className="w-3 h-3 animate-spin" />
                 <span>Loading view...</span>
               </span>
             )}
@@ -371,7 +371,7 @@ export function OnboardingTour({
         {/* "Good to know" Tip Callout */}
         {currentStep.tip && (
           <div className="p-3 rounded-xl bg-brand-purple/5 border border-brand-purple/15 text-xs text-text-secondary flex items-start gap-2.5 mb-5">
-            <Sparkles className="w-4 h-4 text-brand-purple shrink-0 mt-0.5" />
+            <Compass className="w-4 h-4 text-brand-purple shrink-0 mt-0.5" />
             <div className="space-y-0.5">
               <span className="font-semibold text-brand-purple block text-[11px] uppercase tracking-wide">
                 Good to know

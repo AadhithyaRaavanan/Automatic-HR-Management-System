@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { BentoCard } from "@/components/bento/bento-card";
-import { Play, Square, Clock, ShieldCheck, Sparkles, Lock, AlertCircle } from "lucide-react";
+import { Play, Square, Clock, ShieldCheck, CheckCircle2, Lock, AlertCircle } from "lucide-react";
 import { evaluatePreCheckInLock } from "@/lib/date/timezone";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -28,23 +28,42 @@ export function HeroCheckInCard({
   workDate = "Today",
   targetMinutes = 480,
   shiftStartTime = "09:00:00",
-  shiftEndTime = "17:00:00",
-  userTimezone = "UTC",
+  shiftEndTime = "18:00:00",
+  userTimezone = "Asia/Kolkata",
   onCheckIn,
   onCheckOut,
   isLoading = false,
   className,
 }: HeroCheckInCardProps) {
   const hasNotifiedShiftStartRef = React.useRef(false);
+  const serverOffsetRef = React.useRef(0);
 
-  // Evaluate 5-minute pre-check-in lock and shift start status
+  // Synchronize with authoritative internet/server time
+  React.useEffect(() => {
+    async function syncServerClock() {
+      try {
+        const t0 = Date.now();
+        const res = await fetch("/api/time", { cache: "no-store" });
+        if (res.ok) {
+          const t1 = Date.now();
+          const json = await res.json();
+          const latency = (t1 - t0) / 2;
+          serverOffsetRef.current = json.epoch + latency - t1;
+        }
+      } catch {}
+    }
+    syncServerClock();
+  }, []);
+
+  // Evaluate pre-check-in lock and shift start status using synced time
   const [lockStatus, setLockStatus] = React.useState(() =>
-    evaluatePreCheckInLock(shiftStartTime, shiftEndTime, userTimezone)
+    evaluatePreCheckInLock(shiftStartTime, shiftEndTime, userTimezone, new Date())
   );
 
   React.useEffect(() => {
     const updateLock = () => {
-      const status = evaluatePreCheckInLock(shiftStartTime, shiftEndTime, userTimezone);
+      const syncedNow = new Date(Date.now() + serverOffsetRef.current);
+      const status = evaluatePreCheckInLock(shiftStartTime, shiftEndTime, userTimezone, syncedNow);
       setLockStatus(status);
 
       // Trigger Shift-Start Notification if online at shift start, shift is active/unlocked, and not checked in
@@ -207,7 +226,7 @@ export function HeroCheckInCard({
             : `Timezone: ${userTimezone}`}
         </span>
         <span className="flex items-center gap-1 font-semibold text-brand-purple">
-          <Sparkles className="w-3.5 h-3.5" />
+          <CheckCircle2 className="w-3.5 h-3.5" />
           Auto-regularization supported
         </span>
       </div>

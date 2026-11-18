@@ -297,6 +297,7 @@ export async function POST(request: NextRequest) {
     // 4. Update onboarding profile to submitted
     const updateProfileData: Record<string, any> = {
       full_name: resolvedFullName,
+      highest_qualification: highestQual,
       dob: resolvedDob,
       gender: payload.gender || onbProfile.gender || null,
       phone: resolvedPhone,
@@ -316,6 +317,25 @@ export async function POST(request: NextRequest) {
       submitted_at: nowIso,
       updated_at: nowIso,
     };
+
+    // Purge non-matching qualification docs so only the chosen certificate remains in DB
+    if (requiredQualDoc) {
+      const otherQualDocTypes = [
+        "cert_10th",
+        "cert_12th",
+        "cert_diploma",
+        "cert_undergraduate",
+        "cert_postgraduate",
+        "cert_doctorate",
+        "cert_other",
+      ].filter((dt) => dt !== requiredQualDoc);
+
+      await (supabaseAdmin as any)
+        .from("onboarding_documents")
+        .delete()
+        .eq("user_id", user.id)
+        .in("doc_type", otherQualDocTypes);
+    }
 
     const { error: updateErr } = await (supabaseAdmin as any)
       .from("onboarding_profiles")

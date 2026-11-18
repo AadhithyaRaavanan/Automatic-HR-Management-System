@@ -33,6 +33,7 @@ export async function updateSession(request: NextRequest) {
   // Feature flag guards: if feature is disabled, redirect server-side to /dashboard
   if (
     (!FEATURES.KPI && (pathname === "/kpi" || pathname.startsWith("/kpi/"))) ||
+    (!FEATURES.TASKS && (pathname === "/tasks" || pathname.startsWith("/tasks/"))) ||
     (!FEATURES.LOCATIONS && (pathname === "/admin/locations" || pathname.startsWith("/admin/locations/"))) ||
     (!FEATURES.SHIFTS && (pathname === "/admin/shifts" || pathname.startsWith("/admin/shifts/"))) ||
     (!FEATURES.AUDITS && (pathname === "/admin/audits" || pathname.startsWith("/admin/audits/")))
@@ -289,7 +290,9 @@ export async function updateSession(request: NextRequest) {
         if (
           !pathname.startsWith("/mfa-challenge") &&
           !pathname.startsWith("/mfa-setup") &&
-          !pathname.startsWith("/auth")
+          !pathname.startsWith("/auth") &&
+          !pathname.startsWith("/settings") &&
+          !pathname.startsWith("/api")
         ) {
           const url = request.nextUrl.clone();
           url.pathname = "/mfa-challenge";

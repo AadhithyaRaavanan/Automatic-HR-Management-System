@@ -13,7 +13,6 @@ import {
   UserCheck,
   Target,
   ShieldAlert,
-  Sparkles,
   AlertCircle,
   ExternalLink,
   Filter,
@@ -33,7 +32,7 @@ function getNotificationIcon(type: string) {
   if (type.startsWith("kpi")) return <Target className="w-4 h-4 text-indigo-500 shrink-0" />;
   if (type.startsWith("security") || type.startsWith("password") || type.startsWith("mfa"))
     return <ShieldAlert className="w-4 h-4 text-red-500 shrink-0" />;
-  if (type.startsWith("holiday")) return <Sparkles className="w-4 h-4 text-emerald-500 shrink-0" />;
+  if (type.startsWith("holiday")) return <Calendar className="w-4 h-4 text-emerald-500 shrink-0" />;
   if (type.startsWith("reminder") || type.includes("overdue") || type.includes("missed"))
     return <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />;
   return <Bell className="w-4 h-4 text-brand-purple shrink-0" />;

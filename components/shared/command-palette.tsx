@@ -76,7 +76,7 @@ export function CommandPalette({ open, onOpenChange, userRole = "employee" }: Co
       const key = e.key.toLowerCase();
 
       // "N" for new task
-      if (key === "n" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (FEATURES.TASKS && key === "n" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         window.location.href = "/tasks?create=1";
         return;
@@ -103,7 +103,9 @@ export function CommandPalette({ open, onOpenChange, userRole = "employee" }: Co
           window.location.href = "/attendance";
         } else if (key === "t") {
           e.preventDefault();
-          window.location.href = "/tasks";
+          if (FEATURES.TASKS) {
+            window.location.href = "/tasks";
+          }
         } else if (key === "l") {
           e.preventDefault();
           window.location.href = "/leave";
@@ -184,18 +186,20 @@ export function CommandPalette({ open, onOpenChange, userRole = "employee" }: Co
                 </kbd>
               </Command.Item>
 
-              <Command.Item
-                onSelect={() => navigate("/tasks?create=1")}
-                className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-text-primary hover:bg-brand-purple-light/50 hover:text-brand-purple cursor-pointer transition-colors"
-              >
-                <div className="flex items-center gap-2.5">
-                  <Plus className="w-4 h-4 text-brand-purple" />
-                  <span>New Task</span>
-                </div>
-                <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-card border border-border-light text-text-tertiary">
-                  N
-                </kbd>
-              </Command.Item>
+              {FEATURES.TASKS && (
+                <Command.Item
+                  onSelect={() => navigate("/tasks?create=1")}
+                  className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-text-primary hover:bg-brand-purple-light/50 hover:text-brand-purple cursor-pointer transition-colors"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Plus className="w-4 h-4 text-brand-purple" />
+                    <span>New Task</span>
+                  </div>
+                  <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-card border border-border-light text-text-tertiary">
+                    N
+                  </kbd>
+                </Command.Item>
+              )}
 
               <Command.Item
                 onSelect={() => navigate("/requests")}
@@ -263,18 +267,20 @@ export function CommandPalette({ open, onOpenChange, userRole = "employee" }: Co
                 </kbd>
               </Command.Item>
 
-              <Command.Item
-                onSelect={() => navigate("/tasks")}
-                className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-text-primary hover:bg-brand-purple-light/50 hover:text-brand-purple cursor-pointer transition-colors"
-              >
-                <div className="flex items-center gap-2.5">
-                  <CheckSquare className="w-4 h-4 text-brand-purple" />
-                  <span>Tasks & Kanban Board</span>
-                </div>
-                <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-card border border-border-light text-text-tertiary">
-                  G T
-                </kbd>
-              </Command.Item>
+              {FEATURES.TASKS && (
+                <Command.Item
+                  onSelect={() => navigate("/tasks")}
+                  className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-text-primary hover:bg-brand-purple-light/50 hover:text-brand-purple cursor-pointer transition-colors"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <CheckSquare className="w-4 h-4 text-brand-purple" />
+                    <span>Tasks & Kanban Board</span>
+                  </div>
+                  <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-card border border-border-light text-text-tertiary">
+                    G T
+                  </kbd>
+                </Command.Item>
+              )}
 
               <Command.Item
                 onSelect={() => navigate("/leave")}

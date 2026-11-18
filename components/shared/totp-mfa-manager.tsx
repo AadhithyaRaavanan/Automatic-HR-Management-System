@@ -40,9 +40,21 @@ export function TotpMfaManager() {
   const handleStartEnrollment = async () => {
     setIsEnrolling(true);
     try {
+      // Clean up any stale unverified factors from previous incomplete sessions first
+      try {
+        const { data: factorList } = await supabase.auth.mfa.listFactors();
+        const unverified = (factorList?.all || factorList?.totp || []).filter((f: any) => f.status === "unverified");
+        for (const f of unverified) {
+          await supabase.auth.mfa.unenroll({ factorId: f.id }).catch(() => {});
+        }
+      } catch {}
+
+      // Unique friendly name prevents "A factor with the friendly name "" already exists"
+      const friendlySuffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
       const { data, error } = await supabase.auth.mfa.enroll({
         factorType: "totp",
-        issuer: "RemoteHR",
+        issuer: "Pulse HR",
+        friendlyName: `Pulse-Authenticator-${friendlySuffix}`,
       });
 
       if (error) throw error;
@@ -56,6 +68,16 @@ export function TotpMfaManager() {
       toast.error(err.message || "Failed to initiate MFA enrollment.");
       setIsEnrolling(false);
     }
+  };
+
+  const handleCancelEnrollment = async () => {
+    if (enrollData?.factorId) {
+      await supabase.auth.mfa.unenroll({ factorId: enrollData.factorId }).catch(() => {});
+    }
+    setEnrollData(null);
+    setVerifyCode("");
+    setIsEnrolling(false);
+    await fetchFactors();
   };
 
   const handleVerifyEnrollment = async (e: React.FormEvent) => {
@@ -251,10 +273,7 @@ export function TotpMfaManager() {
 
             <button
               type="button"
-              onClick={() => {
-                setIsEnrolling(false);
-                setEnrollData(null);
-              }}
+              onClick={handleCancelEnrollment}
               className="text-xs text-text-tertiary hover:text-text-primary transition-colors cursor-pointer"
             >
               Cancel enrollment

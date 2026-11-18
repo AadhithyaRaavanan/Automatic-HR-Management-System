@@ -18,7 +18,7 @@ import { AttendanceCalendarCard } from "@/features/calendar/components/attendanc
 import {
   Clock,
   Calendar,
-  Sparkles,
+  Award,
   TrendingUp,
   AlertCircle,
   CheckCircle2,
@@ -45,7 +45,7 @@ export default function GalleryPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-brand-purple text-white mb-2">
-                <Sparkles className="w-3.5 h-3.5" />
+                <Award className="w-3.5 h-3.5" />
                 Phase 0 Milestone
               </div>
               <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight">

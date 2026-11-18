@@ -8,6 +8,7 @@ import { BentoCard } from "@/components/bento/bento-card";
 import { Modal } from "@/components/ui/modal";
 import { EmptyState } from "@/components/shared/empty-state";
 import {
+  Calendar,
   CalendarDays,
   Plus,
   Trash2,
@@ -15,7 +16,6 @@ import {
   Lock,
   Sliders,
   ShieldCheck,
-  Sparkles,
   MapPin,
   Download,
   AlertTriangle,
@@ -516,7 +516,7 @@ function HolidaysPageContent() {
       <div className="p-4 rounded-3xl bg-gradient-to-r from-brand-purple/15 via-brand-purple/5 to-card-subtle border border-brand-purple/25 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl bg-brand-purple text-white flex items-center justify-center shadow-float shrink-0">
-            <Sparkles className="w-5 h-5" />
+            <Calendar className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">

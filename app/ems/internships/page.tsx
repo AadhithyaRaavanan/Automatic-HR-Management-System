@@ -12,7 +12,6 @@ import {
   ExternalLink,
   CheckCircle2,
   Clock,
-  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -93,7 +92,7 @@ export default function EmsInternshipsPage() {
                   <div className="flex justify-between">
                     <span className="text-text-muted">Mentor:</span>
                     <span className="font-semibold text-text-primary">
-                      {intern.mentor?.full_name || "Aadhithya Raavanan"}
+                      {intern.mentor?.full_name || "Not Assigned"}
                     </span>
                   </div>
                   <div className="flex justify-between">

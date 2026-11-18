@@ -13,7 +13,6 @@ import {
   Briefcase,
   GitPullRequest,
   GraduationCap,
-  Sparkles,
   Download,
   CheckCircle2,
 } from "lucide-react";
@@ -32,7 +31,7 @@ export const emsNavItems = [
   { label: "Roles & Permissions", href: "/ems/roles", icon: ShieldCheck },
   { label: "Organization Tree", href: "/ems/organization", icon: GitPullRequest },
   { label: "Internships", href: "/ems/internships", icon: GraduationCap },
-  { label: "Onboarding Hub", href: "/hr/onboarding", icon: Sparkles },
+  { label: "Onboarding Hub", href: "/hr/onboarding", icon: UserPlus },
 ];
 
 export function EmsNavigationHeader({ currentTab }: EmsNavProps) {

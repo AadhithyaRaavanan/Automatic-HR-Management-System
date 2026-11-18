@@ -25,7 +25,7 @@ import {
   CheckSquare,
   Target,
   UserPlus,
-  Sparkles,
+  Palette,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isDemoModeEnabled } from "@/lib/config/demo";
@@ -172,11 +172,12 @@ export function CurvedSidebar({
   const navItems = React.useMemo(() => {
     const items = [...baseNavItems];
     if (isDemoModeEnabled()) {
-      items.push({ label: "Gallery", href: "/gallery", icon: Sparkles });
+      items.push({ label: "Gallery", href: "/gallery", icon: Palette });
     }
     return items
       .filter((item) => {
         if (item.href === "/kpi" && !FEATURES.KPI) return false;
+        if (item.href === "/tasks" && !FEATURES.TASKS) return false;
         if (item.href === "/admin/locations" && !FEATURES.LOCATIONS) return false;
         if (item.href === "/admin/shifts" && !FEATURES.SHIFTS) return false;
         if (item.href === "/admin/audits" && !FEATURES.AUDITS) return false;

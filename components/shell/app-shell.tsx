@@ -399,7 +399,12 @@ export function AppShell({
           <div className="flex-1 flex flex-col min-w-0 px-4 sm:px-6 md:px-8 lg:px-10 py-5 pb-20 md:pb-8">
             <main className={cn("flex-1 w-full flex flex-col min-w-0", className)}>
               {/* Warning banner when organization has disabled mandatory MFA for privileged accounts */}
-              {mounted && sessionState.isLoaded && sessionState.requireMfaForPrivileged === false && (
+              {mounted &&
+                sessionState.isLoaded &&
+                sessionState.userRole === "admin" &&
+                sessionState.requireMfaForPrivileged === false &&
+                typeof window !== "undefined" &&
+                !window.location.pathname.startsWith("/settings") && (
                 <div
                   className="mb-4 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 flex items-center justify-between gap-3 text-xs font-semibold shadow-sm"
                   role="alert"

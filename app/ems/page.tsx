@@ -11,7 +11,6 @@ import {
   Building2,
   Network,
   GraduationCap,
-  Sparkles,
   ShieldAlert,
   ArrowRight,
   TrendingUp,
@@ -121,7 +120,7 @@ export default function EmsOverviewPage() {
           <div className="p-4 rounded-2xl bg-card/60 backdrop-blur-md border border-border-light shadow-sm">
             <div className="flex items-center justify-between text-text-muted mb-2">
               <span className="text-xs font-semibold">Pending Onboarding</span>
-              <Sparkles className="w-4 h-4 text-rose-500" />
+              <UserCheck className="w-4 h-4 text-rose-500" />
             </div>
             <p className="text-2xl font-extrabold text-text-primary tracking-tight">
               {loading ? "..." : stats.pendingOnboarding || 0}

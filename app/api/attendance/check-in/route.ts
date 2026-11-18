@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
     ]);
 
     const shiftStartTime = member?.shift_start_time || emp?.shift_start_time || "09:00:00";
-    const shiftEndTime = member?.shift_end_time || emp?.shift_end_time || "17:00:00";
+    const shiftEndTime = member?.shift_end_time || emp?.shift_end_time || "18:00:00";
     const timezone = emp?.timezone || "Asia/Kolkata";
 
     // 2. Server-side guard: Evaluate shift time lock

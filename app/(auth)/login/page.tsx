@@ -17,7 +17,7 @@ import {
   ArrowLeft,
   KeyRound,
   ShieldCheck,
-  Sparkles,
+  CheckCircle2,
   Users,
   Briefcase,
   UserCheck,
@@ -573,7 +573,7 @@ function LoginForm() {
           Supabase Auth RLS
         </span>
         <span className="flex items-center gap-1">
-          <Sparkles className="w-3.5 h-3.5 text-brand-purple" />
+          <CheckCircle2 className="w-3.5 h-3.5 text-brand-purple" />
           Zero Invasive Monitoring
         </span>
       </div>

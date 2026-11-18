@@ -21,7 +21,8 @@ import {
   Lock,
   PlusCircle,
   CheckCircle2,
-  Sparkles,
+  Calendar,
+  CalendarDays,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isDemoModeEnabled } from "@/lib/config/demo";
@@ -339,7 +340,7 @@ function AttendanceCalendarContent() {
           title="Holidays"
           value={`${totalHolidays}`}
           subtitle="Org holidays this month"
-          icon={<Sparkles className="w-4 h-4 text-brand-purple" />}
+          icon={<Calendar className="w-4 h-4 text-brand-purple" />}
         />
         <StatCard
           title="Late Arrivals"
@@ -485,7 +486,7 @@ function AttendanceCalendarContent() {
               {selectedDay.holidayName && (
                 <div className="p-4 rounded-2xl bg-brand-purple/10 border border-brand-purple/30 mb-4">
                   <div className="flex items-center gap-2 text-brand-purple font-bold text-sm">
-                    <Sparkles className="w-4 h-4" />
+                    <Calendar className="w-4 h-4" />
                     <span>{selectedDay.holidayName}</span>
                   </div>
                   {selectedDay.holidayLocalName && (

@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
+import { FEATURES } from "@/lib/features";
 import { AppShell, useAppSession } from "@/components/shell/app-shell";
 import { BentoCard } from "@/components/bento/bento-card";
 import { StatusPill } from "@/components/shared/status-pill";
@@ -1585,6 +1587,18 @@ function TasksWorkspaceContent() {
 }
 
 export default function TasksPage() {
+  const router = useRouter();
+
+  React.useEffect(() => {
+    if (!FEATURES.TASKS) {
+      router.replace("/dashboard");
+    }
+  }, [router]);
+
+  if (!FEATURES.TASKS) {
+    return null;
+  }
+
   return (
     <AppShell>
       <TasksWorkspaceContent />

@@ -70,9 +70,38 @@ export async function GET(request: NextRequest) {
         const rawDocs = docsByUserId.get(c.user_id) || [];
         const verifiedDocsMap = (c.education_details?.verified_docs) || {};
 
+        // Filter qualification docs so ONLY the document matching the candidate's chosen highest qualification displays
+        const candidateHighestQual = (c.highest_qualification || c.education_details?.highest_qualification || "12th Standard") as string;
+        const qualMap: Record<string, string> = {
+          "10th Standard": "cert_10th",
+          "12th Standard": "cert_12th",
+          "Diploma": "cert_diploma",
+          "Undergraduate Degree": "cert_undergraduate",
+          "Postgraduate Degree": "cert_postgraduate",
+          "Doctorate / PhD": "cert_doctorate",
+          "Other Certification": "cert_other",
+        };
+        const expectedQualDocType = qualMap[candidateHighestQual] || "cert_12th";
+        const allQualDocTypes = new Set([
+          "cert_10th",
+          "cert_12th",
+          "cert_diploma",
+          "cert_undergraduate",
+          "cert_postgraduate",
+          "cert_doctorate",
+          "cert_other",
+        ]);
+
+        const filteredRawDocs = rawDocs.filter((doc: any) => {
+          if (allQualDocTypes.has(doc.doc_type)) {
+            return doc.doc_type === expectedQualDocType;
+          }
+          return true;
+        });
+
         // Resolve signed URLs for each doc
         const docsWithUrls = await Promise.all(
-          rawDocs.map(async (doc: any) => {
+          filteredRawDocs.map(async (doc: any) => {
             let signedUrl = "";
             try {
               signedUrl = await getSignedUrl(doc.storage_path, 3600);

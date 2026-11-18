@@ -14,7 +14,6 @@ import {
   Briefcase,
   ShieldCheck,
   GraduationCap,
-  Sparkles,
   Clock,
   Mail,
   Copy,
@@ -488,7 +487,7 @@ export default function NewEmployeeWizardPage() {
                     className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-md transition-all"
                   >
                     {isSubmitting ? "Provisioning..." : "Confirm & Provision Account"}
-                    <Sparkles className="w-3.5 h-3.5" />
+                    <CheckCircle2 className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>

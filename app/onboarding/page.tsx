@@ -2100,7 +2100,7 @@ export default function OnboardingPage() {
                 {/* 2. Highest Qualification */}
                 <div className="p-3 rounded-xl bg-card border border-border-light flex items-center justify-between text-xs">
                   <span className="font-bold">{highestQualification} Certificate</span>
-                  {getDoc(QUALIFICATION_DOC_MAP[highestQualification]?.docType) || getDoc("cert_12th") || getDoc("cert_10th") || getDoc("cert_undergraduate") || getDoc("cert_diploma") || getDoc("cert_postgraduate") ? (
+                  {getDoc(QUALIFICATION_DOC_MAP[highestQualification]?.docType) ? (
                     <span className="text-status-success font-bold flex items-center gap-1">
                       <Check className="w-3.5 h-3.5" /> Uploaded
                     </span>

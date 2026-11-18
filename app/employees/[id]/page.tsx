@@ -178,21 +178,23 @@ export default function Employee360ProfilePage() {
                 </span>
                 <span className="flex items-center gap-1">
                   <Phone className="w-3 h-3 text-brand-cyan" />
-                  {emp.phone || onb.emergency_contact_phone || "Not set"}
+                  {emp.phone || onb.phone || onb.emergency_contact_phone || "Not set"}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setPermissionModalOpen(true)}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-brand-purple text-white hover:bg-brand-purple/90 shadow-sm transition-all flex items-center gap-1.5"
-            >
-              <Clock className="w-3.5 h-3.5" />
-              Request Hourly Permission
-            </button>
-          </div>
+          {userRole !== "admin" && userRole !== "hr" && (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setPermissionModalOpen(true)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-brand-purple text-white hover:bg-brand-purple/90 shadow-sm transition-all flex items-center gap-1.5"
+              >
+                <Clock className="w-3.5 h-3.5" />
+                Request Hourly Permission
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Navigation Tabs */}
@@ -259,7 +261,7 @@ export default function Employee360ProfilePage() {
                 <div className="flex justify-between py-1 border-b border-border-light/40">
                   <span className="text-text-muted">Reporting Manager:</span>
                   <span className="font-semibold text-text-primary">
-                    {emp.manager?.full_name || "Aadhithya Raavanan (Super Admin)"}
+                    {emp.manager?.full_name || "Not Assigned"}
                   </span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-border-light/40">
@@ -285,7 +287,9 @@ export default function Employee360ProfilePage() {
                 </div>
                 <div className="flex justify-between py-1 border-b border-border-light/40">
                   <span className="text-text-muted">Bank Name:</span>
-                  <span className="font-semibold text-text-primary">{onb.bank_name || "Axis Bank Ltd"}</span>
+                  <span className="font-semibold text-text-primary">
+                    {onb.bank_name || (onb.bank_ifsc?.startsWith("CNRB") ? "Canara Bank" : null) || "Not Specified"}
+                  </span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-border-light/40">
                   <span className="text-text-muted">Bank A/C:</span>
@@ -333,7 +337,7 @@ export default function Employee360ProfilePage() {
               <div className="flex items-center gap-2">
                 <GraduationCap className="w-4 h-4 text-brand-purple" />
                 <span className="font-bold text-text-primary">
-                  {onb.highest_qualification || "Bachelor of Technology (B.Tech) in Computer Science"}
+                  {onb.highest_qualification || onb.education_details?.highest_qualification || "12th Standard"}
                 </span>
               </div>
               <p className="text-text-muted">Verified during mandatory employee onboarding intake.</p>
@@ -361,9 +365,22 @@ export default function Employee360ProfilePage() {
                         <p className="text-[10px] text-text-muted font-mono">{d.file_name || "drive_asset.pdf"}</p>
                       </div>
                     </div>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                      {d.document_status || "VERIFIED"}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                        {d.document_status || "VERIFIED"}
+                      </span>
+                      {d.signedUrl && (
+                        <a
+                          href={d.signedUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-1 rounded-lg bg-card hover:bg-card-subtle text-brand-purple border border-border-light text-[10px] font-semibold flex items-center gap-1 shadow-sm"
+                          title="Preview document"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -389,8 +406,8 @@ export default function Employee360ProfilePage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
               <div className="p-4 rounded-2xl bg-card-subtle border border-border-light space-y-1.5">
                 <p className="text-text-muted">Assigned Mentor:</p>
-                <p className="font-bold text-text-primary">{internship?.mentor?.full_name || "Aadhithya Raavanan"}</p>
-                <p className="text-[11px] text-text-muted">Senior Technical Architect</p>
+                <p className="font-bold text-text-primary">{internship?.mentor?.full_name || "Not Assigned"}</p>
+                <p className="text-[11px] text-text-muted">{internship?.mentor ? "Assigned Mentor" : "Mentor Not Assigned"}</p>
               </div>
               <div className="p-4 rounded-2xl bg-card-subtle border border-border-light space-y-1.5">
                 <p className="text-text-muted">Internship Period:</p>

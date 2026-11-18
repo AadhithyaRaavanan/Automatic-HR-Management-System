@@ -33,13 +33,14 @@ function MfaChallengeForm() {
         const totpFactor = data.totp.find((f) => f.status === "verified");
         if (totpFactor) {
           setFactorId(totpFactor.id);
-        } else if (data.totp.length > 0) {
-          // If first factor pending verification
-          setFactorId(data.totp[0].id);
         } else {
-          // No factor enrolled: redirect seamlessly to enrollment page to prevent lockout
-          toast.info("No authenticator enrolled yet. Redirecting to setup...");
-          router.push(`/mfa-setup?redirect=${encodeURIComponent(redirectPath)}`);
+          // No verified factor: clean up any stale unverified attempts so the user is never trapped
+          for (const f of data.totp || []) {
+            if ((f.status as string) !== "verified") {
+              await supabase.auth.mfa.unenroll({ factorId: f.id }).catch(() => {});
+            }
+          }
+          window.location.href = redirectPath || "/";
         }
       } catch (err: any) {
         toast.error("Failed to load two-factor credentials.");

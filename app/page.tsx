@@ -46,7 +46,6 @@ import {
   CheckSquare,
   AlertTriangle,
   BarChart3,
-  Sparkles,
   Lock,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -340,7 +339,7 @@ function DashboardContent({
           <div className="grid grid-cols-2 gap-4">
             <div className="p-4 rounded-2xl bg-card border border-border-light shadow-card space-y-1">
               <span className="text-[11px] font-bold uppercase tracking-wider text-text-tertiary flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-brand-purple" />
+                <Calendar className="w-3.5 h-3.5 text-brand-purple" />
                 Upcoming Holiday
               </span>
               {nextHoliday ? (
