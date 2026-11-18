@@ -148,20 +148,35 @@ export async function GET(request: NextRequest) {
       })
     );
 
+    // Filter out Admin, HR, and Manager staff accounts (they are internal management, not candidates undergoing verification)
+    const candidateList = enhancedCandidates.filter((c) => {
+      const emp = empMap.get(c.user_id);
+      const role = (emp?.role || "").toLowerCase();
+      return (
+        role !== "admin" &&
+        role !== "hr" &&
+        role !== "manager" &&
+        c.user_id !== "952a33f0-3af4-4a69-a382-26fef3b7fa11" &&
+        !c.email?.includes("aadhithya.raavanan") &&
+        !c.email?.includes("hr.demo") &&
+        !c.email?.includes("manager.demo")
+      );
+    });
+
     // Summary Metrics: pending reflects 'submitted' items only
     const summary = {
-      total: enhancedCandidates.length,
-      pending: enhancedCandidates.filter(
+      total: candidateList.length,
+      pending: candidateList.filter(
         (c) => c.status === "submitted" || c.onboarding_status === "SUBMITTED"
       ).length,
-      under_review: enhancedCandidates.filter((c) => c.onboarding_status === "UNDER_REVIEW").length,
-      correction_required: enhancedCandidates.filter((c) => c.status === "changes_requested" || c.onboarding_status === "CORRECTION_REQUIRED").length,
-      approved: enhancedCandidates.filter((c) => c.status === "approved" || ["VERIFIED", "COMPLETED"].includes(c.onboarding_status)).length,
-      completed: enhancedCandidates.filter((c) => c.status === "approved" || c.onboarding_status === "COMPLETED").length,
+      under_review: candidateList.filter((c) => c.onboarding_status === "UNDER_REVIEW").length,
+      correction_required: candidateList.filter((c) => c.status === "changes_requested" || c.onboarding_status === "CORRECTION_REQUIRED").length,
+      approved: candidateList.filter((c) => c.status === "approved" || ["VERIFIED", "COMPLETED"].includes(c.onboarding_status)).length,
+      completed: candidateList.filter((c) => c.status === "approved" || c.onboarding_status === "COMPLETED").length,
     };
 
     return NextResponse.json({
-      candidates: enhancedCandidates,
+      candidates: candidateList,
       summary,
     });
   } catch (err: any) {

@@ -14,27 +14,27 @@ import {
 interface HighlightTileProps {
   title: string;
   icon: React.ReactNode;
-  value: string;
+  primaryValue: string;
+  subValue?: string | null;
   targetText?: string;
   hasData: boolean;
   hint?: string;
-  percentValue?: number | null; // 0-100 for mini progress bar
-  targetPercent?: number;       // default 95 or 100
+  percentValue?: number | null;
   trendDiff?: number | null;
-  accentColor: "purple" | "emerald" | "amber";
+  accentColor?: "purple" | "emerald" | "amber";
 }
 
 function HighlightTile({
   title,
   icon,
-  value,
+  primaryValue,
+  subValue,
   targetText,
   hasData,
   hint,
   percentValue,
-  targetPercent = 100,
   trendDiff,
-  accentColor,
+  accentColor = "purple",
 }: HighlightTileProps) {
   const barColors = {
     purple: "bg-brand-purple",
@@ -45,7 +45,7 @@ function HighlightTile({
   return (
     <div
       className={cn(
-        "rounded-[22px] border p-4.5 flex flex-col justify-between transition-all",
+        "rounded-[22px] border p-5 flex flex-col justify-between transition-all",
         hasData
           ? "bg-card border-border-light shadow-card hover:shadow-card-hover"
           : "bg-card-subtle/50 border-dashed border-border-light text-text-tertiary"
@@ -94,32 +94,45 @@ function HighlightTile({
         )}
       </div>
 
-      {/* Main Headline & Progress */}
-      <div className="space-y-2.5 my-3">
+      {/* Main Headline & Context */}
+      <div className="space-y-2 my-2.5">
         <div className="flex items-baseline justify-between gap-2">
           <span
             className={cn(
-              "text-2xl font-black tabular-nums tracking-tight",
-              hasData ? "text-text-primary" : "text-text-tertiary text-lg font-bold"
+              "text-3xl font-black tabular-nums tracking-tight",
+              hasData ? "text-text-primary" : "text-text-tertiary text-xl font-bold"
             )}
           >
-            {value}
+            {primaryValue}
           </span>
 
           {hasData && targetText && (
-            <span className="text-[10px] font-mono text-text-tertiary font-bold tabular-nums">
+            <span className="text-[11px] font-mono text-text-tertiary font-bold tabular-nums shrink-0">
               {targetText}
             </span>
           )}
         </div>
 
+        {hasData && subValue ? (
+          <p className="text-xs font-semibold text-text-secondary leading-snug">
+            {subValue}
+          </p>
+        ) : !hasData ? (
+          <p className="text-xs text-text-muted italic">
+            {hint || "No activity recorded"}
+          </p>
+        ) : null}
+
         {/* Mini Progress Bar */}
         {hasData && percentValue != null && (
-          <div className="space-y-1">
+          <div className="pt-1">
             <div className="h-1.5 w-full bg-card-subtle rounded-full overflow-hidden relative">
               <div
                 style={{ width: `${Math.min(100, Math.max(0, percentValue))}%` }}
-                className={cn("h-full rounded-full transition-all duration-500", barColors[accentColor])}
+                className={cn(
+                  "h-full rounded-full transition-all duration-500",
+                  barColors[accentColor]
+                )}
               />
             </div>
           </div>
@@ -133,7 +146,7 @@ function HighlightTile({
             Active tracking in cycle
           </span>
         ) : (
-          <span className="text-text-muted italic">{hint || "No activity recorded"}</span>
+          <span className="text-text-muted italic">Awaiting punches / deliverables</span>
         )}
       </div>
     </div>
@@ -160,17 +173,23 @@ export function KpiHighlightTiles({
     Boolean(onTimeMetric?.value != null && onTimeMetric.status !== "no_data") ||
     Boolean(daysMetric?.value != null && daysMetric.status !== "no_data");
 
-  const attendanceValue = onTimeMetric?.value != null
-    ? onTimeMetric.displayValue
-    : daysMetric?.value != null
-    ? daysMetric.displayValue
-    : "No data";
+  let attendancePrimary = "No data";
+  let attendanceSub: string | null = null;
+  let attendancePercent: number | null = null;
 
-  const attendancePercent = onTimeMetric?.value != null
-    ? onTimeMetric.value
-    : daysMetric?.value != null && daysMetric?.target
-    ? Math.round((daysMetric.value / daysMetric.target) * 100)
-    : null;
+  if (attendanceHasData) {
+    if (onTimeMetric?.value != null) {
+      attendancePrimary = `${onTimeMetric.value}%`;
+      attendancePercent = onTimeMetric.value;
+      const m = onTimeMetric.displayValue?.match(/\(([^)]+)\)/);
+      attendanceSub = m ? `${m[1]} on time` : "Punctual punches recorded";
+    } else if (daysMetric?.value != null) {
+      attendancePrimary = `${daysMetric.value}%`;
+      attendancePercent = daysMetric.value;
+      const m = daysMetric.displayValue?.match(/^([^(]+)/);
+      attendanceSub = m ? `${m[1].trim()} attended` : "Shift attendance tracked";
+    }
+  }
 
   const attendanceTrend =
     onTimeMetric?.value != null && prevOnTime?.value != null
@@ -185,8 +204,21 @@ export function KpiHighlightTiles({
     hoursMetric?.value != null && hoursMetric.status !== "no_data"
   );
 
-  const hoursValue = hoursHasData ? hoursMetric.displayValue : "No data";
+  let hoursPrimary = "No data";
+  let hoursSub: string | null = null;
   const hoursPercent = hoursMetric?.value != null ? hoursMetric.value : null;
+
+  if (hoursHasData && hoursMetric?.displayValue) {
+    // Expected format: "8.3h / 104.0h (8%)"
+    const m = hoursMetric.displayValue.match(/^([\d.]+h)\s*\/\s*([\d.]+h)/);
+    if (m) {
+      hoursPrimary = m[1];
+      hoursSub = `of ${m[2]} target (${hoursMetric.value ?? 0}%)`;
+    } else {
+      hoursPrimary = `${hoursMetric.value ?? 0}%`;
+      hoursSub = hoursMetric.displayValue;
+    }
+  }
 
   const hoursTrend =
     hoursMetric?.value != null && prevHours?.value != null
@@ -201,8 +233,21 @@ export function KpiHighlightTiles({
     tasksMetric?.value != null && tasksMetric.status !== "no_data"
   );
 
-  const tasksValue = tasksHasData ? tasksMetric.displayValue : "No data";
+  let tasksPrimary = "No data";
+  let tasksSub: string | null = null;
   const tasksPercent = tasksMetric?.value != null ? tasksMetric.value : null;
+
+  if (tasksHasData && tasksMetric?.displayValue) {
+    // Expected format: "3 / 4 (75%)"
+    const m = tasksMetric.displayValue.match(/^(\d+)\s*\/\s*(\d+)/);
+    if (m) {
+      tasksPrimary = `${tasksMetric.value ?? 0}%`;
+      tasksSub = `${m[1]} of ${m[2]} deliverables completed`;
+    } else {
+      tasksPrimary = `${tasksMetric.value ?? 0}%`;
+      tasksSub = tasksMetric.displayValue;
+    }
+  }
 
   const tasksTrend =
     tasksMetric?.value != null && prevTasks?.value != null
@@ -210,16 +255,16 @@ export function KpiHighlightTiles({
       : null;
 
   return (
-    <div className={cn("grid grid-cols-1 sm:grid-cols-3 gap-3.5 h-full items-stretch", className)}>
+    <div className={cn("grid grid-cols-1 sm:grid-cols-3 gap-4 h-full items-stretch", className)}>
       <HighlightTile
         title="Attendance"
         icon={<Clock className="w-4 h-4 text-brand-purple" />}
-        value={attendanceValue}
+        primaryValue={attendancePrimary}
+        subValue={attendanceSub}
         targetText="Target: 95%"
         hasData={attendanceHasData}
         hint="No punch records yet"
         percentValue={attendancePercent}
-        targetPercent={95}
         trendDiff={attendanceTrend}
         accentColor="purple"
       />
@@ -227,12 +272,12 @@ export function KpiHighlightTiles({
       <HighlightTile
         title="Hours Target"
         icon={<Calendar className="w-4 h-4 text-brand-purple" />}
-        value={hoursValue}
+        primaryValue={hoursPrimary}
+        subValue={hoursSub}
         targetText="Goal: 100%"
         hasData={hoursHasData}
         hint="No logged shift hours"
         percentValue={hoursPercent}
-        targetPercent={100}
         trendDiff={hoursTrend}
         accentColor="emerald"
       />
@@ -240,12 +285,12 @@ export function KpiHighlightTiles({
       <HighlightTile
         title="Task Delivery"
         icon={<CheckCircle2 className="w-4 h-4 text-brand-purple" />}
-        value={tasksValue}
+        primaryValue={tasksPrimary}
+        subValue={tasksSub}
         targetText="Target: 90%"
         hasData={tasksHasData}
         hint="No deliverables in cycle"
         percentValue={tasksPercent}
-        targetPercent={90}
         trendDiff={tasksTrend}
         accentColor="amber"
       />
