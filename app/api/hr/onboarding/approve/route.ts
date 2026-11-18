@@ -306,6 +306,31 @@ export async function POST(request: NextRequest) {
           console.warn(`[Admin Dossier] Failed to deliver to ${targetAdminEmail}:`, res.error);
         }
       }
+
+      // 9. Post-Approval Storage Purge: Now that files have been attached & dispatched to Admin email,
+      // purge the binary files from Supabase Storage so zero storage space is consumed in Supabase.
+      if (adminDossierSent && attachments.length > 0) {
+        try {
+          const pathsToRemove = uploadedDocs
+            .map((d: any) => d.storage_path)
+            .filter(Boolean);
+
+          if (pathsToRemove.length > 0) {
+            console.log(`[Admin Dossier] Purging ${pathsToRemove.length} storage files from Supabase onboarding-docs...`);
+            const { error: removeErr } = await supabaseAdmin.storage
+              .from("onboarding-docs")
+              .remove(pathsToRemove);
+
+            if (removeErr) {
+              console.warn("[Admin Dossier] Storage removal warning:", removeErr);
+            } else {
+              console.log("[Admin Dossier] Successfully purged documents from Supabase Storage.");
+            }
+          }
+        } catch (purgeErr) {
+          console.warn("[Admin Dossier] Storage purge error:", purgeErr);
+        }
+      }
     } catch (dossierErr) {
       console.error("[Admin Dossier Error]:", dossierErr);
     }
