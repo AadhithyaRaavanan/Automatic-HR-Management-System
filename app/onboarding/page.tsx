@@ -524,6 +524,14 @@ export default function OnboardingPage() {
         toast.error("PAN Card document (PDF, JPG, or PNG) is mandatory.");
         return false;
       }
+      if (!aadhaarNumber.trim() || aadhaarNumber.trim().length !== 12) {
+        toast.error("A valid 12-digit Aadhaar number is mandatory.");
+        return false;
+      }
+      if (!getDoc("aadhaar_card")) {
+        toast.error("Aadhaar Card document (PDF, JPG, or PNG) is mandatory.");
+        return false;
+      }
       return true;
     }
 
@@ -1718,24 +1726,38 @@ export default function OnboardingPage() {
                 )}
               </div>
 
-              {/* Aadhaar Section (Optional / Conditional) */}
+              {/* Aadhaar Section (Mandatory) */}
               <div className="p-5 rounded-2xl border border-border-light bg-card-subtle space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-extrabold uppercase tracking-wider text-text-primary">
-                    Aadhaar Card (Conditional / Optional)
+                    Aadhaar Card (Mandatory)
                   </h4>
-                  {getDoc("aadhaar_card") && (
+                  {getDoc("aadhaar_card") ? (
                     <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-status-success/15 text-status-success flex items-center gap-1">
                       <Check className="w-3 h-3" />
                       Uploaded
                     </span>
+                  ) : (
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-status-danger/15 text-status-danger">
+                      Required
+                    </span>
                   )}
                 </div>
+
+                {getDoc("aadhaar_card")?.document_status === "rejected" && (
+                  <div className="p-3 rounded-xl bg-status-danger/10 border border-status-danger/30 text-status-danger text-xs font-semibold flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold">Aadhaar Document Requires Correction:</p>
+                      <p>{getDoc("aadhaar_card")?.rejection_reason || "Please upload a clearer copy of your Aadhaar card."}</p>
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1.5">
-                      Aadhaar Number (12 Digits)
+                      Aadhaar Number (12 Digits) <span className="text-status-danger">*</span>
                     </label>
                     <input
                       type="text"
@@ -1749,7 +1771,7 @@ export default function OnboardingPage() {
 
                   <div>
                     <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1.5">
-                      Upload Aadhaar (PDF / JPG / PNG) (Optional)
+                      Upload Aadhaar (PDF / JPG / PNG) <span className="text-status-danger">*</span>
                     </label>
                     <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-card hover:bg-card-subtle border border-border-light text-text-primary text-xs font-bold transition-all cursor-pointer shadow-sm w-full justify-center">
                       <Upload className="w-3.5 h-3.5 text-brand-purple" />
@@ -1766,6 +1788,24 @@ export default function OnboardingPage() {
                     </label>
                   </div>
                 </div>
+
+                {getDoc("aadhaar_card") && (
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-card border border-border-light text-xs">
+                    <span className="font-mono text-text-primary truncate">
+                      {getDoc("aadhaar_card")?.file_name}
+                    </span>
+                    {getDoc("aadhaar_card")?.signedUrl && (
+                      <a
+                        href={getDoc("aadhaar_card")?.signedUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-brand-purple font-bold flex items-center gap-1 ml-2"
+                      >
+                        Preview <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

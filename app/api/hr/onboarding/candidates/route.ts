@@ -97,8 +97,8 @@ export async function GET(request: NextRequest) {
         );
 
         // Calculate progress percentage
-        // Required docs: PAN + Bank Proof + Highest Qual Cert (+ Experience Cert if experienced)
-        let totalRequired = 3;
+        // Required docs: Photo + Resume + Highest Qual Cert + PAN + Aadhaar + Bank Proof (+ Experience Cert if experienced)
+        let totalRequired = 6;
         if (c.has_experience) totalRequired += 1;
         const approvedCount = docsWithUrls.filter((d) => d.document_status === "approved").length;
         const uploadedCount = docsWithUrls.length;

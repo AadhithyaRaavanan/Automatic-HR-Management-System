@@ -252,6 +252,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Identity check (Aadhaar is mandatory)
+    const resolvedAadhaar = payload.aadhaar_number || onbProfile.aadhaar_number;
+    if (!resolvedAadhaar || resolvedAadhaar.trim().length !== 12 || !docTypesUploaded.has("aadhaar_card")) {
+      return NextResponse.json(
+        { error: "Aadhaar number (12 digits) and Aadhaar Card document are mandatory. Please complete Step 4." },
+        { status: 400 }
+      );
+    }
+
     // Bank Details check
     const resolvedHolder = payload.bank_account_holder || onbProfile.bank_account_holder;
     const resolvedAccount = payload.bank_account_number || onbProfile.bank_account_number;

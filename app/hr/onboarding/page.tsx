@@ -602,6 +602,9 @@ export default function HROnboardingPage() {
                   <p><strong>A/C:</strong> {selectedCandidate.bank_details.bank_account_number ? `•••• ${selectedCandidate.bank_details.bank_account_number.slice(-4)}` : "—"}</p>
                   <p><strong>IFSC:</strong> {selectedCandidate.bank_details.bank_ifsc}</p>
                   <p><strong>PAN:</strong> {selectedCandidate.bank_details.pan_number}</p>
+                  {selectedCandidate.bank_details.aadhaar_number && (
+                    <p><strong>Aadhaar:</strong> {`•••• •••• ${selectedCandidate.bank_details.aadhaar_number.slice(-4)}`}</p>
+                  )}
                 </div>
               </div>
 
