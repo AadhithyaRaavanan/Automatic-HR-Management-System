@@ -5,6 +5,7 @@ import {
   NotificationTypeGroup,
   DEFAULT_PREFERENCES,
 } from "@/lib/notifications/types";
+import { requireApprovedUser } from "@/lib/auth/require-approved-user";
 
 export const dynamic = "force-dynamic";
 
@@ -65,10 +66,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getNotificationCaller(request);
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const approvedCheck = await requireApprovedUser(request);
+    if ("response" in approvedCheck) {
+      return approvedCheck.response;
     }
+
+    const user = approvedCheck.user;
 
     const body = await request.json().catch(() => ({}));
     const { type_group, in_app, email } = body;

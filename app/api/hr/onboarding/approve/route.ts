@@ -3,6 +3,7 @@ import { verifyAdminRouteCaller } from "@/lib/auth/admin-guard";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notifications/notify";
 import { QUALIFICATION_DOC_MAP, HighestQualification } from "@/lib/onboarding-types";
+import { sendOnboardingApprovalEmail } from "@/lib/email/resend";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,14 @@ export async function POST(request: NextRequest) {
 
     if (!userId) {
       return NextResponse.json({ error: "Missing required parameter 'userId'." }, { status: 400 });
+    }
+
+    // Nobody can approve their own onboarding
+    if (reviewerId === userId) {
+      return NextResponse.json(
+        { error: "You cannot approve your own onboarding profile." },
+        { status: 403 }
+      );
     }
 
     // 1. Fetch candidate onboarding profile
@@ -41,80 +50,34 @@ export async function POST(request: NextRequest) {
 
     const uploadedDocs = docs || [];
 
-    // Verify all mandatory document types are present and approved
-    // Mandatory: PAN + Bank Proof + Highest Qualification Certificate
-    const highestQual = (profile.highest_qualification || "Undergraduate Degree") as HighestQualification;
-    const requiredQualDocType = QUALIFICATION_DOC_MAP[highestQual]?.docType || "cert_undergraduate";
-
-    const panDoc = uploadedDocs.find((d: any) => d.doc_type === "pan_card");
-    const bankDoc = uploadedDocs.find((d: any) => d.doc_type === "bank_proof");
-    const qualDoc = uploadedDocs.find((d: any) => d.doc_type === requiredQualDocType);
-    const photoDoc = uploadedDocs.find((d: any) => d.doc_type === "photo");
-    const resumeDoc = uploadedDocs.find((d: any) => d.doc_type === "resume");
-
-    if (photoDoc && photoDoc.document_status !== "approved") {
+    if (uploadedDocs.length === 0) {
       return NextResponse.json(
-        { error: "Cannot complete approval: Passport-size photo is not yet approved." },
+        { error: "Cannot complete approval: No documents have been uploaded." },
         { status: 400 }
       );
     }
 
-    if (resumeDoc && resumeDoc.document_status !== "approved") {
+    // Server-side strict check: Final approval is blocked unless EVERY document is individually approved
+    const unapprovedDocs = uploadedDocs.filter((d: any) => d.document_status !== "approved");
+    if (unapprovedDocs.length > 0) {
       return NextResponse.json(
-        { error: "Cannot complete approval: Candidate resume is not yet approved." },
-        { status: 400 }
-      );
-    }
-
-    if (!panDoc || panDoc.document_status !== "approved") {
-      return NextResponse.json(
-        { error: "Cannot complete approval: PAN card document is either missing or has not been approved." },
-        { status: 400 }
-      );
-    }
-
-    if (!bankDoc || bankDoc.document_status !== "approved") {
-      return NextResponse.json(
-        { error: "Cannot complete approval: Bank proof document is either missing or has not been approved." },
-        { status: 400 }
-      );
-    }
-
-    if (!qualDoc || qualDoc.document_status !== "approved") {
-      return NextResponse.json(
-        { error: `Cannot complete approval: Highest qualification certificate (${QUALIFICATION_DOC_MAP[highestQual]?.label || "Degree Certificate"}) is not yet approved.` },
-        { status: 400 }
-      );
-    }
-
-    if (profile.has_experience) {
-      const expDoc = uploadedDocs.find((d: any) => d.doc_type === "experience_cert");
-      const hasExplanation = Boolean(profile.experience_explanation?.trim());
-      if (!hasExplanation && (!expDoc || expDoc.document_status !== "approved")) {
-        return NextResponse.json(
-          { error: "Cannot complete approval: Experience certificate has not been approved." },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Ensure no document is in rejected state
-    const hasRejectedDocs = uploadedDocs.some((d: any) => d.document_status === "rejected");
-    if (hasRejectedDocs) {
-      return NextResponse.json(
-        { error: "Cannot complete approval: There are rejected documents that need candidate correction first." },
+        {
+          error: `Cannot complete approval: ${unapprovedDocs.length} document(s) have not been individually approved.`,
+        },
         { status: 400 }
       );
     }
 
     const nowIso = new Date().toISOString();
 
-    // 3. Update onboarding_profiles to COMPLETED / VERIFIED
+    // 3. Update onboarding_profiles to approved and record approved_by, approved_at
     await (supabaseAdmin as any)
       .from("onboarding_profiles")
       .update({
         onboarding_status: "COMPLETED",
         status: "approved",
+        approved_by: reviewerId,
+        approved_at: nowIso,
         verified_by: reviewerId,
         verified_at: nowIso,
         completed_at: nowIso,
@@ -122,7 +85,7 @@ export async function POST(request: NextRequest) {
       })
       .eq("user_id", userId);
 
-    // 4. Update profiles and employees onboarding_completed = true
+    // 4. Update profiles, employees (status = 'active', onboarding_completed = true), and app_metadata claim
     await Promise.all([
       (supabaseAdmin as any).from("profiles").upsert(
         {
@@ -137,13 +100,18 @@ export async function POST(request: NextRequest) {
       (supabaseAdmin as any)
         .from("employees")
         .update({
+          status: "active",
           onboarding_completed: true,
           updated_at: nowIso,
         })
         .eq("id", userId),
       supabaseAdmin.auth.admin.updateUserById(userId, {
+        app_metadata: {
+          onboarding_approved: true,
+        },
         user_metadata: {
           onboarding_completed: true,
+          onboarding_status: "COMPLETED",
         },
       }),
     ]);
@@ -152,23 +120,23 @@ export async function POST(request: NextRequest) {
     try {
       await (supabaseAdmin as any).from("employee_onboarding_audit").insert({
         employee_id: userId,
-        action: "ONBOARDING_APPROVED_AND_COMPLETED",
+        action: "ONBOARDING_APPROVED_AND_ACTIVATED",
         performed_by: reviewerId,
-        previous_status: profile.onboarding_status || "SUBMITTED",
-        new_status: "COMPLETED",
-        remarks: note?.trim() || "HR Admin completed document verification and activated employee profile.",
+        previous_status: profile.status || "submitted",
+        new_status: "approved",
+        remarks: note?.trim() || "HR Admin approved all documents and activated employee account.",
       });
     } catch {}
 
-    // 6. In-App + Email Notification to Employee
+    // 6. In-App Notification to Employee: "Welcome, you now have access" linking to /dashboard
     try {
       await notify({
         userIds: [userId],
-        type: "onboarding_approved",
+        type: "onboarding_status",
         typeGroup: "onboarding",
-        title: "Welcome Aboard – Onboarding Approved!",
-        body: "Your submitted documents have been fully verified and your profile is approved. You now have full access to your workplace dashboard.",
-        link: "/",
+        title: "Welcome, you now have access",
+        body: "Your onboarding has been approved by HR and your Pulse account is now active.",
+        link: "/dashboard",
         entityType: "onboarding_profiles",
         entityId: userId,
         actorId: reviewerId,
@@ -177,10 +145,54 @@ export async function POST(request: NextRequest) {
       console.warn("[Onboarding Approval Notification Error]:", notifErr);
     }
 
+    // 7. Approval Email: Send transactional welcome email once
+    let emailSent = Boolean(profile.approval_email_sent_at);
+
+    if (!emailSent) {
+      const { data: candEmp } = await (supabaseAdmin.from("employees") as any)
+        .select(`
+          id,
+          full_name,
+          email,
+          departments:department_id(name),
+          job_titles:job_title_id(title_name)
+        `)
+        .eq("id", userId)
+        .maybeSingle();
+
+      const toEmail = candEmp?.email || profile.personal_email;
+      const firstName = (candEmp?.full_name || profile.full_name || "Team Member").split(" ")[0];
+
+      if (toEmail) {
+        try {
+          const emailRes = await sendOnboardingApprovalEmail({
+            to: toEmail,
+            firstName,
+            departmentName: candEmp?.departments?.name,
+            jobTitle: candEmp?.job_titles?.title_name,
+          });
+
+          if (emailRes.success) {
+            emailSent = true;
+            await (supabaseAdmin as any)
+              .from("onboarding_profiles")
+              .update({ approval_email_sent_at: nowIso })
+              .eq("user_id", userId);
+          } else {
+            console.warn("[Onboarding Approval Email Warning]:", emailRes.error);
+          }
+        } catch (emailErr) {
+          console.error("[Onboarding Approval Email Error]:", emailErr);
+          emailSent = false;
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       message: "Employee onboarding approved and activated successfully.",
       onboarding_status: "COMPLETED",
+      emailSent,
     });
   } catch (err: any) {
     return NextResponse.json(

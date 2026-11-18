@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { Database } from "@/types/database.types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { requireApprovedUser } from "@/lib/auth/require-approved-user";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,10 @@ export interface AttendanceBreakPayload {
 
 // GET active/completed breaks for current user today
 export async function GET(request: NextRequest) {
+  const approvedCheck = await requireApprovedUser(request);
+  if ("response" in approvedCheck) {
+    return approvedCheck.response;
+  }
   try {
     let response = NextResponse.next();
     const supabase = createServerClient<Database>(
@@ -95,6 +100,10 @@ export async function GET(request: NextRequest) {
 
 // POST: Start or End a break
 export async function POST(request: NextRequest) {
+  const approvedCheck = await requireApprovedUser(request);
+  if ("response" in approvedCheck) {
+    return approvedCheck.response;
+  }
   try {
     let response = NextResponse.next();
     const supabase = createServerClient<Database>(

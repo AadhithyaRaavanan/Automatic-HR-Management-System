@@ -445,7 +445,7 @@ function KpiContent() {
   const doneGoals = goalsList.filter((g: any) => g.status === "done").length;
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-6 pb-24">
       {/* 1. Page Header matching Tasks and Attendance */}
       <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1">
         <div>
@@ -570,7 +570,7 @@ function KpiContent() {
               <KpiCategorySection
                 title="Hours & Shift Completion"
                 description="Total productive work hours vs shift target expectations."
-                icon={<Calendar className="w-4 h-4 text-emerald-500" />}
+                icon={<Calendar className="w-4 h-4 text-brand-purple" />}
                 categoryHint="Standard daily target is 8h per full working shift."
                 metrics={[currentMetrics.worked_hours_vs_target]}
                 previousMetricsMap={previousMetrics}
@@ -585,7 +585,7 @@ function KpiContent() {
               <KpiCategorySection
                 title="Task Delivery & Execution"
                 description="Sprint deliverables, sprint completion rate, on-time delivery, and cycle time."
-                icon={<CheckCircle2 className="w-4 h-4 text-amber-500" />}
+                icon={<CheckCircle2 className="w-4 h-4 text-brand-purple" />}
                 categoryHint="Sprint deliverables: 90% completion and 90% on-time delivery."
                 metrics={[
                   currentMetrics.tasks_completed_vs_assigned,

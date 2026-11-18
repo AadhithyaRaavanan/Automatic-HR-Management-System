@@ -3,10 +3,15 @@ import { createServerClient } from "@supabase/ssr";
 import { Database } from "@/types/database.types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import { requireApprovedUser } from "@/lib/auth/require-approved-user";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const approvedCheck = await requireApprovedUser(request);
+  if ("response" in approvedCheck) {
+    return approvedCheck.response;
+  }
   const { searchParams } = new URL(request.url);
   const employeeId = searchParams.get("employeeId");
   const status = searchParams.get("status");
@@ -64,6 +69,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const approvedCheck = await requireApprovedUser(request);
+  if ("response" in approvedCheck) {
+    return approvedCheck.response;
+  }
   const response = NextResponse.next();
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",

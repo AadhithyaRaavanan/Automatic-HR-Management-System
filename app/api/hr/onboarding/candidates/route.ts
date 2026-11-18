@@ -100,7 +100,10 @@ export async function GET(request: NextRequest) {
           employee_id: emp?.id ? `EMP-${emp.id.slice(0, 6).toUpperCase()}` : `EMP-${c.user_id.slice(0, 6).toUpperCase()}`,
           department: emp?.departments?.name || "General",
           designation: emp?.job_titles?.title_name || "Employee",
+          status: (c.status || "draft").toLowerCase(),
           onboarding_status: rawStatus,
+          approval_email_sent_at: c.approval_email_sent_at || null,
+          approved_at: c.approved_at || null,
           highest_qualification: c.highest_qualification || "Undergraduate Degree",
           has_experience: Boolean(c.has_experience),
           submission_date: c.submitted_at || c.created_at,
@@ -145,14 +148,16 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    // Summary Metrics
+    // Summary Metrics: pending reflects 'submitted' items only
     const summary = {
       total: enhancedCandidates.length,
-      pending: enhancedCandidates.filter((c) => ["SUBMITTED", "RESUBMITTED"].includes(c.onboarding_status)).length,
+      pending: enhancedCandidates.filter(
+        (c) => c.status === "submitted" || c.onboarding_status === "SUBMITTED"
+      ).length,
       under_review: enhancedCandidates.filter((c) => c.onboarding_status === "UNDER_REVIEW").length,
-      correction_required: enhancedCandidates.filter((c) => c.onboarding_status === "CORRECTION_REQUIRED").length,
-      approved: enhancedCandidates.filter((c) => ["VERIFIED", "COMPLETED"].includes(c.onboarding_status)).length,
-      completed: enhancedCandidates.filter((c) => c.onboarding_status === "COMPLETED").length,
+      correction_required: enhancedCandidates.filter((c) => c.status === "changes_requested" || c.onboarding_status === "CORRECTION_REQUIRED").length,
+      approved: enhancedCandidates.filter((c) => c.status === "approved" || ["VERIFIED", "COMPLETED"].includes(c.onboarding_status)).length,
+      completed: enhancedCandidates.filter((c) => c.status === "approved" || c.onboarding_status === "COMPLETED").length,
     };
 
     return NextResponse.json({

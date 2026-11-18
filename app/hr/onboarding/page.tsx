@@ -38,7 +38,10 @@ interface EnhancedCandidate {
   employee_id: string;
   department: string;
   designation: string;
+  status?: string;
   onboarding_status: string;
+  approval_email_sent_at?: string | null;
+  approved_at?: string | null;
   highest_qualification: string;
   has_experience: boolean;
   submission_date: string;
@@ -115,6 +118,10 @@ export default function HROnboardingPage() {
   const [rejectionReasons, setRejectionReasons] = React.useState<Record<string, string>>({});
   const [showRejectInput, setShowRejectInput] = React.useState<Record<string, boolean>>({});
   const [approvingOnboarding, setApprovingOnboarding] = React.useState(false);
+  const [requestChangesOpen, setRequestChangesOpen] = React.useState(false);
+  const [requestChangesNote, setRequestChangesNote] = React.useState("");
+  const [requestingChanges, setRequestingChanges] = React.useState(false);
+  const [resendingEmail, setResendingEmail] = React.useState(false);
 
   React.useEffect(() => {
     setMounted(true);
@@ -235,6 +242,76 @@ export default function HROnboardingPage() {
     }
   };
 
+  // Request changes on onboarding
+  const handleRequestChanges = async () => {
+    if (!selectedCandidate) return;
+    const trimmed = requestChangesNote.trim();
+    if (trimmed.length < 5) {
+      toast.error("Please enter a feedback note (min 5 characters) explaining what needs to be changed.");
+      return;
+    }
+
+    setRequestingChanges(true);
+    try {
+      const res = await fetch("/api/hr/onboarding/request-changes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: selectedCandidate.user_id,
+          note: trimmed,
+        }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || "Failed to request changes.");
+      }
+
+      toast.success(`Changes requested for ${selectedCandidate.full_name}. Candidate notified.`);
+      setRequestChangesOpen(false);
+      setRequestChangesNote("");
+      setSelectedCandidate(null);
+      await loadCandidates();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to request changes.");
+    } finally {
+      setRequestingChanges(false);
+    }
+  };
+
+  // Resend approval welcome email
+  const handleResendApprovalEmail = async () => {
+    if (!selectedCandidate) return;
+    setResendingEmail(true);
+    try {
+      const res = await fetch("/api/hr/onboarding/resend-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selectedCandidate.user_id }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to resend approval email.");
+      }
+
+      toast.success(data.message || "Approval email resent successfully.");
+      setSelectedCandidate((prev) =>
+        prev
+          ? {
+              ...prev,
+              approval_email_sent_at: data.sentAt || new Date().toISOString(),
+            }
+          : null
+      );
+      await loadCandidates();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to resend approval email.");
+    } finally {
+      setResendingEmail(false);
+    }
+  };
+
   // Filter candidates
   const filteredCandidates = React.useMemo(() => {
     return candidates.filter((c) => {
@@ -247,10 +324,10 @@ export default function HROnboardingPage() {
       if (!matchesSearch) return false;
 
       if (statusFilter === "all") return true;
-      if (statusFilter === "pending") return ["SUBMITTED", "RESUBMITTED"].includes(c.onboarding_status);
+      if (statusFilter === "pending") return c.status === "submitted" || c.onboarding_status === "SUBMITTED";
       if (statusFilter === "under_review") return c.onboarding_status === "UNDER_REVIEW";
-      if (statusFilter === "correction_required") return c.onboarding_status === "CORRECTION_REQUIRED";
-      if (statusFilter === "completed") return ["VERIFIED", "COMPLETED"].includes(c.onboarding_status);
+      if (statusFilter === "correction_required") return c.status === "changes_requested" || c.onboarding_status === "CORRECTION_REQUIRED";
+      if (statusFilter === "completed") return c.status === "approved" || ["VERIFIED", "COMPLETED"].includes(c.onboarding_status);
 
       return true;
     });
@@ -259,7 +336,8 @@ export default function HROnboardingPage() {
   const canFinalApprove =
     selectedCandidate &&
     selectedCandidate.documents.length > 0 &&
-    selectedCandidate.documents.every((d) => d.document_status === "approved");
+    selectedCandidate.documents.every((d) => d.document_status === "approved") &&
+    selectedCandidate.status !== "approved";
 
   return (
     <AppShell>
@@ -666,38 +744,121 @@ export default function HROnboardingPage() {
               </div>
 
               {/* Final HR Approval Footer */}
-              <div className="pt-4 border-t border-border-light flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-bold text-text-primary">
-                    Final Onboarding Approval & Profile Activation
-                  </p>
-                  <p className="text-[11px] text-text-tertiary">
-                    {canFinalApprove
-                      ? "All mandatory documents have been approved. You can now activate this employee's workspace access."
-                      : "All uploaded documents must be individually marked 'Approved' before finalizing onboarding."}
-                  </p>
-                </div>
+              <div className="pt-4 border-t border-border-light space-y-3">
+                {/* Changes Request Input Form if toggled */}
+                {requestChangesOpen && (
+                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-2">
+                    <label className="block text-xs font-bold text-text-primary">
+                      Feedback note to candidate <span className="text-status-danger">*</span> (min 5 characters)
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={requestChangesNote}
+                      onChange={(e) => setRequestChangesNote(e.target.value)}
+                      placeholder="Explain what needs correction (e.g. Please upload clear scans of your degree certificate and PAN card)..."
+                      className="w-full px-3 py-2 rounded-xl bg-card border border-border-light text-xs font-medium text-text-primary focus:outline-none focus:border-brand-purple"
+                    />
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRequestChangesOpen(false);
+                          setRequestChangesNote("");
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-card border border-border-light text-xs font-bold text-text-secondary cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        disabled={requestingChanges || requestChangesNote.trim().length < 5}
+                        onClick={handleRequestChanges}
+                        className="px-4 py-1.5 rounded-lg bg-status-danger text-white text-xs font-bold cursor-pointer disabled:opacity-40"
+                      >
+                        {requestingChanges ? "Submitting..." : "Send Changes Request"}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedCandidate(null)}
-                    className="px-4 py-2.5 rounded-xl bg-card border border-border-light hover:bg-card-subtle text-xs font-bold text-text-primary cursor-pointer shadow-sm"
-                  >
-                    Close
-                  </button>
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div>
+                    {selectedCandidate.status === "approved" ? (
+                      <div className="space-y-1">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600">
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Onboarding Approved & Profile Active</span>
+                        </span>
+                        <div className="flex items-center gap-2 text-[11px] text-text-secondary">
+                          {selectedCandidate.approval_email_sent_at ? (
+                            <span>
+                              Approval email sent to <strong>{selectedCandidate.email}</strong>
+                            </span>
+                          ) : (
+                            <span className="text-amber-600 font-semibold">
+                              Email could not be sent
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            disabled={resendingEmail}
+                            onClick={handleResendApprovalEmail}
+                            className="underline text-brand-purple hover:opacity-80 font-bold ml-1 cursor-pointer disabled:opacity-50"
+                          >
+                            {resendingEmail ? "Sending..." : "Resend email"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-xs font-bold text-text-primary">
+                          Final Onboarding Approval & Profile Activation
+                        </p>
+                        <p className="text-[11px] text-text-tertiary">
+                          {canFinalApprove
+                            ? "All uploaded documents are individually approved. Ready to activate."
+                            : "All documents must be individually approved before final activation."}
+                        </p>
+                      </div>
+                    )}
+                  </div>
 
-                  <button
-                    type="button"
-                    disabled={approvingOnboarding || !canFinalApprove}
-                    onClick={handleFinalApproval}
-                    className="px-6 py-2.5 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-extrabold uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <ShieldCheck className="w-4 h-4 text-brand-purple" />
-                    <span>
-                      {approvingOnboarding ? "Activating Profile..." : "Approve & Activate Employee"}
-                    </span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCandidate(null);
+                        setRequestChangesOpen(false);
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-card border border-border-light hover:bg-card-subtle text-xs font-bold text-text-primary cursor-pointer shadow-sm"
+                    >
+                      Close
+                    </button>
+
+                    {selectedCandidate.status !== "approved" && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setRequestChangesOpen((prev) => !prev)}
+                          className="px-4 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 text-xs font-bold cursor-pointer transition-colors"
+                        >
+                          Request Changes
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={approvingOnboarding || !canFinalApprove}
+                          onClick={handleFinalApproval}
+                          className="px-6 py-2.5 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-extrabold uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <ShieldCheck className="w-4 h-4 text-brand-purple" />
+                          <span>
+                            {approvingOnboarding ? "Activating..." : "Approve & Activate Employee"}
+                          </span>
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

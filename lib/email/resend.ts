@@ -732,3 +732,252 @@ export async function sendNotificationEmail(params: SendNotificationEmailParams)
 
   return { success: true, messageId: `sim_${Date.now()}` };
 }
+
+export interface SendApprovalEmailParams {
+  to: string;
+  firstName: string;
+  departmentName?: string;
+  jobTitle?: string;
+}
+
+export function buildApprovalEmailHtml(params: SendApprovalEmailParams): string {
+  const { to, firstName, departmentName, jobTitle } = params;
+  const loginUrl = `${getSiteUrl()}/login`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Onboarding Approved - Pulse</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #f7f6fd;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        color: #14123A;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrapper {
+        width: 100%;
+        table-layout: fixed;
+        background-color: #f7f6fd;
+        padding: 30px 10px;
+      }
+      .container {
+        max-width: 560px;
+        margin: 0 auto;
+        background-color: #ffffff;
+        border-radius: 20px;
+        border: 1px solid #e2e0f0;
+        overflow: hidden;
+        box-shadow: 0 4px 16px rgba(20, 18, 58, 0.06);
+      }
+      .header {
+        background-color: #14123A;
+        padding: 28px 32px;
+        text-align: center;
+      }
+      .brand-title {
+        color: #ffffff;
+        font-size: 22px;
+        font-weight: 800;
+        margin: 0;
+      }
+      .brand-tag {
+        color: #6C5CE7;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-top: 4px;
+      }
+      .body-content {
+        padding: 32px;
+      }
+      .greeting {
+        font-size: 18px;
+        font-weight: 700;
+        color: #14123A;
+        margin-bottom: 12px;
+      }
+      .paragraph {
+        font-size: 14px;
+        line-height: 1.6;
+        color: #4A4868;
+        margin-bottom: 20px;
+      }
+      .details-card {
+        background-color: #F8F9FC;
+        border: 1px solid #E2E8F0;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 24px;
+      }
+      .detail-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        padding: 4px 0;
+      }
+      .detail-label {
+        color: #64748B;
+        font-weight: 600;
+      }
+      .detail-val {
+        color: #0F172A;
+        font-weight: 700;
+      }
+      .btn-container {
+        text-align: center;
+        margin: 28px 0;
+      }
+      .login-btn {
+        background-color: #14123A;
+        color: #ffffff !important;
+        padding: 14px 32px;
+        border-radius: 9999px;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 700;
+        display: inline-block;
+      }
+      .note {
+        font-size: 12px;
+        line-height: 1.5;
+        color: #64748B;
+        border-top: 1px solid #E2E8F0;
+        padding-top: 16px;
+        margin-top: 24px;
+      }
+      .footer {
+        background-color: #f7f6fd;
+        padding: 18px 32px;
+        text-align: center;
+        font-size: 11px;
+        color: #8C8A9E;
+        border-top: 1px solid #e2e0f0;
+      }
+    </style>
+  </head>
+  <body>
+    <table class="wrapper" role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td align="center">
+          <div class="container">
+            <div class="header">
+              <div class="brand-title">Pulse</div>
+              <div class="brand-tag">Zen Xea Workspace</div>
+            </div>
+
+            <div class="body-content">
+              <div class="greeting">Hello ${firstName},</div>
+              <div class="paragraph">
+                Your onboarding has been approved by HR and your Pulse account is now active.
+              </div>
+
+              <div class="details-card">
+                <table width="100%" cellspacing="0" cellpadding="4" style="font-size: 13px;">
+                  <tr>
+                    <td style="color: #64748B; font-weight: 600;">Login Email:</td>
+                    <td align="right" style="color: #0F172A; font-weight: 700;">${to}</td>
+                  </tr>
+                  ${
+                    departmentName
+                      ? `<tr>
+                    <td style="color: #64748B; font-weight: 600;">Department:</td>
+                    <td align="right" style="color: #0F172A; font-weight: 700;">${departmentName}</td>
+                  </tr>`
+                      : ""
+                  }
+                  ${
+                    jobTitle
+                      ? `<tr>
+                    <td style="color: #64748B; font-weight: 600;">Job Title:</td>
+                    <td align="right" style="color: #0F172A; font-weight: 700;">${jobTitle}</td>
+                  </tr>`
+                      : ""
+                  }
+                </table>
+              </div>
+
+              <div class="btn-container">
+                <a href="${loginUrl}" class="login-btn" target="_blank" rel="noopener noreferrer">
+                  Log in to Pulse
+                </a>
+              </div>
+
+              <div class="paragraph" style="font-size: 13px; color: #4A4868;">
+                Log in with the email address and the password you set during onboarding. If you forgot it, use &apos;Forgot password&apos; on the login page.
+              </div>
+
+              <div class="note">
+                <strong>Quick Start:</strong> A quick walkthrough will start on your first login to guide you through your new workspace.
+              </div>
+            </div>
+
+            <div class="footer">
+              Pulse HRMS &bull; Zen Xea Technologies &bull; This is an automated transactional notification.
+            </div>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+export async function sendOnboardingApprovalEmail(params: SendApprovalEmailParams): Promise<{
+  success: boolean;
+  messageId?: string;
+  error?: string;
+}> {
+  const { to } = params;
+  const subject = "You're approved - log in to Pulse";
+  const htmlContent = buildApprovalEmailHtml(params);
+
+  // 1. Hostinger / SMTP
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      const transporter = getSmtpTransporter();
+      if (transporter) {
+        const fromAddress = process.env.SMTP_FROM || `Pulse <hr@zenxea.com>`;
+        const info = await transporter.sendMail({
+          from: fromAddress,
+          to,
+          subject,
+          html: htmlContent,
+        });
+        return { success: true, messageId: info.messageId };
+      }
+    } catch (smtpErr: any) {
+      console.error("[Hostinger SMTP Approval Notice Error]:", smtpErr);
+      return { success: false, error: smtpErr.message || "Failed to dispatch email via SMTP" };
+    }
+  }
+
+  // 2. Resend fallback
+  if (process.env.RESEND_API_KEY) {
+    const client = resend || new Resend(process.env.RESEND_API_KEY);
+    try {
+      const fromAddress = process.env.RESEND_FROM_EMAIL || "RemoteHR <onboarding@remotehr.io>";
+      const response = await client.emails.send({
+        from: fromAddress,
+        to: [to],
+        subject,
+        html: htmlContent,
+      });
+
+      if (response.error) {
+        return { success: false, error: response.error.message };
+      }
+
+      return { success: true, messageId: response.data?.id };
+    } catch (err: any) {
+      return { success: false, error: err.message || String(err) };
+    }
+  }
+
+  return { success: true, messageId: `sim_${Date.now()}` };
+}

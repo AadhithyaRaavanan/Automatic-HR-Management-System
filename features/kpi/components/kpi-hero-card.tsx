@@ -139,12 +139,12 @@ export function KpiHeroCard({
               />
               <div
                 style={{ width: "25%" }}
-                className="bg-emerald-500 h-full transition-all duration-500"
+                className="bg-brand-purple/65 h-full transition-all duration-500"
                 title="Shift Hours Target (25%)"
               />
               <div
                 style={{ width: "35%" }}
-                className="bg-amber-500 h-full transition-all duration-500"
+                className="bg-brand-purple/35 h-full transition-all duration-500"
                 title="Task Delivery & Execution (35%)"
               />
             </div>
@@ -155,11 +155,11 @@ export function KpiHeroCard({
                 Attendance 40%
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                <span className="w-2 h-2 rounded-full bg-brand-purple/65 shrink-0" />
                 Hours 25%
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                <span className="w-2 h-2 rounded-full bg-brand-purple/35 shrink-0" />
                 Tasks 35%
               </span>
             </div>

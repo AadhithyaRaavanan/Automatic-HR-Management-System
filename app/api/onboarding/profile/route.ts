@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
             salary_year: d.salary_year || null,
           }));
         }
-      } catch {}
+      } catch { }
     }
 
     const employeeIdFormatted = employee?.id
@@ -115,9 +115,11 @@ export async function GET(request: NextRequest) {
         user: {
           id: user.id,
           email: user.email,
+          fullName: employee?.full_name || user.user_metadata?.full_name || "",
           fullName: employee?.full_name || onboardingProfile?.full_name || user.user_metadata?.full_name || "",
           employeeId: employeeIdFormatted,
           rawEmployeeId: employee?.id || user.id,
+          department: employee?.departments?.name || "General",
           department: employee?.departments?.name || "Technical",
           designation: employee?.job_titles?.title_name || "Employee",
           role: userRole,
@@ -126,7 +128,12 @@ export async function GET(request: NextRequest) {
           storage_folder: onboardingProfile?.storage_folder || null,
         },
         profile: {
-          onboarding_completed: Boolean(profile?.onboarding_completed || employee?.onboarding_completed || onboardingProfile?.status === "submitted"),
+          onboarding_completed: Boolean(profile?.onboarding_completed || employee?.onboarding_completed),
+          onboarding_completed: Boolean(
+            (profile?.onboarding_completed || employee?.onboarding_completed) &&
+            onboardingProfile?.status === "approved" &&
+            employee?.status === "active"
+          ),
           tutorial_completed: Boolean(profile?.tutorial_completed),
         },
         onboardingProfile: onboardingProfile || null,

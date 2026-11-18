@@ -10,10 +10,15 @@ import {
   getStoredUsers,
   getStoredDepartments,
 } from "@/lib/storage/demo-store";
+import { requireApprovedUser } from "@/lib/auth/require-approved-user";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const approvedCheck = await requireApprovedUser(request);
+  if ("response" in approvedCheck) {
+    return approvedCheck.response;
+  }
   try {
     const isDemo = isDemoModeEnabled();
 

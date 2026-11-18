@@ -38,8 +38,8 @@ function HighlightTile({
 }: HighlightTileProps) {
   const barColors = {
     purple: "bg-brand-purple",
-    emerald: "bg-emerald-500",
-    amber: "bg-amber-500",
+    emerald: "bg-brand-purple/75",
+    amber: "bg-brand-purple/55",
   };
 
   return (
@@ -226,7 +226,7 @@ export function KpiHighlightTiles({
 
       <HighlightTile
         title="Hours Target"
-        icon={<Calendar className="w-4 h-4 text-emerald-500" />}
+        icon={<Calendar className="w-4 h-4 text-brand-purple" />}
         value={hoursValue}
         targetText="Goal: 100%"
         hasData={hoursHasData}
@@ -239,7 +239,7 @@ export function KpiHighlightTiles({
 
       <HighlightTile
         title="Task Delivery"
-        icon={<CheckCircle2 className="w-4 h-4 text-amber-500" />}
+        icon={<CheckCircle2 className="w-4 h-4 text-brand-purple" />}
         value={tasksValue}
         targetText="Target: 90%"
         hasData={tasksHasData}

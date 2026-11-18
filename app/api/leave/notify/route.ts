@@ -3,15 +3,18 @@ import { getNotificationCaller } from "@/lib/notifications/auth";
 import { getManagersOf, getHrUsers } from "@/lib/notifications/recipients";
 import { notify } from "@/lib/notifications/notify";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { requireApprovedUser } from "@/lib/auth/require-approved-user";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getNotificationCaller(request);
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const approvedCheck = await requireApprovedUser(request);
+    if ("response" in approvedCheck) {
+      return approvedCheck.response;
     }
+
+    const user = approvedCheck.user;
 
     const body = await request.json().catch(() => ({}));
     const { event, requestId, startDate, endDate, reason } = body;

@@ -3,11 +3,17 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import { getStoredUsers, getStoredDepartments, getStoredTeams } from "@/lib/storage/demo-store";
+import { requireApprovedUser } from "@/lib/auth/require-approved-user";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
+    const approvedCheck = await requireApprovedUser(request);
+    if ("response" in approvedCheck) {
+      return approvedCheck.response;
+    }
+
     const isDemo = isDemoModeEnabled();
 
     // Authenticate caller
@@ -62,8 +68,8 @@ export async function GET(request: NextRequest) {
         .select("id, name, team_lead_id, department_id"),
       (supabaseAdmin as any)
         .from("onboarding_profiles")
-        .select("id, onboarding_status")
-        .in("onboarding_status", ["NOT_STARTED", "IN_PROGRESS", "SUBMITTED"]),
+        .select("id, status, onboarding_status")
+        .eq("status", "submitted"),
       (supabaseAdmin as any)
         .from("internships")
         .select("id, status, end_date"),

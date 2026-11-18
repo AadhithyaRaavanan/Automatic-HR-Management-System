@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import { requireApprovedUser } from "@/lib/auth/require-approved-user";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const approvedCheck = await requireApprovedUser(request);
+  if ("response" in approvedCheck) {
+    return approvedCheck.response;
+  }
   try {
     const { data: internships, error } = await (supabaseAdmin as any)
       .from("internships")

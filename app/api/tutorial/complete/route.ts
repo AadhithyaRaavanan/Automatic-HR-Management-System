@@ -62,15 +62,29 @@ export async function GET(request: NextRequest) {
     const tutorial_completed =
       prof?.tutorial_completed === true || emp?.tutorial_completed === true;
     const tutorial_version = Number(prof?.tutorial_version) || 0;
-    const onboarding_completed =
-      prof?.onboarding_completed === true ||
-      emp?.onboarding_completed === true ||
-      Boolean(emp?.onboarding_completed_at);
+
+    const userRole = (user.app_metadata?.user_role || user.user_metadata?.role || "employee").toLowerCase();
+    const isExempt = userRole === "admin" || userRole === "hr";
+
+    // Walkthrough gate: only starts when onboarding status is ALLOWED (approved profile + active employee)
+    let isAllowed = isExempt;
+    if (!isExempt) {
+      if (user.app_metadata?.onboarding_approved === true) {
+        isAllowed = true;
+      } else {
+        const { data: onbProf } = await (supabaseAdmin as any)
+          .from("onboarding_profiles")
+          .select("status")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        isAllowed = onbProf?.status === "approved" && emp?.status === "active";
+      }
+    }
 
     return NextResponse.json({
       tutorial_completed,
       tutorial_version,
-      onboarding_completed,
+      onboarding_completed: isAllowed,
     });
   } catch (err: any) {
     return NextResponse.json(

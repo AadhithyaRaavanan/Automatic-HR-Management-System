@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import { requireApprovedUser } from "@/lib/auth/require-approved-user";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +9,10 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const approvedCheck = await requireApprovedUser(request);
+  if ("response" in approvedCheck) {
+    return approvedCheck.response;
+  }
   const employeeId = params.id;
   if (!employeeId) {
     return NextResponse.json({ error: "Missing employee ID" }, { status: 400 });

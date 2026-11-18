@@ -35,12 +35,10 @@ export function KpiRadialGauge({
 
   const strokeColor =
     validScore == null
-      ? "#94A3B8"
+      ? "#CBD5E1"
       : validScore >= target
-      ? "#10B981" // Emerald
-      : validScore >= target - 15
-      ? "#F59E0B" // Amber
-      : "#F43F5E"; // Rose
+      ? "#6C5CE7" // Primary brand purple
+      : "#8B5CF6"; // Refined purple tone
 
   return (
     <div

@@ -149,83 +149,7 @@ export async function updateSession(request: NextRequest) {
     const userMeta = (claims?.user_metadata || {}) as Record<string, any>;
     const userId = (claims?.sub || claims?.id) as string | undefined;
 
-    // Onboarding Guard:
-    // HR and Admin accounts retain authorized administrative access and are not restricted.
-    // Regular employees who have submitted all documents (SUBMITTED, RESUBMITTED, UNDER_REVIEW, VERIFIED, COMPLETED)
-    // are allowed into the dashboard to continue work.
-    // Employees who have NOT submitted (NOT_STARTED, IN_PROGRESS) or require corrections (CORRECTION_REQUIRED) are routed to /onboarding.
-    const isPrivilegedAdminOrHr = userRole === "admin" || userRole === "hr";
-
-    let canAccessDashboard = isPrivilegedAdminOrHr;
-
-    if (userId && !isPrivilegedAdminOrHr) {
-      if (userMeta.onboarding_completed === true) {
-        canAccessDashboard = true;
-      } else {
-        try {
-          // Check onboarding_profiles for submission/completion status using privileged client or session client
-          const checkClient = process.env.SUPABASE_SERVICE_ROLE_KEY
-            ? createServerClient<Database>(
-                process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-                process.env.SUPABASE_SERVICE_ROLE_KEY,
-                { cookies: { getAll: () => [], setAll: () => {} } }
-              )
-            : supabase;
-
-          const { data: onbProf } = await (checkClient as any)
-            .from("onboarding_profiles")
-            .select("status")
-            .eq("user_id", userId)
-            .maybeSingle();
-
-          const onbStatus = (onbProf?.status || "").toUpperCase();
-
-          if (["SUBMITTED", "RESUBMITTED", "UNDER_REVIEW", "VERIFIED", "COMPLETED", "APPROVED"].includes(onbStatus)) {
-            canAccessDashboard = true;
-          } else {
-            const { data: prof } = await (checkClient as any)
-              .from("profiles")
-              .select("onboarding_completed")
-              .eq("id", userId)
-              .maybeSingle();
-
-            if (prof?.onboarding_completed === true) {
-              canAccessDashboard = true;
-            } else {
-              const { data: emp } = await (checkClient as any)
-                .from("employees")
-                .select("onboarding_completed")
-                .eq("id", userId)
-                .maybeSingle();
-
-              canAccessDashboard = Boolean(emp?.onboarding_completed);
-            }
-          }
-        } catch {
-          canAccessDashboard = false;
-        }
-      }
-    }
-
-    if (!isPrivilegedAdminOrHr && !canAccessDashboard) {
-      if (
-        pathname !== "/onboarding" &&
-        !pathname.startsWith("/onboarding") &&
-        !(pathname.startsWith("/settings") && request.nextUrl.searchParams.get("must_change_password") === "true") &&
-        !pathname.startsWith("/api") &&
-        !pathname.startsWith("/auth") &&
-        pathname !== "/login"
-      ) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/onboarding";
-        url.search = "";
-        return NextResponse.redirect(url);
-      }
-    } else if (!isPrivilegedAdminOrHr && canAccessDashboard && pathname === "/onboarding") {
-      // If employee wants to visit /onboarding while permitted, allow them to view/replace documents
-    }
-
-    // Enforce temporary password must-change-password and 24-hour expiration
+    // 1. Enforce temporary password must-change-password and 24-hour expiration
     const mustChangePassword = Boolean(claims?.must_change_password || userMeta.must_change_password);
 
     if (mustChangePassword) {
@@ -242,15 +166,12 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url);
       }
 
-      // If user hasn't completed onboarding, allow /onboarding without redirecting to /settings
-      if (!canAccessDashboard && (pathname === "/onboarding" || pathname.startsWith("/onboarding"))) {
-        // Allow access to onboarding
-      } else if (
-        pathname !== "/" &&
-        !pathname.startsWith("/settings") &&
-        !pathname.startsWith("/onboarding") &&
+      if (
+        pathname !== "/settings" &&
+        request.nextUrl.searchParams.get("must_change_password") !== "true" &&
         !pathname.startsWith("/auth") &&
-        !pathname.startsWith("/login")
+        !pathname.startsWith("/login") &&
+        !pathname.startsWith("/api")
       ) {
         const url = request.nextUrl.clone();
         url.pathname = "/settings";
@@ -259,11 +180,10 @@ export async function updateSession(request: NextRequest) {
       }
     }
 
-    // Multi-Factor Authentication Enforcement:
-    // 1. If user has an enrolled factor and current assurance is not aal2 -> /mfa-challenge
-    // 2. If user is HR/Admin in an organization with require_mfa_for_privileged = TRUE,
-    //    and user has NO verified factor -> session at aal1 may reach ONLY /mfa-setup,
-    //    the MFA enroll/verify endpoints, change-password, and sign-out. Everything else redirects to /mfa-setup.
+    // 2. Multi-Factor Authentication Enforcement:
+    // - If user has an enrolled factor and current assurance is not aal2 -> /mfa-challenge
+    // - If user is HR/Admin in an organization with require_mfa_for_privileged = TRUE,
+    //   and user has NO verified factor -> /mfa-setup
     if (aal !== "aal2") {
       let hasEnrolledFactor = false;
       try {
@@ -312,6 +232,100 @@ export async function updateSession(request: NextRequest) {
             url.searchParams.set("redirect", pathname);
             return NextResponse.redirect(url);
           }
+        }
+      }
+    }
+
+    // 3. Onboarding Approval Gate (Enforced after Password Change & MFA)
+    // ADMIN and HR are exempt (always ALLOWED)
+    const isPrivilegedAdminOrHr = userRole === "admin" || userRole === "hr";
+    let isAllowed = isPrivilegedAdminOrHr;
+    let gateStatus: "ALLOWED" | "PENDING_APPROVAL" | "CHANGES_REQUESTED" | "ONBOARDING_REQUIRED" =
+      isPrivilegedAdminOrHr ? "ALLOWED" : "ONBOARDING_REQUIRED";
+
+    if (!isPrivilegedAdminOrHr && userId) {
+      // Fast-path: check trusted app_metadata claim
+      if (claims?.app_metadata?.onboarding_approved === true) {
+        isAllowed = true;
+        gateStatus = "ALLOWED";
+      } else {
+        // Fallback: ONE lightweight DB check so a newly approved user is let in without logging out
+        try {
+          const checkClient = process.env.SUPABASE_SERVICE_ROLE_KEY
+            ? createServerClient<Database>(
+                process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+                process.env.SUPABASE_SERVICE_ROLE_KEY,
+                { cookies: { getAll: () => [], setAll: () => {} } }
+              )
+            : supabase;
+
+          const [onbRes, empRes] = await Promise.all([
+            (checkClient as any)
+              .from("onboarding_profiles")
+              .select("status")
+              .eq("user_id", userId)
+              .maybeSingle(),
+            (checkClient as any)
+              .from("employees")
+              .select("status, onboarding_completed")
+              .eq("id", userId)
+              .maybeSingle(),
+          ]);
+
+          const profStatus = (onbRes.data?.status || "").toLowerCase();
+          const empStatus = (empRes.data?.status || "").toLowerCase();
+
+          if (profStatus === "approved" && empStatus === "active") {
+            isAllowed = true;
+            gateStatus = "ALLOWED";
+          } else if (profStatus === "changes_requested" || profStatus === "rejected") {
+            gateStatus = "CHANGES_REQUESTED";
+          } else if (profStatus === "submitted") {
+            gateStatus = "PENDING_APPROVAL";
+          } else {
+            gateStatus = "ONBOARDING_REQUIRED";
+          }
+        } catch {
+          gateStatus = "ONBOARDING_REQUIRED";
+        }
+      }
+    }
+
+    // If candidate is ALLOWED and visits /onboarding/pending, redirect to dashboard
+    if (isAllowed && pathname === "/onboarding/pending") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard";
+      return NextResponse.redirect(url);
+    }
+
+    // Non-ALLOWED routing enforcement:
+    if (!isAllowed) {
+      const isWhitelisted =
+        pathname === "/login" ||
+        pathname.startsWith("/login") ||
+        pathname.startsWith("/auth") ||
+        pathname === "/403" ||
+        pathname.startsWith("/api/auth/signout") ||
+        (pathname.startsWith("/settings") && request.nextUrl.searchParams.get("must_change_password") === "true");
+
+      if (gateStatus === "PENDING_APPROVAL") {
+        if (pathname !== "/onboarding/pending" && !isWhitelisted) {
+          const url = request.nextUrl.clone();
+          url.pathname = "/onboarding/pending";
+          url.search = "";
+          return NextResponse.redirect(url);
+        }
+      } else {
+        // ONBOARDING_REQUIRED or CHANGES_REQUESTED -> /onboarding
+        if (
+          pathname !== "/onboarding" &&
+          !pathname.startsWith("/onboarding") &&
+          !isWhitelisted
+        ) {
+          const url = request.nextUrl.clone();
+          url.pathname = "/onboarding";
+          url.search = "";
+          return NextResponse.redirect(url);
         }
       }
     }

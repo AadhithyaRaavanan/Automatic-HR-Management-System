@@ -77,6 +77,34 @@ export async function getKpiCallerContext(
     const role = (memberRes.data?.role || "employee").toLowerCase() as CallerContext["role"];
     const orgId = memberRes.data?.organization_id || empRes.data?.organization_id || "";
 
+    // Onboarding Gate: Non-admin/HR users must have approved onboarding
+    if (role !== "admin" && role !== "hr") {
+      const isClaimApproved = user.app_metadata?.onboarding_approved === true;
+      if (!isClaimApproved) {
+        const { data: onbProf } = await (supabaseAdmin as any)
+          .from("onboarding_profiles")
+          .select("status")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        const isDbApproved =
+          onbProf?.status === "approved" && empRes.data?.status === "active";
+
+        if (!isDbApproved) {
+          return {
+            caller: null,
+            errorResponse: NextResponse.json(
+              {
+                error: "Onboarding not approved. Wait until approval.",
+                code: "ONBOARDING_NOT_APPROVED",
+              },
+              { status: 403 }
+            ),
+          };
+        }
+      }
+    }
+
     const caller: CallerContext = {
       userId: user.id,
       email: user.email || "",

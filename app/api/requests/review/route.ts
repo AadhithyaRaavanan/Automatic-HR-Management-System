@@ -3,10 +3,15 @@ import { createServerClient } from "@supabase/ssr";
 import { Database } from "@/types/database.types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notifications/notify";
+import { requireApprovedUser } from "@/lib/auth/require-approved-user";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
+  const approvedCheck = await requireApprovedUser(request);
+  if ("response" in approvedCheck) {
+    return approvedCheck.response;
+  }
   try {
     let response = NextResponse.next();
     const authHeader = request.headers.get("authorization");

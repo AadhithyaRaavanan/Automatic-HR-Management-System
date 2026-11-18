@@ -3,10 +3,15 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import { getStoredUsers, getStoredDepartments, getStoredJobTitles } from "@/lib/storage/demo-store";
+import { requireApprovedUser } from "@/lib/auth/require-approved-user";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const approvedCheck = await requireApprovedUser(request);
+  if ("response" in approvedCheck) {
+    return approvedCheck.response;
+  }
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search")?.toLowerCase();
   const departmentId = searchParams.get("departmentId");

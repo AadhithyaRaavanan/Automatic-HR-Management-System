@@ -137,11 +137,15 @@ export function KpiCategorySection({
               "Leave, holidays, and approved corrections are not counted against the person.";
 
             if (hasData) {
+              const match = m.displayValue.match(/^([^(]+)(\(.*\))?$/);
+              const primaryVal = match ? match[1].trim() : m.displayValue;
+              const secondaryVal = match && match[2] ? match[2].trim() : null;
+
               /* Full Metric Card */
               return (
                 <div
                   key={m.key}
-                  className="p-4 rounded-2xl bg-card border border-border-light shadow-card hover:border-brand-purple/40 hover:shadow-card-hover transition-all flex flex-col justify-between space-y-3"
+                  className="p-4 rounded-2xl bg-card border border-border-light shadow-card hover:border-brand-purple/40 hover:shadow-card-hover transition-all flex flex-col justify-between min-h-[148px] space-y-3"
                 >
                   <div className="space-y-2">
                     {/* Top: 2-line wrapped full title, no truncation */}
@@ -161,11 +165,16 @@ export function KpiCategorySection({
                     </div>
 
                     {/* Middle: Big Value & Target */}
-                    <div className="flex items-baseline justify-between pt-1 gap-2">
-                      <div className="flex items-baseline gap-2">
+                    <div className="flex flex-wrap items-baseline justify-between pt-1 gap-2">
+                      <div className="flex items-baseline flex-wrap gap-1.5 min-w-0">
                         <span className="text-2xl font-black text-text-primary tabular-nums tracking-tight">
-                          {m.displayValue}
+                          {primaryVal}
                         </span>
+                        {secondaryVal && (
+                          <span className="text-xs font-semibold text-text-secondary">
+                            {secondaryVal}
+                          </span>
+                        )}
 
                         {trendDiff != null && (
                           <span
@@ -206,14 +215,7 @@ export function KpiCategorySection({
                       <div className="h-1.5 w-full bg-card-subtle rounded-full overflow-hidden">
                         <div
                           style={{ width: `${Math.min(100, Math.max(0, m.value))}%` }}
-                          className={cn(
-                            "h-full rounded-full transition-all duration-500",
-                            m.status === "on_track"
-                              ? "bg-emerald-500"
-                              : m.status === "at_risk"
-                              ? "bg-amber-500"
-                              : "bg-rose-500"
-                          )}
+                          className="h-full rounded-full transition-all duration-500 bg-brand-purple"
                         />
                       </div>
                     )}

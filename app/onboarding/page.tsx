@@ -635,10 +635,10 @@ export default function OnboardingPage() {
       }
 
       const resData = await res.json();
-      toast.success("Onboarding submitted successfully! You can now access your dashboard to continue working.");
+      toast.success("Onboarding submitted successfully! Your documents are being reviewed by HR.");
       setWorkflowStatus(resData.onboarding_status || "SUBMITTED");
       await fetchProfileData();
-      router.push("/");
+      router.push("/onboarding/pending");
     } catch (err: any) {
       toast.error(err.message || "Failed to submit onboarding.");
     } finally {
@@ -657,60 +657,12 @@ export default function OnboardingPage() {
     );
   }
 
-  // A. SUBMITTED or UNDER_REVIEW state view (Permits continuing directly to dashboard to work)
+  // A. SUBMITTED or UNDER_REVIEW state: Redirect to "Wait Until Approval" screen
   if (["SUBMITTED", "UNDER_REVIEW", "RESUBMITTED"].includes(workflowStatus)) {
-    return (
-      <div className="min-h-screen bg-surface-ground flex flex-col justify-center items-center p-6">
-        <div className="max-w-2xl w-full bg-card rounded-3xl border border-border-light shadow-float p-8 sm:p-10 text-center space-y-6">
-          <div className="w-16 h-16 rounded-full bg-brand-purple/10 text-brand-purple flex items-center justify-center mx-auto shadow-md">
-            <Clock className="w-8 h-8 animate-pulse" />
-          </div>
-
-          <div className="space-y-2">
-            <span className="px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider bg-brand-purple-light text-brand-purple">
-              {workflowStatus.replace(/_/g, " ")}
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-text-primary tracking-tight">
-              Onboarding Submitted & Verification In Progress
-            </h1>
-            <p className="text-sm text-text-secondary max-w-lg mx-auto">
-              Welcome aboard, <strong>{fullName || employeeMeta.fullName}</strong> ({employeeMeta.employeeId}). Your documents have been successfully submitted for HR review. <strong>You can continue with your work now.</strong>
-            </p>
-          </div>
-
-          <div className="bg-card-subtle p-5 rounded-2xl border border-border-light text-left space-y-3">
-            <div className="flex items-center justify-between text-xs font-bold text-text-primary border-b border-border-light pb-2">
-              <span>Department: {employeeMeta.department}</span>
-              <span>Designation: {employeeMeta.designation}</span>
-            </div>
-            <p className="text-xs text-text-tertiary">
-              You have full workspace access to attend shifts, mark attendance, and collaborate. If any submitted certificate requires replacement or clarification, HR Admin will send you a note right here.
-            </p>
-          </div>
-
-          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                window.location.href = "/";
-              }}
-              className="w-full sm:w-auto px-6 py-3 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
-            >
-              <span>Continue to Work Dashboard</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => fetchProfileData()}
-              className="w-full sm:w-auto px-6 py-3 rounded-xl bg-card border border-border-light hover:bg-card-subtle text-xs font-bold text-text-primary transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span>Refresh Status</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+    if (typeof window !== "undefined") {
+      router.replace("/onboarding/pending");
+    }
+    return null;
   }
 
   // B. COMPLETED or VERIFIED state view

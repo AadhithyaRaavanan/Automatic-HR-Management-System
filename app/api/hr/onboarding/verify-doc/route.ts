@@ -24,9 +24,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (action === "reject" && (!rejectionReason || !rejectionReason.trim())) {
+    if (action === "reject" && (!rejectionReason || rejectionReason.trim().length < 5)) {
       return NextResponse.json(
-        { error: "A rejection reason is mandatory when rejecting a document." },
+        { error: "A feedback note (min 5 characters) is required when rejecting a document." },
         { status: 400 }
       );
     }
@@ -40,6 +40,20 @@ export async function POST(request: NextRequest) {
 
     if (fetchErr || !doc) {
       return NextResponse.json({ error: "Document not found." }, { status: 404 });
+    }
+
+    // Block modifying documents if candidate profile is already approved
+    const { data: profile } = await (supabaseAdmin as any)
+      .from("onboarding_profiles")
+      .select("status")
+      .eq("user_id", doc.user_id)
+      .maybeSingle();
+
+    if (profile?.status === "approved") {
+      return NextResponse.json(
+        { error: "Cannot modify documents for an already approved onboarding profile." },
+        { status: 400 }
+      );
     }
 
     const nowIso = new Date().toISOString();
@@ -56,13 +70,13 @@ export async function POST(request: NextRequest) {
       })
       .eq("id", documentId);
 
-    // 3. If rejected, update candidate's onboarding status to CORRECTION_REQUIRED and notify them
+    // 3. If rejected, update candidate's onboarding status to changes_requested / CORRECTION_REQUIRED and notify them
     if (action === "reject") {
       await (supabaseAdmin as any)
         .from("onboarding_profiles")
         .update({
           onboarding_status: "CORRECTION_REQUIRED",
-          status: "rejected",
+          status: "changes_requested",
           updated_at: nowIso,
         })
         .eq("user_id", doc.user_id);

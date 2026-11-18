@@ -387,11 +387,11 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
     },
     {
       id: "hr-onboarding-hub",
-      title: "Onboarding Hub & Document Verification",
+      title: "Onboarding Approval & Verification Hub",
       route: "/hr/onboarding",
       selector: '[data-tour="onboarding-hub"]',
-      body: "Review candidate onboarding submissions, inspect uploaded PAN cards, resumes, and bank proofs via secure signed previews, and approve or reject each certificate with structured feedback notes. All documents are segregated into private EMPLOYEEID_NAME folders.",
-      tip: "Once all required documents are verified, one click completes onboarding and transitions the candidate to active status.",
+      body: "Candidates are held at the 'Wait until approval' screen until HR reviews their documents. Inspect uploaded PAN cards, qualification certificates, and bank proofs, approving each or requesting corrections with structured feedback notes. Once all documents are approved, final approval activates their account and automatically dispatches the 'You're approved - log in to Pulse' welcome email.",
+      tip: "Candidates cannot enter the workplace dashboard until final HR approval is completed and active status is granted.",
     },
     {
       id: "hr-leave-queue",

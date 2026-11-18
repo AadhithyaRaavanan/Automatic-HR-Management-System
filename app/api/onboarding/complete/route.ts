@@ -317,13 +317,10 @@ export async function POST(request: NextRequest) {
       console.error("[POST /api/onboarding/complete] Failed to update onboarding profile:", updateErr.message);
     }
 
-    // 5. Update employees and profiles to mark onboarding submitted / completed so dashboard access is granted
+    // 5. Update employees details (Note: onboarding_completed and active status are granted ONLY upon final HR approval)
     try {
       const empEmergency = emergencyName && emergencyPhone ? `${emergencyName} - ${emergencyPhone}` : undefined;
       const empUpdatePayload: Record<string, any> = {
-        onboarding_completed: true,
-        onboarding_completed_at: nowIso,
-        status: "active",
         full_name: resolvedFullName,
         phone: resolvedPhone,
       };
@@ -335,23 +332,25 @@ export async function POST(request: NextRequest) {
         .update(empUpdatePayload)
         .eq("id", user.id);
 
+      // Reset any rejected documents back to 'pending' upon candidate resubmission
       await (supabaseAdmin as any)
-        .from("profiles")
-        .upsert({
-          id: user.id,
-          onboarding_completed: true,
-        });
+        .from("onboarding_documents")
+        .update({
+          document_status: "pending",
+          rejection_reason: null,
+          reviewed_at: null,
+        })
+        .eq("user_id", user.id)
+        .eq("document_status", "rejected");
 
       await supabaseAdmin.auth.admin.updateUserById(user.id, {
         user_metadata: {
           ...user.user_metadata,
-          onboarding_completed: true,
           onboarding_status: "SUBMITTED",
-          must_change_password: false,
         },
       });
     } catch (grantErr) {
-      console.warn("[Onboarding Complete] Error granting dashboard access:", grantErr);
+      console.warn("[Onboarding Complete] Error updating employee info on submission:", grantErr);
     }
 
     // 6. Employee details for notification (empRecord resolved above)

@@ -231,14 +231,14 @@ export function AppShell({
             resolvedDeptName = empProfile.departments?.name || null;
             resolvedJobTitle = empProfile.job_titles?.title_name || null;
 
-            // Extra client-side lockdown guard: un-onboarded employees cannot mount the workplace shell
+            // Extra client-side lockdown guard: un-approved employees cannot mount the workplace shell
             if (
               resolvedRole !== "admin" &&
               resolvedRole !== "hr" &&
               empProfile.onboarding_completed === false
             ) {
-              if (typeof window !== "undefined" && window.location.pathname !== "/onboarding") {
-                window.location.href = "/onboarding";
+              if (typeof window !== "undefined" && !window.location.pathname.startsWith("/onboarding")) {
+                window.location.href = "/onboarding/pending";
                 return;
               }
             }
@@ -280,7 +280,7 @@ export function AppShell({
             }
           } catch { }
 
-          if (empProfile?.onboarding_completed === true || Boolean(empProfile?.onboarding_completed_at)) {
+          if (empProfile?.onboarding_completed === true && (empProfile as any)?.status === "active") {
             onboardingCompleted = true;
           }
 
