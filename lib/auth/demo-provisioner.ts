@@ -15,6 +15,24 @@ export const DEMO_ACCOUNTS: Record<string, DemoAccountConfig> = {
     email: "aadhithya.raavanan@gmail.com",
     role: "admin",
   },
+  "hr@zenxea.com": {
+    id: "91acc93d-7093-48a0-bfa5-35a7e51236ea",
+    name: "HR Lead",
+    email: "hr@zenxea.com",
+    role: "hr",
+  },
+  "manager@zenxea.com": {
+    id: "ccb11354-faad-4259-bbbd-c7885f692c57",
+    name: "Team Manager",
+    email: "manager@zenxea.com",
+    role: "manager",
+  },
+  "employee@zenxea.com": {
+    id: "f0094233-6b3e-423f-80de-6472a5c1c73a",
+    name: "Staff Employee",
+    email: "employee@zenxea.com",
+    role: "employee",
+  },
 };
 
 /**

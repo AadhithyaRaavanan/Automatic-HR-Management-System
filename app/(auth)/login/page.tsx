@@ -53,21 +53,24 @@ function LoginForm() {
 
     try {
       if (authMode === "magic-link") {
-        // Magic link flow via Supabase client
-        const { error } = await supabase.auth.signInWithOtp({
-          email: loginEmail,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent(
-              redirectPath
-            )}`,
-          },
+        // Authoritative server-side magic link via /api/auth/magic-link
+        const res = await fetch("/api/auth/magic-link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: loginEmail,
+            redirectPath,
+            turnstileToken: captchaToken || undefined,
+          }),
         });
 
-        if (error) {
-          throw new Error("Unable to send magic link. Please check the email address and try again.");
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Unable to send magic link. Please check the email address and try again.");
         }
 
-        toast.success("If an account exists, a secure sign-in link has been sent to your email.");
+        toast.success(data.message || "A secure sign-in link and verification code have been dispatched to your email.");
+        setAuthMode("otp-verify");
         setIsAuthenticating(false);
       } else {
         // Authoritative Server-Side Login via /api/auth/login

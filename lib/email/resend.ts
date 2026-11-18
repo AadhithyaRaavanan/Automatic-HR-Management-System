@@ -342,7 +342,7 @@ export async function sendWelcomeCredentialsEmail(params: SendInviteEmailParams)
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {
-        const fromAddress = process.env.SMTP_FROM || `Pulse <hr@zenxea.com>`;
+        const fromAddress = process.env.SMTP_FROM || `Pulse <${process.env.SMTP_USER || "business@zenxea.com"}>`;
         const info = await transporter.sendMail({
           from: fromAddress,
           to,
@@ -352,8 +352,7 @@ export async function sendWelcomeCredentialsEmail(params: SendInviteEmailParams)
         return { success: true, messageId: info.messageId };
       }
     } catch (smtpErr: any) {
-      console.error("[Hostinger SMTP Error]:", smtpErr);
-      return { success: false, error: smtpErr.message || "Failed to dispatch email via Hostinger SMTP" };
+      console.warn("[SMTP Error, falling back to Resend]:", smtpErr?.message || smtpErr);
     }
   }
 
@@ -538,7 +537,7 @@ export async function sendOnboardingSubmittedEmail(params: SendOnboardingSubmitt
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {
-        const fromAddress = process.env.SMTP_FROM || `Pulse <hr@zenxea.com>`;
+        const fromAddress = process.env.SMTP_FROM || `Pulse <${process.env.SMTP_USER || "business@zenxea.com"}>`;
         const info = await transporter.sendMail({
           from: fromAddress,
           to: hrRecipient,
@@ -548,8 +547,7 @@ export async function sendOnboardingSubmittedEmail(params: SendOnboardingSubmitt
         return { success: true, messageId: info.messageId };
       }
     } catch (smtpErr: any) {
-      console.error("[Hostinger SMTP Onboarding Notice Error]:", smtpErr);
-      return { success: false, error: smtpErr.message || "Failed to dispatch email via Hostinger SMTP" };
+      console.warn("[SMTP Error, falling back to Resend]:", smtpErr?.message || smtpErr);
     }
   }
 
@@ -592,7 +590,7 @@ export async function sendPasswordResetEmail(params: SendPasswordResetParams): P
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {
-        const fromAddress = process.env.SMTP_FROM || `Pulse <hr@zenxea.com>`;
+        const fromAddress = process.env.SMTP_FROM || `Pulse <${process.env.SMTP_USER || "business@zenxea.com"}>`;
         const info = await transporter.sendMail({
           from: fromAddress,
           to,
@@ -602,8 +600,7 @@ export async function sendPasswordResetEmail(params: SendPasswordResetParams): P
         return { success: true, messageId: info.messageId };
       }
     } catch (smtpErr: any) {
-      console.error("[Hostinger SMTP Password Reset Error]:", smtpErr);
-      return { success: false, error: smtpErr.message || "Failed to dispatch reset email via Hostinger SMTP" };
+      console.warn("[SMTP Error, falling back to Resend]:", smtpErr?.message || smtpErr);
     }
   }
 
@@ -695,7 +692,7 @@ export async function sendNotificationEmail(params: SendNotificationEmailParams)
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {
-        const fromAddress = process.env.SMTP_FROM || `Pulse <hr@zenxea.com>`;
+        const fromAddress = process.env.SMTP_FROM || `Pulse <${process.env.SMTP_USER || "business@zenxea.com"}>`;
         const info = await transporter.sendMail({
           from: fromAddress,
           to,
@@ -705,8 +702,7 @@ export async function sendNotificationEmail(params: SendNotificationEmailParams)
         return { success: true, messageId: info.messageId };
       }
     } catch (smtpErr: any) {
-      console.error("[SMTP Notification Error]:", smtpErr);
-      return { success: false, error: smtpErr.message || "Failed to dispatch notification email via SMTP" };
+      console.warn("[SMTP Error, falling back to Resend]:", smtpErr?.message || smtpErr);
     }
   }
 
@@ -942,7 +938,7 @@ export async function sendOnboardingApprovalEmail(params: SendApprovalEmailParam
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {
-        const fromAddress = process.env.SMTP_FROM || `Pulse <hr@zenxea.com>`;
+        const fromAddress = process.env.SMTP_FROM || `Pulse <${process.env.SMTP_USER || "business@zenxea.com"}>`;
         const info = await transporter.sendMail({
           from: fromAddress,
           to,
@@ -952,8 +948,7 @@ export async function sendOnboardingApprovalEmail(params: SendApprovalEmailParam
         return { success: true, messageId: info.messageId };
       }
     } catch (smtpErr: any) {
-      console.error("[Hostinger SMTP Approval Notice Error]:", smtpErr);
-      return { success: false, error: smtpErr.message || "Failed to dispatch email via SMTP" };
+      console.warn("[SMTP Error, falling back to Resend]:", smtpErr?.message || smtpErr);
     }
   }
 
@@ -1165,7 +1160,7 @@ export async function sendAdminOnboardingDossierEmail(params: SendAdminDossierEm
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {
-        const fromAddress = process.env.SMTP_FROM || `Pulse HR <hr@zenxea.com>`;
+        const fromAddress = process.env.SMTP_FROM || `Pulse HR <${process.env.SMTP_USER || "business@zenxea.com"}>`;
         const info = await transporter.sendMail({
           from: fromAddress,
           to,
@@ -1180,8 +1175,7 @@ export async function sendAdminOnboardingDossierEmail(params: SendAdminDossierEm
         return { success: true, messageId: info.messageId };
       }
     } catch (smtpErr: any) {
-      console.error("[Hostinger SMTP Admin Dossier Error]:", smtpErr);
-      return { success: false, error: smtpErr.message || "Failed to dispatch email via SMTP" };
+      console.warn("[SMTP Error, falling back to Resend]:", smtpErr?.message || smtpErr);
     }
   }
 
@@ -1199,6 +1193,138 @@ export async function sendAdminOnboardingDossierEmail(params: SendAdminDossierEm
           filename: att.filename,
           content: att.content,
         })),
+      });
+
+      if (response.error) {
+        return { success: false, error: response.error.message };
+      }
+
+      return { success: true, messageId: response.data?.id };
+    } catch (err: any) {
+      return { success: false, error: err.message || String(err) };
+    }
+  }
+
+  return { success: true, messageId: `sim_${Date.now()}` };
+}
+
+
+export interface SendMagicLinkParams {
+  to: string;
+  magicLink?: string;
+  otpCode?: string;
+}
+
+export function buildMagicLinkEmailHtml(params: SendMagicLinkParams): string {
+  const { magicLink, otpCode } = params;
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign In to Pulse — Secure Workplace Access</title>
+    <style>
+      body { margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; }
+      .wrapper { width: 100%; padding: 40px 0; background-color: #f8fafc; }
+      .card { max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 24px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+      .header { background: #14123A; padding: 32px 32px 28px; text-align: center; }
+      .brand { font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; }
+      .badge { display: inline-block; background: rgba(108, 92, 231, 0.25); color: #a29bfe; font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase; margin-top: 8px; }
+      .body { padding: 32px; }
+      .title { font-size: 20px; font-weight: 800; color: #0f172a; margin: 0 0 12px; line-height: 1.3; }
+      .paragraph { font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 24px; }
+      .otp-box { background: #f8fafc; border: 2px dashed #6C5CE7; border-radius: 16px; padding: 20px; text-align: center; margin: 24px 0; }
+      .otp-label { font-size: 11px; font-weight: 700; color: #6C5CE7; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+      .otp-number { font-size: 32px; font-weight: 800; font-family: monospace; letter-spacing: 6px; color: #14123A; }
+      .cta-box { text-align: center; margin: 28px 0; }
+      .cta-btn { display: inline-block; background: #6C5CE7; color: #ffffff !important; text-decoration: none; font-size: 14px; font-weight: 700; padding: 14px 32px; border-radius: 12px; box-shadow: 0 4px 12px rgba(108, 92, 231, 0.3); }
+      .notice { background: #f1f5f9; border-radius: 12px; padding: 16px; font-size: 12px; color: #64748b; line-height: 1.5; margin-top: 24px; }
+      .footer { text-align: center; padding: 24px 32px; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; }
+    </style>
+  </head>
+  <body>
+    <div class="wrapper">
+      <div class="card">
+        <div class="header">
+          <div class="brand">Pulse</div>
+          <div class="badge">Passwordless Secure Access</div>
+        </div>
+        <div class="body">
+          <h1 class="title">Sign In With Your Magic Link</h1>
+          <p class="paragraph">
+            You requested passwordless sign-in for your Pulse workplace account. Click the button below to sign in instantly, or enter the verification code on the sign-in page.
+          </p>
+
+          ${
+            magicLink
+              ? `<div class="cta-box">
+                  <a href="${magicLink}" class="cta-btn" target="_blank" rel="noopener noreferrer">
+                    Sign In to Pulse
+                  </a>
+                </div>`
+              : ""
+          }
+
+          ${
+            otpCode
+              ? `<div class="otp-box">
+                  <div class="otp-label">Or Use Your 6-Digit Code</div>
+                  <div class="otp-number">${otpCode}</div>
+                </div>`
+              : ""
+          }
+
+          <div class="notice">
+            This secure sign-in link is valid for 15 minutes and can only be used once. If you did not request this login, please contact your workplace administrator.
+          </div>
+        </div>
+        <div class="footer">
+          Delivered securely via Hostinger SMTP &bull; Pulse Platform
+        </div>
+      </div>
+    </div>
+  </body>
+</html>`;
+}
+
+export async function sendMagicLinkEmail(params: SendMagicLinkParams): Promise<{
+  success: boolean;
+  messageId?: string;
+  error?: string;
+}> {
+  const { to } = params;
+  const subject = `Your Secure Sign-In Link for Pulse`;
+  const htmlContent = buildMagicLinkEmailHtml(params);
+
+  // 1. Hostinger SMTP
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      const transporter = getSmtpTransporter();
+      if (transporter) {
+        const fromAddress = process.env.SMTP_FROM || `Pulse <${process.env.SMTP_USER || "business@zenxea.com"}>`;
+        const info = await transporter.sendMail({
+          from: fromAddress,
+          to,
+          subject,
+          html: htmlContent,
+        });
+        return { success: true, messageId: info.messageId };
+      }
+    } catch (smtpErr: any) {
+      console.warn("[Hostinger SMTP Magic Link Error, falling back to Resend]:", smtpErr?.message || smtpErr);
+    }
+  }
+
+  // 2. Resend fallback
+  if (process.env.RESEND_API_KEY) {
+    const client = resend || new Resend(process.env.RESEND_API_KEY);
+    try {
+      const fromAddress = process.env.RESEND_FROM_EMAIL || "Pulse <onboarding@remotehr.io>";
+      const response = await client.emails.send({
+        from: fromAddress,
+        to: [to],
+        subject,
+        html: htmlContent,
       });
 
       if (response.error) {

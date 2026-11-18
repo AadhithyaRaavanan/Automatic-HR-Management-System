@@ -114,7 +114,19 @@ export async function POST(request: NextRequest) {
       if (!recOtpRes.error && recOtpRes.data.user) {
         authData = recOtpRes.data;
       } else {
-        verifyError = recOtpRes.error || emailOtpRes.error;
+        // Also attempt magiclink type verification
+        const mlOtpRes = await supabase.auth.verifyOtp({
+          email,
+          token,
+          type: "magiclink",
+          options: turnstileToken ? { captchaToken: turnstileToken } : undefined,
+        });
+
+        if (!mlOtpRes.error && mlOtpRes.data.user) {
+          authData = mlOtpRes.data;
+        } else {
+          verifyError = mlOtpRes.error || recOtpRes.error || emailOtpRes.error;
+        }
       }
     }
 
