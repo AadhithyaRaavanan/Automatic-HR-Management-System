@@ -149,94 +149,7 @@ export async function updateSession(request: NextRequest) {
     const userMeta = (claims?.user_metadata || {}) as Record<string, any>;
     const userId = (claims?.sub || claims?.id) as string | undefined;
 
-    // 1. Enforce temporary password must-change-password and 24-hour expiration
-    const mustChangePassword = Boolean(claims?.must_change_password || userMeta.must_change_password);
-
-    if (mustChangePassword) {
-      const expiresAt = userMeta.temp_password_expires_at;
-      const createdAt = userMeta.temp_password_created_at;
-      const isExpired =
-        (expiresAt && new Date(expiresAt).getTime() < Date.now()) ||
-        (createdAt && Date.now() - new Date(createdAt).getTime() > 24 * 60 * 60 * 1000);
-
-      if (isExpired) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/login";
-        url.searchParams.set("error", "expired_temp_password");
-        return NextResponse.redirect(url);
-      }
-
-      if (
-        pathname !== "/settings" &&
-        request.nextUrl.searchParams.get("must_change_password") !== "true" &&
-        !pathname.startsWith("/auth") &&
-        !pathname.startsWith("/login") &&
-        !pathname.startsWith("/api")
-      ) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/settings";
-        url.searchParams.set("must_change_password", "true");
-        return NextResponse.redirect(url);
-      }
-    }
-
-    // 2. Multi-Factor Authentication Enforcement:
-    // - If user has an enrolled factor and current assurance is not aal2 -> /mfa-challenge
-    // - If user is HR/Admin in an organization with require_mfa_for_privileged = TRUE,
-    //   and user has NO verified factor -> /mfa-setup
-    if (aal !== "aal2") {
-      let hasEnrolledFactor = false;
-      try {
-        const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-        hasEnrolledFactor = aalData?.nextLevel === "aal2";
-      } catch {}
-
-      if (hasEnrolledFactor) {
-        if (
-          !pathname.startsWith("/mfa-challenge") &&
-          !pathname.startsWith("/mfa-setup") &&
-          !pathname.startsWith("/auth")
-        ) {
-          const url = request.nextUrl.clone();
-          url.pathname = "/mfa-challenge";
-          url.searchParams.set("redirect", pathname);
-          return NextResponse.redirect(url);
-        }
-      } else if (userRole === "hr" || userRole === "admin") {
-        let reqMfa = !isDemoModeEnabled();
-        try {
-          const orgId = claims?.organization_id || claims?.app_metadata?.organization_id;
-          if (orgId) {
-            const { data: org } = await (supabase as any)
-              .from("organizations")
-              .select("require_mfa_for_privileged")
-              .eq("id", orgId)
-              .maybeSingle();
-            if (org && typeof org.require_mfa_for_privileged === "boolean") {
-              reqMfa = org.require_mfa_for_privileged;
-            }
-          }
-        } catch {}
-
-        if (reqMfa) {
-          const isAllowedUnenrolledPath =
-            pathname.startsWith("/mfa-setup") ||
-            pathname.startsWith("/api/auth") ||
-            pathname.startsWith("/auth") ||
-            pathname === "/login" ||
-            (pathname.startsWith("/settings") && request.nextUrl.searchParams.get("must_change_password") === "true");
-
-          if (!isAllowedUnenrolledPath) {
-            const url = request.nextUrl.clone();
-            url.pathname = "/mfa-setup";
-            url.searchParams.set("redirect", pathname);
-            return NextResponse.redirect(url);
-          }
-        }
-      }
-    }
-
-    // 3. Onboarding Approval Gate (Enforced after Password Change & MFA)
+    // 1. Onboarding Approval Gate (Enforced before General App Access)
     // ADMIN and HR are exempt (always ALLOWED)
     const isPrivilegedAdminOrHr = userRole === "admin" || userRole === "hr";
     let isAllowed = isPrivilegedAdminOrHr;
@@ -291,13 +204,6 @@ export async function updateSession(request: NextRequest) {
       }
     }
 
-    // If candidate is ALLOWED and visits /onboarding/pending, redirect to dashboard
-    if (isAllowed && pathname === "/onboarding/pending") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/dashboard";
-      return NextResponse.redirect(url);
-    }
-
     // Non-ALLOWED routing enforcement:
     if (!isAllowed) {
       const isWhitelisted =
@@ -305,8 +211,7 @@ export async function updateSession(request: NextRequest) {
         pathname.startsWith("/login") ||
         pathname.startsWith("/auth") ||
         pathname === "/403" ||
-        pathname.startsWith("/api/auth/signout") ||
-        (pathname.startsWith("/settings") && request.nextUrl.searchParams.get("must_change_password") === "true");
+        pathname.startsWith("/api/auth/signout");
 
       if (gateStatus === "PENDING_APPROVAL") {
         if (pathname !== "/onboarding/pending" && !isWhitelisted) {
@@ -326,6 +231,101 @@ export async function updateSession(request: NextRequest) {
           url.pathname = "/onboarding";
           url.search = "";
           return NextResponse.redirect(url);
+        }
+      }
+      return response;
+    }
+
+    // If candidate is ALLOWED and visits /onboarding/pending or /onboarding, redirect to dashboard
+    if (isAllowed && (pathname === "/onboarding/pending" || pathname === "/onboarding")) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard";
+      return NextResponse.redirect(url);
+    }
+
+    // 2. Enforce temporary password must-change-password and 24-hour expiration (Only after onboarding approval)
+    const mustChangePassword = Boolean(claims?.must_change_password || userMeta.must_change_password);
+
+    if (mustChangePassword) {
+      const expiresAt = userMeta.temp_password_expires_at;
+      const createdAt = userMeta.temp_password_created_at;
+      const isExpired =
+        (expiresAt && new Date(expiresAt).getTime() < Date.now()) ||
+        (createdAt && Date.now() - new Date(createdAt).getTime() > 24 * 60 * 60 * 1000);
+
+      if (isExpired) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/login";
+        url.searchParams.set("error", "expired_temp_password");
+        return NextResponse.redirect(url);
+      }
+
+      if (
+        pathname !== "/settings" &&
+        request.nextUrl.searchParams.get("must_change_password") !== "true" &&
+        !pathname.startsWith("/auth") &&
+        !pathname.startsWith("/login") &&
+        !pathname.startsWith("/api")
+      ) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/settings";
+        url.searchParams.set("must_change_password", "true");
+        return NextResponse.redirect(url);
+      }
+    }
+
+    // 3. Multi-Factor Authentication Enforcement:
+    // - If user has an enrolled factor and current assurance is not aal2 -> /mfa-challenge
+    // - If user is HR/Admin in an organization with require_mfa_for_privileged = TRUE,
+    //   and user has NO verified factor -> /mfa-setup
+    if (aal !== "aal2") {
+      let hasEnrolledFactor = false;
+      try {
+        const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        hasEnrolledFactor = aalData?.nextLevel === "aal2";
+      } catch {}
+
+      if (hasEnrolledFactor) {
+        if (
+          !pathname.startsWith("/mfa-challenge") &&
+          !pathname.startsWith("/mfa-setup") &&
+          !pathname.startsWith("/auth")
+        ) {
+          const url = request.nextUrl.clone();
+          url.pathname = "/mfa-challenge";
+          url.searchParams.set("redirect", pathname);
+          return NextResponse.redirect(url);
+        }
+      } else if (userRole === "hr" || userRole === "admin") {
+        let reqMfa = !isDemoModeEnabled();
+        try {
+          const orgId = claims?.organization_id || claims?.app_metadata?.organization_id;
+          if (orgId) {
+            const { data: org } = await (supabase as any)
+              .from("organizations")
+              .select("require_mfa_for_privileged")
+              .eq("id", orgId)
+              .maybeSingle();
+            if (org && typeof org.require_mfa_for_privileged === "boolean") {
+              reqMfa = org.require_mfa_for_privileged;
+            }
+          }
+        } catch {}
+
+        if (reqMfa) {
+          const isAllowedUnenrolledPath =
+            pathname.startsWith("/mfa-setup") ||
+            pathname.startsWith("/api/auth") ||
+            pathname.startsWith("/auth") ||
+            pathname === "/login" ||
+            (pathname.startsWith("/settings") && request.nextUrl.searchParams.get("must_change_password") === "true");
+
+          if (!isAllowedUnenrolledPath) {
+            const url = request.nextUrl.clone();
+            url.pathname = "/mfa-setup";
+            url.searchParams.set("redirect", pathname);
+            return NextResponse.redirect(url);
+          }
         }
       }
     }

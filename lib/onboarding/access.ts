@@ -65,13 +65,11 @@ export async function getOnboardingGate(
     return "ALLOWED";
   }
 
-  // Password change enforcement must take precedence before dashboard access
-  if (mustChange === true) {
-    return "MUST_CHANGE_PASSWORD";
-  }
-
   // Fast-path: if app_metadata.onboarding_approved is already stamped
   if (onboardingApprovedClaim) {
+    if (mustChange === true) {
+      return "MUST_CHANGE_PASSWORD";
+    }
     return "ALLOWED";
   }
 
@@ -122,6 +120,9 @@ export async function getOnboardingGate(
           app_metadata: { onboarding_approved: true },
         });
       } catch {}
+      if (mustChange === true) {
+        return "MUST_CHANGE_PASSWORD";
+      }
       return "ALLOWED";
     }
 
