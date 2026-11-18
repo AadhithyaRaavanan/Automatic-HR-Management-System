@@ -18,11 +18,30 @@ export function localDateTimeToUtcIso(
 }
 
 /**
- * Returns the work date (YYYY-MM-DD) calculated authoritatively in the employee's timezone
+ * Returns the work date (YYYY-MM-DD) calculated authoritatively in the employee's timezone.
+ * For overnight night shifts (e.g. 17:00 to 01:00), punches between 00:00 and shift_end_time (01:00)
+ * belong to yesterday's scheduled work session.
  */
-export function getEmployeeWorkDate(timezone: string = "UTC", date: Date = new Date()): string {
+export function getEmployeeWorkDate(
+  timezone: string = "Asia/Kolkata",
+  date: Date = new Date(),
+  shiftStartTime?: string,
+  shiftEndTime?: string
+): string {
+  const effectiveTz = !timezone || timezone === "UTC" ? "Asia/Kolkata" : timezone;
   try {
-    const zonedDate = toZonedTime(date, timezone);
+    const zonedDate = toZonedTime(date, effectiveTz);
+
+    if (shiftStartTime && shiftEndTime && isNightShift(shiftStartTime, shiftEndTime)) {
+      const [endH = 0, endM = 0] = shiftEndTime.split(":").map(Number);
+      const currentMins = zonedDate.getHours() * 60 + zonedDate.getMinutes();
+      const shiftEndMins = endH * 60 + endM;
+      if (currentMins <= shiftEndMins) {
+        const prevDay = new Date(zonedDate.getTime() - 24 * 60 * 60 * 1000);
+        return format(prevDay, "yyyy-MM-dd");
+      }
+    }
+
     return format(zonedDate, "yyyy-MM-dd");
   } catch {
     return format(date, "yyyy-MM-dd");
@@ -44,12 +63,13 @@ export function formatDurationMinutes(totalMinutes: number): string {
  */
 export function formatTimeInTimezone(
   dateInput: string | Date,
-  timezone: string = "UTC",
+  timezone?: string,
   formatString: string = "hh:mm a"
 ): string {
+  const effectiveTz = timezone || "Asia/Kolkata";
   try {
     const date = typeof dateInput === "string" ? parseISO(dateInput) : dateInput;
-    return formatZoned(toZonedTime(date, timezone), formatString);
+    return formatZoned(toZonedTime(date, effectiveTz), formatString);
   } catch {
     return "--:--";
   }
@@ -74,14 +94,15 @@ export function calculateElapsedSeconds(checkInAtIso: string): number {
  */
 export function isLateArrival(
   checkInAtIso: string,
-  timezone: string = "UTC",
+  timezone: string = "Asia/Kolkata",
   expectedStartHour: number = 9,
   expectedStartMinute: number = 0,
   graceMinutes: number = 15
 ): boolean {
   try {
     const checkInDate = parseISO(checkInAtIso);
-    const zoned = toZonedTime(checkInDate, timezone);
+    const effectiveTz = timezone || "Asia/Kolkata";
+    const zoned = toZonedTime(checkInDate, effectiveTz);
     const checkInHour = zoned.getHours();
     const checkInMinute = zoned.getMinutes();
 

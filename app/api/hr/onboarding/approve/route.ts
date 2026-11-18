@@ -134,38 +134,39 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. Update profiles, employees (status = 'active', onboarding_completed = true), and app_metadata claim
-    // Preserve existing shift_start_time, shift_end_time, and timezone assigned during employee creation
-    const { data: existingEmp } = await (supabaseAdmin as any)
-      .from("employees")
-      .select("shift_start_time, shift_end_time, timezone")
-      .eq("id", userId)
-      .maybeSingle();
+    // Authoritatively preserve existing shift_start_time, shift_end_time, and timezone assigned by Admin/HR
+    const [{ data: existingEmp }, { data: existingMember }] = await Promise.all([
+      (supabaseAdmin as any)
+        .from("employees")
+        .select("shift_start_time, shift_end_time, timezone")
+        .eq("id", userId)
+        .maybeSingle(),
+      (supabaseAdmin as any)
+        .from("organization_members")
+        .select("shift_start_time, shift_end_time")
+        .eq("user_id", userId)
+        .maybeSingle(),
+    ]);
+
+    const resolvedShiftStart = existingEmp?.shift_start_time || existingMember?.shift_start_time || "09:00:00";
+    const resolvedShiftEnd = existingEmp?.shift_end_time || existingMember?.shift_end_time || "17:00:00";
+    const resolvedTimezone = (existingEmp?.timezone && existingEmp.timezone !== "UTC") ? existingEmp.timezone : "Asia/Kolkata";
 
     const empUpdatePayload: Record<string, any> = {
       status: "active",
       onboarding_completed: true,
+      shift_start_time: resolvedShiftStart,
+      shift_end_time: resolvedShiftEnd,
+      timezone: resolvedTimezone,
       updated_at: nowIso,
     };
-    if (!existingEmp?.shift_start_time) {
-      empUpdatePayload.shift_start_time = "09:00:00";
-    }
-    if (!existingEmp?.shift_end_time) {
-      empUpdatePayload.shift_end_time = "17:00:00";
-    }
-    if (!existingEmp?.timezone) {
-      empUpdatePayload.timezone = "Asia/Kolkata";
-    }
 
     const memUpdatePayload: Record<string, any> = {
       status: "active",
+      shift_start_time: resolvedShiftStart,
+      shift_end_time: resolvedShiftEnd,
       updated_at: nowIso,
     };
-    if (existingEmp?.shift_start_time) {
-      memUpdatePayload.shift_start_time = existingEmp.shift_start_time;
-    }
-    if (existingEmp?.shift_end_time) {
-      memUpdatePayload.shift_end_time = existingEmp.shift_end_time;
-    }
 
     await Promise.all([
       (supabaseAdmin as any).from("profiles").upsert(

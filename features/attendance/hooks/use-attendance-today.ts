@@ -121,22 +121,32 @@ export function useAttendanceToday() {
 
       const empProfile = profileData as EmployeeProfileRow | null;
       const memRow = memberData as any;
-      const effectiveTz = empProfile?.timezone || (userTimezone && userTimezone !== "UTC" ? userTimezone : "Asia/Kolkata");
-      const effectiveWorkDate = getEmployeeWorkDate(effectiveTz);
+      const effectiveTz = empProfile?.timezone && empProfile.timezone !== "UTC" ? empProfile.timezone : (userTimezone && userTimezone !== "UTC" ? userTimezone : "Asia/Kolkata");
       const targetMins = empProfile?.work_target_minutes || 480;
-      const shiftStartTime = memRow?.shift_start_time || empProfile?.shift_start_time || "09:00:00";
-      const shiftEndTime = memRow?.shift_end_time || empProfile?.shift_end_time || "17:00:00";
+      const shiftStartTime = empProfile?.shift_start_time || memRow?.shift_start_time || "09:00:00";
+      const shiftEndTime = empProfile?.shift_end_time || memRow?.shift_end_time || "17:00:00";
+      const effectiveWorkDate = getEmployeeWorkDate(effectiveTz, new Date(), shiftStartTime, shiftEndTime);
 
-      // 1. Fetch today's sessions
-      const { data: sessions } = await supabase
-        .from("attendance_sessions")
-        .select("*")
-        .eq("employee_id", user.id)
-        .eq("work_date", effectiveWorkDate)
-        .order("check_in_at", { ascending: true });
+      // 1. Fetch today's sessions and any open active session (supporting overnight crossover)
+      const [{ data: sessions }, { data: activeOpenSession }] = await Promise.all([
+        supabase
+          .from("attendance_sessions")
+          .select("*")
+          .eq("employee_id", user.id)
+          .eq("work_date", effectiveWorkDate)
+          .order("check_in_at", { ascending: true }),
+        supabase
+          .from("attendance_sessions")
+          .select("*")
+          .eq("employee_id", user.id)
+          .is("check_out_at", null)
+          .order("check_in_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
 
       const sessionList = (sessions || []) as AttendanceSessionItem[];
-      const active = sessionList.find((s) => s.check_out_at === null) || null;
+      const active = (activeOpenSession as AttendanceSessionItem | null) || sessionList.find((s) => s.check_out_at === null) || null;
 
       // 2. Fetch today's day summary
       const { data: summaryData } = await supabase

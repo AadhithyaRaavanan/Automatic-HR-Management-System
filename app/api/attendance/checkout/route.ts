@@ -85,15 +85,22 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Fetch employee shift settings
-    const { data: emp } = await (supabaseAdmin as any)
-      .from("employees")
-      .select("shift_start_time, shift_end_time, timezone")
-      .eq("id", user.id)
-      .maybeSingle();
+    const [{ data: emp }, { data: member }] = await Promise.all([
+      (supabaseAdmin as any)
+        .from("employees")
+        .select("shift_start_time, shift_end_time, timezone")
+        .eq("id", user.id)
+        .maybeSingle(),
+      (supabaseAdmin as any)
+        .from("organization_members")
+        .select("shift_start_time, shift_end_time")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+    ]);
 
-    const shiftStartTime = emp?.shift_start_time || "09:00:00";
-    const shiftEndTime = emp?.shift_end_time || "17:00:00";
-    const timezone = emp?.timezone || "Asia/Kolkata";
+    const shiftStartTime = emp?.shift_start_time || member?.shift_start_time || "09:00:00";
+    const shiftEndTime = emp?.shift_end_time || member?.shift_end_time || "17:00:00";
+    const timezone = (emp?.timezone && emp.timezone !== "UTC") ? emp.timezone : "Asia/Kolkata";
 
     // 3. Evaluate early checkout
     const earlyEval = evaluateEarlyCheckout(

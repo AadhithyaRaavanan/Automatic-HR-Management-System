@@ -116,6 +116,12 @@ export default function NewEmployeeWizardPage() {
         return;
       }
     }
+    if (currentStep === 3) {
+      if (!shiftStart || !shiftEnd) {
+        toast.error("Please specify both Shift Start (Check-In) and Shift End (Check-Out) times.");
+        return;
+      }
+    }
     setCurrentStep((prev) => Math.min(prev + 1, 5));
   };
 
@@ -130,16 +136,16 @@ export default function NewEmployeeWizardPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email,
-          fullName,
+          email: email.trim().toLowerCase(),
+          fullName: fullName.trim(),
           role: systemRole,
           employmentCategory,
           workMode,
-          timezone,
+          timezone: timezone || "Asia/Kolkata",
           departmentId,
           jobTitleId,
-          shiftStartTime: shiftStart,
-          shiftEndTime: shiftEnd,
+          shiftStartTime: shiftStart.length === 5 ? `${shiftStart}:00` : shiftStart,
+          shiftEndTime: shiftEnd.length === 5 ? `${shiftEnd}:00` : shiftEnd,
         }),
       });
 
@@ -381,7 +387,7 @@ export default function NewEmployeeWizardPage() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block font-semibold text-text-secondary mb-1">Shift Start Time</label>
+                      <label className="block font-semibold text-text-secondary mb-1">Shift Start (Scheduled Check-In) *</label>
                       <input
                         type="time"
                         value={shiftStart}
@@ -390,7 +396,7 @@ export default function NewEmployeeWizardPage() {
                       />
                     </div>
                     <div>
-                      <label className="block font-semibold text-text-secondary mb-1">Shift End Time</label>
+                      <label className="block font-semibold text-text-secondary mb-1">Shift End (Scheduled Check-Out) *</label>
                       <input
                         type="time"
                         value={shiftEnd}
@@ -399,6 +405,13 @@ export default function NewEmployeeWizardPage() {
                       />
                     </div>
                   </div>
+
+                  {shiftEnd && shiftStart && shiftEnd < shiftStart && (
+                    <div className="p-3 rounded-xl bg-brand-purple/10 border border-brand-purple/20 text-brand-purple text-xs font-semibold flex items-center gap-2">
+                      <Clock className="w-4 h-4 shrink-0" />
+                      <span>Overnight Shift: Check-in scheduled for {shiftStart}, check-out scheduled for {shiftEnd} the following day.</span>
+                    </div>
+                  )}
                 </div>
               )}
 

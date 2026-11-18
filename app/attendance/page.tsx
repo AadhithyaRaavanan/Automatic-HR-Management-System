@@ -10,7 +10,7 @@ import { StatCard } from "@/features/attendance/components/stat-card";
 import { RequestModal } from "@/features/requests/components/request-modal";
 import { useSubmitRegularization } from "@/features/requests/hooks/use-regularizations";
 import { createClient } from "@/lib/supabase/client";
-import { formatDurationMinutes, formatTimeInTimezone } from "@/lib/date/timezone";
+import { formatDurationMinutes, formatTimeInTimezone, getEmployeeWorkDate } from "@/lib/date/timezone";
 import { getTamilMonthInfo, resolveTamilHolidayName } from "@/lib/date/holidays-tn";
 import { AttendanceDayStatus, SessionSource } from "@/types/database.types";
 import {
@@ -73,8 +73,8 @@ function AttendanceCalendarContent() {
   const [selectedYear, setSelectedYear] = React.useState(now.getFullYear());
   const [monthDays, setMonthDays] = React.useState<CalendarDayRow[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [selectedDayKey, setSelectedDayKey] = React.useState<string>(
-    `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
+  const [selectedDayKey, setSelectedDayKey] = React.useState<string>(() =>
+    getEmployeeWorkDate(timezone || "Asia/Kolkata")
   );
   const [requestModalOpen, setRequestModalOpen] = React.useState(false);
   const submitRegularizationMutation = useSubmitRegularization();

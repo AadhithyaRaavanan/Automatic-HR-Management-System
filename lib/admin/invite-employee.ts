@@ -69,7 +69,7 @@ export async function inviteSingleEmployee(
     role = "employee",
     employmentCategory = "full_time",
     workMode = "remote",
-    timezone = "UTC",
+    timezone = "Asia/Kolkata",
     departmentId = null,
     managerId = null,
     primaryLocationId = null,
@@ -374,9 +374,18 @@ export async function inviteSingleEmployee(
     };
   }
 
-  // Persist shift schedule, job title, and department if specified
-  const startVal = shiftStartTime ? (shiftStartTime.length === 5 ? `${shiftStartTime}:00` : shiftStartTime) : "09:00:00";
-  const endVal = shiftEndTime ? (shiftEndTime.length === 5 ? `${shiftEndTime}:00` : shiftEndTime) : "17:00:00";
+  // Persist shift schedule, timezone, job title, and department authoritatively
+  const sanitizeTime = (t?: string, defaultVal: string = "09:00:00") => {
+    if (!t) return defaultVal;
+    const trimmed = t.trim();
+    if (trimmed.length === 5) return `${trimmed}:00`;
+    if (trimmed.length >= 8) return trimmed.slice(0, 8);
+    return defaultVal;
+  };
+  const startVal = sanitizeTime(shiftStartTime, "09:00:00");
+  const endVal = sanitizeTime(shiftEndTime, "17:00:00");
+  const effectiveTz = (!timezone || timezone === "UTC") ? "Asia/Kolkata" : timezone;
+
   const [omRes, empRes] = await Promise.all([
     (supabaseAdmin.from("organization_members") as any)
       .update({
@@ -391,6 +400,7 @@ export async function inviteSingleEmployee(
       .update({
         shift_start_time: startVal,
         shift_end_time: endVal,
+        timezone: effectiveTz,
         department_id: departmentId || null,
         job_title_id: jobTitleId || null,
         updated_at: new Date().toISOString(),
