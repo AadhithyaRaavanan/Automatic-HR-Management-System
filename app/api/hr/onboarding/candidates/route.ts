@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
             let signedUrl = "";
             try {
               signedUrl = await getSignedUrl(doc.storage_path, 3600);
-            } catch {}
+            } catch { }
             const docStatus = doc.document_status || verifiedDocsMap[doc.id]?.status || "pending";
             const docRejectionReason = doc.rejection_reason || verifiedDocsMap[doc.id]?.rejection_reason || null;
             return {
