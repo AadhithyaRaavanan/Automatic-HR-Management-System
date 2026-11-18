@@ -507,6 +507,8 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
 function isStepFeatureEnabled(step: TutorialStep): boolean {
   if (step.route === "/kpi" && !FEATURES.KPI) return false;
   if (step.id.includes("kpi") && !FEATURES.KPI) return false;
+  if (step.route === "/tasks" && !FEATURES.TASKS) return false;
+  if (step.id.includes("tasks") && !FEATURES.TASKS) return false;
   if (step.route === "/admin/locations" && !FEATURES.LOCATIONS) return false;
   if (step.route === "/admin/shifts" && !FEATURES.SHIFTS) return false;
   if (step.route === "/admin/audits" && !FEATURES.AUDITS) return false;

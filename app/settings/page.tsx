@@ -262,9 +262,9 @@ function SettingsPageContent() {
       )}
 
       {/* Bento Grid */}
-      <div data-tour="settings-security">
       <BentoGrid>
         {/* Privacy Notice Banner Card */}
+        <div data-tour="settings-security" className="lg:col-span-12">
         <BentoCard
           title={
             <div className="flex items-center gap-2">
@@ -333,6 +333,7 @@ function SettingsPageContent() {
             </div>
           </div>
         </BentoCard>
+        </div>
 
         {/* Two-Factor Authentication Security Card */}
         <BentoCard
@@ -622,7 +623,6 @@ function SettingsPageContent() {
           </form>
         </BentoCard>
       </BentoGrid>
-      </div>
     </div>
   );
 }

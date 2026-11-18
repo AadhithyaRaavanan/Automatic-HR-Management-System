@@ -360,16 +360,16 @@ export function AppShell({
       }
 
       setSessionState(nextSession);
-      if (shouldOpenTour) {
+      const isAlreadyActive =
+        typeof window !== "undefined" &&
+        sessionStorage.getItem("pulse_tutorial_active") === "true";
+
+      if (shouldOpenTour || isAlreadyActive) {
         if (typeof window !== "undefined") {
           sessionStorage.setItem("pulse_tutorial_active", "true");
         }
         setTourOpen(true);
       } else {
-        if (typeof window !== "undefined") {
-          sessionStorage.removeItem("pulse_tutorial_active");
-          sessionStorage.removeItem("pulse_tutorial_step_index");
-        }
         setTourOpen(false);
       }
     }
@@ -396,6 +396,11 @@ export function AppShell({
 
           {/* Main Full-Width Application Area */}
           <div className="flex-1 flex flex-col min-w-0 px-4 sm:px-6 md:px-8 lg:px-10 py-5 pb-20 md:pb-8">
+            <TopNavBar
+              userRole={userRole}
+              onPrimaryAction={onPrimaryAction}
+              primaryActionLabel={primaryActionLabel}
+            />
             <main className={cn("flex-1 w-full flex flex-col min-w-0", className)}>
               {/* Warning banner when organization has disabled mandatory MFA for privileged accounts */}
               {mounted &&

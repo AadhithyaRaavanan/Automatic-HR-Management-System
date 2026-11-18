@@ -25,6 +25,126 @@ interface OnboardingTourProps {
 
 const STEP_STORAGE_KEY = "pulse_tutorial_step_index";
 
+function getSmartCardPlacement(
+  targetRect: DOMRect | null,
+  cardWidth: number,
+  cardHeight: number
+): { style: React.CSSProperties; placement: "right" | "left" | "bottom" | "top" | "docked" } {
+  if (!targetRect || typeof window === "undefined") {
+    return {
+      style: {
+        position: "fixed",
+        bottom: "28px",
+        right: "28px",
+        width: `${cardWidth}px`,
+        maxHeight: "calc(100vh - 56px)",
+      },
+      placement: "docked",
+    };
+  }
+
+  const vpW = window.innerWidth;
+  const vpH = window.innerHeight;
+  const margin = 20;
+  const edgePadding = 20;
+
+  // If the target is massive (e.g. covers > 75% width & height), dock to corner
+  if (targetRect.width > vpW * 0.75 && targetRect.height > vpH * 0.7) {
+    return {
+      style: {
+        position: "fixed",
+        bottom: "28px",
+        right: "28px",
+        width: `${cardWidth}px`,
+        maxHeight: "calc(100vh - 56px)",
+      },
+      placement: "docked",
+    };
+  }
+
+  // 1. Try RIGHT of target (best for sidebar, left-docked cards, punch timer)
+  if (targetRect.right + margin + cardWidth + edgePadding <= vpW) {
+    const left = targetRect.right + margin;
+    const idealTop = targetRect.top + (targetRect.height - cardHeight) / 2;
+    const top = Math.max(edgePadding, Math.min(idealTop, vpH - cardHeight - edgePadding));
+    return {
+      style: {
+        position: "fixed",
+        top: `${top}px`,
+        left: `${left}px`,
+        width: `${cardWidth}px`,
+        maxHeight: `calc(100vh - ${top + edgePadding}px)`,
+      },
+      placement: "right",
+    };
+  }
+
+  // 2. Try BELOW target (best for headers, hero banners, top-aligned cards)
+  if (targetRect.bottom + margin + cardHeight + edgePadding <= vpH) {
+    const top = targetRect.bottom + margin;
+    const idealLeft = targetRect.left + (targetRect.width - cardWidth) / 2;
+    const left = Math.max(edgePadding, Math.min(idealLeft, vpW - cardWidth - edgePadding));
+    return {
+      style: {
+        position: "fixed",
+        top: `${top}px`,
+        left: `${left}px`,
+        width: `${cardWidth}px`,
+        maxHeight: `calc(100vh - ${top + edgePadding}px)`,
+      },
+      placement: "bottom",
+    };
+  }
+
+  // 3. Try LEFT of target (best for elements in the right half of the screen, e.g. top-nav bell, export button)
+  if (targetRect.left - margin - cardWidth >= edgePadding) {
+    const left = targetRect.left - margin - cardWidth;
+    const idealTop = targetRect.top + (targetRect.height - cardHeight) / 2;
+    const top = Math.max(edgePadding, Math.min(idealTop, vpH - cardHeight - edgePadding));
+    return {
+      style: {
+        position: "fixed",
+        top: `${top}px`,
+        left: `${left}px`,
+        width: `${cardWidth}px`,
+        maxHeight: `calc(100vh - ${top + edgePadding}px)`,
+      },
+      placement: "left",
+    };
+  }
+
+  // 4. Try ABOVE target (best for bottom-docked elements)
+  if (targetRect.top - margin - cardHeight >= edgePadding) {
+    const top = targetRect.top - margin - cardHeight;
+    const idealLeft = targetRect.left + (targetRect.width - cardWidth) / 2;
+    const left = Math.max(edgePadding, Math.min(idealLeft, vpW - cardWidth - edgePadding));
+    return {
+      style: {
+        position: "fixed",
+        top: `${top}px`,
+        left: `${left}px`,
+        width: `${cardWidth}px`,
+        maxHeight: `calc(100vh - ${top + edgePadding}px)`,
+      },
+      placement: "top",
+    };
+  }
+
+  // 5. Smart corner fallback (never overlap the center of the target)
+  const isLeftHalf = targetRect.left + targetRect.width / 2 < vpW / 2;
+  return {
+    style: {
+      position: "fixed",
+      bottom: "24px",
+      right: isLeftHalf ? "24px" : "auto",
+      left: isLeftHalf ? "auto" : "24px",
+      width: `${cardWidth}px`,
+      maxHeight: "calc(100vh - 48px)",
+    },
+    placement: "docked",
+  };
+}
+
 export function OnboardingTour({
   open,
   onOpenChange,
@@ -85,13 +205,14 @@ export function OnboardingTour({
     }
   }, [open, steps, router]);
 
-  // Navigate to target route if needed
+  // Navigate to target route if needed (do not navigate on final step to avoid glitching)
   React.useEffect(() => {
     if (!open || !currentStep) return;
+    if (isLast) return;
     if (currentStep.route && pathname !== currentStep.route) {
       router.push(currentStep.route);
     }
-  }, [open, currentStep, pathname, router]);
+  }, [open, currentStep, pathname, router, isLast]);
 
   // Calculate target element rect for spotlight with continuous smooth detection
   React.useEffect(() => {
@@ -102,7 +223,7 @@ export function OnboardingTour({
 
     let cancelled = false;
     let attempts = 0;
-    const maxAttempts = 25; // 25 * 60ms = 1.5s polling window across route changes
+    const maxAttempts = 20;
 
     const checkTarget = () => {
       if (cancelled) return;
@@ -115,31 +236,44 @@ export function OnboardingTour({
         const rect = el.getBoundingClientRect();
         if (rect.width > 0 && rect.height > 0) {
           setTargetRect(rect);
-          try {
-            el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
-          } catch {}
+          // Only scroll if element is not already visible in the viewport
+          const isInViewport =
+            rect.top >= 40 &&
+            rect.bottom <= window.innerHeight - 40 &&
+            rect.left >= 0 &&
+            rect.right <= window.innerWidth;
+
+          if (!isInViewport) {
+            try {
+              el.scrollIntoView({ behavior: "auto", block: "nearest", inline: "nearest" });
+              const updatedRect = el.getBoundingClientRect();
+              setTargetRect(updatedRect);
+            } catch {}
+          }
           return;
         }
       }
       attempts++;
       if (attempts < maxAttempts) {
-        setTimeout(checkTarget, 60);
-      } else {
-        setTargetRect(null);
+        setTimeout(checkTarget, 75);
       }
     };
 
     checkTarget();
 
+    let rafId: number | null = null;
     const handleWindowChange = () => {
-      if (!currentStep.selector) return;
-      const el = document.querySelector(currentStep.selector);
-      if (el) {
-        const rect = el.getBoundingClientRect();
-        if (rect.width > 0 && rect.height > 0) {
-          setTargetRect(rect);
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        if (!currentStep.selector) return;
+        const el = document.querySelector(currentStep.selector);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            setTargetRect(rect);
+          }
         }
-      }
+      });
     };
 
     window.addEventListener("resize", handleWindowChange);
@@ -147,6 +281,7 @@ export function OnboardingTour({
 
     return () => {
       cancelled = true;
+      if (rafId) cancelAnimationFrame(rafId);
       window.removeEventListener("resize", handleWindowChange);
       window.removeEventListener("scroll", handleWindowChange, true);
     };
@@ -184,6 +319,9 @@ export function OnboardingTour({
       });
 
       toast.success("Walkthrough completed. Welcome to Pulse!");
+      if (pathname !== "/") {
+        router.push("/");
+      }
     } catch (err: any) {
       onOpenChange(false);
     } finally {
@@ -224,41 +362,14 @@ export function OnboardingTour({
 
   if (!open) return null;
 
-  // Positioning calculation
-  let cardPositionStyle: React.CSSProperties = {};
-
-  if (targetRect) {
-    const cardHeight = 360;
-    const cardWidth = 460;
-    const maxTop = Math.max(16, window.innerHeight - cardHeight - 20);
-
-    let top = targetRect.bottom + 16;
-    if (top > maxTop) {
-      if (targetRect.top - cardHeight - 16 >= 16) {
-        top = targetRect.top - cardHeight - 16;
-      } else {
-        top = maxTop;
-      }
-    }
-    top = Math.max(16, Math.min(top, maxTop));
-    const left = Math.max(16, Math.min(targetRect.left, window.innerWidth - cardWidth - 24));
-
-    cardPositionStyle = {
-      position: "fixed",
-      top: `${top}px`,
-      left: `${left}px`,
-      width: `${cardWidth}px`,
-      maxHeight: "calc(100vh - 32px)",
-    };
-  } else {
-    cardPositionStyle = {
-      position: "fixed",
-      bottom: "32px",
-      right: "32px",
-      width: "460px",
-      maxHeight: "calc(100vh - 64px)",
-    };
-  }
+  // Collision-free positioning: guarantees explanation card never covers or obstructs the highlighted target
+  const cardWidth = typeof window !== "undefined" ? Math.min(440, window.innerWidth - 32) : 440;
+  const cardHeight = 320;
+  const { style: cardPositionStyle, placement } = getSmartCardPlacement(
+    targetRect,
+    cardWidth,
+    cardHeight
+  );
 
   const progressPercent = Math.round(((stepIndex + 1) / steps.length) * 100);
   const isNavigating = Boolean(currentStep?.route && pathname !== currentStep.route);
@@ -286,7 +397,7 @@ export function OnboardingTour({
                 height={targetRect.height + 12}
                 rx={10}
                 fill="black"
-                className="transition-all duration-300 ease-out"
+                className="transition-all duration-200 ease-out"
               />
             </mask>
           </defs>
@@ -307,7 +418,7 @@ export function OnboardingTour({
             stroke="#818cf8"
             strokeWidth="2.5"
             strokeDasharray="6 4"
-            className="animate-pulse transition-all duration-300 ease-out"
+            className="animate-pulse transition-all duration-200 ease-out"
           />
         </svg>
       ) : (
@@ -320,7 +431,7 @@ export function OnboardingTour({
       {/* Floating Tour Card */}
       <div
         style={cardPositionStyle}
-        className="z-[9999] bg-card border border-border-light shadow-2xl rounded-2xl p-5 md:p-6 transition-all duration-300 ease-out overflow-y-auto"
+        className="z-[9999] bg-card border border-border-light shadow-2xl rounded-2xl p-5 md:p-6 transition-all duration-200 ease-out overflow-y-auto"
       >
         {/* Card Header & Badges */}
         <div className="flex items-center justify-between gap-3 mb-3">
