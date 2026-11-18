@@ -981,3 +981,235 @@ export async function sendOnboardingApprovalEmail(params: SendApprovalEmailParam
 
   return { success: true, messageId: `sim_${Date.now()}` };
 }
+
+export interface SendAdminDossierEmailParams {
+  to: string;
+  candidateName: string;
+  candidateEmail: string;
+  candidatePhone?: string;
+  employeeId: string;
+  departmentName?: string;
+  jobTitle?: string;
+  reviewedByName?: string;
+  approvedAt?: string;
+  candidateUserId?: string;
+  documents: Array<{ name: string; url?: string }>;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer;
+    contentType?: string;
+  }>;
+}
+
+export function buildAdminDossierEmailHtml(params: SendAdminDossierEmailParams): string {
+  const {
+    candidateName,
+    candidateEmail,
+    candidatePhone,
+    employeeId,
+    departmentName = "General",
+    jobTitle = "Employee",
+    reviewedByName = "HR Team",
+    approvedAt = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+    candidateUserId,
+    documents = [],
+    attachments = [],
+  } = params;
+
+  const siteUrl = getSiteUrl();
+  const profileUrl = candidateUserId ? `${siteUrl}/employees/${candidateUserId}` : `${siteUrl}/hr/onboarding`;
+
+  const docRows = documents
+    .map(
+      (doc) => `
+      <tr>
+        <td style="padding: 10px 14px; border-bottom: 1px solid #E2E8F0; font-size: 13px; font-weight: 600; color: #1E293B;">
+          ${doc.name}
+        </td>
+        <td align="right" style="padding: 10px 14px; border-bottom: 1px solid #E2E8F0; font-size: 12px; font-weight: 700;">
+          ${
+            doc.url
+              ? `<a href="${doc.url}" target="_blank" rel="noopener noreferrer" style="color: #6C5CE7; text-decoration: none; margin-right: 8px;">View Link</a>`
+              : ""
+          }
+          <span style="display: inline-block; background-color: #ECFDF5; color: #059669; padding: 2px 8px; border-radius: 6px; font-size: 11px;">Approved</span>
+        </td>
+      </tr>`
+    )
+    .join("");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Candidate Onboarding Dossier</title>
+  </head>
+  <body style="margin: 0; padding: 0; background-color: #F8F9FC; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #14123A;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #F8F9FC; padding: 32px 0 48px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width: 620px; background-color: #ffffff; border-radius: 20px; border: 1px solid #E2E8F0; overflow: hidden; box-shadow: 0 4px 16px rgba(20, 18, 58, 0.06);">
+            <!-- Header -->
+            <tr>
+              <td style="background: linear-gradient(135deg, #14123A 0%, #2A2566 100%); padding: 32px 36px 28px;">
+                <p style="font-size: 20px; font-weight: 800; color: #ffffff; margin: 0; letter-spacing: -0.5px;">Pulse HRMS</p>
+                <p style="font-size: 11px; font-weight: 700; color: #A5B4FC; text-transform: uppercase; letter-spacing: 1.2px; margin: 4px 0 0 0;">Employee Onboarding Dossier</p>
+              </td>
+            </tr>
+
+            <!-- Content -->
+            <tr>
+              <td style="padding: 32px 36px 28px;">
+                <div style="display: inline-block; padding: 5px 12px; border-radius: 9999px; background-color: #ECFDF5; color: #059669; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px;">
+                  ✓ Approved & Activated
+                </div>
+
+                <h1 style="font-size: 22px; font-weight: 800; color: #14123A; margin: 0 0 10px; line-height: 1.3;">
+                  Candidate Approved: ${candidateName}
+                </h1>
+                <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 24px;">
+                  The candidate onboarding submission has been fully reviewed and approved by HR. All verified documents are attached to this email and archived in the corporate employee registry.
+                </p>
+
+                <!-- Candidate Details Card -->
+                <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 14px; padding: 18px 20px; margin-bottom: 24px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="font-size: 13px;">
+                    <tr>
+                      <td style="padding: 6px 0; color: #64748B; font-weight: 600;">Employee ID:</td>
+                      <td align="right" style="padding: 6px 0; color: #0F172A; font-weight: 800; font-family: monospace;">${employeeId}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 6px 0; color: #64748B; font-weight: 600;">Full Name:</td>
+                      <td align="right" style="padding: 6px 0; color: #0F172A; font-weight: 700;">${candidateName}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 6px 0; color: #64748B; font-weight: 600;">Email:</td>
+                      <td align="right" style="padding: 6px 0; color: #0F172A; font-weight: 700;">${candidateEmail}</td>
+                    </tr>
+                    ${
+                      candidatePhone
+                        ? `<tr>
+                      <td style="padding: 6px 0; color: #64748B; font-weight: 600;">Phone:</td>
+                      <td align="right" style="padding: 6px 0; color: #0F172A; font-weight: 700;">${candidatePhone}</td>
+                    </tr>`
+                        : ""
+                    }
+                    <tr>
+                      <td style="padding: 6px 0; color: #64748B; font-weight: 600;">Department:</td>
+                      <td align="right" style="padding: 6px 0; color: #0F172A; font-weight: 700;">${departmentName}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 6px 0; color: #64748B; font-weight: 600;">Role / Title:</td>
+                      <td align="right" style="padding: 6px 0; color: #0F172A; font-weight: 700;">${jobTitle}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 6px 0; color: #64748B; font-weight: 600;">Reviewed & Approved By:</td>
+                      <td align="right" style="padding: 6px 0; color: #0F172A; font-weight: 700;">${reviewedByName}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 6px 0; color: #64748B; font-weight: 600;">Approval Timestamp:</td>
+                      <td align="right" style="padding: 6px 0; color: #0F172A; font-weight: 700;">${approvedAt}</td>
+                    </tr>
+                  </table>
+                </div>
+
+                <!-- Verified Documents List -->
+                <p style="font-size: 13px; font-weight: 800; color: #14123A; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 12px;">
+                  Attached Documents (${attachments.length} files attached)
+                </p>
+                <div style="background-color: #ffffff; border: 1px solid #E2E8F0; border-radius: 12px; overflow: hidden; margin-bottom: 24px;">
+                  <table width="100%" cellpadding="0" cellspacing="0">
+                    ${docRows}
+                  </table>
+                </div>
+
+                <!-- Action Button -->
+                <div style="text-align: center; margin: 28px 0 16px;">
+                  <a href="${profileUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #14123A; color: #ffffff !important; padding: 13px 28px; font-size: 13px; font-weight: 800; text-decoration: none; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 12px rgba(20, 18, 58, 0.15);">
+                    Open Employee Profile in Pulse
+                  </a>
+                </div>
+
+                <p style="font-size: 12px; color: #64748B; text-align: center; margin: 0;">
+                  All attached documents are also safely preserved in the Supabase Storage encrypted vault.
+                </p>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style="background-color: #F8FAFC; border-top: 1px solid #E2E8F0; padding: 20px 36px; text-align: center; font-size: 11px; color: #94A3B8;">
+                Pulse HRMS &bull; Zen Xea Technologies &bull; Automated HR Document Dispatch
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+export async function sendAdminOnboardingDossierEmail(params: SendAdminDossierEmailParams): Promise<{
+  success: boolean;
+  messageId?: string;
+  error?: string;
+}> {
+  const { to, candidateName, employeeId, attachments = [] } = params;
+  const subject = `[Pulse HR] Candidate Approved & Documents Dossier - ${candidateName} (${employeeId})`;
+  const htmlContent = buildAdminDossierEmailHtml(params);
+
+  // 1. Hostinger / SMTP
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      const transporter = getSmtpTransporter();
+      if (transporter) {
+        const fromAddress = process.env.SMTP_FROM || `Pulse HR <hr@zenxea.com>`;
+        const info = await transporter.sendMail({
+          from: fromAddress,
+          to,
+          subject,
+          html: htmlContent,
+          attachments: attachments.map((att) => ({
+            filename: att.filename,
+            content: att.content,
+            contentType: att.contentType,
+          })),
+        });
+        return { success: true, messageId: info.messageId };
+      }
+    } catch (smtpErr: any) {
+      console.error("[Hostinger SMTP Admin Dossier Error]:", smtpErr);
+      return { success: false, error: smtpErr.message || "Failed to dispatch email via SMTP" };
+    }
+  }
+
+  // 2. Resend fallback
+  if (process.env.RESEND_API_KEY) {
+    const client = resend || new Resend(process.env.RESEND_API_KEY);
+    try {
+      const fromAddress = process.env.RESEND_FROM_EMAIL || "Pulse HR <hr@zenxea.com>";
+      const response = await client.emails.send({
+        from: fromAddress,
+        to: [to],
+        subject,
+        html: htmlContent,
+        attachments: attachments.map((att) => ({
+          filename: att.filename,
+          content: att.content,
+        })),
+      });
+
+      if (response.error) {
+        return { success: false, error: response.error.message };
+      }
+
+      return { success: true, messageId: response.data?.id };
+    } catch (err: any) {
+      return { success: false, error: err.message || String(err) };
+    }
+  }
+
+  return { success: true, messageId: `sim_${Date.now()}` };
+}

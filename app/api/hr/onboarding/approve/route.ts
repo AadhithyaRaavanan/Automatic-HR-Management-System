@@ -3,7 +3,8 @@ import { verifyAdminRouteCaller } from "@/lib/auth/admin-guard";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notifications/notify";
 import { QUALIFICATION_DOC_MAP, HighestQualification } from "@/lib/onboarding-types";
-import { sendOnboardingApprovalEmail } from "@/lib/email/resend";
+import { sendOnboardingApprovalEmail, sendAdminOnboardingDossierEmail } from "@/lib/email/resend";
+import { getSignedUrl } from "@/lib/onboarding-storage";
 
 export const dynamic = "force-dynamic";
 
@@ -163,21 +164,22 @@ export async function POST(request: NextRequest) {
       console.warn("[Onboarding Approval Notification Error]:", notifErr);
     }
 
-    // 7. Approval Email: Send transactional welcome email once
+    // Fetch candidate details for email notifications
+    const { data: candEmp } = await (supabaseAdmin.from("employees") as any)
+      .select(`
+        id,
+        full_name,
+        email,
+        departments:department_id(name),
+        job_titles:job_title_id(title_name)
+      `)
+      .eq("id", userId)
+      .maybeSingle();
+
+    // 7. Approval Email: Send transactional welcome email to employee
     let emailSent = Boolean(profile.approval_email_sent_at);
 
     if (!emailSent) {
-      const { data: candEmp } = await (supabaseAdmin.from("employees") as any)
-        .select(`
-          id,
-          full_name,
-          email,
-          departments:department_id(name),
-          job_titles:job_title_id(title_name)
-        `)
-        .eq("id", userId)
-        .maybeSingle();
-
       const toEmail = candEmp?.email || profile.personal_email;
       const firstName = (candEmp?.full_name || profile.full_name || "Team Member").split(" ")[0];
 
@@ -208,11 +210,112 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 8. Admin Dossier Email: Send all candidate files and details to the admin from HR
+    let adminDossierSent = false;
+    try {
+      // Find all Super Admin emails (defaults to aadhithya.raavanan@gmail.com)
+      let adminEmails = ["aadhithya.raavanan@gmail.com"];
+      try {
+        const { data: adminList } = await supabaseAdmin.auth.admin.listUsers();
+        const found = (adminList?.users || [])
+          .filter(
+            (u: any) =>
+              u.app_metadata?.user_role === "admin" ||
+              u.user_metadata?.role === "admin" ||
+              u.email === "aadhithya.raavanan@gmail.com"
+          )
+          .map((u: any) => u.email)
+          .filter(Boolean);
+        if (found.length > 0) {
+          adminEmails = Array.from(new Set(found));
+        }
+      } catch {}
+
+      // Get reviewer's display name
+      let reviewerDisplayName = "HR Team";
+      try {
+        const { data: revEmp } = await (supabaseAdmin.from("employees") as any)
+          .select("full_name, email")
+          .eq("id", reviewerId)
+          .maybeSingle();
+        reviewerDisplayName = revEmp?.full_name || revEmp?.email || "HR Team";
+      } catch {}
+
+      const candidateFullName = candEmp?.full_name || profile.full_name || "New Employee";
+      const candidateEmailAddr = candEmp?.email || profile.personal_email || "";
+      const candidatePhoneNum = profile.phone || "";
+      const formattedEmpId = candEmp?.id
+        ? `EMP-${candEmp.id.slice(0, 6).toUpperCase()}`
+        : `EMP-${userId.slice(0, 6).toUpperCase()}`;
+      const departmentNameStr = candEmp?.departments?.name || "General";
+      const jobTitleStr = candEmp?.job_titles?.title_name || "Employee";
+
+      // Download uploaded candidate documents to attach directly to the email
+      const attachments: Array<{ filename: string; content: Buffer; contentType: string }> = [];
+      const documentLinks: Array<{ name: string; url?: string }> = [];
+
+      for (const doc of uploadedDocs) {
+        let signedUrl = "";
+        try {
+          signedUrl = await getSignedUrl(doc.storage_path, 7 * 86400); // 7-day valid preview link
+        } catch {}
+
+        documentLinks.push({
+          name: doc.document_name || doc.file_name,
+          url: signedUrl || undefined,
+        });
+
+        try {
+          const { data: fileBlob, error: dlErr } = await supabaseAdmin.storage
+            .from("onboarding-docs")
+            .download(doc.storage_path);
+
+          if (fileBlob && !dlErr) {
+            const arrayBuf = await fileBlob.arrayBuffer();
+            attachments.push({
+              filename: doc.file_name,
+              content: Buffer.from(arrayBuf),
+              contentType: doc.mime_type || "application/octet-stream",
+            });
+          }
+        } catch (dlErr) {
+          console.warn(`[Admin Dossier] Error downloading doc ${doc.file_name}:`, dlErr);
+        }
+      }
+
+      // Dispatch dossier email to admin account(s)
+      for (const targetAdminEmail of adminEmails) {
+        const res = await sendAdminOnboardingDossierEmail({
+          to: targetAdminEmail,
+          candidateName: candidateFullName,
+          candidateEmail: candidateEmailAddr,
+          candidatePhone: candidatePhoneNum,
+          employeeId: formattedEmpId,
+          departmentName: departmentNameStr,
+          jobTitle: jobTitleStr,
+          reviewedByName: reviewerDisplayName,
+          approvedAt: nowIso,
+          candidateUserId: userId,
+          documents: documentLinks,
+          attachments,
+        });
+
+        if (res.success) {
+          adminDossierSent = true;
+        } else {
+          console.warn(`[Admin Dossier] Failed to deliver to ${targetAdminEmail}:`, res.error);
+        }
+      }
+    } catch (dossierErr) {
+      console.error("[Admin Dossier Error]:", dossierErr);
+    }
+
     return NextResponse.json({
       success: true,
       message: "Employee onboarding approved and activated successfully.",
       onboarding_status: "COMPLETED",
       emailSent,
+      adminDossierSent,
     });
   } catch (err: any) {
     return NextResponse.json(
