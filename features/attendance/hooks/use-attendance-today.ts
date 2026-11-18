@@ -125,7 +125,7 @@ export function useAttendanceToday() {
       const effectiveWorkDate = getEmployeeWorkDate(effectiveTz);
       const targetMins = empProfile?.work_target_minutes || 480;
       const shiftStartTime = memRow?.shift_start_time || empProfile?.shift_start_time || "09:00:00";
-      const shiftEndTime = memRow?.shift_end_time || empProfile?.shift_end_time || "18:00:00";
+      const shiftEndTime = memRow?.shift_end_time || empProfile?.shift_end_time || "17:00:00";
 
       // 1. Fetch today's sessions
       const { data: sessions } = await supabase

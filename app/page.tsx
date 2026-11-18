@@ -518,6 +518,8 @@ function DashboardContent({
               month: "long",
               year: "numeric",
             })}
+            shiftStartTime={shiftStartTime}
+            shiftEndTime={shiftEndTime}
             onSelectDate={() => router.push("/attendance")}
           />
         </div>

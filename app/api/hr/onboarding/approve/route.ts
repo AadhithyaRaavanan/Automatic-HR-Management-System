@@ -134,6 +134,39 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. Update profiles, employees (status = 'active', onboarding_completed = true), and app_metadata claim
+    // Preserve existing shift_start_time, shift_end_time, and timezone assigned during employee creation
+    const { data: existingEmp } = await (supabaseAdmin as any)
+      .from("employees")
+      .select("shift_start_time, shift_end_time, timezone")
+      .eq("id", userId)
+      .maybeSingle();
+
+    const empUpdatePayload: Record<string, any> = {
+      status: "active",
+      onboarding_completed: true,
+      updated_at: nowIso,
+    };
+    if (!existingEmp?.shift_start_time) {
+      empUpdatePayload.shift_start_time = "09:00:00";
+    }
+    if (!existingEmp?.shift_end_time) {
+      empUpdatePayload.shift_end_time = "17:00:00";
+    }
+    if (!existingEmp?.timezone) {
+      empUpdatePayload.timezone = "Asia/Kolkata";
+    }
+
+    const memUpdatePayload: Record<string, any> = {
+      status: "active",
+      updated_at: nowIso,
+    };
+    if (existingEmp?.shift_start_time) {
+      memUpdatePayload.shift_start_time = existingEmp.shift_start_time;
+    }
+    if (existingEmp?.shift_end_time) {
+      memUpdatePayload.shift_end_time = existingEmp.shift_end_time;
+    }
+
     await Promise.all([
       (supabaseAdmin as any).from("profiles").upsert(
         {
@@ -147,22 +180,11 @@ export async function POST(request: NextRequest) {
       ),
       (supabaseAdmin as any)
         .from("employees")
-        .update({
-          status: "active",
-          onboarding_completed: true,
-          shift_start_time: "09:00:00",
-          shift_end_time: "18:00:00",
-          timezone: "Asia/Kolkata",
-          updated_at: nowIso,
-        })
+        .update(empUpdatePayload)
         .eq("id", userId),
       (supabaseAdmin as any)
         .from("organization_members")
-        .update({
-          shift_start_time: "09:00:00",
-          shift_end_time: "18:00:00",
-          updated_at: nowIso,
-        })
+        .update(memUpdatePayload)
         .eq("user_id", userId),
       supabaseAdmin.auth.admin.updateUserById(userId, {
         app_metadata: {

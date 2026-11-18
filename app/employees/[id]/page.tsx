@@ -320,7 +320,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
               <div className="p-4 rounded-2xl bg-card-subtle border border-border-light/60 space-y-2">
                 <p className="text-text-muted">Shift Timings:</p>
                 <p className="font-bold text-text-primary">
-                  {emp.shift_start_time || "09:00"} - {emp.shift_end_time || "17:00"}
+                  {emp.shift_start_time ? emp.shift_start_time.slice(0, 5) : "09:00"} - {emp.shift_end_time ? emp.shift_end_time.slice(0, 5) : "17:00"}
                 </p>
                 <p className="text-[11px] text-text-muted">Standard 8-hour workday with 60-min lunch allowance.</p>
               </div>

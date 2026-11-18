@@ -377,7 +377,7 @@ export async function inviteSingleEmployee(
   // Persist shift schedule, job title, and department if specified
   const startVal = shiftStartTime ? (shiftStartTime.length === 5 ? `${shiftStartTime}:00` : shiftStartTime) : "09:00:00";
   const endVal = shiftEndTime ? (shiftEndTime.length === 5 ? `${shiftEndTime}:00` : shiftEndTime) : "17:00:00";
-  await Promise.all([
+  const [omRes, empRes] = await Promise.all([
     (supabaseAdmin.from("organization_members") as any)
       .update({
         shift_start_time: startVal,
@@ -386,8 +386,7 @@ export async function inviteSingleEmployee(
         job_title_id: jobTitleId || null,
         updated_at: new Date().toISOString(),
       })
-      .eq("user_id", invitedUserId)
-      .eq("organization_id", context.organizationId),
+      .eq("user_id", invitedUserId),
     (supabaseAdmin.from("employees") as any)
       .update({
         shift_start_time: startVal,
@@ -396,9 +395,14 @@ export async function inviteSingleEmployee(
         job_title_id: jobTitleId || null,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", invitedUserId)
-      .eq("organization_id", context.organizationId),
+      .eq("id", invitedUserId),
   ]);
+  if (omRes?.error) {
+    console.error("[inviteSingleEmployee] Failed to persist shift in organization_members:", omRes.error);
+  }
+  if (empRes?.error) {
+    console.error("[inviteSingleEmployee] Failed to persist shift in employees:", empRes.error);
+  }
 
   // 3. Dispatch invitation email via Resend / Hostinger SMTP (with Token Link & Temporary Password)
   const emailResult = await sendWelcomeCredentialsEmail({

@@ -24,6 +24,8 @@ export interface AttendanceCalendarCardProps {
   currentMonth?: string;
   days?: DayStripItem[];
   agenda?: AgendaItem[];
+  shiftStartTime?: string;
+  shiftEndTime?: string;
   onSelectDate?: (dateKey: string) => void;
   onPrevMonth?: () => void;
   onNextMonth?: () => void;
@@ -89,7 +91,24 @@ function generateLiveWeekDays(refDate: Date, weekOffset: number): DayStripItem[]
   return days;
 }
 
-function generateLiveAgenda(dateKey: string): AgendaItem[] {
+function formatTime12h(timeStr?: string): string {
+  if (!timeStr) return "09:00 AM";
+  const [hStr = "9", mStr = "0"] = timeStr.split(":");
+  let h = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10);
+  if (isNaN(h)) h = 9;
+  if (isNaN(m)) return "09:00 AM";
+  const period = h >= 12 ? "PM" : "AM";
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")} ${period}`;
+}
+
+function generateLiveAgenda(
+  dateKey: string,
+  shiftStartTime?: string,
+  shiftEndTime?: string
+): AgendaItem[] {
   if (KNOWN_HOLIDAYS[dateKey]) {
     const h = KNOWN_HOLIDAYS[dateKey];
     return [
@@ -113,6 +132,9 @@ function generateLiveAgenda(dateKey: string): AgendaItem[] {
   const dayOfWeek = target.getDay();
   const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
+  const startFormatted = formatTime12h(shiftStartTime || "09:00:00");
+  const endFormatted = formatTime12h(shiftEndTime || "17:00:00");
+
   if (isWeekend) {
     return [
       {
@@ -123,7 +145,7 @@ function generateLiveAgenda(dateKey: string): AgendaItem[] {
       },
       {
         id: "weekend-2",
-        timeSlot: "Next Shift: Mon 09:00 AM",
+        timeSlot: `Next Shift: Mon ${startFormatted}`,
         title: "Standard Shift (IST)",
         category: "Chennai Office / Remote",
       },
@@ -133,9 +155,9 @@ function generateLiveAgenda(dateKey: string): AgendaItem[] {
   return [
     {
       id: "workday-1",
-      timeSlot: "Shift: 09:00 AM - 06:00 PM",
-      title: "Standard Workday (IST)",
-      category: "Active Workplace Target (8 hrs)",
+      timeSlot: `Shift: ${startFormatted} - ${endFormatted}`,
+      title: "Scheduled Workday (IST)",
+      category: "Active Workplace Target",
     },
     {
       id: "workday-2",
@@ -150,6 +172,8 @@ export function AttendanceCalendarCard({
   currentMonth,
   days: propDays,
   agenda: propAgenda,
+  shiftStartTime,
+  shiftEndTime,
   onSelectDate,
   onPrevMonth,
   onNextMonth,
@@ -181,8 +205,8 @@ export function AttendanceCalendarCard({
 
   const agenda = React.useMemo(() => {
     if (propAgenda && propAgenda.length > 0) return propAgenda;
-    return generateLiveAgenda(selectedKey);
-  }, [propAgenda, selectedKey]);
+    return generateLiveAgenda(selectedKey, shiftStartTime, shiftEndTime);
+  }, [propAgenda, selectedKey, shiftStartTime, shiftEndTime]);
 
   const handleSelect = (d: DayStripItem) => {
     setSelectedKey(d.dateKey);
