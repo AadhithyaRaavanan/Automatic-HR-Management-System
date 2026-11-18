@@ -183,18 +183,40 @@ export function ProfilePageSkeleton() {
 export function KpiPageSkeleton() {
   return (
     <AppShell>
-      <div className="space-y-6 max-w-7xl mx-auto pb-12">
-        <div className="flex items-center justify-between">
+      <div className="space-y-6 max-w-[1280px] mx-auto pb-16">
+        {/* Header Skeleton */}
+        <div className="flex items-center justify-between pt-1 pb-4">
           <div className="space-y-2">
-            <Skeleton className="h-8 w-64" />
-            <Skeleton className="h-4 w-80" />
+            <Skeleton className="h-8 w-64 rounded-xl" />
+            <Skeleton className="h-4 w-96 rounded-lg" />
           </div>
           <Skeleton className="h-10 w-28 rounded-xl" />
         </div>
-        <Skeleton className="h-32 rounded-[28px]" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <Skeleton key={i} className="h-28 rounded-2xl" />
+
+        {/* Sticky Toolbar Skeleton */}
+        <Skeleton className="h-14 rounded-2xl" />
+
+        {/* Hero Row: 2 columns (40% + 60%) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+          <Skeleton className="lg:col-span-5 h-56 rounded-[24px]" />
+          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            <Skeleton className="h-56 rounded-[22px]" />
+            <Skeleton className="h-56 rounded-[22px]" />
+            <Skeleton className="h-56 rounded-[22px]" />
+          </div>
+        </div>
+
+        {/* Category Sections */}
+        <div className="space-y-6 pt-2">
+          {[1, 2].map((sec) => (
+            <div key={sec} className="space-y-3">
+              <Skeleton className="h-6 w-48 rounded-lg" />
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
+                {[1, 2, 3, 4].map((i) => (
+                  <Skeleton key={i} className="h-36 rounded-2xl" />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </div>

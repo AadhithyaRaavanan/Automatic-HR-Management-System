@@ -2,112 +2,98 @@
 
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { AppShell, useAppSession } from "@/components/shell/app-shell";
-import { StatusPill } from "@/components/shared/status-pill";
+import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { PageHeader } from "@/components/shared/page-header";
+import { Skeleton } from "@/components/shared/skeleton";
 import { FEATURES } from "@/lib/features";
 import { KPI_CONFIG } from "@/lib/kpi/config";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
-  TrendingUp,
-  TrendingDown,
-  Calendar,
+  BarChart3,
   Download,
-  Filter,
-  CheckCircle2,
-  Clock,
-  AlertTriangle,
-  Award,
-  Edit3,
   Plus,
   X,
   Target,
   MessageSquare,
-  HelpCircle,
-  BarChart3,
-  Layers,
-  ArrowRight,
+  Clock,
+  Calendar,
+  CheckCircle2,
+  Edit3,
   UserCheck,
 } from "lucide-react";
 
-type PeriodPreset = "week" | "month" | "quarter" | "custom";
-type KpiTab = "metrics" | "reviews" | "goals";
+import { KpiToolbar, KpiTab, PeriodPreset } from "@/features/kpi/components/kpi-toolbar";
+import { KpiHeroCard } from "@/features/kpi/components/kpi-hero-card";
+import { KpiHighlightTiles } from "@/features/kpi/components/kpi-highlight-tiles";
+import {
+  KpiCategorySection,
+  MetricItemData,
+} from "@/features/kpi/components/kpi-category-section";
+import { KpiCalculationFooter } from "@/features/kpi/components/kpi-calculation-footer";
 
-function getPresetDates(preset: PeriodPreset): { from: string; to: string } {
-  const today = new Date().toISOString().slice(0, 10);
-  const now = new Date();
+// Helper: Compute initial date range for presets
+function getPresetDates(preset: PeriodPreset, baseDate = new Date()): { from: string; to: string } {
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const year = baseDate.getFullYear();
+  const month = baseDate.getMonth();
 
   if (preset === "week") {
-    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    return { from: weekAgo.toISOString().slice(0, 10), to: today };
+    const end = new Date(baseDate.getTime());
+    const start = new Date(baseDate.getTime() - 6 * 24 * 60 * 60 * 1000);
+    return {
+      from: start.toISOString().slice(0, 10),
+      to: end.toISOString().slice(0, 10),
+    };
   }
+
   if (preset === "quarter") {
-    const quarterAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-    return { from: quarterAgo.toISOString().slice(0, 10), to: today };
+    const qIndex = Math.floor(month / 3);
+    const qStart = new Date(year, qIndex * 3, 1).toISOString().slice(0, 10);
+    const qEnd = new Date(year, (qIndex + 1) * 3, 0).toISOString().slice(0, 10);
+    return { from: qStart, to: qEnd > todayIso ? todayIso : qEnd };
   }
+
   // month (default)
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    .toISOString()
-    .slice(0, 10);
-  return { from: startOfMonth, to: today };
+  const startOfMonth = new Date(year, month, 1).toISOString().slice(0, 10);
+  const endOfMonth = new Date(year, month + 1, 0).toISOString().slice(0, 10);
+  return { from: startOfMonth, to: endOfMonth > todayIso ? todayIso : endOfMonth };
 }
 
-function RadialGauge({ score, target = 90 }: { score: number; target?: number }) {
-  const radius = 38;
-  const circumference = 2 * Math.PI * radius * 0.75; // 270deg arc
-  const strokeDashoffset = circumference - (Math.min(100, Math.max(0, score)) / 100) * circumference;
-  const strokeColor = score >= target ? "#10B981" : score >= target - 15 ? "#F59E0B" : "#F43F5E";
+// Helper: Format period label
+function formatPeriodLabel(preset: PeriodPreset, from: string, to: string): string {
+  if (preset === "month") {
+    const d = new Date(`${from}T00:00:00Z`);
+    return d.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+  }
 
-  return (
-    <div className="relative flex items-center justify-center w-24 h-24 shrink-0">
-      <svg className="w-24 h-24 -rotate-[135deg]" viewBox="0 0 100 100">
-        <circle
-          cx="50"
-          cy="50"
-          r={radius}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="8"
-          strokeDasharray={`${circumference} ${circumference}`}
-          strokeLinecap="round"
-          className="text-border-light/60"
-        />
-        <circle
-          cx="50"
-          cy="50"
-          r={radius}
-          fill="none"
-          stroke={strokeColor}
-          strokeWidth="8"
-          strokeDasharray={`${circumference} ${circumference}`}
-          strokeDashoffset={strokeDashoffset}
-          strokeLinecap="round"
-          className="transition-all duration-700 ease-out"
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-        <span className="text-xl font-black text-text-primary tabular-nums tracking-tight">
-          {score}%
-        </span>
-        <span className="text-[9px] font-bold text-text-tertiary uppercase">
-          Goal {target}%
-        </span>
-      </div>
-    </div>
-  );
+  if (preset === "week") {
+    const d1 = new Date(`${from}T00:00:00Z`);
+    const d2 = new Date(`${to}T00:00:00Z`);
+    const d1Str = d1.toLocaleDateString("en-US", { day: "numeric", month: "short", timeZone: "UTC" });
+    const d2Str = d2.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+    return `${d1Str} – ${d2Str}`;
+  }
+
+  if (preset === "quarter") {
+    const d = new Date(`${from}T00:00:00Z`);
+    const q = Math.floor(d.getUTCMonth() / 3) + 1;
+    return `Q${q} ${d.getUTCFullYear()}`;
+  }
+
+  // Custom
+  return `${from} to ${to}`;
 }
 
 function KpiContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const queryClient = useQueryClient();
   const { userId, userRole } = useAppSession();
 
-  // Redirect if feature is disabled
+  // Redirect if feature flag is off
   React.useEffect(() => {
     if (!FEATURES.KPI) {
       router.replace("/dashboard");
@@ -124,7 +110,7 @@ function KpiContent() {
 
   // Modals state
   const [breakdownOpen, setBreakdownOpen] = React.useState(false);
-  const [adjustMetricKey, setAdjustMetricKey] = React.useState<string | null>(null);
+  const [adjustMetric, setAdjustMetric] = React.useState<MetricItemData | null>(null);
   const [adjustValue, setAdjustValue] = React.useState<string>("");
   const [adjustReason, setAdjustReason] = React.useState<string>("");
   const [createReviewOpen, setCreateReviewOpen] = React.useState(false);
@@ -144,7 +130,7 @@ function KpiContent() {
   const [goalTitle, setGoalTitle] = React.useState("");
   const [goalNote, setGoalNote] = React.useState("");
 
-  // Default target employee to searchParam or current user
+  // Default target employee to param or current user
   React.useEffect(() => {
     if (targetFromParam) {
       setSelectedEmpId(targetFromParam);
@@ -154,10 +140,22 @@ function KpiContent() {
   }, [targetFromParam, userId, selectedEmpId]);
 
   const effectiveEmpId = selectedEmpId || userId || "";
+  const isManagerOrAdmin = userRole === "manager" || userRole === "hr" || userRole === "admin";
 
   // 1. Fetch Main KPI Data
-  const { data: kpiData, isLoading: kpiLoading, refetch: refetchKpi } = useQuery({
-    queryKey: ["kpi-dashboard", effectiveEmpId, dateRange.from, dateRange.to, empType, deptFilter],
+  const {
+    data: kpiData,
+    isLoading: kpiLoading,
+    refetch: refetchKpi,
+  } = useQuery({
+    queryKey: [
+      "kpi-dashboard",
+      effectiveEmpId,
+      dateRange.from,
+      dateRange.to,
+      empType,
+      deptFilter,
+    ],
     queryFn: async () => {
       if (!effectiveEmpId) return null;
       const params = new URLSearchParams({
@@ -178,7 +176,19 @@ function KpiContent() {
     enabled: Boolean(effectiveEmpId && FEATURES.KPI),
   });
 
-  // Automatically default employee type to target employee's actual category
+  // Delayed skeleton loading flag (>300ms)
+  const [showSkeleton, setShowSkeleton] = React.useState(false);
+  React.useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (kpiLoading) {
+      timer = setTimeout(() => setShowSkeleton(true), 300);
+    } else {
+      setShowSkeleton(false);
+    }
+    return () => clearTimeout(timer);
+  }, [kpiLoading]);
+
+  // Sync employment category from data
   React.useEffect(() => {
     if (kpiData?.employee?.employment_category) {
       setEmpType(kpiData.employee.employment_category);
@@ -186,11 +196,17 @@ function KpiContent() {
   }, [kpiData?.employee?.employment_category]);
 
   // 2. Fetch Reviews Data
-  const { data: reviewsData, isLoading: reviewsLoading, refetch: refetchReviews } = useQuery({
+  const {
+    data: reviewsData,
+    isLoading: reviewsLoading,
+    refetch: refetchReviews,
+  } = useQuery({
     queryKey: ["kpi-reviews", effectiveEmpId],
     queryFn: async () => {
       if (!effectiveEmpId) return null;
-      const res = await fetch(`/api/kpi/reviews?employee_id=${encodeURIComponent(effectiveEmpId)}`);
+      const res = await fetch(
+        `/api/kpi/reviews?employee_id=${encodeURIComponent(effectiveEmpId)}`
+      );
       if (!res.ok) return null;
       return res.json();
     },
@@ -198,21 +214,92 @@ function KpiContent() {
   });
 
   // 3. Fetch Goals Data
-  const { data: goalsData, isLoading: goalsLoading, refetch: refetchGoals } = useQuery({
+  const {
+    data: goalsData,
+    isLoading: goalsLoading,
+    refetch: refetchGoals,
+  } = useQuery({
     queryKey: ["kpi-goals", effectiveEmpId],
     queryFn: async () => {
       if (!effectiveEmpId) return null;
-      const res = await fetch(`/api/kpi/goals?employee_id=${encodeURIComponent(effectiveEmpId)}`);
+      const res = await fetch(
+        `/api/kpi/goals?employee_id=${encodeURIComponent(effectiveEmpId)}`
+      );
       if (!res.ok) return null;
       return res.json();
     },
     enabled: Boolean(effectiveEmpId && activeTab === "goals" && FEATURES.KPI),
   });
 
-  // Mutations
+  // Period shifting handlers
+  const handlePrevPeriod = () => {
+    const curFrom = new Date(`${dateRange.from}T00:00:00Z`);
+
+    if (preset === "month") {
+      curFrom.setUTCMonth(curFrom.getUTCMonth() - 1);
+      const y = curFrom.getUTCFullYear();
+      const m = curFrom.getUTCMonth();
+      const start = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
+      const end = new Date(Date.UTC(y, m + 1, 0)).toISOString().slice(0, 10);
+      setDateRange({ from: start, to: end });
+    } else if (preset === "week") {
+      const start = new Date(curFrom.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const end = new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000);
+      setDateRange({
+        from: start.toISOString().slice(0, 10),
+        to: end.toISOString().slice(0, 10),
+      });
+    } else if (preset === "quarter") {
+      curFrom.setUTCMonth(curFrom.getUTCMonth() - 3);
+      const y = curFrom.getUTCFullYear();
+      const q = Math.floor(curFrom.getUTCMonth() / 3);
+      const start = new Date(Date.UTC(y, q * 3, 1)).toISOString().slice(0, 10);
+      const end = new Date(Date.UTC(y, (q + 1) * 3, 0)).toISOString().slice(0, 10);
+      setDateRange({ from: start, to: end });
+    }
+  };
+
+  const handleNextPeriod = () => {
+    const curFrom = new Date(`${dateRange.from}T00:00:00Z`);
+    const todayIso = new Date().toISOString().slice(0, 10);
+
+    if (preset === "month") {
+      curFrom.setUTCMonth(curFrom.getUTCMonth() + 1);
+      const y = curFrom.getUTCFullYear();
+      const m = curFrom.getUTCMonth();
+      const start = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
+      const end = new Date(Date.UTC(y, m + 1, 0)).toISOString().slice(0, 10);
+      setDateRange({ from: start, to: end > todayIso ? todayIso : end });
+    } else if (preset === "week") {
+      const start = new Date(curFrom.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const end = new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000);
+      const endIso = end.toISOString().slice(0, 10);
+      setDateRange({
+        from: start.toISOString().slice(0, 10),
+        to: endIso > todayIso ? todayIso : endIso,
+      });
+    } else if (preset === "quarter") {
+      curFrom.setUTCMonth(curFrom.getUTCMonth() + 3);
+      const y = curFrom.getUTCFullYear();
+      const q = Math.floor(curFrom.getUTCMonth() / 3);
+      const start = new Date(Date.UTC(y, q * 3, 1)).toISOString().slice(0, 10);
+      const end = new Date(Date.UTC(y, (q + 1) * 3, 0)).toISOString().slice(0, 10);
+      setDateRange({ from: start, to: end > todayIso ? todayIso : end });
+    }
+  };
+
+  // Preset selector
+  const handlePresetChange = (newPreset: PeriodPreset) => {
+    setPreset(newPreset);
+    if (newPreset !== "custom") {
+      setDateRange(getPresetDates(newPreset));
+    }
+  };
+
+  // Adjustment Mutation
   const submitAdjustment = useMutation({
     mutationFn: async () => {
-      if (!adjustMetricKey || !adjustValue || adjustReason.trim().length < 5) {
+      if (!adjustMetric || !adjustValue || adjustReason.trim().length < 5) {
         throw new Error("Override value and a reason of at least 5 characters are required");
       }
       const res = await fetch("/api/kpi/adjustments", {
@@ -220,7 +307,7 @@ function KpiContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           employee_id: effectiveEmpId,
-          metric: adjustMetricKey,
+          metric: adjustMetric.key,
           period_start: dateRange.from,
           period_end: dateRange.to,
           override_value: Number(adjustValue),
@@ -233,7 +320,7 @@ function KpiContent() {
     },
     onSuccess: () => {
       toast.success("Metric adjusted and recorded");
-      setAdjustMetricKey(null);
+      setAdjustMetric(null);
       setAdjustValue("");
       setAdjustReason("");
       refetchKpi();
@@ -243,6 +330,7 @@ function KpiContent() {
     },
   });
 
+  // Review Mutation
   const submitReview = useMutation({
     mutationFn: async () => {
       if (reviewNote.trim().length < 5) {
@@ -275,6 +363,7 @@ function KpiContent() {
     },
   });
 
+  // Goal Mutation
   const submitGoal = useMutation({
     mutationFn: async () => {
       if (!goalTitle.trim()) throw new Error("Goal title is required");
@@ -317,7 +406,7 @@ function KpiContent() {
       return data;
     },
     onSuccess: () => {
-      toast.success("Goal updated");
+      toast.success("Goal status updated");
       refetchGoals();
     },
     onError: (err: any) => {
@@ -325,6 +414,7 @@ function KpiContent() {
     },
   });
 
+  // Export CSV
   const handleExportCsv = () => {
     if (!effectiveEmpId) return;
     const params = new URLSearchParams({
@@ -336,412 +426,283 @@ function KpiContent() {
     window.location.href = `/api/kpi/export?${params.toString()}`;
   };
 
-  const isManagerOrAdmin = userRole === "manager" || userRole === "hr" || userRole === "admin";
   const currentMetrics = kpiData?.current?.metrics;
+  const previousMetrics = kpiData?.previous?.metrics;
   const overallScore = kpiData?.current?.overallScore;
   const trend = kpiData?.trend?.overallScore;
-  const teamAverage = kpiData?.teamAverage;
   const scopedEmployees = kpiData?.scopedEmployees || [];
+
+  const periodLabel = formatPeriodLabel(preset, dateRange.from, dateRange.to);
 
   if (!FEATURES.KPI) {
     return null;
   }
 
-  return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black tracking-tight text-text-primary flex items-center gap-2.5">
-            <BarChart3 className="w-6 h-6 text-brand-purple" />
-            Performance & KPI Analytics
-          </h1>
-          <p className="text-xs text-text-secondary mt-1">
-            Data-grounded performance metrics, manager reviews, and goal tracking.
-          </p>
-        </div>
+  // Goals progress summary
+  const goalsList = goalsData?.goals || [];
+  const notStartedGoals = goalsList.filter((g: any) => g.status === "not_started").length;
+  const onTrackGoals = goalsList.filter((g: any) => g.status === "on_track").length;
+  const atRiskGoals = goalsList.filter((g: any) => g.status === "at_risk").length;
+  const doneGoals = goalsList.filter((g: any) => g.status === "done").length;
 
-        <div className="flex items-center gap-2">
+  return (
+    <div className="w-full max-w-[1280px] mx-auto space-y-6 pb-16">
+      {/* 1. Standardized Desktop Page Header */}
+      <PageHeader
+        title={
+          <div className="flex items-center gap-2.5">
+            <BarChart3 className="w-6 h-6 text-brand-purple" />
+            <span>Performance & KPI Analytics</span>
+          </div>
+        }
+        subtitle="Data-grounded performance metrics, manager reviews, and goal tracking."
+        action={
           <button
             type="button"
             onClick={handleExportCsv}
             disabled={kpiLoading || !kpiData}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-card border border-border-light text-xs font-bold text-text-primary hover:bg-card-subtle transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-card border border-border-light text-xs font-bold text-text-primary hover:bg-card-subtle transition-colors shadow-xs cursor-pointer disabled:opacity-50"
           >
             <Download className="w-4 h-4 text-brand-purple" />
-            Export CSV
+            <span>Export CSV</span>
           </button>
+        }
+      />
+
+      {/* 2. Unified Sticky Toolbar */}
+      <KpiToolbar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        reviewCount={reviewsData?.reviews?.length || 0}
+        goalCount={goalsData?.goals?.length || 0}
+        periodLabel={periodLabel}
+        preset={preset}
+        onPresetChange={handlePresetChange}
+        onPrevPeriod={handlePrevPeriod}
+        onNextPeriod={handleNextPeriod}
+        customRange={dateRange}
+        onCustomRangeChange={setDateRange}
+        isManagerOrAdmin={isManagerOrAdmin}
+        scopedEmployees={scopedEmployees}
+        selectedEmpId={effectiveEmpId}
+        onSelectEmployee={setSelectedEmpId}
+        currentUserId={userId}
+        empType={empType}
+        onEmpTypeChange={setEmpType}
+        deptFilter={deptFilter}
+        onDeptFilterChange={setDeptFilter}
+      />
+
+      {/* 3. TAB CONTENT */}
+      {showSkeleton ? (
+        /* Delayed skeleton loader for instant layout stability */
+        <div className="space-y-6 pt-2">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+            <Skeleton className="lg:col-span-5 h-56 rounded-[24px]" />
+            <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+              <Skeleton className="h-56 rounded-[22px]" />
+              <Skeleton className="h-56 rounded-[22px]" />
+              <Skeleton className="h-56 rounded-[22px]" />
+            </div>
+          </div>
+          <div className="space-y-3 pt-3">
+            <Skeleton className="h-6 w-48 rounded-lg" />
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
+              {[1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} className="h-36 rounded-2xl" />
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
+      ) : activeTab === "metrics" ? (
+        /* TAB 1: METRICS & SCORE */
+        <div className="space-y-7">
+          {/* Hero Row: Two Columns (40% Left + 60% Right) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+            {/* Left: Overall Performance Index Card (~40%) */}
+            <div className="lg:col-span-5 flex flex-col">
+              <KpiHeroCard
+                overallScore={overallScore}
+                trend={trend}
+                target={90}
+                currentMetrics={currentMetrics}
+                onOpenBreakdown={() => setBreakdownOpen(true)}
+                className="h-full"
+              />
+            </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-border-light pb-2">
-        <button
-          type="button"
-          onClick={() => setActiveTab("metrics")}
-          className={cn(
-            "px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2",
-            activeTab === "metrics"
-              ? "bg-brand-purple text-white shadow-xs"
-              : "text-text-secondary hover:text-text-primary hover:bg-card-subtle"
-          )}
-        >
-          <BarChart3 className="w-4 h-4" />
-          Metrics & Score
-        </button>
-        <button
-          type="button"
-          data-tour="kpi-reviews-tab"
-          onClick={() => setActiveTab("reviews")}
-          className={cn(
-            "px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2",
-            activeTab === "reviews"
-              ? "bg-brand-purple text-white shadow-xs"
-              : "text-text-secondary hover:text-text-primary hover:bg-card-subtle"
-          )}
-        >
-          <MessageSquare className="w-4 h-4" />
-          Manager Reviews ({reviewsData?.reviews?.length || 0})
-        </button>
-        <button
-          type="button"
-          data-tour="kpi-goals-tab"
-          onClick={() => setActiveTab("goals")}
-          className={cn(
-            "px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2",
-            activeTab === "goals"
-              ? "bg-brand-purple text-white shadow-xs"
-              : "text-text-secondary hover:text-text-primary hover:bg-card-subtle"
-          )}
-        >
-          <Target className="w-4 h-4" />
-          Goals ({goalsData?.goals?.length || 0})
-        </button>
-      </div>
-
-      {/* Filter Bar (Sticky on Desktop) */}
-      <div data-tour="kpi-filters" className="sticky top-0 z-20 p-4 rounded-2xl bg-card/95 backdrop-blur-md border border-border-light shadow-card space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Person selector for managers/HR/admin */}
-            {isManagerOrAdmin && scopedEmployees.length > 0 && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-bold uppercase text-text-tertiary">Employee:</span>
-                <select
-                  aria-label="Select Employee"
-                  value={effectiveEmpId}
-                  onChange={(e) => setSelectedEmpId(e.target.value)}
-                  className="px-3 py-1.5 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary"
-                >
-                  {scopedEmployees.map((emp: any) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.full_name || emp.email} {emp.id === userId ? "(You)" : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Employee Type filter (Managers & HR only; hidden for employees viewing themselves) */}
-            {isManagerOrAdmin && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-bold uppercase text-text-tertiary">Type:</span>
-                <select
-                  aria-label="Employee Type"
-                  value={empType}
-                  onChange={(e) => setEmpType(e.target.value)}
-                  className="px-3 py-1.5 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary"
-                >
-                  <option value="full_time">Full-Time (8h)</option>
-                  <option value="part_time">Part-Time (4h)</option>
-                  <option value="intern">Intern (8h)</option>
-                  <option value="contract">Contract (8h)</option>
-                </select>
-              </div>
-            )}
+            {/* Right: Three Highlight Tiles (~60%) */}
+            <div className="lg:col-span-7 flex flex-col">
+              <KpiHighlightTiles
+                currentMetrics={currentMetrics}
+                previousMetrics={previousMetrics}
+              />
+            </div>
           </div>
 
-          {/* Date Presets */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            {(["week", "month", "quarter", "custom"] as PeriodPreset[]).map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => {
-                  setPreset(p);
-                  if (p !== "custom") setDateRange(getPresetDates(p));
+          {/* Metric Sections */}
+          {currentMetrics && (
+            <div data-tour="kpi-metrics-grid" className="space-y-7">
+              {/* Category 1: Attendance & Reliability */}
+              <KpiCategorySection
+                title="Attendance & Reliability"
+                description="Punctuality, shift attendance frequency, early departures, and correction volume."
+                icon={<Clock className="w-4 h-4 text-brand-purple" />}
+                categoryHint="Punctuality targets: 95% on-time punches and 100% expected workdays."
+                metrics={[
+                  currentMetrics.on_time_check_in_rate,
+                  currentMetrics.days_worked_vs_expected,
+                  currentMetrics.early_check_outs,
+                  currentMetrics.auto_closed_check_outs,
+                  currentMetrics.regularization_requests,
+                ]}
+                previousMetricsMap={previousMetrics}
+                isManagerOrAdmin={isManagerOrAdmin}
+                onAdjustMetric={(m) => {
+                  setAdjustMetric(m);
+                  setAdjustValue(m.value != null ? String(m.value) : "");
                 }}
-                className={cn(
-                  "px-3 py-1 rounded-xl text-xs font-bold transition-colors cursor-pointer",
-                  preset === p
-                    ? "bg-brand-navy text-white"
-                    : "bg-card-subtle text-text-secondary hover:text-text-primary"
-                )}
-              >
-                {p.charAt(0).toUpperCase() + p.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
+              />
 
-        {/* Custom date range inputs */}
-        {preset === "custom" && (
-          <div className="flex items-center gap-2 pt-2 border-t border-border-light text-xs">
-            <span className="font-bold text-text-secondary">Range:</span>
-            <input
-              type="date"
-              value={dateRange.from}
-              onChange={(e) => setDateRange((prev) => ({ ...prev, from: e.target.value }))}
-              className="px-2.5 py-1 rounded-lg bg-card-subtle border border-border-light text-xs text-text-primary"
-            />
-            <span className="text-text-tertiary">to</span>
-            <input
-              type="date"
-              value={dateRange.to}
-              onChange={(e) => setDateRange((prev) => ({ ...prev, to: e.target.value }))}
-              className="px-2.5 py-1 rounded-lg bg-card-subtle border border-border-light text-xs text-text-primary"
-            />
-          </div>
-        )}
-      </div>
+              {/* Category 2: Hours & Shift Completion */}
+              <KpiCategorySection
+                title="Hours & Shift Completion"
+                description="Total productive work hours vs shift target expectations."
+                icon={<Calendar className="w-4 h-4 text-emerald-500" />}
+                categoryHint="Standard daily target is 8h per full working shift."
+                metrics={[currentMetrics.worked_hours_vs_target]}
+                previousMetricsMap={previousMetrics}
+                isManagerOrAdmin={isManagerOrAdmin}
+                onAdjustMetric={(m) => {
+                  setAdjustMetric(m);
+                  setAdjustValue(m.value != null ? String(m.value) : "");
+                }}
+              />
 
-      {/* TAB 1: METRICS & SCORE */}
-      {activeTab === "metrics" && (
-        <div className="space-y-6">
-          {/* Overall Performance Card */}
-          <div data-tour="kpi-overview" className="p-6 rounded-[28px] bg-card border border-border-light shadow-card flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-            <div className="space-y-2 flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-extrabold uppercase tracking-wider text-text-tertiary">
-                  Overall Performance Index
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setBreakdownOpen(true)}
-                  className="text-brand-purple hover:underline text-xs font-bold flex items-center gap-1 cursor-pointer"
-                >
-                  <HelpCircle className="w-3.5 h-3.5" />
-                  View Weight Breakdown
-                </button>
-              </div>
-
-              {overallScore != null ? (
-                <div className="space-y-2">
-                  <div className="flex items-baseline gap-3">
-                    <span className="text-4xl font-black text-text-primary tabular-nums">
-                      {overallScore}%
-                    </span>
-
-                    {trend != null && (
-                      <span
-                        className={cn(
-                          "inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full",
-                          trend > 0
-                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
-                            : trend < 0
-                            ? "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400"
-                            : "bg-card-subtle text-text-secondary"
-                        )}
-                      >
-                        {trend > 0 ? <TrendingUp className="w-3 h-3" /> : trend < 0 ? <TrendingDown className="w-3 h-3" /> : null}
-                        {trend > 0 ? `+${trend}%` : `${trend}%`} vs previous period
-                      </span>
-                    )}
-                  </div>
-
-                  <p className="text-xs text-text-tertiary font-medium">
-                    Target: 90%+ • Computed across Attendance, Hours, and Task delivery
-                  </p>
-
-                  {/* Small Stacked Bar Weight Breakdown */}
-                  <div className="pt-2 max-w-md space-y-1.5">
-                    <div className="h-2 w-full rounded-full overflow-hidden flex bg-card-subtle">
-                      <div style={{ width: "20%" }} className="bg-brand-purple h-full" title="On-Time Attendance (20%)" />
-                      <div style={{ width: "20%" }} className="bg-blue-500 h-full" title="Days Worked (20%)" />
-                      <div style={{ width: "25%" }} className="bg-emerald-500 h-full" title="Hours Target (25%)" />
-                      <div style={{ width: "20%" }} className="bg-amber-500 h-full" title="Tasks Completion (20%)" />
-                      <div style={{ width: "15%" }} className="bg-indigo-500 h-full" title="On-Time Delivery (15%)" />
-                    </div>
-                    <div className="flex items-center gap-3 text-[10px] text-text-tertiary font-medium">
-                      <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-brand-purple" />Attendance 40%</span>
-                      <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Hours 25%</span>
-                      <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" />Tasks 35%</span>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  <div className="text-2xl font-bold text-text-secondary tracking-tight">
-                    Not enough data yet
-                  </div>
-                  <p className="text-xs text-text-tertiary leading-relaxed max-w-md font-medium">
-                    Active attendance sessions or completed task deliverables in this period are needed to compute the overall performance index.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Radial / Arc Gauge or Neutral Box */}
-            {overallScore != null ? (
-              <RadialGauge score={overallScore} target={90} />
-            ) : (
-              <div className="w-24 h-24 rounded-2xl bg-card-subtle border border-border-light flex flex-col items-center justify-center text-text-tertiary shrink-0">
-                <BarChart3 className="w-8 h-8 opacity-40 mb-1" />
-                <span className="text-[10px] font-bold uppercase tracking-wider">No Score</span>
-              </div>
-            )}
-          </div>
-
-          {/* Metric Cards Grid */}
-          {currentMetrics ? (
-            <div data-tour="kpi-metrics-grid" className="space-y-6">
-              {/* Category: Attendance */}
-              <div>
-                <h3 className="text-xs font-extrabold uppercase tracking-wider text-text-secondary mb-3 flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-brand-purple" />
-                  Attendance & Reliability
-                </h3>
-                <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
-                  {[
-                    currentMetrics.on_time_check_in_rate,
-                    currentMetrics.days_worked_vs_expected,
-                    currentMetrics.early_check_outs,
-                    currentMetrics.auto_closed_check_outs,
-                    currentMetrics.regularization_requests,
-                  ].map((m) => (
-                    <MetricCard
-                      key={m.key}
-                      metric={m}
-                      isManagerOrAdmin={isManagerOrAdmin}
-                      onAdjust={() => {
-                        setAdjustMetricKey(m.key);
-                        setAdjustValue(m.value != null ? String(m.value) : "");
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Category: Hours */}
-              <div>
-                <h3 className="text-xs font-extrabold uppercase tracking-wider text-text-secondary mb-3 flex items-center gap-1.5">
-                  <Calendar className="w-4 h-4 text-brand-purple" />
-                  Hours & Shift Completion
-                </h3>
-                <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
-                  {[currentMetrics.worked_hours_vs_target].map((m) => (
-                    <MetricCard
-                      key={m.key}
-                      metric={m}
-                      isManagerOrAdmin={isManagerOrAdmin}
-                      onAdjust={() => {
-                        setAdjustMetricKey(m.key);
-                        setAdjustValue(m.value != null ? String(m.value) : "");
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Category: Tasks */}
-              <div>
-                <h3 className="text-xs font-extrabold uppercase tracking-wider text-text-secondary mb-3 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-brand-purple" />
-                  Task Execution & Delivery
-                </h3>
-                <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
-                  {[
-                    currentMetrics.tasks_completed_vs_assigned,
-                    currentMetrics.task_on_time_rate,
-                    currentMetrics.task_average_cycle_time,
-                    currentMetrics.task_overdue_count,
-                  ].map((m) => (
-                    <MetricCard
-                      key={m.key}
-                      metric={m}
-                      isManagerOrAdmin={isManagerOrAdmin}
-                      onAdjust={() => {
-                        setAdjustMetricKey(m.key);
-                        setAdjustValue(m.value != null ? String(m.value) : "");
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="py-12 text-center text-xs text-text-tertiary">
-              {kpiLoading ? "Calculating live performance metrics..." : "No performance records found for this period."}
+              {/* Category 3: Task Delivery & Execution */}
+              <KpiCategorySection
+                title="Task Delivery & Execution"
+                description="Sprint deliverables, sprint completion rate, on-time delivery, and cycle time."
+                icon={<CheckCircle2 className="w-4 h-4 text-amber-500" />}
+                categoryHint="Sprint deliverables: 90% completion and 90% on-time delivery."
+                metrics={[
+                  currentMetrics.tasks_completed_vs_assigned,
+                  currentMetrics.task_on_time_rate,
+                  currentMetrics.task_average_cycle_time,
+                  currentMetrics.task_overdue_count,
+                ]}
+                previousMetricsMap={previousMetrics}
+                isManagerOrAdmin={isManagerOrAdmin}
+                onAdjustMetric={(m) => {
+                  setAdjustMetric(m);
+                  setAdjustValue(m.value != null ? String(m.value) : "");
+                }}
+              />
             </div>
           )}
-        </div>
-      )}
 
-      {/* TAB 2: REVIEWS */}
-      {activeTab === "reviews" && (
+          {/* Collapsible Explanatory Footer */}
+          <KpiCalculationFooter employeeType={empType} />
+        </div>
+      ) : activeTab === "reviews" ? (
+        /* TAB 2: MANAGER REVIEWS */
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between pb-1">
             <div>
-              <h2 className="text-sm font-extrabold text-text-primary">Performance Reviews</h2>
-              <p className="text-xs text-text-secondary">Manager reviews with qualitative feedback and notes.</p>
+              <h2 className="text-sm font-extrabold text-text-primary tracking-tight">
+                Manager Performance Reviews
+              </h2>
+              <p className="text-xs text-text-secondary font-medium">
+                Structured evaluations covering quality, communication, initiative, and teamwork.
+              </p>
             </div>
+
             {isManagerOrAdmin && effectiveEmpId !== userId && (
               <button
                 type="button"
                 data-tour="kpi-add-review"
                 onClick={() => setCreateReviewOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                Add Review
+                <span>Write Review</span>
               </button>
             )}
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3.5">
             {(reviewsData?.reviews || []).length > 0 ? (
-              reviewsData!.reviews.map((rev: any) => (
-                <div
-                  key={rev.id}
-                  className="p-5 rounded-2xl bg-card border border-border-light shadow-card space-y-3"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-extrabold text-text-primary">
-                        {rev.reviewer_name}
-                      </span>
-                      <span className="text-[11px] text-text-tertiary ml-2">
-                        {rev.period_type.toUpperCase()} • {rev.period_start} to {rev.period_end}
+              reviewsData!.reviews.map((rev: any) => {
+                const reviewerInitials = (rev.reviewer_name || "Manager")
+                  .trim()
+                  .split(/\s+/)
+                  .map((w: string) => w[0])
+                  .join("")
+                  .slice(0, 2)
+                  .toUpperCase();
+
+                return (
+                  <div
+                    key={rev.id}
+                    className="p-5 rounded-2xl bg-card border border-border-light shadow-card space-y-4"
+                  >
+                    {/* Header */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-brand-purple/10 text-brand-purple font-bold text-xs flex items-center justify-center shrink-0">
+                          {reviewerInitials}
+                        </div>
+                        <div>
+                          <span className="text-xs font-extrabold text-text-primary block">
+                            {rev.reviewer_name}
+                          </span>
+                          <span className="text-[11px] text-text-tertiary">
+                            {rev.period_type.toUpperCase()} CYCLE • {rev.period_start} to {rev.period_end}
+                          </span>
+                        </div>
+                      </div>
+
+                      <span className="text-[11px] font-mono text-text-tertiary">
+                        {new Date(rev.created_at).toLocaleDateString()}
                       </span>
                     </div>
-                    <span className="text-[11px] font-mono text-text-tertiary">
-                      {new Date(rev.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
 
-                  {/* Ratings grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-border-light/60">
-                    {Object.entries(rev.ratings || {}).map(([key, val]) => (
-                      <div key={key} className="p-2 rounded-xl bg-card-subtle text-xs">
-                        <span className="text-[10px] font-bold uppercase text-text-tertiary block capitalize">
-                          {key}
-                        </span>
-                        <span className="text-xs font-black text-brand-purple">
-                          {"★".repeat(Number(val) || 0)}
-                          {"☆".repeat(5 - (Number(val) || 0))}
-                          <span className="ml-1 text-[11px] text-text-secondary">({Number(val)}/5)</span>
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                    {/* Compact Rating Bars */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-border-light/60">
+                      {Object.entries(rev.ratings || {}).map(([key, val]) => {
+                        const score = Number(val) || 0;
+                        const pct = Math.min(100, (score / 5) * 100);
+                        return (
+                          <div key={key} className="p-3 rounded-xl bg-card-subtle space-y-1.5">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-bold text-text-secondary capitalize">
+                                {key}
+                              </span>
+                              <span className="font-mono font-black text-brand-purple">
+                                {score}/5
+                              </span>
+                            </div>
+                            <div className="h-1.5 w-full bg-card rounded-full overflow-hidden">
+                              <div
+                                style={{ width: `${pct}%` }}
+                                className="h-full bg-brand-purple rounded-full"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
 
-                  {/* Review Note */}
-                  <div className="p-3 rounded-xl bg-card-subtle/70 border border-border-light text-xs text-text-primary leading-relaxed whitespace-pre-wrap">
-                    <strong className="text-text-secondary block text-[10px] uppercase font-bold mb-0.5">Feedback Note:</strong>
-                    {rev.note}
+                    {/* Qualitative Note */}
+                    <div className="p-3.5 rounded-xl bg-card-subtle/80 border border-border-light text-xs text-text-primary leading-relaxed whitespace-pre-wrap">
+                      <strong className="text-text-secondary block text-[10px] uppercase font-extrabold mb-1">
+                        Supervisor Feedback:
+                      </strong>
+                      {rev.note}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             ) : (
               <EmptyState
                 className="py-12 border-dashed shadow-none"
@@ -767,31 +728,65 @@ function KpiContent() {
             )}
           </div>
         </div>
-      )}
-
-      {/* TAB 3: GOALS */}
-      {activeTab === "goals" && (
+      ) : (
+        /* TAB 3: GOALS */
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between pb-1">
             <div>
-              <h2 className="text-sm font-extrabold text-text-primary">Performance Goals</h2>
-              <p className="text-xs text-text-secondary">Strategic milestones and personal targets for this cycle.</p>
+              <h2 className="text-sm font-extrabold text-text-primary tracking-tight">
+                Performance Goals & Strategic Milestones
+              </h2>
+              <p className="text-xs text-text-secondary font-medium">
+                Track deliverable milestones and professional objectives for this cycle.
+              </p>
             </div>
+
             {isManagerOrAdmin && (
               <button
                 type="button"
                 onClick={() => setCreateGoalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                Add Goal
+                <span>Add Goal</span>
               </button>
             )}
           </div>
 
+          {/* Goals Progress Summary Strip */}
+          {goalsList.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 rounded-xl bg-card border border-border-light shadow-xs flex items-center justify-between">
+                <span className="text-xs font-bold text-text-secondary">Not Started</span>
+                <span className="text-base font-black text-text-tertiary tabular-nums">
+                  {notStartedGoals}
+                </span>
+              </div>
+              <div className="p-3 rounded-xl bg-card border border-border-light shadow-xs flex items-center justify-between">
+                <span className="text-xs font-bold text-text-secondary">On Track</span>
+                <span className="text-base font-black text-emerald-600 tabular-nums">
+                  {onTrackGoals}
+                </span>
+              </div>
+              <div className="p-3 rounded-xl bg-card border border-border-light shadow-xs flex items-center justify-between">
+                <span className="text-xs font-bold text-text-secondary">At Risk</span>
+                <span className="text-base font-black text-rose-600 tabular-nums">
+                  {atRiskGoals}
+                </span>
+              </div>
+              <div className="p-3 rounded-xl bg-card border border-border-light shadow-xs flex items-center justify-between">
+                <span className="text-xs font-bold text-text-secondary">Done</span>
+                <span className="text-base font-black text-brand-purple tabular-nums">
+                  {doneGoals}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Goal Cards List */}
           <div className="space-y-3">
-            {(goalsData?.goals || []).length > 0 ? (
-              goalsData!.goals.map((g: any) => (
+            {goalsList.length > 0 ? (
+              goalsList.map((g: any) => (
                 <div
                   key={g.id}
                   className="p-4 rounded-2xl bg-card border border-border-light shadow-card space-y-2.5"
@@ -804,12 +799,16 @@ function KpiContent() {
                       </p>
                     </div>
 
-                    {/* Status updater */}
                     <div className="flex items-center gap-2">
+                      <StatusBadge status={g.status} />
+
+                      {/* Status selector for manager/admin or employee owner */}
                       <select
-                        aria-label="Goal status"
+                        aria-label="Update Goal Status"
                         value={g.status}
-                        onChange={(e) => updateGoalStatus.mutate({ id: g.id, status: e.target.value })}
+                        onChange={(e) =>
+                          updateGoalStatus.mutate({ id: g.id, status: e.target.value })
+                        }
                         className="px-2.5 py-1 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary cursor-pointer"
                       >
                         <option value="not_started">Not Started</option>
@@ -821,7 +820,7 @@ function KpiContent() {
                   </div>
 
                   {g.note && (
-                    <p className="text-xs text-text-secondary bg-card-subtle p-2.5 rounded-xl border border-border-light">
+                    <p className="text-xs text-text-secondary bg-card-subtle p-2.5 rounded-xl border border-border-light leading-relaxed">
                       {g.note}
                     </p>
                   )}
@@ -850,7 +849,7 @@ function KpiContent() {
         </div>
       )}
 
-      {/* MODAL: Score Breakdown */}
+      {/* MODAL: Score Weight Breakdown */}
       {breakdownOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
@@ -862,7 +861,7 @@ function KpiContent() {
             <div className="flex items-center justify-between pb-2 border-b border-border-light">
               <h3 className="text-sm font-extrabold text-text-primary flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-brand-purple" />
-                Overall Score Weight Breakdown
+                <span>Overall Score Weight Breakdown</span>
               </h3>
               <button
                 type="button"
@@ -874,16 +873,16 @@ function KpiContent() {
             </div>
 
             <p className="text-xs text-text-secondary leading-relaxed">
-              The overall performance score is a weighted index across available operational data. Metrics with no recorded activity are marked <strong>No data</strong> and excluded from penalizing the score.
+              The overall performance score is a weighted index across operational data. Metrics with no recorded activity are marked <strong>No data</strong> and excluded from penalizing your score.
             </p>
 
             <div className="space-y-2">
               {[
-                { label: "On-Time Check-In Rate", weight: "20%", key: "on_time_check_in_rate" },
-                { label: "Days Worked vs Expected", weight: "20%", key: "days_worked_vs_expected" },
-                { label: "Worked Hours vs Target", weight: "25%", key: "worked_hours_vs_target" },
-                { label: "Tasks Completed vs Assigned", weight: "20%", key: "tasks_completed_vs_assigned" },
-                { label: "Task On-Time Delivery Rate", weight: "15%", key: "task_on_time_rate" },
+                { label: "On-Time Check-In Rate", weight: `${Math.round(KPI_CONFIG.weights.on_time_check_in_rate * 100)}%`, key: "on_time_check_in_rate" },
+                { label: "Days Worked vs Expected", weight: `${Math.round(KPI_CONFIG.weights.days_worked_vs_expected * 100)}%`, key: "days_worked_vs_expected" },
+                { label: "Worked Hours vs Target", weight: `${Math.round(KPI_CONFIG.weights.worked_hours_vs_target * 100)}%`, key: "worked_hours_vs_target" },
+                { label: "Tasks Completed vs Assigned", weight: `${Math.round(KPI_CONFIG.weights.tasks_completed_vs_assigned * 100)}%`, key: "tasks_completed_vs_assigned" },
+                { label: "Task On-Time Delivery Rate", weight: `${Math.round(KPI_CONFIG.weights.task_on_time_rate * 100)}%`, key: "task_on_time_rate" },
               ].map((item) => (
                 <div
                   key={item.key}
@@ -899,7 +898,7 @@ function KpiContent() {
               <button
                 type="button"
                 onClick={() => setBreakdownOpen(false)}
-                className="w-full py-2 rounded-full bg-brand-purple text-white text-xs font-bold cursor-pointer"
+                className="w-full py-2.5 rounded-full bg-brand-purple text-white text-xs font-bold cursor-pointer hover:bg-brand-purple-hover transition-colors"
               >
                 Close
               </button>
@@ -908,23 +907,23 @@ function KpiContent() {
         </div>
       )}
 
-      {/* MODAL: Adjust Metric */}
-      {adjustMetricKey && (
+      {/* MODAL: Adjust Metric Override */}
+      {adjustMetric && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setAdjustMetricKey(null);
+            if (e.target === e.currentTarget) setAdjustMetric(null);
           }}
         >
           <div className="w-full max-w-md bg-card rounded-[28px] border border-border-light shadow-shell p-6 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-border-light">
               <h3 className="text-sm font-extrabold text-text-primary flex items-center gap-2">
                 <Edit3 className="w-4 h-4 text-brand-purple" />
-                Adjust Metric Override
+                <span>Adjust Metric Override</span>
               </h3>
               <button
                 type="button"
-                onClick={() => setAdjustMetricKey(null)}
+                onClick={() => setAdjustMetric(null)}
                 className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-card-subtle cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -932,7 +931,7 @@ function KpiContent() {
             </div>
 
             <p className="text-xs text-text-secondary">
-              Metric: <strong className="text-text-primary">{adjustMetricKey}</strong>. All adjustments are logged and displayed with your justification.
+              Metric: <strong className="text-text-primary">{adjustMetric.label}</strong>. All adjustments are logged and displayed with your justification.
             </p>
 
             <form
@@ -967,7 +966,7 @@ function KpiContent() {
                   minLength={5}
                   value={adjustReason}
                   onChange={(e) => setAdjustReason(e.target.value)}
-                  placeholder="Explain why this metric is being adjusted (e.g. system clock drift, verified client emergency)..."
+                  placeholder="Explain why this metric is being adjusted (e.g. verified technical emergency, clock drift)..."
                   className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
                 />
               </div>
@@ -975,7 +974,7 @@ function KpiContent() {
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setAdjustMetricKey(null)}
+                  onClick={() => setAdjustMetric(null)}
                   className="px-4 py-2 rounded-full bg-card-subtle text-xs font-bold text-text-secondary cursor-pointer"
                 >
                   Cancel
@@ -1005,7 +1004,7 @@ function KpiContent() {
             <div className="flex items-center justify-between pb-2 border-b border-border-light">
               <h3 className="text-sm font-extrabold text-text-primary flex items-center gap-2">
                 <MessageSquare className="w-4 h-4 text-brand-purple" />
-                Write Manager Review
+                <span>Write Manager Review</span>
               </h3>
               <button
                 type="button"
@@ -1109,7 +1108,7 @@ function KpiContent() {
             <div className="flex items-center justify-between pb-2 border-b border-border-light">
               <h3 className="text-sm font-extrabold text-text-primary flex items-center gap-2">
                 <Target className="w-4 h-4 text-brand-purple" />
-                Assign Performance Goal
+                <span>Assign Performance Goal</span>
               </h3>
               <button
                 type="button"
@@ -1171,69 +1170,6 @@ function KpiContent() {
               </div>
             </form>
           </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function MetricCard({
-  metric,
-  isManagerOrAdmin,
-  onAdjust,
-}: {
-  metric: any;
-  isManagerOrAdmin: boolean;
-  onAdjust: () => void;
-}) {
-  const isNoData = metric.value == null || metric.status === "no_data";
-
-  return (
-    <div className="p-4 rounded-2xl bg-card border border-border-light shadow-card space-y-2.5 flex flex-col justify-between">
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-bold text-text-primary truncate">{metric.label}</span>
-          <StatusBadge
-            status={isNoData ? "no_data" : metric.status}
-            label={isNoData ? "No data" : undefined}
-          />
-        </div>
-
-        <div className="flex items-baseline justify-between pt-1">
-          <span
-            className={cn(
-              "text-xl font-black tabular-nums tracking-tight",
-              isNoData ? "text-text-tertiary font-semibold text-base" : "text-text-primary"
-            )}
-          >
-            {metric.displayValue}
-          </span>
-          {metric.target != null && !isNoData && (
-            <span className="text-[11px] font-mono text-text-tertiary tabular-nums">
-              Target: {metric.target}{metric.unit ? " " + metric.unit : ""}
-            </span>
-          )}
-        </div>
-
-        {/* Adjusted indicator */}
-        {metric.adjusted && (
-          <div className="p-2 rounded-xl bg-brand-purple/10 border border-brand-purple/20 text-[10px] text-brand-purple font-medium">
-            <span className="font-bold">Adjusted:</span> {metric.adjustmentReason}
-          </div>
-        )}
-      </div>
-
-      {/* Adjust Button for Manager/HR/Admin */}
-      {isManagerOrAdmin && (
-        <div className="pt-2 border-t border-border-light/60 flex justify-end">
-          <button
-            type="button"
-            onClick={onAdjust}
-            className="text-[11px] font-bold text-brand-purple hover:underline flex items-center gap-1 cursor-pointer"
-          >
-            <Edit3 className="w-3 h-3" />
-            Adjust
-          </button>
         </div>
       )}
     </div>
