@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AppShell, useAppSession } from "@/components/shell/app-shell";
 import { BentoGrid } from "@/components/bento/bento-grid";
 import { BentoCard } from "@/components/bento/bento-card";
@@ -50,6 +51,7 @@ const DOC_TYPE_LABELS: Record<string, string> = {
 };
 
 function ProfilePageContent() {
+  const router = useRouter();
   const { userId, userRole, isLoaded } = useAppSession();
   const supabase = React.useMemo(() => createClient(), []);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -111,11 +113,31 @@ function ProfilePageContent() {
     }>
   >([]);
 
-  const handleReplayTutorial = () => {
+  const handleReplayTutorial = async () => {
     if (typeof window !== "undefined") {
+      sessionStorage.setItem("pulse_tutorial_active", "true");
       sessionStorage.setItem("pulse_tutorial_step_index", "0");
-      window.dispatchEvent(new CustomEvent("pulse:start-tour"));
+      sessionStorage.removeItem("pulse_tutorial_completed");
+      localStorage.removeItem("pulse_tutorial_completed");
     }
+
+    try {
+      let headers: Record<string, string> = { "Content-Type": "application/json" };
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
+      }
+      await fetch("/api/tutorial/complete", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ reset: true }),
+      });
+    } catch {}
+
+    toast.info("Starting Workplace Walkthrough...");
+    router.push("/");
   };
 
   const resolveAvatarSignedUrl = React.useCallback(

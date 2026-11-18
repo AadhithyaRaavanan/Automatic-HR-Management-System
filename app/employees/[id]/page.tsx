@@ -190,7 +190,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
             </div>
           </div>
 
-          {isLoaded && userRole !== "admin" && (
+          {isLoaded && userRole !== "admin" && userId === emp.id && (
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setPermissionModalOpen(true)}
@@ -451,7 +451,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
                   Short-duration permissions (personal, medical, emergency) seamlessly integrated with attendance.
                 </p>
               </div>
-              {isLoaded && userRole !== "admin" && (
+              {isLoaded && userRole !== "admin" && userId === emp.id && (
                 <button
                   onClick={() => setPermissionModalOpen(true)}
                   className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-brand-purple text-white hover:bg-brand-purple/90"

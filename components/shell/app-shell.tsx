@@ -120,7 +120,6 @@ export function AppShell({
   const [isExistingUserTour, setIsExistingUserTour] = React.useState<boolean>(false);
   const [tourOpen, setTourOpen] = React.useState<boolean>(() => {
     if (typeof window === "undefined") return false;
-    if (localStorage.getItem("pulse_tutorial_completed") === "true") return false;
     return sessionStorage.getItem("pulse_tutorial_active") === "true";
   });
 
@@ -139,6 +138,7 @@ export function AppShell({
     const handleManualTour = () => {
       if (sessionState.userRole !== "admin") {
         if (typeof window !== "undefined") {
+          sessionStorage.setItem("pulse_tutorial_active", "true");
           sessionStorage.setItem("pulse_tutorial_step_index", "0");
           sessionStorage.removeItem("pulse_tutorial_completed");
           localStorage.removeItem("pulse_tutorial_completed");

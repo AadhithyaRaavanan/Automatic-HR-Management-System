@@ -25,6 +25,24 @@ interface OnboardingTourProps {
 
 const STEP_STORAGE_KEY = "pulse_tutorial_step_index";
 
+function checkOverlap(
+  cLeft: number,
+  cTop: number,
+  cWidth: number,
+  cHeight: number,
+  target: DOMRect
+): boolean {
+  const cRight = cLeft + cWidth;
+  const cBottom = cTop + cHeight;
+  // Overlap if horizontal and vertical intervals intersect
+  return !(
+    cRight <= target.left ||
+    cLeft >= target.right ||
+    cBottom <= target.top ||
+    cTop >= target.bottom
+  );
+}
+
 function getSmartCardPlacement(
   targetRect: DOMRect | null,
   cardWidth: number,
@@ -45,45 +63,93 @@ function getSmartCardPlacement(
 
   const vpW = window.innerWidth;
   const vpH = window.innerHeight;
-  const margin = 20;
-  const edgePadding = 20;
+  const margin = 16;
+  const edgePadding = 16;
 
-  // If the target is massive (e.g. covers > 75% width & height), dock to corner
-  if (targetRect.width > vpW * 0.75 && targetRect.height > vpH * 0.7) {
-    return {
-      style: {
-        position: "fixed",
-        bottom: "28px",
-        right: "28px",
-        width: `${cardWidth}px`,
-        maxHeight: "calc(100vh - 56px)",
-      },
-      placement: "docked",
-    };
-  }
-
-  // 1. Try RIGHT of target (best for sidebar, left-docked cards, punch timer)
-  if (targetRect.right + margin + cardWidth + edgePadding <= vpW) {
-    const left = targetRect.right + margin;
-    const idealTop = targetRect.top + (targetRect.height - cardHeight) / 2;
-    const top = Math.max(edgePadding, Math.min(idealTop, vpH - cardHeight - edgePadding));
-    return {
-      style: {
-        position: "fixed",
-        top: `${top}px`,
-        left: `${left}px`,
-        width: `${cardWidth}px`,
-        maxHeight: `calc(100vh - ${top + edgePadding}px)`,
-      },
-      placement: "right",
-    };
-  }
-
-  // 2. Try BELOW target (best for headers, hero banners, top-aligned cards)
-  if (targetRect.bottom + margin + cardHeight + edgePadding <= vpH) {
-    const top = targetRect.bottom + margin;
+  // 1. Try BELOW target (best for headers, hero banners, top nav, etc.)
+  const belowTop = targetRect.bottom + margin;
+  if (belowTop + cardHeight + edgePadding <= vpH) {
     const idealLeft = targetRect.left + (targetRect.width - cardWidth) / 2;
     const left = Math.max(edgePadding, Math.min(idealLeft, vpW - cardWidth - edgePadding));
+    if (!checkOverlap(left, belowTop, cardWidth, cardHeight, targetRect)) {
+      return {
+        style: {
+          position: "fixed",
+          top: `${belowTop}px`,
+          left: `${left}px`,
+          width: `${cardWidth}px`,
+          maxHeight: `calc(100vh - ${belowTop + edgePadding}px)`,
+        },
+        placement: "bottom",
+      };
+    }
+  }
+
+  // 2. Try RIGHT of target (best for sidebar, left-docked cards, punch timer)
+  const rightLeft = targetRect.right + margin;
+  if (rightLeft + cardWidth + edgePadding <= vpW) {
+    const idealTop = targetRect.top + (targetRect.height - cardHeight) / 2;
+    const top = Math.max(edgePadding, Math.min(idealTop, vpH - cardHeight - edgePadding));
+    if (!checkOverlap(rightLeft, top, cardWidth, cardHeight, targetRect)) {
+      return {
+        style: {
+          position: "fixed",
+          top: `${top}px`,
+          left: `${rightLeft}px`,
+          width: `${cardWidth}px`,
+          maxHeight: `calc(100vh - ${top + edgePadding}px)`,
+        },
+        placement: "right",
+      };
+    }
+  }
+
+  // 3. Try LEFT of target (best for elements in right half of screen, e.g. top-nav bell, export button)
+  const leftLeft = targetRect.left - margin - cardWidth;
+  if (leftLeft >= edgePadding) {
+    const idealTop = targetRect.top + (targetRect.height - cardHeight) / 2;
+    const top = Math.max(edgePadding, Math.min(idealTop, vpH - cardHeight - edgePadding));
+    if (!checkOverlap(leftLeft, top, cardWidth, cardHeight, targetRect)) {
+      return {
+        style: {
+          position: "fixed",
+          top: `${top}px`,
+          left: `${leftLeft}px`,
+          width: `${cardWidth}px`,
+          maxHeight: `calc(100vh - ${top + edgePadding}px)`,
+        },
+        placement: "left",
+      };
+    }
+  }
+
+  // 4. Try ABOVE target (best for bottom-docked elements or lower cards)
+  const aboveTop = targetRect.top - margin - cardHeight;
+  if (aboveTop >= edgePadding) {
+    const idealLeft = targetRect.left + (targetRect.width - cardWidth) / 2;
+    const left = Math.max(edgePadding, Math.min(idealLeft, vpW - cardWidth - edgePadding));
+    if (!checkOverlap(left, aboveTop, cardWidth, cardHeight, targetRect)) {
+      return {
+        style: {
+          position: "fixed",
+          top: `${aboveTop}px`,
+          left: `${left}px`,
+          width: `${cardWidth}px`,
+          maxHeight: `calc(${targetRect.top - margin}px)`,
+        },
+        placement: "top",
+      };
+    }
+  }
+
+  // 5. Intelligent clearance fallback: pick the vertical side with maximum available space
+  const spaceBelow = vpH - targetRect.bottom;
+  const spaceAbove = targetRect.top;
+
+  if (spaceBelow >= spaceAbove && spaceBelow >= 200) {
+    const top = targetRect.bottom + margin;
+    const isTargetOnRight = targetRect.left + targetRect.width / 2 > vpW / 2;
+    const left = isTargetOnRight ? edgePadding : Math.max(edgePadding, vpW - cardWidth - edgePadding);
     return {
       style: {
         position: "fixed",
@@ -94,50 +160,27 @@ function getSmartCardPlacement(
       },
       placement: "bottom",
     };
-  }
-
-  // 3. Try LEFT of target (best for elements in the right half of the screen, e.g. top-nav bell, export button)
-  if (targetRect.left - margin - cardWidth >= edgePadding) {
-    const left = targetRect.left - margin - cardWidth;
-    const idealTop = targetRect.top + (targetRect.height - cardHeight) / 2;
-    const top = Math.max(edgePadding, Math.min(idealTop, vpH - cardHeight - edgePadding));
+  } else if (spaceAbove >= 200) {
+    const isTargetOnRight = targetRect.left + targetRect.width / 2 > vpW / 2;
+    const left = isTargetOnRight ? edgePadding : Math.max(edgePadding, vpW - cardWidth - edgePadding);
     return {
       style: {
         position: "fixed",
-        top: `${top}px`,
+        bottom: `${vpH - targetRect.top + margin}px`,
         left: `${left}px`,
         width: `${cardWidth}px`,
-        maxHeight: `calc(100vh - ${top + edgePadding}px)`,
-      },
-      placement: "left",
-    };
-  }
-
-  // 4. Try ABOVE target (best for bottom-docked elements)
-  if (targetRect.top - margin - cardHeight >= edgePadding) {
-    const top = targetRect.top - margin - cardHeight;
-    const idealLeft = targetRect.left + (targetRect.width - cardWidth) / 2;
-    const left = Math.max(edgePadding, Math.min(idealLeft, vpW - cardWidth - edgePadding));
-    return {
-      style: {
-        position: "fixed",
-        top: `${top}px`,
-        left: `${left}px`,
-        width: `${cardWidth}px`,
-        maxHeight: `calc(100vh - ${top + edgePadding}px)`,
+        maxHeight: `calc(${targetRect.top - margin - edgePadding}px)`,
       },
       placement: "top",
     };
   }
 
-  // 5. Smart corner fallback (never overlap the center of the target)
-  const isLeftHalf = targetRect.left + targetRect.width / 2 < vpW / 2;
+  // 6. Dock to screen bottom-right corner with safe inset
   return {
     style: {
       position: "fixed",
       bottom: "24px",
-      right: isLeftHalf ? "24px" : "auto",
-      left: isLeftHalf ? "auto" : "24px",
+      right: "24px",
       width: `${cardWidth}px`,
       maxHeight: "calc(100vh - 48px)",
     },

@@ -226,9 +226,8 @@ export async function GET(request: NextRequest) {
 
     const callerRole = (authResult.context.role || "").toLowerCase();
 
-    // Filter candidate list based on hierarchy:
-    // - Super Admin caller sees ALL non-admin candidates (HR, Manager, Employee, Team Lead)
-    // - HR caller sees Manager, Employee, Team Lead (Super Admin approves HR)
+    // Filter candidate list:
+    // - All non-admin onboarding profiles (HR, Manager, Employee, Team Lead) are visible
     // - Super Admin account is never an onboarding candidate
     const candidateList = enhancedCandidates.filter((c) => {
       const emp = empMap.get(c.user_id);
@@ -241,11 +240,6 @@ export async function GET(request: NextRequest) {
         c.user_id === "952a33f0-3af4-4a69-a382-26fef3b7fa11" ||
         email.includes("aadhithya.raavanan")
       ) {
-        return false;
-      }
-
-      // HR cannot review or approve HR candidates (Super Admin reviews and approves HR)
-      if (callerRole === "hr" && memberRole === "hr") {
         return false;
       }
 

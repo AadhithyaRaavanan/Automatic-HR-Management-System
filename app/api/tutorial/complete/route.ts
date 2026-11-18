@@ -102,30 +102,37 @@ export async function POST(request: NextRequest) {
     }
 
     let targetVersion = 2;
+    let isReset = false;
     try {
       const body = await request.json();
       if (typeof body.tutorial_version === "number") {
         targetVersion = body.tutorial_version;
       }
+      if (body.reset === true) {
+        isReset = true;
+      }
     } catch {}
 
-    // 1. Mark tutorial_completed on employees
+    const completedVal = !isReset;
+    const versionVal = isReset ? 0 : targetVersion;
+
+    // 1. Update tutorial_completed on employees
     await (supabaseAdmin as any)
       .from("employees")
       .update({
-        tutorial_completed: true,
+        tutorial_completed: completedVal,
         updated_at: new Date().toISOString(),
       })
       .eq("id", user.id);
 
-    // 2. Mark tutorial_completed on profiles with version fallback
+    // 2. Update tutorial_completed on profiles with version fallback
     try {
       await (supabaseAdmin as any).from("profiles").upsert(
         {
           id: user.id,
           user_id: user.id,
-          tutorial_completed: true,
-          tutorial_version: targetVersion,
+          tutorial_completed: completedVal,
+          tutorial_version: versionVal,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "id" }
@@ -136,7 +143,7 @@ export async function POST(request: NextRequest) {
           {
             id: user.id,
             user_id: user.id,
-            tutorial_completed: true,
+            tutorial_completed: completedVal,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "id" }
@@ -144,7 +151,11 @@ export async function POST(request: NextRequest) {
       } catch {}
     }
 
-    return NextResponse.json({ success: true, tutorial_completed: true, tutorial_version: targetVersion });
+    return NextResponse.json({
+      success: true,
+      tutorial_completed: completedVal,
+      tutorial_version: versionVal,
+    });
   } catch (err: any) {
     return NextResponse.json(
       { error: err?.message || "Failed to update tutorial status." },
