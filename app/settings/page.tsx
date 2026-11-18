@@ -21,7 +21,9 @@ import {
   Lock,
   KeyRound,
   AlertCircle,
+  Check,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 
@@ -82,15 +84,16 @@ function SettingsPageContent() {
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword.length < 12) {
-      toast.error("Password must be at least 12 characters long.");
+    if (newPassword.length < 8) {
+      toast.error("Password must be at least 8 characters long.");
       return;
     }
     const hasUpper = /[A-Z]/.test(newPassword);
     const hasLower = /[a-z]/.test(newPassword);
-    const hasDigitOrSpecial = /[\d!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(newPassword);
-    if (!hasUpper || !hasLower || !hasDigitOrSpecial) {
-      toast.error("Password must include uppercase, lowercase, and a number or symbol.");
+    const hasDigit = /\d/.test(newPassword);
+    const hasSpecial = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(newPassword);
+    if (!hasUpper || !hasLower || !hasDigit || !hasSpecial) {
+      toast.error("Password must include uppercase, lowercase, a number, and a special character.");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -100,12 +103,15 @@ function SettingsPageContent() {
 
     setIsChangingPassword(true);
     try {
+      const nowIso = new Date().toISOString();
+
       // 1. Direct Supabase Auth client update
       const { error: clientErr } = await supabase.auth.updateUser({
         password: newPassword,
         data: {
           must_change_password: false,
           temp_password_expires_at: null,
+          password_last_changed_at: nowIso,
         },
       });
 
@@ -126,25 +132,25 @@ function SettingsPageContent() {
         console.warn("[Password Update] Note:", clientErr.message);
       }
 
-      // 3. Immediately dismiss banner and remove query param from URL
-      setShowMustChangeBanner(false);
+      // 3. Immediately kick user out: clear session and sign out
+      toast.success("Password updated successfully! Please sign in with your new password.");
+
       if (typeof window !== "undefined") {
-        const url = new URL(window.location.href);
-        url.searchParams.delete("must_change_password");
-        window.history.replaceState(null, "", url.pathname + url.search);
+        try {
+          localStorage.removeItem("remotehr_cached_session");
+          localStorage.removeItem("remotehr_cached_role");
+          document.cookie = "remotehr_role=; path=/; max-age=0; SameSite=Lax";
+        } catch {}
       }
 
-      toast.success("Password updated successfully! Welcome to your workplace.");
-      setNewPassword("");
-      setConfirmPassword("");
+      await supabase.auth.signOut().catch(() => {});
 
-      // 5. Navigate to dashboard so walkthrough tutorial starts automatically
+      // 4. Force reload and kick out to login page
       setTimeout(() => {
-        router.push("/?tour=auto");
-      }, 1000);
+        window.location.href = "/login?password_updated=true";
+      }, 500);
     } catch (err: any) {
       toast.error(err.message || "Failed to update password.");
-    } finally {
       setIsChangingPassword(false);
     }
   };
@@ -233,7 +239,9 @@ function SettingsPageContent() {
           <div className="flex items-center gap-3">
             <KeyRound className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
             <div className="text-xs sm:text-sm font-semibold">
-              Action Required: You are signed in with a temporary password. You must set a new permanent password below before accessing workplace features.
+              {searchParams?.get("reason") === "monthly_expiry"
+                ? "Security Requirement: It has been 30 days since your last password update. For your protection, please establish a new strong password below."
+                : "Action Required: You are signed in with a temporary password. You must set a new permanent password below before accessing workplace features."}
             </div>
           </div>
           <button
@@ -539,10 +547,10 @@ function SettingsPageContent() {
                     id="new-password"
                     type="password"
                     required
-                    minLength={12}
+                    minLength={8}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Min. 12 characters"
+                    placeholder="Min. 8 characters"
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-medium text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-brand-purple focus:ring-2 focus:ring-brand-purple/20 transition-all"
                   />
                 </div>
@@ -561,7 +569,7 @@ function SettingsPageContent() {
                     id="confirm-password"
                     type="password"
                     required
-                    minLength={12}
+                    minLength={8}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Re-enter password"
@@ -571,9 +579,38 @@ function SettingsPageContent() {
               </div>
             </div>
 
-            <p className="text-[11px] text-text-tertiary">
-              Password must contain at least 12 characters. Changes take effect across all active sessions upon next sign-in.
-            </p>
+            {/* Live Password Requirements Checklist */}
+            <div className="p-3.5 rounded-2xl bg-card-subtle border border-border-light/80 text-xs space-y-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-text-tertiary block">
+                Password Constraints:
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                <div className={cn("flex items-center gap-1.5 transition-colors", newPassword.length >= 8 ? "text-emerald-600 font-semibold" : "text-text-tertiary")}>
+                  {newPassword.length >= 8 ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary ml-1 mr-1" />}
+                  <span>Minimum 8 characters</span>
+                </div>
+                <div className={cn("flex items-center gap-1.5 transition-colors", /[A-Z]/.test(newPassword) ? "text-emerald-600 font-semibold" : "text-text-tertiary")}>
+                  {/[A-Z]/.test(newPassword) ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary ml-1 mr-1" />}
+                  <span>At least one uppercase letter (A-Z)</span>
+                </div>
+                <div className={cn("flex items-center gap-1.5 transition-colors", /[a-z]/.test(newPassword) ? "text-emerald-600 font-semibold" : "text-text-tertiary")}>
+                  {/[a-z]/.test(newPassword) ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary ml-1 mr-1" />}
+                  <span>At least one lowercase letter (a-z)</span>
+                </div>
+                <div className={cn("flex items-center gap-1.5 transition-colors", /\d/.test(newPassword) ? "text-emerald-600 font-semibold" : "text-text-tertiary")}>
+                  {/\d/.test(newPassword) ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary ml-1 mr-1" />}
+                  <span>At least one number (0-9)</span>
+                </div>
+                <div className={cn("flex items-center gap-1.5 transition-colors", /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(newPassword) ? "text-emerald-600 font-semibold" : "text-text-tertiary")}>
+                  {/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(newPassword) ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary ml-1 mr-1" />}
+                  <span>At least one special symbol (!@#$%^&*)</span>
+                </div>
+                <div className={cn("flex items-center gap-1.5 transition-colors", confirmPassword && newPassword === confirmPassword ? "text-emerald-600 font-semibold" : "text-text-tertiary")}>
+                  {confirmPassword && newPassword === confirmPassword ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary ml-1 mr-1" />}
+                  <span>Passwords match</span>
+                </div>
+              </div>
+            </div>
 
             <button
               type="submit"

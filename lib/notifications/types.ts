@@ -38,7 +38,7 @@ export const DEFAULT_PREFERENCES: Record<
 > = {
   leave: { in_app: true, email: true },
   requests: { in_app: true, email: true },
-  onboarding: { in_app: true, email: true },
+  onboarding: { in_app: true, email: false },
   security: { in_app: true, email: true, lockRequired: true },
   tasks: { in_app: true, email: false },
   kpi: { in_app: true, email: false },

@@ -114,10 +114,13 @@ function LoginForm() {
           throw new Error(data.error || "Invalid email or password. Please verify your credentials and try again.");
         }
 
-        // Handle Privileged MFA Routing:
-        // Only routes to /mfa-challenge if a verified factor is enrolled
+        // Handle MFA Routing (2FA challenge or setup):
         if (data.requireMfa && data.mfaDestination) {
-          toast.info("Two-Factor Authentication required. Please enter your authenticator code.");
+          toast.info(
+            data.mfaDestination === "/mfa-setup"
+              ? "Please complete two-factor authentication setup."
+              : "Two-Factor Authentication required. Please enter your authenticator code."
+          );
           router.push(`${data.mfaDestination}?redirect=${encodeURIComponent(redirectPath)}`);
           return;
         }
@@ -128,9 +131,26 @@ function LoginForm() {
           } catch {}
         }
 
+        // Onboarding required -> /onboarding
         if (data.onboardingRequired || data.destination === "/onboarding" || data.mfaDestination === "/onboarding") {
           toast.success("Welcome aboard! Please complete your mandatory employee onboarding.");
           router.push("/onboarding");
+          router.refresh();
+          return;
+        }
+
+        // Pending HR approval -> /onboarding/pending
+        if (data.destination === "/onboarding/pending" || data.mfaDestination === "/onboarding/pending") {
+          toast.info("Your onboarding profile is currently under review.");
+          router.push("/onboarding/pending");
+          router.refresh();
+          return;
+        }
+
+        // Must change password or specific destination -> route directly
+        if (data.destination) {
+          toast.success("Signed in successfully!");
+          router.push(data.destination);
           router.refresh();
           return;
         }

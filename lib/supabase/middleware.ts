@@ -237,22 +237,21 @@ export async function updateSession(request: NextRequest) {
       return response;
     }
 
-    // If candidate is ALLOWED and visits /onboarding/pending or /onboarding, redirect to dashboard
-    if (isAllowed && (pathname === "/onboarding/pending" || pathname === "/onboarding")) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/dashboard";
-      return NextResponse.redirect(url);
-    }
-
-    // 2. Enforce temporary password must-change-password and 24-hour expiration (Only after onboarding approval)
-    const mustChangePassword = Boolean(claims?.must_change_password || userMeta.must_change_password);
+    // 2. Enforce temporary password must-change-password (24h) and monthly password expiry (30 days)
+    const passwordLastChangedAt = userMeta.password_last_changed_at || claims?.password_last_changed_at;
+    const isMonthlyExpired = Boolean(
+      passwordLastChangedAt &&
+      Date.now() - new Date(passwordLastChangedAt).getTime() > 30 * 24 * 60 * 60 * 1000
+    );
+    const mustChangePassword = Boolean(claims?.must_change_password || userMeta.must_change_password) || isMonthlyExpired;
 
     if (mustChangePassword) {
       const expiresAt = userMeta.temp_password_expires_at;
       const createdAt = userMeta.temp_password_created_at;
       const isExpired =
-        (expiresAt && new Date(expiresAt).getTime() < Date.now()) ||
-        (createdAt && Date.now() - new Date(createdAt).getTime() > 24 * 60 * 60 * 1000);
+        !isMonthlyExpired &&
+        ((expiresAt && new Date(expiresAt).getTime() < Date.now()) ||
+        (createdAt && Date.now() - new Date(createdAt).getTime() > 24 * 60 * 60 * 1000));
 
       if (isExpired) {
         const url = request.nextUrl.clone();
@@ -263,7 +262,6 @@ export async function updateSession(request: NextRequest) {
 
       if (
         pathname !== "/settings" &&
-        request.nextUrl.searchParams.get("must_change_password") !== "true" &&
         !pathname.startsWith("/auth") &&
         !pathname.startsWith("/login") &&
         !pathname.startsWith("/api")
@@ -271,8 +269,20 @@ export async function updateSession(request: NextRequest) {
         const url = request.nextUrl.clone();
         url.pathname = "/settings";
         url.searchParams.set("must_change_password", "true");
+        if (isMonthlyExpired) url.searchParams.set("reason", "monthly_expiry");
         return NextResponse.redirect(url);
       }
+    }
+
+    // If candidate is ALLOWED and visits /onboarding/pending or /onboarding, redirect to dashboard
+    if (isAllowed && (pathname === "/onboarding/pending" || pathname === "/onboarding")) {
+      const url = request.nextUrl.clone();
+      url.pathname = mustChangePassword ? "/settings" : "/dashboard";
+      if (mustChangePassword) {
+        url.searchParams.set("must_change_password", "true");
+        if (isMonthlyExpired) url.searchParams.set("reason", "monthly_expiry");
+      }
+      return NextResponse.redirect(url);
     }
 
     // 3. Multi-Factor Authentication Enforcement:

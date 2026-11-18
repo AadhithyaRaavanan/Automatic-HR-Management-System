@@ -32,6 +32,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check candidate role hierarchy:
+    // If candidate is HR, ONLY an Admin can approve! For employee & manager, HR or Admin can approve.
+    const reviewerRole = authResult.context.role;
+    let candidateRole = "employee";
+    try {
+      const { data: memberData } = await (supabaseAdmin as any)
+        .from("organization_members")
+        .select("role")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (memberData?.role) {
+        candidateRole = memberData.role.toLowerCase();
+      } else {
+        const { data: candAuth } = await supabaseAdmin.auth.admin.getUserById(userId);
+        candidateRole = (
+          candAuth?.user?.app_metadata?.user_role ||
+          candAuth?.user?.user_metadata?.role ||
+          "employee"
+        ).toLowerCase();
+      }
+    } catch {}
+
+    if (candidateRole === "hr" && reviewerRole !== "admin") {
+      return NextResponse.json(
+        { error: "HR onboarding profiles can only be approved by an Admin." },
+        { status: 403 }
+      );
+    }
+
     // 1. Fetch candidate onboarding profile
     const { data: profile, error: profErr } = await (supabaseAdmin as any)
       .from("onboarding_profiles")
@@ -221,137 +250,139 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 8. Admin Dossier Email: Send all candidate files and details to the admin from HR
-    let adminDossierSent = false;
-    try {
-      // Find all Super Admin emails (defaults to aadhithya.raavanan@gmail.com)
-      let adminEmails = ["aadhithya.raavanan@gmail.com"];
+    // 8. Admin Dossier Email & Storage Purge: Dispatched asynchronously in background
+    // so the approval endpoint responds instantly (< 300ms) without keeping the reviewer waiting.
+    (async () => {
       try {
-        const { data: adminList } = await supabaseAdmin.auth.admin.listUsers();
-        const found = (adminList?.users || [])
-          .filter(
-            (u: any) =>
-              u.app_metadata?.user_role === "admin" ||
-              u.user_metadata?.role === "admin" ||
-              u.email === "aadhithya.raavanan@gmail.com"
-          )
-          .map((u: any) => u.email)
-          .filter(Boolean);
-        if (found.length > 0) {
-          adminEmails = Array.from(new Set(found));
-        }
-      } catch {}
-
-      // Get reviewer's display name
-      let reviewerDisplayName = "HR Team";
-      try {
-        const { data: revEmp } = await (supabaseAdmin.from("employees") as any)
-          .select("full_name, email")
-          .eq("id", reviewerId)
-          .maybeSingle();
-        reviewerDisplayName = revEmp?.full_name || revEmp?.email || "HR Team";
-      } catch {}
-
-      const candidateFullName = candEmp?.full_name || profile.full_name || "New Employee";
-      const candidateEmailAddr = candEmp?.email || profile.personal_email || "";
-      const candidatePhoneNum = profile.phone || "";
-      const formattedEmpId = candEmp?.id
-        ? `EMP-${candEmp.id.slice(0, 6).toUpperCase()}`
-        : `EMP-${userId.slice(0, 6).toUpperCase()}`;
-      const departmentNameStr = candEmp?.departments?.name || "General";
-      const jobTitleStr = candEmp?.job_titles?.title_name || "Employee";
-
-      // Download uploaded candidate documents to attach directly to the email
-      const attachments: Array<{ filename: string; content: Buffer; contentType: string }> = [];
-      const documentLinks: Array<{ name: string; url?: string }> = [];
-
-      for (const doc of uploadedDocs) {
-        let signedUrl = "";
+        // Find all Super Admin emails (defaults to aadhithya.raavanan@gmail.com)
+        let adminEmails = ["aadhithya.raavanan@gmail.com"];
         try {
-          signedUrl = await getSignedUrl(doc.storage_path, 7 * 86400); // 7-day valid preview link
+          const { data: adminList } = await supabaseAdmin.auth.admin.listUsers();
+          const found = (adminList?.users || [])
+            .filter(
+              (u: any) =>
+                u.app_metadata?.user_role === "admin" ||
+                u.user_metadata?.role === "admin" ||
+                u.email === "aadhithya.raavanan@gmail.com"
+            )
+            .map((u: any) => u.email)
+            .filter(Boolean);
+          if (found.length > 0) {
+            adminEmails = Array.from(new Set(found));
+          }
         } catch {}
 
-        documentLinks.push({
-          name: doc.document_name || doc.file_name,
-          url: signedUrl || undefined,
-        });
-
+        // Get reviewer's display name
+        let reviewerDisplayName = "HR Team";
         try {
-          const { data: fileBlob, error: dlErr } = await supabaseAdmin.storage
-            .from("onboarding-docs")
-            .download(doc.storage_path);
+          const { data: revEmp } = await (supabaseAdmin.from("employees") as any)
+            .select("full_name, email")
+            .eq("id", reviewerId)
+            .maybeSingle();
+          reviewerDisplayName = revEmp?.full_name || revEmp?.email || "HR Team";
+        } catch {}
 
-          if (fileBlob && !dlErr) {
-            const arrayBuf = await fileBlob.arrayBuffer();
-            attachments.push({
-              filename: doc.file_name,
-              content: Buffer.from(arrayBuf),
-              contentType: doc.mime_type || "application/octet-stream",
-            });
-          }
-        } catch (dlErr) {
-          console.warn(`[Admin Dossier] Error downloading doc ${doc.file_name}:`, dlErr);
-        }
-      }
+        const candidateFullName = candEmp?.full_name || profile.full_name || "New Employee";
+        const candidateEmailAddr = candEmp?.email || profile.personal_email || "";
+        const candidatePhoneNum = profile.phone || "";
+        const formattedEmpId = candEmp?.id
+          ? `EMP-${candEmp.id.slice(0, 6).toUpperCase()}`
+          : `EMP-${userId.slice(0, 6).toUpperCase()}`;
+        const departmentNameStr = candEmp?.departments?.name || "General";
+        const jobTitleStr = candEmp?.job_titles?.title_name || "Employee";
 
-      // Dispatch dossier email to admin account(s)
-      for (const targetAdminEmail of adminEmails) {
-        const res = await sendAdminOnboardingDossierEmail({
-          to: targetAdminEmail,
-          candidateName: candidateFullName,
-          candidateEmail: candidateEmailAddr,
-          candidatePhone: candidatePhoneNum,
-          employeeId: formattedEmpId,
-          departmentName: departmentNameStr,
-          jobTitle: jobTitleStr,
-          reviewedByName: reviewerDisplayName,
-          approvedAt: nowIso,
-          candidateUserId: userId,
-          documents: documentLinks,
-          attachments,
-        });
+        // Download uploaded candidate documents to attach directly to the email
+        const attachments: Array<{ filename: string; content: Buffer; contentType: string }> = [];
+        const documentLinks: Array<{ name: string; url?: string }> = [];
 
-        if (res.success) {
-          adminDossierSent = true;
-        } else {
-          console.warn(`[Admin Dossier] Failed to deliver to ${targetAdminEmail}:`, res.error);
-        }
-      }
+        for (const doc of uploadedDocs) {
+          let signedUrl = "";
+          try {
+            signedUrl = await getSignedUrl(doc.storage_path, 7 * 86400); // 7-day valid preview link
+          } catch {}
 
-      // 9. Post-Approval Storage Purge: Now that files have been attached & dispatched to Admin email,
-      // purge the binary files from Supabase Storage so zero storage space is consumed in Supabase.
-      if (adminDossierSent && attachments.length > 0) {
-        try {
-          const pathsToRemove = uploadedDocs
-            .map((d: any) => d.storage_path)
-            .filter(Boolean);
+          documentLinks.push({
+            name: doc.document_name || doc.file_name,
+            url: signedUrl || undefined,
+          });
 
-          if (pathsToRemove.length > 0) {
-            console.log(`[Admin Dossier] Purging ${pathsToRemove.length} storage files from Supabase onboarding-docs...`);
-            const { error: removeErr } = await supabaseAdmin.storage
+          try {
+            const { data: fileBlob, error: dlErr } = await supabaseAdmin.storage
               .from("onboarding-docs")
-              .remove(pathsToRemove);
+              .download(doc.storage_path);
 
-            if (removeErr) {
-              console.warn("[Admin Dossier] Storage removal warning:", removeErr);
-            } else {
-              console.log("[Admin Dossier] Successfully purged documents from Supabase Storage.");
+            if (fileBlob && !dlErr) {
+              const arrayBuf = await fileBlob.arrayBuffer();
+              attachments.push({
+                filename: doc.file_name,
+                content: Buffer.from(arrayBuf),
+                contentType: doc.mime_type || "application/octet-stream",
+              });
             }
+          } catch (dlErr) {
+            console.warn(`[Admin Dossier] Error downloading doc ${doc.file_name}:`, dlErr);
           }
-        } catch (purgeErr) {
-          console.warn("[Admin Dossier] Storage purge error:", purgeErr);
         }
+
+        let adminDossierSent = false;
+        // Dispatch dossier email to admin account(s)
+        for (const targetAdminEmail of adminEmails) {
+          const res = await sendAdminOnboardingDossierEmail({
+            to: targetAdminEmail,
+            candidateName: candidateFullName,
+            candidateEmail: candidateEmailAddr,
+            candidatePhone: candidatePhoneNum,
+            employeeId: formattedEmpId,
+            departmentName: departmentNameStr,
+            jobTitle: jobTitleStr,
+            reviewedByName: reviewerDisplayName,
+            approvedAt: nowIso,
+            candidateUserId: userId,
+            documents: documentLinks,
+            attachments,
+          });
+
+          if (res.success) {
+            adminDossierSent = true;
+          } else {
+            console.warn(`[Admin Dossier] Failed to deliver to ${targetAdminEmail}:`, res.error);
+          }
+        }
+
+        // 9. Post-Approval Storage Purge: Now that files have been attached & dispatched to Admin email,
+        // purge the binary files from Supabase Storage so zero storage space is consumed in Supabase.
+        if (adminDossierSent && attachments.length > 0) {
+          try {
+            const pathsToRemove = uploadedDocs
+              .map((d: any) => d.storage_path)
+              .filter(Boolean);
+
+            if (pathsToRemove.length > 0) {
+              console.log(`[Admin Dossier] Purging ${pathsToRemove.length} storage files from Supabase onboarding-docs...`);
+              const { error: removeErr } = await supabaseAdmin.storage
+                .from("onboarding-docs")
+                .remove(pathsToRemove);
+
+              if (removeErr) {
+                console.warn("[Admin Dossier] Storage removal warning:", removeErr);
+              } else {
+                console.log("[Admin Dossier] Successfully purged documents from Supabase Storage.");
+              }
+            }
+          } catch (purgeErr) {
+            console.warn("[Admin Dossier] Storage purge error:", purgeErr);
+          }
+        }
+      } catch (dossierErr) {
+        console.error("[Admin Dossier Background Error]:", dossierErr);
       }
-    } catch (dossierErr) {
-      console.error("[Admin Dossier Error]:", dossierErr);
-    }
+    })().catch(() => {});
 
     return NextResponse.json({
       success: true,
       message: "Employee onboarding approved and activated successfully.",
       onboarding_status: "COMPLETED",
       emailSent,
-      adminDossierSent,
     });
   } catch (err: any) {
     return NextResponse.json(

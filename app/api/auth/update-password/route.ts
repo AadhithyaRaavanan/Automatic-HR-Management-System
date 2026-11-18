@@ -45,20 +45,23 @@ export async function POST(request: NextRequest) {
     }
 
     const { password } = await request.json().catch(() => ({}));
-    if (!password || password.length < 12) {
+    if (!password || password.length < 8) {
       return NextResponse.json(
-        { error: "Password must be at least 12 characters long." },
+        { error: "Password must be at least 8 characters long." },
         { status: 400 }
       );
     }
 
-    // Update password and clear must_change_password lock via Admin client
+    const nowIso = new Date().toISOString();
+
+    // Update password, record timestamp, and clear must_change_password lock via Admin client
     const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
       password,
       user_metadata: {
         ...user.user_metadata,
         must_change_password: false,
         temp_password_expires_at: null,
+        password_last_changed_at: nowIso,
       },
     });
 

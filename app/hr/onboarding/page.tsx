@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { AppShell } from "@/components/shell/app-shell";
+import { AppShell, useAppSession } from "@/components/shell/app-shell";
 import { Modal } from "@/components/ui/modal";
 import { EmptyState } from "@/components/shared/empty-state";
 import {
@@ -38,6 +38,7 @@ interface EnhancedCandidate {
   employee_id: string;
   department: string;
   designation: string;
+  candidate_role?: string;
   status?: string;
   onboarding_status: string;
   approval_email_sent_at?: string | null;
@@ -98,6 +99,15 @@ interface EnhancedCandidate {
 }
 
 export default function HROnboardingPage() {
+  return (
+    <AppShell>
+      <HrOnboardingContent />
+    </AppShell>
+  );
+}
+
+function HrOnboardingContent() {
+  const { userRole } = useAppSession();
   const [mounted, setMounted] = React.useState(false);
   const [candidates, setCandidates] = React.useState<EnhancedCandidate[]>([]);
   const [summary, setSummary] = React.useState({
@@ -224,7 +234,25 @@ export default function HROnboardingPage() {
   const handleFinalApproval = async () => {
     if (!selectedCandidate) return;
 
+    const isHrCandidate = (selectedCandidate?.candidate_role || "").toLowerCase() === "hr";
+    if (isHrCandidate && userRole !== "admin") {
+      toast.error("HR onboarding profiles can only be approved by a Super Admin.");
+      return;
+    }
+
     setApprovingOnboarding(true);
+    // Optimistic UI update so modal feels instant
+    setSelectedCandidate((prev) =>
+      prev
+        ? {
+            ...prev,
+            status: "approved",
+            onboarding_status: "COMPLETED",
+            approval_email_sent_at: new Date().toISOString(),
+          }
+        : null
+    );
+
     try {
       const res = await fetch("/api/hr/onboarding/approve", {
         method: "POST",
@@ -240,10 +268,10 @@ export default function HROnboardingPage() {
       toast.success(
         `Onboarding approved for ${selectedCandidate.full_name}! Employee profile is now active.`
       );
-      setSelectedCandidate(null);
       await loadCandidates();
     } catch (err: any) {
       toast.error(err.message || "Approval failed.");
+      await loadCandidates();
     } finally {
       setApprovingOnboarding(false);
     }
@@ -340,15 +368,18 @@ export default function HROnboardingPage() {
     });
   }, [candidates, searchQuery, statusFilter]);
 
+  const isCandidateHr = (selectedCandidate?.candidate_role || "").toLowerCase() === "hr";
+  const requiresAdminApproval = isCandidateHr && userRole !== "admin";
+
   const canFinalApprove =
     selectedCandidate &&
+    !requiresAdminApproval &&
     selectedCandidate.documents.length > 0 &&
     selectedCandidate.documents.every((d) => d.document_status === "approved") &&
     selectedCandidate.status !== "approved";
 
   return (
-    <AppShell>
-      <div className="space-y-6">
+    <div className="space-y-6">
         {/* Page Header */}
         <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -835,11 +866,17 @@ export default function HROnboardingPage() {
                         <p className="text-xs font-bold text-text-primary">
                           Final Onboarding Approval & Profile Activation
                         </p>
-                        <p className="text-[11px] text-text-tertiary">
-                          {canFinalApprove
-                            ? "All uploaded documents are individually approved. Ready to activate."
-                            : "All documents must be individually approved before final activation."}
-                        </p>
+                        {requiresAdminApproval ? (
+                          <p className="text-[11px] font-bold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 mt-1 inline-block">
+                            Candidate is HR: Approval restricted to Super Admins
+                          </p>
+                        ) : (
+                          <p className="text-[11px] text-text-tertiary">
+                            {canFinalApprove
+                              ? "All uploaded documents are individually approved. Ready to activate."
+                              : "All documents must be individually approved before final activation."}
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -886,6 +923,5 @@ export default function HROnboardingPage() {
           </Modal>
         )}
       </div>
-    </AppShell>
   );
 }

@@ -413,12 +413,15 @@ export async function POST(request: NextRequest) {
 
     const mustChangePassword = Boolean(userMeta.must_change_password);
 
-    // Check onboarding status for standard employees
-    // If the employee has submitted all documents (SUBMITTED, RESUBMITTED, UNDER_REVIEW, VERIFIED, COMPLETED),
-    // they are immediately allowed to enter the dashboard to continue working!
-    let canAccessDashboard = false;
-    if (userMeta.onboarding_completed === true) {
-      canAccessDashboard = true;
+    // Check onboarding approval status
+    // If not approved:
+    //   - If submitted / under review -> route to /onboarding/pending
+    //   - Else (draft / not started / changes requested) -> route to /onboarding
+    let isApproved = false;
+    let isPendingApproval = false;
+
+    if (userMeta.onboarding_approved === true) {
+      isApproved = true;
     } else {
       const { data: onbProf } = await (supabase as any)
         .from("onboarding_profiles")
@@ -427,48 +430,86 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
 
       const onbStatus = (onbProf?.status || "").toUpperCase();
-      if (["SUBMITTED", "RESUBMITTED", "UNDER_REVIEW", "VERIFIED", "COMPLETED", "APPROVED"].includes(onbStatus)) {
-        canAccessDashboard = true;
+      if (onbStatus === "APPROVED" || onbStatus === "COMPLETED") {
+        isApproved = true;
+      } else if (onbStatus === "SUBMITTED" || onbStatus === "UNDER_REVIEW" || onbStatus === "RESUBMITTED") {
+        isPendingApproval = true;
       } else {
-        const { data: prof } = await (supabase as any)
-          .from("profiles")
-          .select("onboarding_completed")
+        const { data: emp } = await (supabase as any)
+          .from("employees")
+          .select("status, onboarding_completed")
           .eq("id", authData.user.id)
           .maybeSingle();
-
-        if (prof?.onboarding_completed === true) {
-          canAccessDashboard = true;
-        } else {
-          const { data: emp } = await (supabase as any)
-            .from("employees")
-            .select("onboarding_completed")
-            .eq("id", authData.user.id)
-            .maybeSingle();
-          canAccessDashboard = Boolean(emp?.onboarding_completed);
+        if (emp?.status === "active" && emp?.onboarding_completed) {
+          isApproved = true;
         }
       }
     }
 
-    if (!canAccessDashboard) {
+    if (!isApproved) {
+      if (isPendingApproval) {
+        return createSuccessResponse({
+          success: true,
+          requireMfa: false,
+          destination: "/onboarding/pending",
+          mfaDestination: "/onboarding/pending",
+          role: userRole,
+        });
+      } else {
+        return createSuccessResponse({
+          success: true,
+          requireMfa: false,
+          onboardingRequired: true,
+          destination: "/onboarding",
+          mfaDestination: "/onboarding",
+          role: userRole,
+        });
+      }
+    }
+
+    // Candidate is approved! Check password change requirement & 30-day monthly expiry
+    const passwordLastChangedAt = userMeta.password_last_changed_at;
+    const isMonthlyExpired = Boolean(
+      passwordLastChangedAt &&
+      Date.now() - new Date(passwordLastChangedAt).getTime() > 30 * 24 * 60 * 60 * 1000
+    );
+    const forcePasswordChange = Boolean(userMeta.must_change_password) || isMonthlyExpired;
+
+    if (forcePasswordChange) {
+      const targetSettingsUrl = `/settings?must_change_password=true${isMonthlyExpired ? "&reason=monthly_expiry" : ""}`;
       return createSuccessResponse({
         success: true,
         requireMfa: false,
-        onboardingRequired: true,
-        destination: "/onboarding",
-        mfaDestination: "/onboarding",
+        mustChangePassword: true,
+        destination: targetSettingsUrl,
+        mfaDestination: targetSettingsUrl,
         role: userRole,
       });
     }
 
-    // Standard employee / manager with completed onboarding
-    return createSuccessResponse({
-      success: true,
-      requireMfa: false,
-      mustChangePassword,
-      mfaDestination: mustChangePassword ? "/settings?must_change_password=true" : "/",
-      destination: mustChangePassword ? "/settings?must_change_password=true" : "/",
-      role: userRole,
-    });
+    // Password is already updated/permanent: Check 2FA along the way!
+    const { data: factorData } = await supabase.auth.mfa.listFactors();
+    const hasVerifiedFactor = Boolean(
+      factorData?.totp?.some((factor) => factor.status === "verified")
+    );
+
+    if (hasVerifiedFactor) {
+      return createSuccessResponse({
+        success: true,
+        requireMfa: true,
+        destination: "/mfa-challenge",
+        mfaDestination: "/mfa-challenge",
+        role: userRole,
+      });
+    } else {
+      return createSuccessResponse({
+        success: true,
+        requireMfa: true,
+        destination: "/mfa-setup",
+        mfaDestination: "/mfa-setup",
+        role: userRole,
+      });
+    }
   } catch (err: any) {
     if (isDemoModeEnabled()) {
       const emailLower = (body?.email || "").toLowerCase().trim();

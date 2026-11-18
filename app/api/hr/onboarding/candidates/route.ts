@@ -143,6 +143,7 @@ export async function GET(request: NextRequest) {
           employee_id: emp?.id ? `EMP-${emp.id.slice(0, 6).toUpperCase()}` : `EMP-${c.user_id.slice(0, 6).toUpperCase()}`,
           department: emp?.departments?.name || "General",
           designation: emp?.job_titles?.title_name || "Employee",
+          candidate_role: (roleMap.get(c.user_id) || "employee").toLowerCase(),
           status: (c.status || "draft").toLowerCase(),
           onboarding_status: rawStatus,
           approval_email_sent_at: c.approval_email_sent_at || null,
