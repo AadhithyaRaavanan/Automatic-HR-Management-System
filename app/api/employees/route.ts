@@ -97,7 +97,28 @@ export async function GET(request: NextRequest) {
 
     const { data: emps, error } = await query;
 
-    let employeeList = emps || [];
+    // Fetch authoritative roles from organization_members and user_roles
+    const [orgMembersRes, userRolesRes] = await Promise.all([
+      (supabaseAdmin as any).from("organization_members").select("user_id, role"),
+      (supabaseAdmin as any).from("user_roles").select("user_id, role"),
+    ]);
+
+    const roleMap = new Map<string, string>();
+    for (const m of orgMembersRes.data || []) {
+      if (m.user_id && m.role) {
+        roleMap.set(m.user_id, String(m.role).toLowerCase());
+      }
+    }
+    for (const ur of userRolesRes.data || []) {
+      if (ur.user_id && ur.role && !roleMap.has(ur.user_id)) {
+        roleMap.set(ur.user_id, String(ur.role).toLowerCase());
+      }
+    }
+
+    let employeeList = (emps || []).map((e: any) => ({
+      ...e,
+      role: roleMap.get(e.id) || "employee",
+    }));
 
     // Fallback or merge with demo store if empty or demo mode
     if ((!employeeList || employeeList.length === 0) && isDemo) {

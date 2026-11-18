@@ -437,6 +437,26 @@ export async function inviteSingleEmployee(
     },
   });
 
+  // 5. Initialize draft onboarding profile so newly invited users appear in Onboarding Hub immediately
+  try {
+    await (supabaseAdmin as any).from("onboarding_profiles").upsert(
+      {
+        user_id: invitedUserId,
+        full_name: normalizedName,
+        personal_email: normalizedEmail,
+        status: "draft",
+        candidate_type: employmentCategory === "intern" ? "INTERN" : "GRADUATE_FRESHER",
+        highest_qualification: "12th Standard",
+        has_experience: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" }
+    );
+  } catch (onbInitErr) {
+    console.warn("[invite-employee] Draft onboarding profile initialization warning:", onbInitErr);
+  }
+
   return {
     ok: true,
     userId: invitedUserId,

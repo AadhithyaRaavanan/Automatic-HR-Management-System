@@ -170,6 +170,7 @@ export async function POST(request: NextRequest) {
           entityType: "onboarding_documents",
           entityId: documentId,
           actorId: reviewerId,
+          forceEmail: false,
         });
       } catch (notifErr) {
         console.warn("[Document Approval Notification Error]:", notifErr);

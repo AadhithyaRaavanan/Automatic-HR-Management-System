@@ -241,7 +241,9 @@ function HrOnboardingContent() {
     }
 
     setApprovingOnboarding(true);
-    // Optimistic UI update so modal feels instant
+    const candidateUserId = selectedCandidate.user_id;
+
+    // Optimistic UI update so modal and background table feel instant (< 16ms)
     setSelectedCandidate((prev) =>
       prev
         ? {
@@ -252,6 +254,24 @@ function HrOnboardingContent() {
           }
         : null
     );
+    setCandidates((prev) =>
+      prev.map((c) =>
+        c.user_id === candidateUserId
+          ? {
+              ...c,
+              status: "approved",
+              onboarding_status: "COMPLETED",
+              approval_email_sent_at: new Date().toISOString(),
+            }
+          : c
+      )
+    );
+    setSummary((prev) => ({
+      ...prev,
+      pending: Math.max(0, prev.pending - 1),
+      approved: prev.approved + 1,
+      completed: prev.completed + 1,
+    }));
 
     try {
       const res = await fetch("/api/hr/onboarding/approve", {
@@ -893,7 +913,16 @@ function HrOnboardingContent() {
                       Close
                     </button>
 
-                    {selectedCandidate.status !== "approved" && (
+                    {selectedCandidate.status === "approved" ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="px-6 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-extrabold uppercase tracking-wider shadow-md flex items-center gap-1.5 cursor-default opacity-95"
+                      >
+                        <CheckCircle2 className="w-4 h-4 text-white" />
+                        <span>Approved</span>
+                      </button>
+                    ) : (
                       <>
                         <button
                           type="button"

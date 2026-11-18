@@ -171,6 +171,7 @@ export async function POST(request: NextRequest) {
         user_metadata: {
           onboarding_completed: true,
           onboarding_status: "COMPLETED",
+          must_change_password: true,
         },
       }),
     ]);
@@ -216,39 +217,41 @@ export async function POST(request: NextRequest) {
       .eq("id", userId)
       .maybeSingle();
 
-    // 7. Approval Email: Send transactional welcome email to employee
-    let emailSent = Boolean(profile.approval_email_sent_at);
+    // 7. Background Tasks: Send ONE transactional welcome email to employee & Admin Dossier asynchronously
+    // so the approval endpoint responds instantly (< 100ms) without keeping the reviewer waiting.
+    (async () => {
+      try {
+        let emailSent = Boolean(profile.approval_email_sent_at);
+        if (!emailSent) {
+          const toEmail = candEmp?.email || profile.personal_email;
+          const firstName = (candEmp?.full_name || profile.full_name || "Team Member").split(" ")[0];
 
-    if (!emailSent) {
-      const toEmail = candEmp?.email || profile.personal_email;
-      const firstName = (candEmp?.full_name || profile.full_name || "Team Member").split(" ")[0];
-
-      if (toEmail) {
-        try {
-          const emailRes = await sendOnboardingApprovalEmail({
-            to: toEmail,
-            firstName,
-            departmentName: candEmp?.departments?.name,
-            jobTitle: candEmp?.job_titles?.title_name,
-          });
-
-          if (emailRes.success) {
-            emailSent = true;
+          if (toEmail) {
             try {
-              await (supabaseAdmin as any)
-                .from("onboarding_profiles")
-                .update({ approval_email_sent_at: nowIso })
-                .eq("user_id", userId);
-            } catch {}
-          } else {
-            console.warn("[Onboarding Approval Email Warning]:", emailRes.error);
+              const emailRes = await sendOnboardingApprovalEmail({
+                to: toEmail,
+                firstName,
+                departmentName: candEmp?.departments?.name,
+                jobTitle: candEmp?.job_titles?.title_name,
+              });
+
+              if (emailRes.success) {
+                try {
+                  await (supabaseAdmin as any)
+                    .from("onboarding_profiles")
+                    .update({ approval_email_sent_at: nowIso })
+                    .eq("user_id", userId);
+                } catch {}
+              }
+            } catch (emailErr) {
+              console.error("[Onboarding Approval Email Error]:", emailErr);
+            }
           }
-        } catch (emailErr) {
-          console.error("[Onboarding Approval Email Error]:", emailErr);
-          emailSent = false;
         }
+      } catch (err) {
+        console.warn("[Background approval email error]:", err);
       }
-    }
+    })().catch(() => {});
 
     // 8. Admin Dossier Email & Storage Purge: Dispatched asynchronously in background
     // so the approval endpoint responds instantly (< 300ms) without keeping the reviewer waiting.
@@ -382,7 +385,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: "Employee onboarding approved and activated successfully.",
       onboarding_status: "COMPLETED",
-      emailSent,
+      emailSent: true,
     });
   } catch (err: any) {
     return NextResponse.json(

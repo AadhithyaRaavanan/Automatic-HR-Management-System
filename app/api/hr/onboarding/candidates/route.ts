@@ -63,6 +63,36 @@ export async function GET(request: NextRequest) {
       docsByUserId.get(doc.user_id)!.push(doc);
     }
 
+    const existingCandidateUserIds = new Set((candidates || []).map((c: any) => c.user_id));
+    for (const emp of empList || []) {
+      const role = (roleMap.get(emp.id) || "").toLowerCase();
+      const email = (emp.email || "").toLowerCase();
+      if (
+        role === "admin" ||
+        emp.id === "952a33f0-3af4-4a69-a382-26fef3b7fa11" ||
+        email.includes("aadhithya.raavanan")
+      ) {
+        continue;
+      }
+
+      if (!existingCandidateUserIds.has(emp.id) && !emp.onboarding_completed) {
+        (candidates as any[]).push({
+          id: `profile-${emp.id}`,
+          user_id: emp.id,
+          full_name: emp.full_name,
+          personal_email: emp.email,
+          phone: emp.phone,
+          status: "draft",
+          onboarding_status: "DRAFT",
+          highest_qualification: "12th Standard",
+          has_experience: false,
+          created_at: new Date().toISOString(),
+          submitted_at: null,
+          education_details: {},
+        });
+      }
+    }
+
     // Enhance each candidate record with documents, signed URLs, and progress metrics
     const enhancedCandidates = await Promise.all(
       (candidates || []).map(async (c: any) => {
@@ -194,22 +224,32 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    // Filter out Admin, HR, and Manager staff accounts (internal management accounts are not candidates undergoing verification)
+    const callerRole = (authResult.context.role || "").toLowerCase();
+
+    // Filter candidate list based on hierarchy:
+    // - Super Admin caller sees ALL non-admin candidates (HR, Manager, Employee, Team Lead)
+    // - HR caller sees Manager, Employee, Team Lead (Super Admin approves HR)
+    // - Super Admin account is never an onboarding candidate
     const candidateList = enhancedCandidates.filter((c) => {
       const emp = empMap.get(c.user_id);
-      const memberRole = roleMap.get(c.user_id) || "";
+      const memberRole = (roleMap.get(c.user_id) || c.candidate_role || "").toLowerCase();
       const email = (c.email || emp?.email || "").toLowerCase();
 
-      const isInternalManagement =
+      // Super Admin is never an onboarding candidate
+      if (
         memberRole === "admin" ||
-        memberRole === "hr" ||
-        memberRole === "manager" ||
         c.user_id === "952a33f0-3af4-4a69-a382-26fef3b7fa11" ||
-        email.includes("aadhithya.raavanan") ||
-        email.includes("hr.demo") ||
-        email.includes("manager.demo");
+        email.includes("aadhithya.raavanan")
+      ) {
+        return false;
+      }
 
-      return !isInternalManagement;
+      // HR cannot review or approve HR candidates (Super Admin reviews and approves HR)
+      if (callerRole === "hr" && memberRole === "hr") {
+        return false;
+      }
+
+      return true;
     });
 
     // Summary Metrics: pending reflects 'submitted' items only

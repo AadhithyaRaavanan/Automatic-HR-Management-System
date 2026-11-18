@@ -171,14 +171,29 @@ export default function EmsEmployeesPage() {
                       </td>
 
                       <td className="p-4">
-                        <span className="font-semibold text-text-secondary capitalize">
-                          {emp.role === "team_lead"
+                        <span
+                          className={cn(
+                            "font-bold text-xs px-2.5 py-1 rounded-lg inline-flex items-center tracking-tight",
+                            (emp.role || "").toLowerCase() === "admin"
+                              ? "bg-purple-500/10 text-purple-600 border border-purple-500/20"
+                              : (emp.role || "").toLowerCase() === "hr"
+                              ? "bg-indigo-500/10 text-indigo-600 border border-indigo-500/20"
+                              : (emp.role || "").toLowerCase() === "manager"
+                              ? "bg-blue-500/10 text-blue-600 border border-blue-500/20"
+                              : (emp.role || "").toLowerCase() === "team_lead"
+                              ? "bg-amber-500/10 text-amber-600 border border-amber-500/20"
+                              : "bg-slate-500/10 text-slate-600 border border-slate-500/20"
+                          )}
+                        >
+                          {(emp.role || "").toLowerCase() === "admin"
+                            ? "Super Admin"
+                            : (emp.role || "").toLowerCase() === "hr"
+                            ? "HR Lead"
+                            : (emp.role || "").toLowerCase() === "manager"
+                            ? "Team Manager"
+                            : (emp.role || "").toLowerCase() === "team_lead"
                             ? "Team Lead"
-                            : emp.role === "manager"
-                            ? "Dept Manager"
-                            : emp.role === "hr"
-                            ? "HR Manager"
-                            : emp.role || "Employee"}
+                            : "Employee"}
                         </span>
                       </td>
 
