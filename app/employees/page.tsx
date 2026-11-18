@@ -246,7 +246,7 @@ export default function EmployeeDirectoryPage() {
                           : "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
                       )}
                     >
-                      {emp.employment_category.replace("_", " ")}
+                      {emp.employment_category ? emp.employment_category.replace("_", " ") : "full time"}
                     </span>
                   </div>
 
