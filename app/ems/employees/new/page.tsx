@@ -157,10 +157,10 @@ export default function NewEmployeeWizardPage() {
 
   const handleCopy = () => {
     if (!createdResult) return;
-    const text = `ZEN XEA HRMS Login Credentials\nEmail: ${email}\nPassword: ${createdResult.temporaryPassword || "Welcome2026!"}\nLink: ${window.location.origin}/auth/login`;
+    const text = `ZEN XEA HRMS Account Provisioned\nName: ${fullName}\nOfficial Email: ${email}\nRole: ${systemRole.toUpperCase()}\nEmployment Category: ${employmentCategory.replace("_", " ").toUpperCase()}\nPortal: ${window.location.origin}/login`;
     navigator.clipboard.writeText(text);
     setCopied(true);
-    toast.success("Credentials copied to clipboard!");
+    toast.success("Account details copied to clipboard!");
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -213,19 +213,13 @@ export default function NewEmployeeWizardPage() {
               </div>
               <h3 className="text-xl font-bold text-text-primary">Employee Provisioned!</h3>
               <p className="text-xs text-text-secondary max-w-md mx-auto">
-                {fullName} has been created and assigned the business ID and temporary access credentials below.
+                {fullName} has been successfully provisioned. An invitation email with secure onboarding access has been sent to their official email.
               </p>
 
               <div className="p-5 rounded-2xl bg-card-subtle border border-border-light max-w-md mx-auto text-left text-xs space-y-2">
                 <div className="flex justify-between">
                   <span className="text-text-muted">Official Email:</span>
                   <span className="font-bold text-text-primary">{email}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-text-muted">Temporary Password:</span>
-                  <span className="font-mono font-bold text-brand-purple">
-                    {createdResult.temporaryPassword || "Welcome2026!"}
-                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-text-muted">System Role:</span>
@@ -245,7 +239,7 @@ export default function NewEmployeeWizardPage() {
                   className="px-4 py-2 rounded-xl text-xs font-semibold bg-card-subtle hover:bg-card-subtle/80 border border-border-light text-text-primary flex items-center gap-1.5"
                 >
                   {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                  Copy Credentials
+                  Copy Details
                 </button>
                 <Link
                   href="/ems/employees"
