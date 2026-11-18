@@ -59,9 +59,9 @@ export async function getOnboardingGate(
     }
   }
 
-  // Exemption: ADMIN and HR accounts retain authorized administrative access
+  // Exemption: Only Super Admin account retains permanent bypass. HR, Manager, and Employee must onboard.
   const normalizedRole = (role || "employee").toLowerCase();
-  if (normalizedRole === "admin" || normalizedRole === "hr") {
+  if (normalizedRole === "admin") {
     return "ALLOWED";
   }
 

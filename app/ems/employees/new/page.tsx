@@ -77,10 +77,36 @@ export default function NewEmployeeWizardPage() {
     return filtered.length > 0 ? filtered : jobTitles;
   }, [departmentId, jobTitles]);
 
+  const sanitizePhone = (val: string) => {
+    const hasPlus = val.startsWith("+");
+    const digits = val.replace(/\D/g, "");
+    return hasPlus ? `+${digits}` : digits;
+  };
+
   const handleNext = () => {
     if (currentStep === 1) {
-      if (!fullName.trim() || !email.trim()) {
-        toast.error("Please fill in full name and email");
+      const cleanName = fullName.trim();
+      const cleanEmail = email.trim();
+      const cleanPhone = phone.trim();
+
+      if (!cleanName) {
+        toast.error("Full name is required.");
+        return;
+      }
+      if (!/^[A-Za-z\s]{2,60}$/.test(cleanName)) {
+        toast.error("Full name must only contain alphabet letters and spaces.");
+        return;
+      }
+      if (!cleanEmail) {
+        toast.error("Email address is required.");
+        return;
+      }
+      if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(cleanEmail)) {
+        toast.error("Email must contain only lowercase letters, numbers, and valid email symbols.");
+        return;
+      }
+      if (cleanPhone && !/^\+?[0-9]{7,15}$/.test(cleanPhone)) {
+        toast.error("Contact phone must contain only numbers, optionally starting with '+'.");
         return;
       }
     }
@@ -240,7 +266,7 @@ export default function NewEmployeeWizardPage() {
                       type="text"
                       placeholder="e.g. Priyanshu Sharma"
                       value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
+                      onChange={(e) => setFullName(e.target.value.replace(/[^A-Za-z\s]/g, ""))}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-card-subtle border border-border-light text-text-primary focus:ring-2 focus:ring-brand-purple/20 focus:border-brand-purple"
                     />
                   </div>
@@ -252,17 +278,17 @@ export default function NewEmployeeWizardPage() {
                         type="email"
                         placeholder="e.g. priyanshu@zenxea.test"
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onChange={(e) => setEmail(e.target.value.toLowerCase().replace(/[^a-z0-9._%+-@]/g, ""))}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-card-subtle border border-border-light text-text-primary focus:ring-2 focus:ring-brand-purple/20 focus:border-brand-purple"
                       />
                     </div>
                     <div>
                       <label className="block font-semibold text-text-secondary mb-1">Contact Phone</label>
                       <input
-                        type="text"
+                        type="tel"
                         placeholder="e.g. +91 98765 43210"
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
+                        onChange={(e) => setPhone(sanitizePhone(e.target.value))}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-card-subtle border border-border-light text-text-primary focus:ring-2 focus:ring-brand-purple/20 focus:border-brand-purple"
                       />
                     </div>

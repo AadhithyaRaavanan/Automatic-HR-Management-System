@@ -231,10 +231,9 @@ export function AppShell({
             resolvedDeptName = empProfile.departments?.name || null;
             resolvedJobTitle = empProfile.job_titles?.title_name || null;
 
-            // Extra client-side lockdown guard: un-approved employees cannot mount the workplace shell
+            // Extra client-side lockdown guard: un-approved non-admin users cannot mount the workplace shell
             if (
               resolvedRole !== "admin" &&
-              resolvedRole !== "hr" &&
               empProfile.onboarding_completed === false
             ) {
               if (typeof window !== "undefined" && !window.location.pathname.startsWith("/onboarding")) {
@@ -303,18 +302,18 @@ export function AppShell({
             }
           } catch { }
 
-          const clientCompleted =
-            typeof window !== "undefined" &&
-            (sessionStorage.getItem("pulse_tutorial_completed") === "true" ||
-              localStorage.getItem("pulse_tutorial_completed") === "true");
+          // If the authoritative server state says tutorial is not completed, clear any stale client flags
+          if (!tutorialCompleted && typeof window !== "undefined") {
+            sessionStorage.removeItem("pulse_tutorial_completed");
+            localStorage.removeItem("pulse_tutorial_completed");
+          }
 
           if (
             isEligibleRole &&
             onboardingCompleted &&
             !mustChangePassword &&
             mfaFinished &&
-            !tutorialCompleted &&
-            !clientCompleted
+            !tutorialCompleted
           ) {
             shouldOpenTour = true;
             setIsExistingUserTour(false);

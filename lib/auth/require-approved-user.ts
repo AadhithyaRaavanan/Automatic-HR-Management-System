@@ -72,8 +72,8 @@ export async function requireApprovedUser(
     "employee"
   ).toLowerCase() as EmployeeRole;
 
-  // 1. Admin and HR are exempt
-  if (role === "admin" || role === "hr") {
+  // 1. Super Admin is exempt. HR, Manager, and Employee must be approved.
+  if (role === "admin") {
     return { user, role, userId: user.id, supabase };
   }
 

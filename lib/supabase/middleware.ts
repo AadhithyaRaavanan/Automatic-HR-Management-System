@@ -151,13 +151,13 @@ export async function updateSession(request: NextRequest) {
     const userId = (claims?.sub || claims?.id) as string | undefined;
 
     // 1. Onboarding Approval Gate (Enforced before General App Access)
-    // ADMIN and HR are exempt (always ALLOWED)
-    const isPrivilegedAdminOrHr = userRole === "admin" || userRole === "hr";
-    let isAllowed = isPrivilegedAdminOrHr;
+    // ONLY Super Admin is exempt (always ALLOWED). HR, Manager, and Employee must onboard and be approved.
+    const isSuperAdmin = userRole === "admin";
+    let isAllowed = isSuperAdmin;
     let gateStatus: "ALLOWED" | "PENDING_APPROVAL" | "CHANGES_REQUESTED" | "ONBOARDING_REQUIRED" =
-      isPrivilegedAdminOrHr ? "ALLOWED" : "ONBOARDING_REQUIRED";
+      isSuperAdmin ? "ALLOWED" : "ONBOARDING_REQUIRED";
 
-    if (!isPrivilegedAdminOrHr && userId) {
+    if (!isSuperAdmin && userId) {
       // Fast-path: check trusted app_metadata claim
       if (claims?.app_metadata?.onboarding_approved === true) {
         isAllowed = true;

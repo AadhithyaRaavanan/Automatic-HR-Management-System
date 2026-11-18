@@ -82,7 +82,7 @@ export function TotpMfaManager() {
 
   const handleVerifyEnrollment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!enrollData) return;
+    if (!enrollData || isVerifying) return;
 
     const cleanCode = verifyCode.replace(/\s+/g, "");
     if (cleanCode.length !== 6) {
@@ -92,13 +92,14 @@ export function TotpMfaManager() {
 
     setIsVerifying(true);
     try {
-      const { error } = await supabase.auth.mfa.challengeAndVerify({
+      const { data, error } = await supabase.auth.mfa.challengeAndVerify({
         factorId: enrollData.factorId,
         code: cleanCode,
       });
 
       if (error) {
-        toast.error("Invalid code. Please ensure your device clock is synchronized and try again.");
+        toast.error(error.message || "Invalid code. Please ensure your device clock is synchronized and try again.");
+        setIsVerifying(false);
         return;
       }
 
@@ -106,9 +107,15 @@ export function TotpMfaManager() {
       setEnrollData(null);
       setVerifyCode("");
       setIsEnrolling(false);
+
+      // Refresh session so Next.js cookies and client immediately recognize AAL2
+      try {
+        await supabase.auth.refreshSession();
+      } catch {}
+
       await fetchFactors();
-    } catch {
-      toast.error("Failed to verify two-factor authentication.");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to verify two-factor authentication.");
     } finally {
       setIsVerifying(false);
     }
@@ -253,11 +260,6 @@ export function TotpMfaManager() {
                 onChange={(e) => {
                   const val = e.target.value.replace(/\D/g, "").slice(0, 6);
                   setVerifyCode(val);
-                  if (val.length === 6 && !isVerifying) {
-                    setTimeout(() => {
-                      (e.target.form as HTMLFormElement)?.requestSubmit();
-                    }, 60);
-                  }
                 }}
                 placeholder="123456"
                 className="w-full text-center tracking-widest font-mono text-sm py-2 px-3 rounded-xl bg-card-subtle border border-border-light text-text-primary focus:outline-none focus:border-brand-purple"

@@ -438,11 +438,21 @@ export default function OnboardingPage() {
     }
   };
 
+  const sanitizePhone = (val: string) => {
+    const hasPlus = val.startsWith("+");
+    const digits = val.replace(/\D/g, "");
+    return hasPlus ? `+${digits}` : digits;
+  };
+
   // Validate step before advancing
   const validateStep = (step: number): boolean => {
     if (step === 1) {
       if (!fullName.trim()) {
         toast.error("Full name is required.");
+        return false;
+      }
+      if (!/^[A-Za-z\s]{2,60}$/.test(fullName.trim())) {
+        toast.error("Full name must only contain alphabet letters and spaces.");
         return false;
       }
       if (!dob) {
@@ -453,8 +463,16 @@ export default function OnboardingPage() {
         toast.error("Personal mobile number is required.");
         return false;
       }
-      if (!personalEmail.trim() || !personalEmail.includes("@")) {
-        toast.error("A valid personal email address is required.");
+      if (!/^\+?[0-9]{7,15}$/.test(phone.trim())) {
+        toast.error("Personal mobile number must contain only numbers, optionally starting with '+'.");
+        return false;
+      }
+      if (!personalEmail.trim()) {
+        toast.error("Personal email address is required.");
+        return false;
+      }
+      if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(personalEmail.trim())) {
+        toast.error("Personal email must contain only lowercase letters, numbers, and valid email symbols.");
         return false;
       }
       if (!currentAddress.trim()) {
@@ -467,6 +485,14 @@ export default function OnboardingPage() {
       }
       if (!emergencyContactName.trim() || !emergencyContactRelationship.trim() || !emergencyContactPhone.trim()) {
         toast.error("Emergency contact name, relationship, and phone are mandatory.");
+        return false;
+      }
+      if (!/^[A-Za-z\s]{2,60}$/.test(emergencyContactName.trim())) {
+        toast.error("Emergency contact name must only contain alphabet letters and spaces.");
+        return false;
+      }
+      if (!/^\+?[0-9]{7,15}$/.test(emergencyContactPhone.trim())) {
+        toast.error("Emergency contact phone must contain only numbers, optionally starting with '+'.");
         return false;
       }
       const isUserAdmin = employeeMeta.role === "admin";
@@ -870,7 +896,7 @@ export default function OnboardingPage() {
                   type="text"
                   required
                   value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
+                  onChange={(e) => setFullName(e.target.value.replace(/[^A-Za-z\s]/g, ""))}
                   placeholder="e.g. Aditya Ravanan"
                   className="w-full px-3.5 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary focus:outline-none focus:border-brand-purple"
                 />
@@ -897,8 +923,8 @@ export default function OnboardingPage() {
                   type="tel"
                   required
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+91 98765 43210"
+                  onChange={(e) => setPhone(sanitizePhone(e.target.value))}
+                  placeholder="+919876543210"
                   className="w-full px-3.5 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary focus:outline-none focus:border-brand-purple"
                 />
               </div>
@@ -911,7 +937,7 @@ export default function OnboardingPage() {
                   type="email"
                   required
                   value={personalEmail}
-                  onChange={(e) => setPersonalEmail(e.target.value)}
+                  onChange={(e) => setPersonalEmail(e.target.value.toLowerCase().replace(/[^a-z0-9._%+-@]/g, ""))}
                   placeholder="name@personal.com"
                   className="w-full px-3.5 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary focus:outline-none focus:border-brand-purple"
                 />
@@ -1019,7 +1045,7 @@ export default function OnboardingPage() {
                     type="text"
                     required
                     value={emergencyContactName}
-                    onChange={(e) => setEmergencyContactName(e.target.value)}
+                    onChange={(e) => setEmergencyContactName(e.target.value.replace(/[^A-Za-z\s]/g, ""))}
                     placeholder="e.g. Ramesh Ravanan"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary focus:outline-none focus:border-brand-purple"
                   />
@@ -1033,7 +1059,7 @@ export default function OnboardingPage() {
                     type="text"
                     required
                     value={emergencyContactRelationship}
-                    onChange={(e) => setEmergencyContactRelationship(e.target.value)}
+                    onChange={(e) => setEmergencyContactRelationship(e.target.value.replace(/[^A-Za-z\s]/g, ""))}
                     placeholder="e.g. Father / Spouse / Guardian"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary focus:outline-none focus:border-brand-purple"
                   />
@@ -1047,8 +1073,8 @@ export default function OnboardingPage() {
                     type="tel"
                     required
                     value={emergencyContactPhone}
-                    onChange={(e) => setEmergencyContactPhone(e.target.value)}
-                    placeholder="+91 98765 00000"
+                    onChange={(e) => setEmergencyContactPhone(sanitizePhone(e.target.value))}
+                    placeholder="+919876500000"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary focus:outline-none focus:border-brand-purple"
                   />
                 </div>

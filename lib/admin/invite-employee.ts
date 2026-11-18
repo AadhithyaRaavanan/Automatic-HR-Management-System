@@ -100,6 +100,22 @@ export async function inviteSingleEmployee(
     };
   }
 
+  if (!/^[A-Za-z\s]{2,60}$/.test(normalizedName)) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Validation Error: Full name must only contain alphabet letters and spaces.",
+    };
+  }
+
+  if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(normalizedEmail)) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Validation Error: Email must contain only lowercase letters, numbers, and valid email symbols.",
+    };
+  }
+
   let resolvedDepartmentName: string | undefined;
   let resolvedJobTitleName: string | undefined;
 
