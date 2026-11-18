@@ -109,7 +109,7 @@ export default function EmsEmployeesPage() {
             className="px-4 py-2 rounded-xl text-xs font-bold bg-brand-purple text-white hover:bg-brand-purple/90 shrink-0 flex items-center gap-1.5 shadow-sm"
           >
             <UserPlus className="w-3.5 h-3.5" />
-            + New Employee
+            New Employee
           </Link>
         </div>
 

@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
           onboarding_status: rawStatus,
           approval_email_sent_at: c.approval_email_sent_at || null,
           approved_at: c.approved_at || null,
-          highest_qualification: c.highest_qualification || "Undergraduate Degree",
+          highest_qualification: c.highest_qualification || c.education_details?.highest_qualification || "12th Standard",
           has_experience: Boolean(c.has_experience),
           submission_date: c.submitted_at || c.created_at,
           completion_percentage: completionPercentage,

@@ -31,9 +31,18 @@ import { cn } from "@/lib/utils";
 
 export default function Employee360ProfilePage() {
   const params = useParams();
-  const router = useRouter();
   const employeeId = params?.id as string;
-  const { userRole } = useAppSession();
+
+  return (
+    <AppShell>
+      <Employee360ProfileContent employeeId={employeeId} />
+    </AppShell>
+  );
+}
+
+function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
+  const router = useRouter();
+  const { userRole, userId, isLoaded } = useAppSession();
 
   const [loading, setLoading] = React.useState(true);
   const [profileData, setProfileData] = React.useState<any>(null);
@@ -124,12 +133,10 @@ export default function Employee360ProfilePage() {
 
   if (loading) {
     return (
-      <AppShell>
-        <div className="p-8 max-w-7xl mx-auto space-y-4">
-          <div className="h-6 w-32 bg-card-subtle rounded-lg animate-pulse" />
-          <div className="h-44 bg-card-subtle rounded-3xl animate-pulse" />
-        </div>
-      </AppShell>
+      <div className="p-8 max-w-7xl mx-auto space-y-4">
+        <div className="h-6 w-32 bg-card-subtle rounded-lg animate-pulse" />
+        <div className="h-44 bg-card-subtle rounded-3xl animate-pulse" />
+      </div>
     );
   }
 
@@ -142,8 +149,7 @@ export default function Employee360ProfilePage() {
   const permissions = profileData?.permissions || [];
 
   return (
-    <AppShell>
-      <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
         {/* Back Link */}
         <div>
           <Link
@@ -184,7 +190,7 @@ export default function Employee360ProfilePage() {
             </div>
           </div>
 
-          {userRole !== "admin" && userRole !== "hr" && (
+          {isLoaded && userRole !== "admin" && (
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setPermissionModalOpen(true)}
@@ -445,12 +451,14 @@ export default function Employee360ProfilePage() {
                   Short-duration permissions (personal, medical, emergency) seamlessly integrated with attendance.
                 </p>
               </div>
-              <button
-                onClick={() => setPermissionModalOpen(true)}
-                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-brand-purple text-white hover:bg-brand-purple/90"
-              >
-                + New Request
-              </button>
+              {isLoaded && userRole !== "admin" && (
+                <button
+                  onClick={() => setPermissionModalOpen(true)}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-brand-purple text-white hover:bg-brand-purple/90"
+                >
+                  New Request
+                </button>
+              )}
             </div>
 
             {permissions.length === 0 ? (
@@ -678,6 +686,5 @@ export default function Employee360ProfilePage() {
           </div>
         )}
       </div>
-    </AppShell>
   );
 }

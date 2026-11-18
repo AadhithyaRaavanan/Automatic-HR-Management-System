@@ -817,7 +817,7 @@ function ProfilePageContent() {
             <div className="p-3.5 rounded-xl bg-card-subtle border border-border-light space-y-1">
               <span className="text-[10px] font-bold uppercase text-text-tertiary block">Highest Qualification</span>
               <p className="font-extrabold text-sm text-text-primary">
-                {onboardingData?.highestQualification || "Undergraduate Degree"}
+                {onboardingData?.highestQualification || "12th Standard"}
               </p>
             </div>
 

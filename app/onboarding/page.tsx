@@ -96,7 +96,7 @@ export default function OnboardingPage() {
   const [bloodGroup, setBloodGroup] = React.useState("");
 
   // STEP 2: Educational Qualification
-  const [highestQualification, setHighestQualification] = React.useState<HighestQualification>("Undergraduate Degree");
+  const [highestQualification, setHighestQualification] = React.useState<HighestQualification>("12th Standard");
 
   // STEP 3: Employment History
   const [hasExperience, setHasExperience] = React.useState<boolean>(false);

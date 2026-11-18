@@ -38,7 +38,7 @@ const AppSessionContext = React.createContext<AppSessionState>({
   organizationId: null,
   userRole: "employee",
   fullName: null,
-  timezone: "UTC",
+  timezone: "Asia/Kolkata",
   isLoaded: false,
   departmentName: null,
   jobTitleName: null,
@@ -84,7 +84,7 @@ function getInitialSession(propRole?: AppUserRole): AppSessionState {
       organizationId: null,
       userRole: propRole,
       fullName: null,
-      timezone: "UTC",
+      timezone: "Asia/Kolkata",
       isLoaded: true,
       departmentName: null,
       jobTitleName: null,
@@ -97,7 +97,7 @@ function getInitialSession(propRole?: AppUserRole): AppSessionState {
     organizationId: null,
     userRole: defaultRole,
     fullName: null,
-    timezone: "UTC",
+    timezone: "Asia/Kolkata",
     isLoaded: isDemoModeEnabled(),
     departmentName: null,
     jobTitleName: null,
@@ -169,7 +169,7 @@ export function AppShell({
       let resolvedDeptName: string | null = null;
       let resolvedJobTitle: string | null = null;
       let resolvedReqMfa: boolean = true;
-      let resolvedTz = "UTC";
+      let resolvedTz = "Asia/Kolkata";
       let shouldOpenTour = false;
 
       try {
@@ -226,7 +226,7 @@ export function AppShell({
 
           if (empProfile) {
             resolvedName = empProfile.full_name || null;
-            resolvedTz = empProfile.timezone || "UTC";
+            resolvedTz = empProfile.timezone || "Asia/Kolkata";
             resolvedOrgId = resolvedOrgId || empProfile.organization_id || null;
             resolvedDeptName = empProfile.departments?.name || null;
             resolvedJobTitle = empProfile.job_titles?.title_name || null;

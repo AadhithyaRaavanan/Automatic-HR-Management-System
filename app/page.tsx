@@ -137,7 +137,37 @@ function DashboardContent({
   const shiftStartTime = data?.shiftStartTime || "09:00:00";
   const shiftEndTime = data?.shiftEndTime || "17:00:00";
   const userTimezone = data?.timezone || timezone || "Asia/Kolkata";
-  const lockStatus = evaluatePreCheckInLock(shiftStartTime, shiftEndTime, userTimezone);
+
+  const serverOffsetRef = React.useRef<number>(0);
+  const [lockStatus, setLockStatus] = React.useState(() =>
+    evaluatePreCheckInLock(shiftStartTime, shiftEndTime, userTimezone, new Date())
+  );
+
+  React.useEffect(() => {
+    async function syncClock() {
+      try {
+        const t0 = Date.now();
+        const res = await fetch("/api/time", { cache: "no-store" });
+        if (res.ok) {
+          const t1 = Date.now();
+          const json = await res.json();
+          const latency = (t1 - t0) / 2;
+          serverOffsetRef.current = json.epoch + latency - t1;
+          const syncedNow = new Date(Date.now() + serverOffsetRef.current);
+          setLockStatus(evaluatePreCheckInLock(shiftStartTime, shiftEndTime, userTimezone, syncedNow));
+        }
+      } catch {}
+    }
+    syncClock();
+  }, [shiftStartTime, shiftEndTime, userTimezone]);
+
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      const syncedNow = new Date(Date.now() + serverOffsetRef.current);
+      setLockStatus(evaluatePreCheckInLock(shiftStartTime, shiftEndTime, userTimezone, syncedNow));
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [shiftStartTime, shiftEndTime, userTimezone]);
 
   // Load week attendance history for the weekly bar chart (Mon - Fri)
   const [weeklyBars, setWeeklyBars] = React.useState<DayBarData[]>([]);
@@ -254,8 +284,8 @@ function DashboardContent({
             {isCheckedIn
               ? "Check Out Now"
               : lockStatus.isLocked
-              ? "Outside Shift Hours"
-              : "Check In Now"}
+                ? "Outside Shift Hours"
+                : "Check In Now"}
           </button>
         </div>
       </section>
@@ -383,7 +413,7 @@ function DashboardContent({
             unreadCount > 0 ? (
               <button
                 type="button"
-                onClick={() => markAllRead().catch(() => {})}
+                onClick={() => markAllRead().catch(() => { })}
                 className="text-brand-purple hover:underline font-bold text-xs cursor-pointer"
               >
                 Mark all read
@@ -399,7 +429,7 @@ function DashboardContent({
                   key={n.id}
                   type="button"
                   onClick={async () => {
-                    if (!n.read_at) await markSingleRead(n.id).catch(() => {});
+                    if (!n.read_at) await markSingleRead(n.id).catch(() => { });
                     if (n.link) router.push(n.link);
                   }}
                   className={cn(
