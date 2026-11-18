@@ -131,7 +131,12 @@ export default function HROnboardingPage() {
   const loadCandidates = React.useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/hr/onboarding/candidates");
+      const res = await fetch(`/api/hr/onboarding/candidates?_t=${Date.now()}`, {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+        },
+      });
       if (!res.ok) {
         throw new Error("Failed to load candidates data.");
       }

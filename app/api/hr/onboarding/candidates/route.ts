@@ -34,6 +34,15 @@ export async function GET(request: NextRequest) {
         job_titles:job_title_id(title_name)
       `);
 
+    const { data: orgMembers } = await (supabaseAdmin.from("organization_members") as any)
+      .select("user_id, role");
+    const roleMap = new Map<string, string>();
+    for (const m of orgMembers || []) {
+      if (m.user_id && m.role) {
+        roleMap.set(m.user_id, (m.role || "").toLowerCase());
+      }
+    }
+
     const empMap = new Map<string, any>();
     for (const emp of empList || []) {
       empMap.set(emp.id, emp);
@@ -151,16 +160,18 @@ export async function GET(request: NextRequest) {
     // Filter out Admin, HR, and Manager staff accounts (they are internal management, not candidates undergoing verification)
     const candidateList = enhancedCandidates.filter((c) => {
       const emp = empMap.get(c.user_id);
-      const role = (emp?.role || "").toLowerCase();
-      return (
-        role !== "admin" &&
-        role !== "hr" &&
-        role !== "manager" &&
-        c.user_id !== "952a33f0-3af4-4a69-a382-26fef3b7fa11" &&
-        !c.email?.includes("aadhithya.raavanan") &&
-        !c.email?.includes("hr.demo") &&
-        !c.email?.includes("manager.demo")
-      );
+      const memberRole = roleMap.get(c.user_id) || "";
+      const email = (c.email || emp?.email || "").toLowerCase();
+      const isInternalManagement =
+        memberRole === "admin" ||
+        memberRole === "hr" ||
+        memberRole === "manager" ||
+        c.user_id === "952a33f0-3af4-4a69-a382-26fef3b7fa11" ||
+        email.includes("aadhithya.raavanan") ||
+        email.includes("hr.demo") ||
+        email.includes("manager.demo");
+
+      return !isInternalManagement;
     });
 
     // Summary Metrics: pending reflects 'submitted' items only
@@ -175,10 +186,19 @@ export async function GET(request: NextRequest) {
       completed: candidateList.filter((c) => c.status === "approved" || c.onboarding_status === "COMPLETED").length,
     };
 
-    return NextResponse.json({
-      candidates: candidateList,
-      summary,
-    });
+    return NextResponse.json(
+      {
+        candidates: candidateList,
+        summary,
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json(
       { error: err?.message || "Failed to retrieve onboarding candidates." },
