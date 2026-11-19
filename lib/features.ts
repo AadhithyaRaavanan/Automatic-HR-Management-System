@@ -1,5 +1,5 @@
 export const FEATURES = {
-  KPI: false,
+  KPI: true,
   TASKS: true,
   LOCATIONS: process.env.NEXT_PUBLIC_FEATURE_LOCATIONS === 'true',
   SHIFTS: process.env.NEXT_PUBLIC_FEATURE_SHIFTS === 'true',

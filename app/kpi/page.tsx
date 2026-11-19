@@ -450,7 +450,7 @@ function KpiContent() {
       <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight flex items-center gap-2.5">
-            <BarChart3 className="w-7 h-7 text-brand-purple" />
+            <BarChart3 className="w-7 h-7 text-black" />
             <span>Performance &amp; KPI Analytics</span>
           </h1>
           <p className="text-xs sm:text-sm text-text-secondary mt-1">
@@ -465,7 +465,7 @@ function KpiContent() {
             disabled={kpiLoading || !kpiData}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-border-light text-xs font-bold text-text-primary hover:bg-card-subtle transition-colors shadow-xs cursor-pointer disabled:opacity-50"
           >
-            <Download className="w-4 h-4 text-brand-purple" />
+            <Download className="w-4 h-4 text-black" />
             <span>Export CSV</span>
           </button>
         </div>
@@ -626,7 +626,7 @@ function KpiContent() {
                 type="button"
                 data-tour="kpi-add-review"
                 onClick={() => setCreateReviewOpen(true)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>Write Review</span>
@@ -749,7 +749,7 @@ function KpiContent() {
               <button
                 type="button"
                 onClick={() => setCreateGoalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>Add Goal</span>
@@ -986,7 +986,7 @@ function KpiContent() {
                 <button
                   type="submit"
                   disabled={submitAdjustment.isPending}
-                  className="px-5 py-2 rounded-full bg-brand-purple text-white text-xs font-bold cursor-pointer disabled:opacity-60"
+                  className="px-5 py-2 rounded-full bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold cursor-pointer disabled:opacity-60"
                 >
                   Save Adjustment
                 </button>
@@ -1090,7 +1090,7 @@ function KpiContent() {
                 <button
                   type="submit"
                   disabled={submitReview.isPending}
-                  className="px-5 py-2 rounded-full bg-brand-purple text-white text-xs font-bold cursor-pointer disabled:opacity-60"
+                  className="px-5 py-2 rounded-full bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold cursor-pointer disabled:opacity-60"
                 >
                   Submit Review
                 </button>
@@ -1167,7 +1167,7 @@ function KpiContent() {
                 <button
                   type="submit"
                   disabled={submitGoal.isPending}
-                  className="px-5 py-2 rounded-full bg-brand-purple text-white text-xs font-bold cursor-pointer disabled:opacity-60"
+                  className="px-5 py-2 rounded-full bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold cursor-pointer disabled:opacity-60"
                 >
                   Set Goal
                 </button>

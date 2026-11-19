@@ -89,9 +89,9 @@ export function KpiToolbar({
             type="button"
             onClick={() => onTabChange("metrics")}
             className={cn(
-              "px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5",
+              "px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5",
               activeTab === "metrics"
-                ? "bg-brand-purple text-white shadow-xs"
+                ? "bg-black text-white shadow-xs"
                 : "text-text-secondary hover:text-text-primary hover:bg-card/60"
             )}
           >
@@ -104,9 +104,9 @@ export function KpiToolbar({
             data-tour="kpi-reviews-tab"
             onClick={() => onTabChange("reviews")}
             className={cn(
-              "px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5",
+              "px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5",
               activeTab === "reviews"
-                ? "bg-brand-purple text-white shadow-xs"
+                ? "bg-black text-white shadow-xs"
                 : "text-text-secondary hover:text-text-primary hover:bg-card/60"
             )}
           >
@@ -129,9 +129,9 @@ export function KpiToolbar({
             data-tour="kpi-goals-tab"
             onClick={() => onTabChange("goals")}
             className={cn(
-              "px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5",
+              "px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5",
               activeTab === "goals"
-                ? "bg-brand-purple text-white shadow-xs"
+                ? "bg-black text-white shadow-xs"
                 : "text-text-secondary hover:text-text-primary hover:bg-card/60"
             )}
           >
