@@ -47,8 +47,8 @@ export function EarlyCheckOutDialog({
       className="max-w-[460px]"
     >
       <div className="space-y-4 pt-2">
-        <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300">
-          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+        <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-800">
+          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-amber-600" />
           <p className="text-xs font-medium leading-relaxed">
             Your shift ends at {shiftEndTime}. You are checking out {formattedEarly} early. Check out anyway?
           </p>
@@ -57,7 +57,7 @@ export function EarlyCheckOutDialog({
         <div className="space-y-1.5">
           <label
             htmlFor="early-checkout-reason"
-            className="text-xs font-semibold text-slate-700 dark:text-slate-300"
+            className="text-xs font-semibold text-black"
           >
             Reason for early check-out (optional)
           </label>
@@ -67,16 +67,16 @@ export function EarlyCheckOutDialog({
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="e.g., Doctor appointment, urgent personal errand..."
-            className="w-full text-xs p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-amber-500/30 text-slate-900 dark:text-white"
+            className="w-full text-xs p-3 rounded-lg border border-[#E6E6E6] bg-[#F5F5F5] focus:outline-none focus:ring-2 focus:ring-black text-black placeholder:text-[#808080]"
           />
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E6E6E6]">
           <button
             type="button"
             onClick={handleCancel}
             disabled={isPending}
-            className="px-4 py-2 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+            className="px-4 py-2 text-xs font-semibold rounded-lg border border-[#E6E6E6] hover:bg-[#F5F5F5] text-black transition-colors cursor-pointer"
           >
             Cancel
           </button>
@@ -84,7 +84,7 @@ export function EarlyCheckOutDialog({
             type="button"
             onClick={handleConfirm}
             disabled={isPending}
-            className="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-600 hover:bg-amber-700 text-white shadow-sm transition-colors cursor-pointer"
+            className="px-4 py-2 text-xs font-semibold rounded-lg bg-black hover:bg-[#1A1A1A] text-white shadow-xs transition-colors cursor-pointer"
           >
             {isPending ? "Checking out..." : "Yes, check out"}
           </button>

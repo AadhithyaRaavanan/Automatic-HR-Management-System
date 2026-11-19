@@ -157,50 +157,50 @@ function AuditsAdminPageContent() {
         {/* Header */}
         <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-3">
           <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary dark:text-white tracking-tight flex items-center gap-2">
+            <h1 className="text-2xl md:text-3xl font-bold text-black tracking-tight flex items-center gap-2">
               Enterprise Audit Viewer & Compliance
             </h1>
-            <p className="text-xs sm:text-sm text-text-secondary dark:text-slate-400 mt-1">
+            <p className="text-xs sm:text-sm text-[#808080] mt-1">
               Tamper-evident system activity log capturing authoritative actor identities, before/after diffs, and sanitization.
             </p>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => handleExport("csv")}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-card-subtle dark:bg-slate-800 hover:bg-slate-200 text-xs font-semibold text-text-primary dark:text-white transition-all"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white hover:bg-[#F5F5F5] border border-[#E6E6E6] text-xs font-semibold text-black transition-colors"
             >
-              <FileText className="w-4 h-4 text-brand-purple" />
+              <FileText className="w-3.5 h-3.5 text-black" />
               CSV Export
             </button>
             <button
               onClick={() => handleExport("xlsx")}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-xs font-semibold text-white shadow-sm transition-all"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-black hover:bg-[#1A1A1A] text-xs font-semibold text-white shadow-xs transition-colors"
             >
-              <FileSpreadsheet className="w-4 h-4" />
+              <FileSpreadsheet className="w-3.5 h-3.5" />
               Excel Export
             </button>
           </div>
         </section>
 
         {/* Filters Bar */}
-        <div className="bg-white dark:bg-slate-900 rounded-[24px] p-4 border border-border-light dark:border-slate-800 shadow-card flex flex-col sm:flex-row gap-3 items-center justify-between">
+        <div className="bg-white rounded-[14px] p-4 border border-[#E6E6E6] shadow-none flex flex-col sm:flex-row gap-3 items-center justify-between">
           <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 text-text-tertiary absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-[#808080] absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search action, table, or record ID..."
-              className="w-full pl-9 pr-4 py-2 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-xs text-text-primary dark:text-white placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-brand-purple"
+              className="w-full pl-9 pr-4 py-2 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] text-xs text-black placeholder:text-[#808080] focus:outline-none focus:ring-2 focus:ring-black"
             />
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Filter className="w-4 h-4 text-text-tertiary shrink-0" />
+            <Filter className="w-4 h-4 text-[#808080] shrink-0" />
             <select
               value={actionFilter}
               onChange={(e) => setActionFilter(e.target.value)}
-              className="w-full sm:w-auto px-3 py-2 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-xs font-semibold text-text-primary dark:text-white"
+              className="w-full sm:w-auto px-3 py-2 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] text-xs font-semibold text-black focus:outline-none focus:ring-2 focus:ring-black"
             >
               <option value="ALL">All Actions</option>
               {availableActions.map((act) => (
@@ -213,7 +213,7 @@ function AuditsAdminPageContent() {
         </div>
 
         {/* Audits Table */}
-        <div className="bg-white dark:bg-slate-900 rounded-[28px] border border-border-light dark:border-slate-800 shadow-card overflow-hidden">
+        <div className="bg-white rounded-[14px] border border-[#E6E6E6] shadow-none overflow-hidden">
           {filteredAudits.length === 0 ? (
             <EmptyState
               icon={<ScrollText className="w-6 h-6" />}
@@ -228,45 +228,45 @@ function AuditsAdminPageContent() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="bg-card-subtle dark:bg-slate-800/50 text-text-secondary dark:text-slate-400 font-semibold border-b border-border-light dark:border-slate-800">
+                <thead className="bg-[#F5F5F5] text-[#808080] font-semibold border-b border-[#E6E6E6]">
                   <tr>
-                    <th className="py-3.5 px-5">Timestamp</th>
-                    <th className="py-3.5 px-4">Action</th>
-                    <th className="py-3.5 px-4">Target Table</th>
-                    <th className="py-3.5 px-4">Record ID</th>
-                    <th className="py-3.5 px-5 text-right">State Diff</th>
+                    <th className="py-3 px-5 text-xs">Timestamp</th>
+                    <th className="py-3 px-4 text-xs">Action</th>
+                    <th className="py-3 px-4 text-xs">Target Table</th>
+                    <th className="py-3 px-4 text-xs">Record ID</th>
+                    <th className="py-3 px-5 text-right text-xs">State Diff</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border-light dark:divide-slate-800">
+                <tbody className="divide-y divide-[#E6E6E6]">
                   {filteredAudits.map((a) => (
                   <React.Fragment key={a.id}>
                     <tr
                       onClick={() => toggleExpand(a.id)}
-                      className="cursor-pointer hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors"
+                      className="cursor-pointer hover:bg-[#F5F5F5]/60 transition-colors"
                     >
-                      <td className="py-4 px-5 whitespace-nowrap text-xs text-text-secondary dark:text-slate-400">
-                        <span className="font-semibold text-text-primary dark:text-white block">
+                      <td className="py-3.5 px-5 whitespace-nowrap text-xs text-[#808080]">
+                        <span className="font-semibold text-black block">
                           {new Date(a.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                         </span>
-                        <span className="text-[11px] text-text-tertiary">
+                        <span className="text-[11px] text-[#808080]">
                           {new Date(a.created_at).toLocaleDateString()}
                         </span>
                       </td>
-                      <td className="py-4 px-4">
-                        <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-lg bg-brand-purple/10 text-brand-purple">
+                      <td className="py-3.5 px-4">
+                        <span className="font-mono text-xs font-medium px-2 py-0.5 rounded bg-[#F5F5F5] border border-[#E6E6E6] text-black">
                           {a.action}
                         </span>
                       </td>
-                      <td className="py-4 px-4 text-xs font-mono text-text-secondary dark:text-slate-300">
+                      <td className="py-3.5 px-4 text-xs font-mono text-black">
                         {a.table_name}
                       </td>
-                      <td className="py-4 px-4 text-xs font-mono text-text-tertiary">
+                      <td className="py-3.5 px-4 text-xs font-mono text-[#808080]">
                         {a.record_id ? `${a.record_id.slice(0, 8)}...` : "--"}
                       </td>
-                      <td className="py-4 px-5 text-right">
+                      <td className="py-3.5 px-5 text-right">
                         <button
                           type="button"
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-brand-purple hover:underline"
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-black hover:underline"
                         >
                           {expandedId === a.id ? (
                             <>
@@ -283,23 +283,23 @@ function AuditsAdminPageContent() {
 
                     {/* Expandable Old vs New Data Diff View */}
                     {expandedId === a.id && (
-                      <tr className="bg-card-subtle/50 dark:bg-slate-900/80">
+                      <tr className="bg-[#F5F5F5]/40">
                         <td colSpan={5} className="p-4 sm:p-6">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="bg-white dark:bg-slate-800/90 rounded-2xl p-4 border border-border-light dark:border-slate-700 shadow-sm">
-                              <span className="text-xs font-bold uppercase tracking-wider text-status-warning-dot block mb-2">
+                            <div className="bg-white rounded-lg p-4 border border-[#E6E6E6] shadow-none">
+                              <span className="text-xs font-semibold text-amber-700 block mb-2">
                                 Prior State (old_data)
                               </span>
-                              <pre className="text-xs font-mono text-text-secondary dark:text-slate-300 overflow-x-auto p-2 bg-slate-50 dark:bg-slate-950 rounded-xl">
+                              <pre className="text-xs font-mono text-black overflow-x-auto p-2 bg-[#F5F5F5] rounded border border-[#E6E6E6]">
                                 {a.old_data ? JSON.stringify(a.old_data, null, 2) : "null (Record Created)"}
                               </pre>
                             </div>
 
-                            <div className="bg-white dark:bg-slate-800/90 rounded-2xl p-4 border border-border-light dark:border-slate-700 shadow-sm">
-                              <span className="text-xs font-bold uppercase tracking-wider text-status-success-dot block mb-2">
+                            <div className="bg-white rounded-lg p-4 border border-[#E6E6E6] shadow-none">
+                              <span className="text-xs font-semibold text-black block mb-2">
                                 New State (new_data)
                               </span>
-                              <pre className="text-xs font-mono text-text-secondary dark:text-slate-300 overflow-x-auto p-2 bg-slate-50 dark:bg-slate-950 rounded-xl">
+                              <pre className="text-xs font-mono text-black overflow-x-auto p-2 bg-[#F5F5F5] rounded border border-[#E6E6E6]">
                                 {a.new_data ? JSON.stringify(a.new_data, null, 2) : "null (Record Deleted)"}
                               </pre>
                             </div>

@@ -340,64 +340,64 @@ export default function OrganizationSettingsAdminPage() {
       <div className="space-y-6 max-w-5xl">
         {/* Header */}
         <section className="pt-1 pb-3">
-          <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary dark:text-white tracking-tight flex items-center gap-2">
-            Organization Governance & Policies
+          <h1 className="text-2xl md:text-3xl font-bold text-black tracking-tight flex items-center gap-2">
+            Organization governance & policies
           </h1>
-          <p className="text-xs sm:text-sm text-text-secondary dark:text-slate-400 mt-1">
-            Configure tenant defaults, company-wide work modes, retention floors, and organization storage health.
+          <p className="text-xs sm:text-sm text-[#808080] mt-1">
+            Configure organization defaults, company-wide work modes, retention floors, and storage health.
           </p>
         </section>
 
         {/* Tab Switcher */}
-        <div className="flex flex-wrap gap-2 p-1.5 rounded-2xl bg-card-subtle dark:bg-slate-800/80 w-fit border border-border-light dark:border-slate-800">
+        <div className="flex flex-wrap gap-1 p-1 rounded-lg bg-[#E6E6E6] border border-[#E6E6E6] w-fit">
           <button
             type="button"
             onClick={() => setActiveTab("profile")}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+            className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
               activeTab === "profile"
-                ? "bg-white dark:bg-slate-900 text-brand-purple shadow-sm"
-                : "text-text-secondary dark:text-slate-400 hover:text-text-primary"
+                ? "bg-white text-black shadow-xs"
+                : "text-[#808080] hover:text-black"
             }`}
           >
-            Organization Profile
+            Organization profile
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("policy")}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+            className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
               activeTab === "policy"
-                ? "bg-white dark:bg-slate-900 text-brand-purple shadow-sm"
-                : "text-text-secondary dark:text-slate-400 hover:text-text-primary"
+                ? "bg-white text-black shadow-xs"
+                : "text-[#808080] hover:text-black"
             }`}
           >
-            Attendance & Work Policy
+            Attendance & work policy
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("health")}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all inline-flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all inline-flex items-center gap-1.5 cursor-pointer ${
               activeTab === "health"
-                ? "bg-white dark:bg-slate-900 text-brand-purple shadow-sm"
-                : "text-text-secondary dark:text-slate-400 hover:text-text-primary"
+                ? "bg-white text-black shadow-xs"
+                : "text-[#808080] hover:text-black"
             }`}
           >
-            <HardDrive className="w-4 h-4" />
-            System Health & Retention
+            <HardDrive className="w-3.5 h-3.5" />
+            System health & retention
           </button>
         </div>
 
         {/* Tab 1: Org Profile */}
         {activeTab === "profile" && (
-          <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 sm:p-8 border border-border-light dark:border-slate-800 shadow-card space-y-6">
+          <div className="bg-white rounded-[14px] p-6 sm:p-8 border border-[#E6E6E6] shadow-none space-y-6">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-brand-purple/10 text-brand-purple flex items-center justify-center">
-                <Building2 className="w-5 h-5" />
+              <div className="w-9 h-9 rounded-lg bg-[#E6E6E6] text-black flex items-center justify-center">
+                <Building2 className="w-4 h-4" />
               </div>
               <div>
-                <h2 className="text-base font-extrabold text-text-primary dark:text-white">
-                  Corporate Profile Settings
+                <h2 className="text-base font-bold text-black">
+                  Corporate profile settings
                 </h2>
-                <p className="text-xs text-text-secondary dark:text-slate-400">
+                <p className="text-xs text-[#808080]">
                   Tenant status and identity are immutable. Profile modifications generate structured audit logs.
                 </p>
               </div>
@@ -405,22 +405,22 @@ export default function OrganizationSettingsAdminPage() {
 
             <form onSubmit={handleSaveOrgSettings} className="space-y-4">
               <div>
-                <label className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1">
-                  Legal Organization Name
+                <label className="text-xs font-medium text-[#4D4D4D] block mb-1">
+                  Legal organization name
                 </label>
                 <input
                   type="text"
                   required
                   value={orgName}
                   onChange={(e) => setOrgName(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm font-semibold text-text-primary dark:text-white focus:outline-none focus:ring-1 focus:ring-brand-purple"
+                  className="w-full px-3.5 py-2 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] text-sm font-medium text-black focus:outline-none focus:ring-1 focus:ring-black"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1">
-                    Primary Default Timezone
+                  <label className="text-xs font-medium text-[#4D4D4D] block mb-1">
+                    Primary default timezone
                   </label>
                   <input
                     type="text"
@@ -428,18 +428,18 @@ export default function OrganizationSettingsAdminPage() {
                     value={orgTimezone}
                     onChange={(e) => setOrgTimezone(e.target.value)}
                     placeholder="UTC"
-                    className="w-full px-4 py-2.5 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm font-medium text-text-primary dark:text-white"
+                    className="w-full px-3.5 py-2 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] text-sm font-medium text-black focus:outline-none focus:ring-1 focus:ring-black"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1">
-                    Default Work Mode
+                  <label className="text-xs font-medium text-[#4D4D4D] block mb-1">
+                    Default work mode
                   </label>
                   <select
                     value={orgWorkMode}
                     onChange={(e) => setOrgWorkMode(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm font-medium text-text-primary dark:text-white"
+                    className="w-full px-3.5 py-2 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] text-sm font-medium text-black focus:outline-none focus:ring-1 focus:ring-black"
                   >
                     <option value="remote">Remote-First</option>
                     <option value="office">Office-Based</option>
@@ -452,10 +452,10 @@ export default function OrganizationSettingsAdminPage() {
                 <button
                   type="submit"
                   disabled={isSavingOrg}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-sm font-semibold shadow-sm transition-all disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold shadow-none transition-colors disabled:opacity-50 cursor-pointer"
                 >
-                  <Save className="w-4 h-4" />
-                  {isSavingOrg ? "Saving..." : "Save Profile Settings"}
+                  <Save className="w-3.5 h-3.5" />
+                  {isSavingOrg ? "Saving..." : "Save profile settings"}
                 </button>
               </div>
             </form>
@@ -464,16 +464,16 @@ export default function OrganizationSettingsAdminPage() {
 
         {/* Tab 2: Attendance Policy */}
         {activeTab === "policy" && (
-          <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 sm:p-8 border border-border-light dark:border-slate-800 shadow-card space-y-6">
+          <div className="bg-white rounded-[14px] p-6 sm:p-8 border border-[#E6E6E6] shadow-none space-y-6">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-status-success-bg text-status-success-text flex items-center justify-center">
-                <ShieldCheck className="w-5 h-5" />
+              <div className="w-9 h-9 rounded-lg bg-[#E6E6E6] text-black flex items-center justify-center">
+                <ShieldCheck className="w-4 h-4" />
               </div>
               <div>
-                <h2 className="text-base font-extrabold text-text-primary dark:text-white">
-                  Attendance Rules & Thresholds
+                <h2 className="text-base font-bold text-black">
+                  Attendance rules & thresholds
                 </h2>
-                <p className="text-xs text-text-secondary dark:text-slate-400">
+                <p className="text-xs text-[#808080]">
                   Rules applied during daily attendance evaluation and automated nightly cron runs.
                 </p>
               </div>
@@ -482,50 +482,50 @@ export default function OrganizationSettingsAdminPage() {
             <form onSubmit={handleSavePolicy} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1">
-                    Check-in Grace Period (minutes)
+                  <label className="text-xs font-medium text-[#4D4D4D] block mb-1">
+                    Check-in grace period (minutes)
                   </label>
                   <input
                     type="number"
                     required
                     value={graceMinutes}
                     onChange={(e) => setGraceMinutes(parseInt(e.target.value) || 15)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm font-medium text-text-primary dark:text-white"
+                    className="w-full px-3.5 py-2 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] text-sm font-medium text-black focus:outline-none focus:ring-1 focus:ring-black"
                   />
-                  <span className="text-[11px] text-text-tertiary mt-1 block">
+                  <span className="text-[11px] text-[#808080] mt-1 block">
                     Punches within this window after shift start will not mark the day late.
                   </span>
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1">
-                    Half-Day Threshold (minutes)
+                  <label className="text-xs font-medium text-[#4D4D4D] block mb-1">
+                    Half-day threshold (minutes)
                   </label>
                   <input
                     type="number"
                     required
                     value={halfDayMinutes}
                     onChange={(e) => setHalfDayMinutes(parseInt(e.target.value) || 240)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm font-medium text-text-primary dark:text-white"
+                    className="w-full px-3.5 py-2 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] text-sm font-medium text-black focus:outline-none focus:ring-1 focus:ring-black"
                   />
-                  <span className="text-[11px] text-text-tertiary mt-1 block">
+                  <span className="text-[11px] text-[#808080] mt-1 block">
                     Total logged working minutes required to qualify for at least a half-day credit.
                   </span>
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1">
-                  Automatic Nightly Checkout Time
+                <label className="text-xs font-medium text-[#4D4D4D] block mb-1">
+                  Automatic nightly checkout time
                 </label>
                 <input
                   type="time"
                   required
                   value={autoCheckoutTime}
                   onChange={(e) => setAutoCheckoutTime(e.target.value)}
-                  className="w-full sm:w-1/2 px-4 py-2.5 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm font-medium text-text-primary dark:text-white"
+                  className="w-full sm:w-1/2 px-3.5 py-2 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] text-sm font-medium text-black focus:outline-none focus:ring-1 focus:ring-black"
                 />
-                <span className="text-[11px] text-text-tertiary mt-1 block">
+                <span className="text-[11px] text-[#808080] mt-1 block">
                   Unclosed sessions will be terminated automatically by the scheduled maintenance job.
                 </span>
               </div>
@@ -534,72 +534,72 @@ export default function OrganizationSettingsAdminPage() {
                 <button
                   type="submit"
                   disabled={isSavingPolicy}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-sm font-semibold shadow-sm transition-all disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold shadow-none transition-colors disabled:opacity-50 cursor-pointer"
                 >
-                  <Save className="w-4 h-4" />
-                  {isSavingPolicy ? "Saving..." : "Save Attendance Policy"}
+                  <Save className="w-3.5 h-3.5" />
+                  {isSavingPolicy ? "Saving..." : "Save attendance policy"}
                 </button>
               </div>
             </form>
 
             {/* Punch Channels & Verification Governance */}
-            <div className="pt-6 border-t border-border-light dark:border-slate-800 space-y-4">
+            <div className="pt-6 border-t border-[#E6E6E6] space-y-4">
               <div>
-                <h3 className="text-sm font-bold text-text-primary dark:text-white">
-                  Punch Channels &amp; Verification Governance
+                <h3 className="text-sm font-bold text-black">
+                  Punch channels & verification governance
                 </h3>
-                <p className="text-xs text-text-secondary dark:text-slate-400 mt-0.5">
+                <p className="text-xs text-[#808080] mt-0.5">
                   Configure permitted authentication mechanisms for workforce check-ins.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div className="p-4 rounded-2xl bg-card-subtle dark:bg-slate-800 border border-status-success-border/60 flex items-start justify-between">
+                <div className="p-4 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] flex items-start justify-between">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-text-primary dark:text-white">Manual Web Check-In</span>
-                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-status-success-bg text-status-success">ACTIVE</span>
+                      <span className="text-xs font-bold text-black">Manual Web Check-In</span>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#A6F000]/20 text-black border border-[#A6F000]/40">Active</span>
                     </div>
-                    <p className="text-[11px] text-text-secondary dark:text-slate-400 mt-1">
+                    <p className="text-[11px] text-[#4D4D4D] mt-1">
                       Authenticated self-service web punches with pre-shift 5-min gate and persistent timer.
                     </p>
                   </div>
-                  <input type="checkbox" checked disabled className="rounded text-brand-purple cursor-not-allowed mt-1" />
+                  <input type="checkbox" checked disabled className="rounded text-black cursor-not-allowed mt-1" />
                 </div>
 
-                <div className="p-4 rounded-2xl bg-card-subtle/50 dark:bg-slate-800/40 border border-border-light dark:border-slate-800 flex items-start justify-between opacity-75">
+                <div className="p-4 rounded-xl bg-[#F5F5F5]/60 border border-[#E6E6E6] flex items-start justify-between opacity-80">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-text-secondary dark:text-slate-400">Geofence GPS Punch</span>
-                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500">Enterprise / In Development</span>
+                      <span className="text-xs font-medium text-[#4D4D4D]">Geofence GPS Punch</span>
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700">In development</span>
                     </div>
-                    <p className="text-[11px] text-text-tertiary mt-1">
-                      Restricts mobile and desktop punches to physical office boundary coordinates.
+                    <p className="text-[11px] text-[#808080] mt-1">
+                      Restricts punches to physical office boundary coordinates.
                     </p>
                   </div>
                   <input type="checkbox" disabled className="rounded cursor-not-allowed opacity-50 mt-1" />
                 </div>
 
-                <div className="p-4 rounded-2xl bg-card-subtle/50 dark:bg-slate-800/40 border border-border-light dark:border-slate-800 flex items-start justify-between opacity-75">
+                <div className="p-4 rounded-xl bg-[#F5F5F5]/60 border border-[#E6E6E6] flex items-start justify-between opacity-80">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-text-secondary dark:text-slate-400">Office IP Allowlist</span>
-                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500">Enterprise / In Development</span>
+                      <span className="text-xs font-medium text-[#4D4D4D]">Office IP Allowlist</span>
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700">In development</span>
                     </div>
-                    <p className="text-[11px] text-text-tertiary mt-1">
+                    <p className="text-[11px] text-[#808080] mt-1">
                       Requires check-in requests to originate from registered corporate subnet CIDRs.
                     </p>
                   </div>
                   <input type="checkbox" disabled className="rounded cursor-not-allowed opacity-50 mt-1" />
                 </div>
 
-                <div className="p-4 rounded-2xl bg-card-subtle/50 dark:bg-slate-800/40 border border-border-light dark:border-slate-800 flex items-start justify-between opacity-75">
+                <div className="p-4 rounded-xl bg-[#F5F5F5]/60 border border-[#E6E6E6] flex items-start justify-between opacity-80">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-text-secondary dark:text-slate-400">Rotating QR &amp; Kiosk Mode</span>
-                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500">Enterprise / In Development</span>
+                      <span className="text-xs font-medium text-[#4D4D4D]">Rotating QR & Kiosk Mode</span>
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700">In development</span>
                     </div>
-                    <p className="text-[11px] text-text-tertiary mt-1">
+                    <p className="text-[11px] text-[#808080] mt-1">
                       Shared tablet kiosk scanner with time-expiring rolling QR code tokens.
                     </p>
                   </div>
@@ -614,18 +614,18 @@ export default function OrganizationSettingsAdminPage() {
         {activeTab === "health" && (
           <div className="space-y-6">
             {/* Organization System Health Card */}
-            <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 sm:p-8 border border-border-light dark:border-slate-800 shadow-card space-y-5">
+            <div className="bg-white rounded-[14px] p-6 sm:p-8 border border-[#E6E6E6] shadow-none space-y-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-brand-purple/10 text-brand-purple flex items-center justify-center">
-                    <Database className="w-5 h-5" />
+                  <div className="w-9 h-9 rounded-lg bg-[#E6E6E6] text-black flex items-center justify-center">
+                    <Database className="w-4 h-4" />
                   </div>
                   <div>
-                    <h2 className="text-base font-extrabold text-text-primary dark:text-white">
-                      Organization System Health & Storage Footprint
+                    <h2 className="text-base font-bold text-black">
+                      Organization storage footprint
                     </h2>
-                    <p className="text-xs text-text-secondary dark:text-slate-400">
-                      Scoped strictly to your organization rows & archives. Platform-wide database size is never shown to tenants.
+                    <p className="text-xs text-[#808080]">
+                      Scoped strictly to your organization rows and archives.
                     </p>
                   </div>
                 </div>
@@ -633,44 +633,44 @@ export default function OrganizationSettingsAdminPage() {
                   type="button"
                   onClick={() => loadHealthAndRetention()}
                   disabled={isLoadingHealth}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-xs font-bold text-text-primary dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 w-fit"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-medium text-black hover:bg-[#F5F5F5] transition-colors disabled:opacity-50 cursor-pointer w-fit"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isLoadingHealth ? "animate-spin" : ""}`} />
-                  Refresh Metrics
+                  Refresh metrics
                 </button>
               </div>
 
               {healthMetrics ? (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="rounded-2xl bg-card-subtle dark:bg-slate-800/70 p-4 border border-border-light dark:border-slate-800">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary dark:text-slate-400">
-                        Organization Row Count
+                    <div className="rounded-xl bg-[#F5F5F5] p-4 border border-[#E6E6E6]">
+                      <span className="text-[11px] font-medium uppercase tracking-wider text-[#808080]">
+                        Organization row count
                       </span>
-                      <div className="text-2xl font-extrabold text-text-primary dark:text-white mt-1 tabular-nums">
+                      <div className="text-2xl font-bold text-black mt-1 tabular-nums">
                         {healthMetrics.total_rows.toLocaleString()}
                       </div>
-                      <span className="text-[11px] text-text-tertiary">Across tenant tables</span>
+                      <span className="text-[11px] text-[#808080]">Across tenant tables</span>
                     </div>
 
-                    <div className="rounded-2xl bg-card-subtle dark:bg-slate-800/70 p-4 border border-border-light dark:border-slate-800">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary dark:text-slate-400">
-                        Approx. Organization Storage
+                    <div className="rounded-xl bg-[#F5F5F5] p-4 border border-[#E6E6E6]">
+                      <span className="text-[11px] font-medium uppercase tracking-wider text-[#808080]">
+                        Approx. organization storage
                       </span>
-                      <div className="text-2xl font-extrabold text-brand-purple mt-1 tabular-nums">
+                      <div className="text-2xl font-bold text-black mt-1 tabular-nums">
                         {formatBytes(healthMetrics.estimated_db_bytes)}
                       </div>
-                      <span className="text-[11px] text-text-tertiary">Live tenant tuples & indexes</span>
+                      <span className="text-[11px] text-[#808080]">Live tenant tuples & indexes</span>
                     </div>
 
-                    <div className="rounded-2xl bg-card-subtle dark:bg-slate-800/70 p-4 border border-border-light dark:border-slate-800">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary dark:text-slate-400">
-                        Compressed Archive Storage
+                    <div className="rounded-xl bg-[#F5F5F5] p-4 border border-[#E6E6E6]">
+                      <span className="text-[11px] font-medium uppercase tracking-wider text-[#808080]">
+                        Compressed archive storage
                       </span>
-                      <div className="text-2xl font-extrabold text-status-success-text mt-1 tabular-nums">
+                      <div className="text-2xl font-bold text-black mt-1 tabular-nums">
                         {formatBytes(healthMetrics.archive_storage_bytes)}
                       </div>
-                      <span className="text-[11px] text-text-tertiary">
+                      <span className="text-[11px] text-[#808080]">
                         {archives.length} monthly .json.gz bundle{archives.length === 1 ? "" : "s"}
                       </span>
                     </div>
@@ -680,16 +680,16 @@ export default function OrganizationSettingsAdminPage() {
                     {(healthMetrics.tables || []).map((t) => (
                       <div
                         key={t.table_name}
-                        className="rounded-2xl px-3.5 py-2.5 bg-card-subtle/60 dark:bg-slate-800/40 border border-border-light dark:border-slate-800"
+                        className="rounded-lg px-3.5 py-2.5 bg-[#F5F5F5] border border-[#E6E6E6]"
                       >
-                        <div className="text-[11px] font-semibold text-text-secondary dark:text-slate-400 truncate">
+                        <div className="text-[11px] font-medium text-[#808080] truncate">
                           {t.table_name}
                         </div>
                         <div className="flex items-baseline justify-between gap-2 mt-1">
-                          <span className="text-sm font-extrabold text-text-primary dark:text-white tabular-nums">
+                          <span className="text-sm font-bold text-black tabular-nums">
                             {Number(t.row_count).toLocaleString()}
                           </span>
-                          <span className="text-[10px] font-medium text-text-tertiary tabular-nums">
+                          <span className="text-[10px] font-medium text-[#808080] tabular-nums">
                             {formatBytes(Number(t.estimated_bytes))}
                           </span>
                         </div>
@@ -698,24 +698,24 @@ export default function OrganizationSettingsAdminPage() {
                   </div>
                 </>
               ) : (
-                <div className="text-xs text-text-secondary dark:text-slate-400 py-4">
+                <div className="text-xs text-[#808080] py-4">
                   Loading organization health metrics...
                 </div>
               )}
             </div>
 
             {/* Retention Policy Configuration & Floor Controls */}
-            <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 sm:p-8 border border-border-light dark:border-slate-800 shadow-card space-y-5">
+            <div className="bg-white rounded-[14px] p-6 sm:p-8 border border-[#E6E6E6] shadow-none space-y-5">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-status-success-bg text-status-success-text flex items-center justify-center">
-                  <ShieldCheck className="w-5 h-5" />
+                <div className="w-9 h-9 rounded-lg bg-[#E6E6E6] text-black flex items-center justify-center">
+                  <ShieldCheck className="w-4 h-4" />
                 </div>
                 <div>
-                  <h2 className="text-base font-extrabold text-text-primary dark:text-white">
-                    Per-Organization Retention Policy & Legal Floors
+                  <h2 className="text-base font-bold text-black">
+                    Retention policy & legal floors
                   </h2>
-                  <p className="text-xs text-text-secondary dark:text-slate-400">
-                    Weekly cleanup runs in 500-row batches via pg_cron. Attendance sessions require locked days & Storage archival before deletion.
+                  <p className="text-xs text-[#808080]">
+                    Weekly cleanup runs in 500-row batches via pg_cron. Attendance sessions require locked days and storage archival before deletion.
                   </p>
                 </div>
               </div>
@@ -725,9 +725,9 @@ export default function OrganizationSettingsAdminPage() {
                   <div>
                     <label
                       htmlFor="retention-sessions-months"
-                      className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1"
+                      className="text-xs font-medium text-[#4D4D4D] block mb-1"
                     >
-                      Locked Sessions Retention (months, min 18)
+                      Locked sessions retention (months, min 18)
                     </label>
                     <input
                       id="retention-sessions-months"
@@ -737,16 +737,16 @@ export default function OrganizationSettingsAdminPage() {
                       required
                       value={sessionsMonths}
                       onChange={(e) => setSessionsMonths(Number(e.target.value) || 18)}
-                      className="w-full px-4 py-2.5 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm font-semibold text-text-primary dark:text-white"
+                      className="w-full px-3.5 py-2 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] text-sm font-medium text-black focus:outline-none focus:ring-1 focus:ring-black"
                     />
                   </div>
 
                   <div>
                     <label
                       htmlFor="retention-audits-months"
-                      className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1"
+                      className="text-xs font-medium text-[#4D4D4D] block mb-1"
                     >
-                      Audit Logs Retention (months, min 24)
+                      Audit logs retention (months, min 24)
                     </label>
                     <input
                       id="retention-audits-months"
@@ -756,16 +756,16 @@ export default function OrganizationSettingsAdminPage() {
                       required
                       value={auditLogsMonths}
                       onChange={(e) => setAuditLogsMonths(Number(e.target.value) || 24)}
-                      className="w-full px-4 py-2.5 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm font-semibold text-text-primary dark:text-white"
+                      className="w-full px-3.5 py-2 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] text-sm font-medium text-black focus:outline-none focus:ring-1 focus:ring-black"
                     />
                   </div>
 
                   <div>
                     <label
                       htmlFor="retention-notifications-days"
-                      className="text-xs font-semibold text-text-secondary dark:text-slate-400 block mb-1"
+                      className="text-xs font-medium text-[#4D4D4D] block mb-1"
                     >
-                      Read Notifications Retention (days, min 90)
+                      Read notifications retention (days, min 90)
                     </label>
                     <input
                       id="retention-notifications-days"
@@ -775,7 +775,7 @@ export default function OrganizationSettingsAdminPage() {
                       required
                       value={notificationsDays}
                       onChange={(e) => setNotificationsDays(Number(e.target.value) || 90)}
-                      className="w-full px-4 py-2.5 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-sm font-semibold text-text-primary dark:text-white"
+                      className="w-full px-3.5 py-2 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] text-sm font-medium text-black focus:outline-none focus:ring-1 focus:ring-black"
                     />
                   </div>
                 </div>
@@ -784,27 +784,27 @@ export default function OrganizationSettingsAdminPage() {
                   <button
                     type="submit"
                     disabled={isSavingRetention}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-sm font-semibold shadow-sm transition-all disabled:opacity-50"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold shadow-none transition-colors disabled:opacity-50 cursor-pointer"
                   >
-                    <Save className="w-4 h-4" />
-                    {isSavingRetention ? "Saving..." : "Save Retention Policy"}
+                    <Save className="w-3.5 h-3.5" />
+                    {isSavingRetention ? "Saving..." : "Save retention policy"}
                   </button>
                 </div>
               </form>
             </div>
 
             {/* Dry-Run Preview & Export-Before-Delete Cleanup */}
-            <div className="bg-white dark:bg-slate-900 rounded-[28px] p-6 sm:p-8 border border-border-light dark:border-slate-800 shadow-card space-y-5">
+            <div className="bg-white rounded-[14px] p-6 sm:p-8 border border-[#E6E6E6] shadow-none space-y-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                    <Archive className="w-5 h-5" />
+                  <div className="w-9 h-9 rounded-lg bg-[#E6E6E6] text-black flex items-center justify-center">
+                    <Archive className="w-4 h-4" />
                   </div>
                   <div>
-                    <h2 className="text-base font-extrabold text-text-primary dark:text-white">
-                      Dry-Run Inspection & Batched Archival Cleanup
+                    <h2 className="text-base font-bold text-black">
+                      Dry-run inspection & archival cleanup
                     </h2>
-                    <p className="text-xs text-text-secondary dark:text-slate-400">
+                    <p className="text-xs text-[#808080]">
                       Preview eligible rows or export monthly locked attendance sessions (.json.gz) to private Storage before purging.
                     </p>
                   </div>
@@ -814,58 +814,58 @@ export default function OrganizationSettingsAdminPage() {
                     type="button"
                     onClick={handleDryRunPreview}
                     disabled={isRunningDryRun || isRunningCleanup}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-card-subtle dark:bg-slate-800 border border-border-light dark:border-slate-700 text-xs font-bold text-text-primary dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs font-medium text-black hover:bg-[#F5F5F5] transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     <Play className="w-3.5 h-3.5" />
-                    {isRunningDryRun ? "Previewing..." : "Run Dry-Run Preview"}
+                    {isRunningDryRun ? "Previewing..." : "Run dry-run preview"}
                   </button>
                   <button
                     type="button"
                     onClick={handleRunArchiveAndCleanup}
                     disabled={isRunningCleanup || isRunningDryRun}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold shadow-sm transition-colors disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold shadow-none transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     <Archive className="w-3.5 h-3.5" />
-                    {isRunningCleanup ? "Archiving & Cleaning..." : "Archive & Run Cleanup"}
+                    {isRunningCleanup ? "Archiving & cleaning..." : "Archive & run cleanup"}
                   </button>
                 </div>
               </div>
 
               {retentionPreview && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="rounded-2xl p-4 bg-card-subtle dark:bg-slate-800/60 border border-border-light dark:border-slate-800">
-                    <div className="text-[11px] font-bold uppercase text-text-secondary dark:text-slate-400">
-                      Locked Sessions Eligible
+                  <div className="rounded-xl p-4 bg-[#F5F5F5] border border-[#E6E6E6]">
+                    <div className="text-[11px] font-medium uppercase text-[#808080]">
+                      Locked sessions eligible
                     </div>
-                    <div className="text-xl font-extrabold text-text-primary dark:text-white mt-1 tabular-nums">
+                    <div className="text-xl font-bold text-black mt-1 tabular-nums">
                       {retentionPreview.eligible.attendance_sessions_locked}
                     </div>
-                    <div className="text-[11px] text-text-tertiary mt-1">
+                    <div className="text-[11px] text-[#808080] mt-1">
                       {retentionPreview.eligible.attendance_sessions_needs_archive} pending .json.gz export ·{" "}
                       {retentionPreview.eligible.attendance_sessions_unlocked_skipped} unlocked protected
                     </div>
                   </div>
 
-                  <div className="rounded-2xl p-4 bg-card-subtle dark:bg-slate-800/60 border border-border-light dark:border-slate-800">
-                    <div className="text-[11px] font-bold uppercase text-text-secondary dark:text-slate-400">
-                      Audit Logs Eligible
+                  <div className="rounded-xl p-4 bg-[#F5F5F5] border border-[#E6E6E6]">
+                    <div className="text-[11px] font-medium uppercase text-[#808080]">
+                      Audit logs eligible
                     </div>
-                    <div className="text-xl font-extrabold text-text-primary dark:text-white mt-1 tabular-nums">
+                    <div className="text-xl font-bold text-black mt-1 tabular-nums">
                       {retentionPreview.eligible.audit_logs}
                     </div>
-                    <div className="text-[11px] text-text-tertiary mt-1">
+                    <div className="text-[11px] text-[#808080] mt-1">
                       Processed in 500-row batches
                     </div>
                   </div>
 
-                  <div className="rounded-2xl p-4 bg-card-subtle dark:bg-slate-800/60 border border-border-light dark:border-slate-800">
-                    <div className="text-[11px] font-bold uppercase text-text-secondary dark:text-slate-400">
-                      Read Notifications Eligible
+                  <div className="rounded-xl p-4 bg-[#F5F5F5] border border-[#E6E6E6]">
+                    <div className="text-[11px] font-medium uppercase text-[#808080]">
+                      Read notifications eligible
                     </div>
-                    <div className="text-xl font-extrabold text-text-primary dark:text-white mt-1 tabular-nums">
+                    <div className="text-xl font-bold text-black mt-1 tabular-nums">
                       {retentionPreview.eligible.notifications_read}
                     </div>
-                    <div className="text-[11px] text-text-tertiary mt-1">
+                    <div className="text-[11px] text-[#808080] mt-1">
                       {retentionPreview.eligible.notifications_unread_skipped} unread notifications preserved
                     </div>
                   </div>
@@ -874,40 +874,40 @@ export default function OrganizationSettingsAdminPage() {
 
               {/* Monthly Archives Table / Empty State */}
               <div className="pt-2">
-                <h3 className="text-xs font-extrabold uppercase tracking-wider text-text-secondary dark:text-slate-400 mb-3">
-                  Monthly Compressed Storage Archives (.json.gz)
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#808080] mb-3">
+                  Monthly compressed storage archives (.json.gz)
                 </h3>
                 {archives.length === 0 ? (
                   <EmptyState
-                    icon={<Archive className="w-6 h-6" />}
+                    icon={<Archive className="w-5 h-5 text-[#808080]" />}
                     title="No archived monthly bundles yet"
                     description="When locked attendance sessions age past your retention window, running Archive & Cleanup exports compressed monthly JSON bundles here before purging rows."
                   />
                 ) : (
-                  <div className="overflow-x-auto rounded-2xl border border-border-light dark:border-slate-800">
+                  <div className="overflow-x-auto rounded-xl border border-[#E6E6E6]">
                     <table className="w-full text-left border-collapse text-xs">
                       <thead>
-                        <tr className="bg-card-subtle dark:bg-slate-800/80 text-text-secondary dark:text-slate-400 border-b border-border-light dark:border-slate-800">
-                          <th className="py-2.5 px-3 font-bold">Month</th>
-                          <th className="py-2.5 px-3 font-bold">Period</th>
-                          <th className="py-2.5 px-3 font-bold">Sessions</th>
-                          <th className="py-2.5 px-3 font-bold">Size (.gz)</th>
-                          <th className="py-2.5 px-3 font-bold">SHA-256</th>
-                          <th className="py-2.5 px-3 font-bold text-right">Download</th>
+                        <tr className="bg-[#F5F5F5] text-[#808080] border-b border-[#E6E6E6]">
+                          <th className="py-2.5 px-3 font-semibold">Month</th>
+                          <th className="py-2.5 px-3 font-semibold">Period</th>
+                          <th className="py-2.5 px-3 font-semibold">Sessions</th>
+                          <th className="py-2.5 px-3 font-semibold">Size (.gz)</th>
+                          <th className="py-2.5 px-3 font-semibold">SHA-256</th>
+                          <th className="py-2.5 px-3 font-semibold text-right">Download</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-border-light dark:divide-slate-800">
+                      <tbody className="divide-y divide-[#E6E6E6]">
                         {archives.map((arch) => (
-                          <tr key={arch.id} className="hover:bg-card-subtle/40 dark:hover:bg-slate-800/30">
-                            <td className="py-2.5 px-3 font-bold text-text-primary dark:text-white">
+                          <tr key={arch.id} className="hover:bg-[#F5F5F5]/60">
+                            <td className="py-2.5 px-3 font-semibold text-black">
                               {arch.archive_month}
                             </td>
-                            <td className="py-2.5 px-3 text-text-secondary dark:text-slate-400">
+                            <td className="py-2.5 px-3 text-[#4D4D4D]">
                               {arch.period_start} → {arch.period_end}
                             </td>
-                            <td className="py-2.5 px-3 font-semibold tabular-nums">{arch.row_count}</td>
-                            <td className="py-2.5 px-3 tabular-nums">{formatBytes(arch.byte_size)}</td>
-                            <td className="py-2.5 px-3 font-mono text-[11px] text-text-tertiary">
+                            <td className="py-2.5 px-3 font-medium tabular-nums">{arch.row_count}</td>
+                            <td className="py-2.5 px-3 tabular-nums text-[#4D4D4D]">{formatBytes(arch.byte_size)}</td>
+                            <td className="py-2.5 px-3 font-mono text-[11px] text-[#808080]">
                               {arch.checksum_sha256.slice(0, 12)}…
                             </td>
                             <td className="py-2.5 px-3 text-right">
@@ -915,9 +915,9 @@ export default function OrganizationSettingsAdminPage() {
                                 type="button"
                                 onClick={() => handleDownloadArchive(arch.id)}
                                 disabled={downloadingArchiveId === arch.id}
-                                className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-brand-purple/10 text-brand-purple hover:bg-brand-purple/20 font-bold transition-colors disabled:opacity-50"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-black text-white hover:bg-[#1A1A1A] font-medium transition-colors disabled:opacity-50 cursor-pointer"
                               >
-                                <Download className="w-3.5 h-3.5" />
+                                <Download className="w-3 h-3" />
                                 {downloadingArchiveId === arch.id ? "Signing..." : "Download"}
                               </button>
                             </td>

@@ -21,8 +21,10 @@ export function WeeklyHoursChart({
   targetHours = 8,
   className,
 }: WeeklyHoursChartProps) {
-  const targetMinutes = targetHours * 60;
-  const maxDisplayMinutes = Math.max(targetMinutes * 1.25, ...days.map((d) => d.workedMinutes || 0), 600);
+  const targetMinutes = targetHours * 60; // 480
+  const maxWorked = Math.max(...days.map((d) => d.workedMinutes || 0), 0);
+  // Scale display ceiling so target (8h) sits nicely around 75%-80% of max height, or expands if someone worked > 8h
+  const maxDisplayMinutes = Math.max(targetMinutes * 1.25, maxWorked * 1.1, 600);
 
   const hasAnyData = days.some((d) => (d.workedMinutes || 0) > 0);
 
@@ -34,11 +36,12 @@ export function WeeklyHoursChart({
     );
   }
 
-  // Calculate target line percentage from bottom
-  const targetLinePercent = Math.round((targetMinutes / maxDisplayMinutes) * 100);
+  // Exact target line percentage from bottom of the plot area
+  const targetLinePercent = Math.min(100, Math.round((targetMinutes / maxDisplayMinutes) * 100));
 
   return (
     <div className={cn("space-y-3 pt-1 select-none", className)}>
+      {/* Header: Title and Legend */}
       <div className="flex items-center justify-between text-xs text-[#808080]">
         <span className="font-medium text-black">Hours worked / day</span>
         <span className="flex items-center gap-1.5 font-normal">
@@ -47,60 +50,82 @@ export function WeeklyHoursChart({
         </span>
       </div>
 
-      <div className="relative h-40 w-full pt-4 pb-6 flex items-end justify-between gap-3 px-2">
-        {/* Target Dashed Guideline */}
+      {/* Plot Area: Shared coordinate container for target guideline and bar tracks */}
+      <div className="relative h-36 w-full mt-2">
+        {/* Target Dashed Guideline: exactly at targetLinePercent from bottom */}
         <div
-          className="absolute left-0 right-0 border-b border-dashed border-[#B3B3B3] pointer-events-none flex items-center justify-end pr-1 z-0"
-          style={{ bottom: `calc(${targetLinePercent}% + 24px)` }}
+          className="absolute left-0 right-0 border-b border-dashed border-[#B3B3B3] pointer-events-none flex items-center justify-end z-0"
+          style={{ bottom: `${targetLinePercent}%` }}
         >
-          <span className="text-[10px] font-sans font-medium text-[#4D4D4D] bg-white px-1 rounded border border-[#E6E6E6]">
+          <span className="text-[10px] font-sans font-medium text-[#4D4D4D] bg-white px-1.5 py-0.5 -translate-y-1/2 rounded border border-[#E6E6E6] shadow-2xs">
             {targetHours}h
           </span>
         </div>
 
-        {/* Day Bars */}
+        {/* Bars Container: spans h-full of the plot area */}
+        <div className="relative z-10 h-full flex items-end justify-between gap-3 px-2">
+          {days.map((d) => {
+            const hours = (d.workedMinutes / 60).toFixed(1);
+            // Height calculation strictly matches the plot coordinate space
+            const heightPercent = Math.min(
+              100,
+              Math.max(d.workedMinutes > 0 ? 4 : 0, Math.round((d.workedMinutes / maxDisplayMinutes) * 100))
+            );
+            const isTargetMet = d.workedMinutes >= targetMinutes;
+
+            return (
+              <div
+                key={d.dateStr}
+                className="flex-1 flex flex-col items-center h-full justify-end group relative"
+              >
+                {/* Tooltip on Hover */}
+                <div className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white text-[10px] font-medium px-2 py-0.5 rounded shadow pointer-events-none whitespace-nowrap z-20 flex items-center gap-1">
+                  <span
+                    className={cn(
+                      "w-1.5 h-1.5 rounded-full",
+                      isTargetMet ? "bg-[#A6F000]" : "bg-[#808080]"
+                    )}
+                  />
+                  <span>
+                    {d.dayLabel}: {hours} hrs {isTargetMet ? "• Target met" : ""}
+                  </span>
+                </div>
+
+                {/* Track and Pill Bar Fill */}
+                <div className="w-6 sm:w-7 bg-[#E6E6E6] rounded-t-full h-full flex items-end overflow-hidden">
+                  <div
+                    className={cn(
+                      "w-full rounded-t-full transition-all duration-300 ease-out",
+                      d.workedMinutes === 0
+                        ? "bg-transparent"
+                        : "bg-[#A6F000] hover:brightness-95"
+                    )}
+                    style={{ height: `${heightPercent}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* X-Axis Day & Hours Labels: Separate row below the plot area */}
+      <div className="flex items-center justify-between gap-3 px-2 pt-2 border-t border-[#E6E6E6]">
         {days.map((d) => {
           const hours = (d.workedMinutes / 60).toFixed(1);
-          const heightPercent = Math.min(
-            100,
-            Math.max(d.workedMinutes > 0 ? 8 : 2, Math.round((d.workedMinutes / maxDisplayMinutes) * 100))
-          );
-          const isTargetMet = d.workedMinutes >= targetMinutes;
-
           return (
-            <div key={d.dateStr} className="flex-1 flex flex-col items-center h-full justify-end group relative z-10">
-              {/* Tooltip on Hover */}
-              <div className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white text-[10px] font-medium px-2 py-0.5 rounded shadow pointer-events-none whitespace-nowrap z-20">
-                {d.dayLabel}: {hours} hrs {isTargetMet ? "✓ Met" : ""}
-              </div>
-
-              {/* Bar track and fill */}
-              <div className="w-full max-w-[36px] bg-[#E6E6E6] rounded-t-lg h-full flex items-end p-0.5 overflow-hidden">
-                <div
-                  className={cn(
-                    "w-full rounded-t-md transition-all duration-300 ease-out",
-                    d.workedMinutes === 0
-                      ? "bg-transparent"
-                      : "bg-[#A6F000] hover:brightness-95"
-                  )}
-                  style={{ height: `${heightPercent}%` }}
-                />
-              </div>
-
-              {/* Day Label */}
-              <div className="mt-2 text-center">
-                <span
-                  className={cn(
-                    "text-xs block font-medium",
-                    d.isToday ? "text-black font-bold" : "text-[#808080]"
-                  )}
-                >
-                  {d.dayLabel}
-                </span>
-                <span className="text-[10px] tabular-nums text-[#808080] block">
-                  {d.workedMinutes > 0 ? `${hours}h` : "—"}
-                </span>
-              </div>
+            <div key={d.dateStr} className="flex-1 text-center">
+              <span
+                className={cn(
+                  "text-xs block font-medium",
+                  d.isToday ? "text-black font-bold" : "text-[#808080]"
+                )}
+              >
+                {d.dayLabel}
+              </span>
+              <span className="text-[10px] tabular-nums text-[#808080] block">
+                {d.workedMinutes > 0 ? `${hours}h` : "—"}
+              </span>
             </div>
           );
         })}

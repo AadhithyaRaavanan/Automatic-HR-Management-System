@@ -2,43 +2,43 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ShieldAlert, ArrowLeft, LogOut, Home } from "lucide-react";
+import { ShieldAlert, LogOut, Home } from "lucide-react";
 
 export default function Forbidden403Page() {
   return (
-    <div className="min-h-screen bg-[#D9DBEC] dark:bg-slate-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-[32px] p-8 shadow-shell text-center space-y-6 border border-border-light dark:border-slate-800">
-        <div className="w-20 h-20 mx-auto rounded-3xl bg-status-danger-bg text-status-danger-text flex items-center justify-center">
-          <ShieldAlert className="w-10 h-10" />
+    <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white rounded-[14px] p-8 text-center space-y-6 border border-[#E6E6E6] shadow-none">
+        <div className="w-14 h-14 mx-auto rounded-full bg-[#F5F5F5] border border-[#E6E6E6] text-black flex items-center justify-center">
+          <ShieldAlert className="w-6 h-6 text-black" />
         </div>
 
         <div className="space-y-2">
-          <span className="text-xs font-bold uppercase tracking-wider text-status-danger-text px-3 py-1 rounded-full bg-status-danger-bg inline-block">
+          <span className="text-[11px] font-semibold text-[#808080] px-2.5 py-1 rounded-full bg-[#F5F5F5] border border-[#E6E6E6] inline-block">
             HTTP 403 Forbidden
           </span>
-          <h1 className="text-2xl font-extrabold text-text-primary dark:text-white">
-            Access Denied
+          <h1 className="text-2xl font-bold text-black tracking-tight">
+            Access denied
           </h1>
-          <p className="text-sm text-text-secondary dark:text-slate-400">
-            You do not have sufficient permissions or authoritative membership role to access this resource.
-            Multi-factor authentication (AAL2) or organization administrator elevation may be required.
+          <p className="text-sm text-[#808080]">
+            You do not have sufficient permissions to access this resource.
+            Organization administrator elevation may be required.
           </p>
         </div>
 
         <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
           <Link
             href="/"
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-brand-purple hover:bg-brand-purple-hover text-white text-sm font-semibold shadow-sm transition-all"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold transition-colors"
           >
-            <Home className="w-4 h-4" />
+            <Home className="w-3.5 h-3.5" />
             Dashboard
           </Link>
           <Link
             href="/login"
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-card-subtle hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-text-primary dark:text-slate-200 text-sm font-semibold transition-all"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-white hover:bg-[#F5F5F5] border border-[#E6E6E6] text-black text-xs font-semibold transition-colors"
           >
-            <LogOut className="w-4 h-4" />
-            Sign Out
+            <LogOut className="w-3.5 h-3.5" />
+            Sign out
           </Link>
         </div>
       </div>
