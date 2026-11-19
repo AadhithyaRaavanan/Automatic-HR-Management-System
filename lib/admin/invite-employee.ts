@@ -347,6 +347,9 @@ export async function inviteSingleEmployee(
   }
 
   // 2. Provision invited employee in database via service_role-only RPC
+  // Map functional roles (like team_lead) to the database security role 'employee' for database provisioning
+  const dbSecurityRole = role === "team_lead" ? "employee" : role;
+
   const { data: provisionData, error: provisionError } = await (supabaseAdmin.rpc as any)(
     "provision_invited_employee",
     {
@@ -354,7 +357,7 @@ export async function inviteSingleEmployee(
       p_organization_id: context.organizationId,
       p_email: normalizedEmail,
       p_full_name: normalizedName,
-      p_role: role,
+      p_role: dbSecurityRole,
       p_work_mode: workMode,
       p_timezone: timezone,
       p_department_id: departmentId || null,
@@ -389,6 +392,7 @@ export async function inviteSingleEmployee(
   const [omRes, empRes] = await Promise.all([
     (supabaseAdmin.from("organization_members") as any)
       .update({
+        role: role,
         shift_start_time: startVal,
         shift_end_time: endVal,
         department_id: departmentId || null,
