@@ -32,26 +32,26 @@ export interface AttendanceCalendarCardProps {
   className?: string;
 }
 
-// Known TN Gazetted Holidays for live display
+// Known TN Gazetted Holidays for live display (English text only)
 const KNOWN_HOLIDAYS: Record<string, { title: string; category: string }> = {
-  "2026-01-01": { title: "New Year's Day (ஆங்கிலப் புத்தாண்டு)", category: "TN Gazetted Holiday" },
-  "2026-01-14": { title: "Pongal Festival (தைப்பொங்கல்)", category: "TN Gazetted Holiday" },
-  "2026-01-15": { title: "Thiruvalluvar Day (திருவள்ளுவர் தினம்)", category: "TN Gazetted Holiday" },
-  "2026-01-16": { title: "Uzhavar Thirunal (உழவர் திருநாள்)", category: "TN Gazetted Holiday" },
-  "2026-01-26": { title: "Republic Day (குடியரசு தினம்)", category: "National Holiday" },
-  "2026-05-01": { title: "May Day / Labour Day (உழைப்பாளர் தினம்)", category: "National Holiday" },
-  "2026-08-15": { title: "Independence Day (சுதந்திர தினம்)", category: "National Holiday" },
-  "2026-10-02": { title: "Gandhi Jayanti (காந்தி ஜெயந்தி)", category: "National Holiday" },
-  "2026-10-19": { title: "Ayutha Pooja (ஆயுத பூஜை)", category: "TN Gazetted Holiday" },
-  "2026-10-20": { title: "Vijaya Dasami (விஜயதசமி)", category: "TN Gazetted Holiday" },
-  "2026-11-08": { title: "Deepavali Festival (தீபாவளி பண்டிகை)", category: "TN Gazetted Holiday" },
-  "2026-12-25": { title: "Christmas Day (கிறிஸ்துமஸ் பண்டிகை)", category: "TN Gazetted Holiday" },
-  "2027-01-01": { title: "New Year's Day (ஆங்கிலப் புத்தாண்டு)", category: "TN Gazetted Holiday" },
-  "2027-01-14": { title: "Bhogi Festival (போகிப் பண்டிகை)", category: "TN Gazetted Holiday" },
-  "2027-01-15": { title: "Thai Pongal (தைப்பொங்கல்)", category: "TN Gazetted Holiday" },
-  "2027-01-16": { title: "Thiruvalluvar Day (திருவள்ளுவர் தினம்)", category: "TN Gazetted Holiday" },
-  "2027-01-17": { title: "Uzhavar Thirunal (உழவர் திருநாள்)", category: "TN Gazetted Holiday" },
-  "2027-01-26": { title: "Republic Day (குடியரசு தினம்)", category: "National Holiday" },
+  "2026-01-01": { title: "New Year's Day", category: "TN Gazetted Holiday" },
+  "2026-01-14": { title: "Pongal Festival", category: "TN Gazetted Holiday" },
+  "2026-01-15": { title: "Thiruvalluvar Day", category: "TN Gazetted Holiday" },
+  "2026-01-16": { title: "Uzhavar Thirunal", category: "TN Gazetted Holiday" },
+  "2026-01-26": { title: "Republic Day", category: "National Holiday" },
+  "2026-05-01": { title: "May Day / Labour Day", category: "National Holiday" },
+  "2026-08-15": { title: "Independence Day", category: "National Holiday" },
+  "2026-10-02": { title: "Gandhi Jayanti", category: "National Holiday" },
+  "2026-10-19": { title: "Ayutha Pooja", category: "TN Gazetted Holiday" },
+  "2026-10-20": { title: "Vijaya Dasami", category: "TN Gazetted Holiday" },
+  "2026-11-08": { title: "Deepavali Festival", category: "TN Gazetted Holiday" },
+  "2026-12-25": { title: "Christmas Day", category: "TN Gazetted Holiday" },
+  "2027-01-01": { title: "New Year's Day", category: "TN Gazetted Holiday" },
+  "2027-01-14": { title: "Bhogi Festival", category: "TN Gazetted Holiday" },
+  "2027-01-15": { title: "Thai Pongal", category: "TN Gazetted Holiday" },
+  "2027-01-16": { title: "Thiruvalluvar Day", category: "TN Gazetted Holiday" },
+  "2027-01-17": { title: "Uzhavar Thirunal", category: "TN Gazetted Holiday" },
+  "2027-01-26": { title: "Republic Day", category: "National Holiday" },
 };
 
 function formatIsoDate(d: Date): string {
@@ -230,45 +230,48 @@ export function AttendanceCalendarCard({
   };
 
   const statusDotClass = {
-    present: "bg-status-success-dot",
-    half_day: "bg-status-warning-dot",
-    absent: "bg-status-danger-dot",
-    holiday: "bg-brand-purple",
-    weekend: "bg-text-tertiary/40",
-    leave: "bg-status-info-dot",
+    present: "bg-[#A6F000]",
+    half_day: "bg-amber-400",
+    absent: "bg-[#F00091]",
+    holiday: "bg-[#F00091]",
+    weekend: "bg-[#B3B3B3]",
+    leave: "bg-[#808080]",
   };
 
   return (
-    <BentoCard
-      title={
-        <div className="flex items-center justify-between w-full">
-          <span className="text-base font-bold text-text-primary tracking-tight">
-            {monthLabel}
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={handlePrev}
-              title="Previous week"
-              className="p-1 rounded-full text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={handleNext}
-              title="Next week"
-              className="p-1 rounded-full text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors cursor-pointer"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      }
-      className={cn("p-5 justify-between", className)}
+    <div
+      className={cn(
+        "bg-white rounded-[14px] border border-[#E6E6E6] p-5 flex flex-col justify-between shadow-none select-none transition-colors",
+        className
+      )}
     >
+      {/* Header */}
+      <div className="flex items-center justify-between w-full mb-3">
+        <span className="text-sm font-bold text-black tracking-tight">
+          {monthLabel}
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handlePrev}
+            title="Previous week"
+            className="p-1 rounded-full text-[#808080] hover:text-black hover:bg-[#F5F5F5] transition-colors cursor-pointer"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={handleNext}
+            title="Next week"
+            className="p-1 rounded-full text-[#808080] hover:text-black hover:bg-[#F5F5F5] transition-colors cursor-pointer"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
       {/* 7-Day Week Strip */}
-      <div className="grid grid-cols-7 gap-1 text-center py-2 border-b border-border-light/60">
+      <div className="grid grid-cols-7 gap-1 text-center py-2 border-b border-[#E6E6E6]">
         {days.map((item) => {
           const isSelected = item.dateKey === selectedKey;
           const isToday = item.dateKey === todayKey;
@@ -282,10 +285,10 @@ export function AttendanceCalendarCard({
             >
               <span
                 className={cn(
-                  "text-[11px] font-semibold transition-colors",
+                  "text-[11px] font-medium transition-colors",
                   isToday
-                    ? "text-brand-purple font-bold"
-                    : "text-text-tertiary group-hover:text-text-primary"
+                    ? "text-black font-bold"
+                    : "text-[#808080] group-hover:text-black"
                 )}
               >
                 {item.dayName}
@@ -293,12 +296,12 @@ export function AttendanceCalendarCard({
 
               <div
                 className={cn(
-                  "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all",
+                  "w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold transition-all",
                   isSelected
-                    ? "bg-brand-purple text-white shadow-sm scale-105"
+                    ? "bg-[#A6F000] text-black font-bold shadow-sm"
                     : isToday
-                    ? "border-2 border-brand-purple text-brand-purple hover:bg-brand-purple/10"
-                    : "text-text-primary hover:bg-card-subtle"
+                    ? "border-2 border-black text-black font-bold"
+                    : "text-black hover:bg-[#F5F5F5]"
                 )}
               >
                 {item.dateNumber}
@@ -318,21 +321,21 @@ export function AttendanceCalendarCard({
       </div>
 
       {/* Selected Day Agenda List */}
-      <div className="mt-4 space-y-3">
+      <div className="mt-4 space-y-2">
         {agenda.map((slot) => (
           <div
             key={slot.id}
-            className="group flex items-start justify-between gap-3 p-2.5 rounded-xl hover:bg-card-subtle/70 transition-colors"
+            className="group flex items-start justify-between gap-3 p-2.5 rounded-lg hover:bg-[#F5F5F5] transition-colors"
           >
             <div>
-              <span className="text-[11px] font-bold tracking-wider text-text-tertiary block font-mono">
+              <span className="text-[11px] font-medium text-[#808080] block font-sans">
                 {slot.timeSlot}
               </span>
-              <h5 className="text-xs font-bold text-text-primary mt-0.5">
+              <h5 className="text-xs font-semibold text-black mt-0.5">
                 {slot.title}
               </h5>
               {slot.category && (
-                <span className="text-[10px] text-brand-purple font-semibold">
+                <span className="text-[10px] text-[#4D4D4D] font-normal">
                   {slot.category}
                 </span>
               )}
@@ -341,13 +344,13 @@ export function AttendanceCalendarCard({
             <button
               type="button"
               title="Session options"
-              className="p-1 rounded text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors opacity-0 group-hover:opacity-100"
+              className="p-1 rounded text-[#808080] hover:text-black hover:bg-[#E6E6E6] transition-colors opacity-0 group-hover:opacity-100"
             >
               <MoreVertical className="w-3.5 h-3.5" />
             </button>
           </div>
         ))}
       </div>
-    </BentoCard>
+    </div>
   );
 }

@@ -73,32 +73,32 @@ export default function GalleryPage() {
         {/* 1. Design Tokens & Palette */}
         <section className="space-y-4">
           <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
-            <span>1. Core Design Tokens & Palette (WCAG AA Certified)</span>
+            <span>1. Zen Xea Brand Palette & Tokens</span>
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-            <div className="p-4 rounded-2xl bg-brand-purple text-white shadow-sm flex flex-col justify-between h-24">
-              <span className="text-xs font-bold">Brand Purple</span>
-              <span className="text-[11px] font-mono opacity-90">#6C5CE7</span>
+            <div className="p-4 rounded-xl bg-black text-white shadow-sm flex flex-col justify-between h-24 border border-[#333333]">
+              <span className="text-xs font-bold">Black</span>
+              <span className="text-[11px] font-mono opacity-90">#000000</span>
             </div>
-            <div className="p-4 rounded-2xl bg-brand-navy text-white shadow-sm flex flex-col justify-between h-24">
-              <span className="text-xs font-bold">Brand Navy</span>
-              <span className="text-[11px] font-mono opacity-90">#14123A</span>
+            <div className="p-4 rounded-xl bg-[#A6F000] text-black shadow-sm flex flex-col justify-between h-24">
+              <span className="text-xs font-bold">Neon Lime</span>
+              <span className="text-[11px] font-mono font-bold">#A6F000</span>
             </div>
-            <div className="p-4 rounded-2xl bg-canvas border border-border-light text-text-primary shadow-sm flex flex-col justify-between h-24">
-              <span className="text-xs font-bold">Canvas Lavender</span>
-              <span className="text-[11px] font-mono text-text-secondary">#D9DBEC</span>
+            <div className="p-4 rounded-xl bg-[#F00091] text-white shadow-sm flex flex-col justify-between h-24">
+              <span className="text-xs font-bold">Neon Magenta</span>
+              <span className="text-[11px] font-mono opacity-90">#F00091</span>
             </div>
-            <div className="p-4 rounded-2xl bg-status-success-bg text-status-success-text border border-status-success-dot/30 shadow-sm flex flex-col justify-between h-24">
-              <span className="text-xs font-bold">Success Mint</span>
-              <span className="text-[11px] font-mono">Contrast 5.2:1</span>
+            <div className="p-4 rounded-xl bg-[#1A1A1A] text-white shadow-sm flex flex-col justify-between h-24">
+              <span className="text-xs font-bold">Grey 900</span>
+              <span className="text-[11px] font-mono opacity-80">#1A1A1A</span>
             </div>
-            <div className="p-4 rounded-2xl bg-status-warning-bg text-status-warning-text border border-status-warning-dot/30 shadow-sm flex flex-col justify-between h-24">
-              <span className="text-xs font-bold">Warning Amber</span>
-              <span className="text-[11px] font-mono">Contrast 5.5:1</span>
+            <div className="p-4 rounded-xl bg-[#808080] text-white shadow-sm flex flex-col justify-between h-24">
+              <span className="text-xs font-bold">Grey 500</span>
+              <span className="text-[11px] font-mono opacity-90">#808080</span>
             </div>
-            <div className="p-4 rounded-2xl bg-status-danger-bg text-status-danger-text border border-status-danger-dot/30 shadow-sm flex flex-col justify-between h-24">
-              <span className="text-xs font-bold">Danger Coral</span>
-              <span className="text-[11px] font-mono">Contrast 5.8:1</span>
+            <div className="p-4 rounded-xl bg-[#E6E6E6] text-black border border-[#D9D9D9] shadow-sm flex flex-col justify-between h-24">
+              <span className="text-xs font-bold">Grey 100</span>
+              <span className="text-[11px] font-mono font-medium">#E6E6E6</span>
             </div>
           </div>
         </section>

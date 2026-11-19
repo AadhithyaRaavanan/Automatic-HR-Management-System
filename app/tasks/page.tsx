@@ -637,16 +637,16 @@ function TasksWorkspaceContent() {
             return (
               <div
                 key={col.key}
-                className="flex flex-col min-h-[220px] max-h-[calc(100vh-220px)] rounded-[24px] bg-card-subtle/70 border border-border-light p-3.5 space-y-3"
+                className="flex flex-col min-h-[220px] max-h-[calc(100vh-220px)] rounded-[14px] bg-[#E6E6E6] border border-[#E6E6E6] p-3.5 space-y-3"
               >
                 <div className="flex items-center justify-between px-1 shrink-0">
                   <div>
-                    <h2 className="text-xs font-extrabold uppercase tracking-wider text-text-primary">
+                    <h2 className="text-xs font-bold text-black">
                       {col.label}
                     </h2>
-                    <p className="text-[10px] text-text-tertiary">{col.hint}</p>
+                    <p className="text-[10px] text-[#808080]">{col.hint}</p>
                   </div>
-                  <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-card border border-border-light text-text-secondary">
+                  <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-white border border-[#E6E6E6] text-black">
                     {colTasks.length}
                   </span>
                 </div>
@@ -661,44 +661,44 @@ function TasksWorkspaceContent() {
                           key={task.id}
                           type="button"
                           onClick={() => setSelectedTaskId(task.id)}
-                          className="w-full text-left p-3 rounded-2xl bg-card hover:border-brand-purple/60 hover:shadow-card-hover border border-border-light shadow-xs transition-all cursor-pointer space-y-2 focus-visible:ring-2 focus-visible:ring-brand-purple focus-visible:outline-none"
+                          className="w-full text-left p-3 rounded-[14px] bg-white hover:border-black/30 border border-[#E6E6E6] shadow-none transition-all cursor-pointer space-y-2 focus-visible:ring-2 focus-visible:ring-black focus-visible:outline-none"
                         >
                           <div className="flex items-center justify-between gap-1.5">
-                            <StatusPill status={task.priority} showIcon={false} />
+                            <StatusPill status={task.priority} showIcon={true} />
                             {task.project_id && projectNameMap.has(task.project_id) && (
-                              <span className="text-[10px] font-bold text-brand-purple truncate max-w-[110px]">
+                              <span className="text-[10px] font-medium text-[#4D4D4D] truncate max-w-[110px]">
                                 {projectNameMap.get(task.project_id)}
                               </span>
                             )}
                           </div>
-                          <p className="text-xs font-bold text-text-primary line-clamp-2 leading-snug">
+                          <p className="text-xs font-semibold text-black line-clamp-2 leading-snug">
                             {task.title}
                           </p>
                           <div className="flex flex-wrap items-center gap-1.5">
                             <DueBadge dueDate={task.due_date} status={task.status} />
                             {task.assignee_id && task.creator_id === task.assignee_id && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-purple/10 text-brand-purple border border-brand-purple/20">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#F5F5F5] text-black border border-[#E6E6E6]">
                                 <UserCheck className="w-2.5 h-2.5" />
                                 Self-Assigned
                               </span>
                             )}
                             {task.assignee_id && task.creator_id !== task.assignee_id && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-card-subtle text-text-tertiary">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-normal bg-[#F5F5F5] text-[#808080]">
                                 From: {formatPerson(task.creator_id)}
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center justify-between pt-1.5 border-t border-border-light/60 text-[11px] text-text-tertiary gap-2">
+                          <div className="flex items-center justify-between pt-1.5 border-t border-[#E6E6E6] text-[11px] text-[#808080] gap-2">
                             <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="w-5 h-5 rounded-full bg-brand-purple/10 text-brand-purple font-bold text-[9px] flex items-center justify-center shrink-0">
+                              <span className="w-5 h-5 rounded-full bg-[#E6E6E6] text-black font-semibold text-[9px] flex items-center justify-center shrink-0">
                                 {initials}
                               </span>
-                              <span className="truncate font-medium text-text-secondary">
+                              <span className="truncate font-medium text-[#4D4D4D]">
                                 {assigneeName}
                               </span>
                             </div>
                             {task.estimated_minutes != null && (
-                              <span className="font-mono font-bold text-brand-purple shrink-0 tabular-nums text-[10px]">
+                              <span className="font-mono text-[#808080] shrink-0 tabular-nums text-[10px]">
                                 {formatEstimatedDuration(task.estimated_minutes)} est
                               </span>
                             )}

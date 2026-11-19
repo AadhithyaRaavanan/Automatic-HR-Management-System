@@ -1,0 +1,285 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@supabase/ssr";
+import { Database } from "@/types/database.types";
+import { supabaseAdmin } from "@/lib/supabase/admin";
+import { isDemoModeEnabled } from "@/lib/config/demo";
+import {
+  getStoredAttendanceSessions,
+  getStoredAttendanceDays,
+  getStoredUsers,
+} from "@/lib/storage/demo-store";
+
+export const dynamic = "force-dynamic";
+
+export async function GET(request: NextRequest) {
+  try {
+    // 1. Authenticate caller
+    let user: any = null;
+    const authHeader = request.headers.get("authorization");
+
+    if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
+      const token = authHeader.slice(7).trim();
+      const { data: authData, error: tokenErr } = await supabaseAdmin.auth.getUser(token);
+      if (!tokenErr && authData?.user) {
+        user = authData.user;
+      }
+    }
+
+    if (!user) {
+      const supabase = createServerClient<Database>(
+        process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
+        {
+          cookies: {
+            getAll() {
+              return request.cookies.getAll();
+            },
+            setAll() {},
+          },
+        }
+      );
+      const { data: authData } = await supabase.auth.getUser();
+      user = authData?.user;
+    }
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // 2. Resolve caller's role
+    const { data: member } = await supabaseAdmin
+      .from("organization_members")
+      .select("role")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const callerRole = (
+      member?.role ||
+      user.user_metadata?.role ||
+      user.user_metadata?.user_role ||
+      "employee"
+    ).toLowerCase();
+
+    // 3. Parse query parameters
+    const { searchParams } = new URL(request.url);
+    const now = new Date();
+    const month = parseInt(searchParams.get("month") || String(now.getMonth() + 1), 10);
+    const year = parseInt(searchParams.get("year") || String(now.getFullYear()), 10);
+    const requestedEmpId = searchParams.get("employeeId") || user.id;
+
+    // 4. Resolve manager's department or reports if manager
+    let managerDeptId: string | null = null;
+    let managerReportIds: string[] = [];
+
+    if (callerRole === "manager") {
+      const { data: callerEmp } = await (supabaseAdmin as any)
+        .from("employees")
+        .select("id, department_id")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      managerDeptId = callerEmp?.department_id || null;
+
+      const { data: directReports } = await (supabaseAdmin as any)
+        .from("employees")
+        .select("id")
+        .eq("manager_id", user.id);
+
+      managerReportIds = (directReports || []).map((r: any) => r.id);
+    }
+
+    // 5. Access control for requested employee's attendance
+    const isSelf = requestedEmpId === user.id;
+    const isPrivileged = callerRole === "admin" || callerRole === "hr";
+    const isManagerAuthorized =
+      callerRole === "manager" &&
+      (isSelf ||
+        managerReportIds.includes(requestedEmpId) ||
+        (managerDeptId &&
+          (
+            await (supabaseAdmin as any)
+              .from("employees")
+              .select("department_id")
+              .eq("id", requestedEmpId)
+              .maybeSingle()
+          )?.data?.department_id === managerDeptId));
+
+    if (!isSelf && !isPrivileged && !isManagerAuthorized) {
+      return NextResponse.json(
+        { error: "Forbidden: You do not have permission to view this employee's attendance." },
+        { status: 403 }
+      );
+    }
+
+    const targetEmpId = requestedEmpId;
+
+    // 6. Build date range for the month
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+    const endDate = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
+
+    // 7. Fetch holidays, days, sessions, target employee info, and accessible list in parallel
+    const [holRes, daysRes, sessRes, targetEmpRes] = await Promise.all([
+      (supabaseAdmin as any)
+        .from("holidays")
+        .select("date, name, local_name, region")
+        .eq("is_active", true)
+        .gte("date", startDate)
+        .lte("date", endDate),
+      (supabaseAdmin as any)
+        .from("attendance_days")
+        .select("work_date, status, total_minutes, is_late, locked")
+        .eq("employee_id", targetEmpId)
+        .gte("work_date", startDate)
+        .lte("work_date", endDate),
+      (supabaseAdmin as any)
+        .from("attendance_sessions")
+        .select("id, work_date, check_in_at, check_out_at, source")
+        .eq("employee_id", targetEmpId)
+        .gte("work_date", startDate)
+        .lte("work_date", endDate)
+        .order("check_in_at", { ascending: true }),
+      (supabaseAdmin as any)
+        .from("employees")
+        .select(`
+          id,
+          full_name,
+          email,
+          avatar_url,
+          timezone,
+          work_mode,
+          department_id,
+          job_title_id,
+          departments:department_id(name),
+          job_titles:job_title_id(title_name)
+        `)
+        .eq("id", targetEmpId)
+        .maybeSingle(),
+    ]);
+
+    // 8. Fetch list of accessible employees for the selector dropdown
+    let accessibleEmployees: Array<{
+      id: string;
+      full_name: string;
+      email: string;
+      role: string;
+      department: string;
+      job_title: string;
+    }> = [];
+
+    if (callerRole === "admin" || callerRole === "hr") {
+      // Admin and HR can see EVERYONE in the organization
+      const { data: allEmps } = await (supabaseAdmin as any)
+        .from("employees")
+        .select(`
+          id,
+          full_name,
+          email,
+          status,
+          departments:department_id(name),
+          job_titles:job_title_id(title_name)
+        `)
+        .eq("status", "active")
+        .order("full_name", { ascending: true });
+
+      const { data: allRoles } = await (supabaseAdmin as any)
+        .from("organization_members")
+        .select("user_id, role");
+
+      const roleLookup = new Map<string, string>();
+      for (const r of allRoles || []) {
+        if (r.user_id && r.role) roleLookup.set(r.user_id, String(r.role).toLowerCase());
+      }
+
+      accessibleEmployees = (allEmps || []).map((e: any) => ({
+        id: e.id,
+        full_name: e.full_name || e.email,
+        email: e.email,
+        role: roleLookup.get(e.id) || "employee",
+        department: e.departments?.name || "General",
+        job_title: e.job_titles?.title_name || "Employee",
+      }));
+    } else if (callerRole === "manager") {
+      // Manager can see their team members (reports / department) + themselves
+      let managerQuery = (supabaseAdmin as any)
+        .from("employees")
+        .select(`
+          id,
+          full_name,
+          email,
+          status,
+          departments:department_id(name),
+          job_titles:job_title_id(title_name)
+        `)
+        .eq("status", "active");
+
+      if (managerDeptId) {
+        managerQuery = managerQuery.or(`manager_id.eq.${user.id},department_id.eq.${managerDeptId},id.eq.${user.id}`);
+      } else {
+        managerQuery = managerQuery.or(`manager_id.eq.${user.id},id.eq.${user.id}`);
+      }
+
+      const { data: teamEmps } = await managerQuery.order("full_name", { ascending: true });
+
+      accessibleEmployees = (teamEmps || []).map((e: any) => ({
+        id: e.id,
+        full_name: e.full_name || e.email,
+        email: e.email,
+        role: e.id === user.id ? "manager" : "employee",
+        department: e.departments?.name || "Department",
+        job_title: e.job_titles?.title_name || "Specialist",
+      }));
+    }
+
+    // 9. Demo mode fallback or merge
+    let days = daysRes.data || [];
+    let sessions = sessRes.data || [];
+    let holidays = holRes.data || [];
+
+    if (isDemoModeEnabled()) {
+      if (days.length === 0) days = getStoredAttendanceDays() as any[];
+      if (sessions.length === 0) sessions = getStoredAttendanceSessions() as any[];
+      if (accessibleEmployees.length === 0) {
+        const storedUsers = getStoredUsers();
+        accessibleEmployees = storedUsers.map((u) => ({
+          id: u.id,
+          full_name: (u as any).fullName || u.name,
+          email: u.email,
+          role: u.role,
+          department: u.department || "Engineering",
+          job_title: u.jobTitle || "Specialist",
+        }));
+      }
+    }
+
+    const targetEmpData = targetEmpRes.data || {
+      id: targetEmpId,
+      full_name: user.user_metadata?.full_name || user.email || "Employee",
+      email: user.email || "",
+      department: "General",
+      job_title: "Employee",
+      timezone: "Asia/Kolkata",
+    };
+
+    return NextResponse.json({
+      targetEmployee: {
+        id: targetEmpData.id,
+        full_name: targetEmpData.full_name,
+        email: targetEmpData.email,
+        department: targetEmpData.departments?.name || targetEmpData.department || "General",
+        job_title: targetEmpData.job_titles?.title_name || targetEmpData.job_title || "Employee",
+        timezone: targetEmpData.timezone || "Asia/Kolkata",
+      },
+      days,
+      sessions,
+      holidays,
+      accessibleEmployees,
+      callerRole,
+    });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: err.message || "Failed to fetch attendance calendar" },
+      { status: 500 }
+    );
+  }
+}

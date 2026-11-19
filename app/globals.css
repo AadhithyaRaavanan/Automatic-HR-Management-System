@@ -4,99 +4,75 @@
 
 @layer base {
   :root {
-    /* Canvas & Surfaces */
-    --canvas-bg: #F4F5F7;              /* Clean quiet neutral canvas */
-    --shell-bg: #FFFFFF;               /* Main application shell */
-    --card-bg: #FFFFFF;                /* Card surface */
-    --card-subtle: #F9FAFB;            /* Inset rows, subtle backgrounds */
-    --card-dashed: #E5E7EB;            /* Dashed placeholder border */
-    --border-light: #E5E7EB;           /* 1px low-contrast neutral border */
-    --border-focus: #6355DC;           /* Keyboard focus ring */
+    /* Zen Xea Brand Colour Palette */
+    --color-black: #000000;
+    --color-white: #FFFFFF;
+    --color-magenta: #F00091;
+    --color-lime: #A6F000;
+    --color-grey-900: #1A1A1A;
+    --color-grey-700: #4D4D4D;
+    --color-grey-500: #808080;
+    --color-grey-300: #B3B3B3;
+    --color-grey-100: #E6E6E6;
 
-    /* Primary Brand & Accents */
-    --brand-purple: #6355DC;           /* Focused, utilitarian brand accent */
-    --brand-purple-hover: #5044C4;     /* Darker hover state */
-    --brand-purple-light: #F3F2FD;     /* Subtle tint for active nav / small chips */
-    --brand-navy: #1F2937;             /* Dark neutral for primary actions */
-    --brand-navy-hover: #111827;       /* Dark hover state */
+    /* Canvas & Surfaces */
+    --canvas-bg: #F5F5F5;              /* Light grey page canvas */
+    --shell-bg: #000000;               /* Black sidebar dock */
+    --card-bg: #FFFFFF;                /* White cards */
+    --card-subtle: #F5F5F5;            /* Subdued background */
+    --card-dashed: #E6E6E6;            /* Border for dashed placeholders */
+    --border-light: #E6E6E6;           /* 1px low-contrast grey 100 border */
+    --border-focus: #000000;           /* 2px black focus ring */
+
+    /* Primary Brand Accents (Zen Xea) */
+    --brand-lime: #A6F000;             /* Lime accent (fills only) */
+    --brand-lime-hover: #95D800;
+    --brand-magenta: #F00091;          /* Sparing magenta for critical / error */
+    --brand-black: #000000;            /* Primary brand black */
+
+    /* Aliases for backwards compatibility with existing component classes */
+    --brand-purple: #000000;           /* Primary button fill is black */
+    --brand-purple-hover: #1A1A1A;     /* Primary button hover is grey 900 */
+    --brand-purple-light: #A6F000;     /* Active nav fill is lime */
+    --brand-navy: #000000;             /* Navy actions map to black */
+    --brand-navy-hover: #1A1A1A;
     
-    /* Typography Colors (WCAG AA Compliant: >= 4.5:1) */
-    --text-primary: #111827;          /* High contrast neutral dark text */
-    --text-secondary: #4B5563;        /* Muted slate text */
-    --text-tertiary: #6B7280;         /* Caption & helper text */
-    --text-on-purple: #FFFFFF;        /* Pure white on brand purple */
-    --text-on-navy: #FFFFFF;          /* Pure white on navy */
+    /* Typography Colors */
+    --text-primary: #000000;          /* Black for headings */
+    --text-secondary: #1A1A1A;        /* Grey 900 for body text */
+    --text-tertiary: #808080;         /* Grey 500 for secondary text and sublines */
+    --text-muted: #808080;
+    --text-on-purple: #FFFFFF;        /* White text on black primary button */
+    --text-on-navy: #FFFFFF;          /* White text on dark surfaces */
+    --text-on-lime: #000000;          /* ALWAYS black text/icon on lime fill */
 
     /* Functional Status Colors */
-    --status-success-bg: #ECFDF5;      /* Mint green soft background */
-    --status-success-text: #065F46;    /* Accessible dark forest text */
-    --status-success-dot: #10B981;     /* Vivid green dot */
+    --status-success-bg: #F5F5F5;
+    --status-success-text: #000000;
+    --status-success-dot: #A6F000;     /* Lime dot for positive status */
 
-    --status-warning-bg: #FFFBEB;      /* Amber soft background */
-    --status-warning-text: #92400E;    /* Accessible amber text */
-    --status-warning-dot: #F59E0B;     /* Vivid amber dot */
+    --status-warning-bg: #F5F5F5;
+    --status-warning-text: #000000;
+    --status-warning-dot: #F59E0B;     /* Amber dot for due soon / pending */
 
-    --status-danger-bg: #FEF2F2;       /* Soft red background */
-    --status-danger-text: #991B1B;     /* Accessible red text */
-    --status-danger-dot: #EF4444;      /* Vivid red dot */
+    --status-danger-bg: #F5F5F5;
+    --status-danger-text: #000000;
+    --status-danger-dot: #F00091;      /* Magenta dot for overdue / rejected / absent */
 
-    --status-info-bg: #EFF6FF;         /* Soft blue background */
-    --status-info-text: #1E40AF;       /* Deep blue text */
-    --status-info-dot: #3B82F6;        /* Vivid blue dot */
+    --status-info-bg: #F5F5F5;
+    --status-info-text: #000000;
+    --status-info-dot: #808080;        /* Grey dot for neutral */
 
-    /* Shadows: quiet 1px borders by default, subtle shadow only on popovers/dialogs */
+    /* Shadows: no soft glow, 1px border by default; subtle float only for popovers/dialogs */
     --shadow-shell: none;
     --shadow-card: none;
-    --shadow-float: 0 4px 14px 0 rgba(0, 0, 0, 0.06);
+    --shadow-float: 0 4px 18px 0 rgba(0, 0, 0, 0.08);
 
-    /* Radius Scale: reduced, quiet, utilitarian */
+    /* Radius Scale: 14px for cards, 8px for buttons/inputs, 6px for chips */
     --radius-sm: 6px;
     --radius-md: 8px;
-    --radius-lg: 12px;
+    --radius-lg: 14px;
     --radius-shell: 14px;
-  }
-
-  .dark {
-    /* Dark Mode Tokens (Deep Obsidian & Indigo) */
-    --canvas-bg: #0B0B14;
-    --shell-bg: #131226;
-    --card-bg: #1A1833;
-    --card-subtle: #222044;
-    --card-dashed: #323060;
-    --border-light: #2A2750;
-    --border-focus: #8F82F7;
-
-    --brand-purple: #7D6DF2;
-    --brand-purple-hover: #9082F8;
-    --brand-purple-light: #282458;
-    --brand-navy: #201D48;
-    --brand-navy-hover: #2E2967;
-
-    --text-primary: #FFFFFF;
-    --text-secondary: #A9A7C7;
-    --text-tertiary: #8481A8;
-    --text-on-purple: #FFFFFF;
-    --text-on-navy: #FFFFFF;
-
-    --status-success-bg: #0F3223;
-    --status-success-text: #6EE7B7;
-    --status-success-dot: #34D399;
-
-    --status-warning-bg: #352309;
-    --status-warning-text: #FCD34D;
-    --status-warning-dot: #FBBF24;
-
-    --status-danger-bg: #3D1414;
-    --status-danger-text: #FCA5A5;
-    --status-danger-dot: #F87171;
-
-    --status-info-bg: #132448;
-    --status-info-text: #93C5FD;
-    --status-info-dot: #60A5FA;
-
-    --shadow-shell: none;
-    --shadow-card: none;
-    --shadow-float: 0 4px 14px 0 rgba(0, 0, 0, 0.4);
   }
 }
 

@@ -386,7 +386,7 @@ export function AppShell({
     <SidebarProvider>
       <AppSessionContext.Provider value={{ ...sessionState, userRole }}>
         <div
-          className="min-h-screen w-full bg-shell flex flex-col md:flex-row transition-colors duration-300 relative"
+          className="min-h-screen w-full bg-[#000000] flex flex-col md:flex-row transition-colors duration-300 relative"
           suppressHydrationWarning
         >
           {/* Left Docked Curved Sidebar */}
@@ -395,13 +395,13 @@ export function AppShell({
           </div>
 
           {/* Main Full-Width Application Area */}
-          <div className="flex-1 flex flex-col min-w-0 px-4 sm:px-6 md:px-8 lg:px-10 py-5 pb-20 md:pb-8">
+          <div className="flex-1 flex flex-col min-w-0 bg-[#F5F5F5] md:rounded-l-[28px] my-0 md:my-2 mr-0 md:mr-2 p-5 sm:p-6 md:p-8 min-h-[calc(100vh-16px)] overflow-x-hidden">
             <TopNavBar
               userRole={userRole}
               onPrimaryAction={onPrimaryAction}
               primaryActionLabel={primaryActionLabel}
             />
-            <main className={cn("flex-1 w-full flex flex-col min-w-0", className)}>
+            <main className={cn("flex-1 w-full flex flex-col min-w-0 max-w-[1360px] mx-auto", className)}>
               {/* Warning banner when organization has disabled mandatory MFA for privileged accounts */}
               {mounted &&
                 sessionState.isLoaded &&
@@ -435,16 +435,16 @@ export function AppShell({
           </div>
 
           {/* Mobile Access Gate: Restrict access on mobile screens */}
-          <div className="fixed inset-0 z-[10000] bg-surface-ground flex flex-col items-center justify-center p-6 text-center md:hidden">
-            <div className="w-16 h-16 rounded-2xl bg-brand-purple/10 border border-brand-purple/20 flex items-center justify-center text-brand-purple mb-4 shadow-sm">
-              <Laptop className="w-8 h-8" />
+          <div className="fixed inset-0 z-[10000] bg-white flex flex-col items-center justify-center p-6 text-center md:hidden">
+            <div className="w-16 h-16 rounded-2xl bg-[#A6F000] border border-black/10 flex items-center justify-center text-black mb-4 shadow-sm font-black text-xl">
+              <Laptop className="w-8 h-8 text-black" />
             </div>
-            <h1 className="text-xl font-bold text-text-primary tracking-tight mb-2">Desktop Workstation Required</h1>
-            <p className="text-sm text-text-secondary max-w-sm mb-6 leading-relaxed">
-              Pulse HRMS is optimized exclusively for desktop and laptop computers to support enterprise attendance governance, document verification, and productivity workflows.
+            <h1 className="text-xl font-bold text-black tracking-tight mb-2">Desktop Workstation Required</h1>
+            <p className="text-sm text-[#4D4D4D] max-w-sm mb-6 leading-relaxed">
+              Pulse is optimized exclusively for desktop and laptop computers to support attendance governance, document verification, and productivity workflows.
             </p>
-            <div className="px-4 py-2.5 rounded-xl bg-card border border-border-light text-xs font-semibold text-text-muted">
-              Please access <span className="text-brand-purple font-bold">pulse.zenxea.com</span> from your computer.
+            <div className="px-4 py-2.5 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] text-xs font-semibold text-[#808080]">
+              Please access <span className="text-black font-bold">pulse.zenxea.com</span> from your computer.
             </div>
           </div>
 

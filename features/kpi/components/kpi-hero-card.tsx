@@ -131,35 +131,35 @@ export function KpiHeroCard({
               <span className="font-mono">100% Total</span>
             </div>
 
-            <div className="h-2.5 w-full rounded-full overflow-hidden flex bg-card-subtle">
+            <div className="h-2.5 w-full rounded-full overflow-hidden flex bg-[#E6E6E6]">
               <div
                 style={{ width: "40%" }}
-                className="bg-brand-purple h-full transition-all duration-500"
+                className="bg-[#A6F000] h-full transition-all duration-500"
                 title="Attendance & Reliability (40%)"
               />
               <div
                 style={{ width: "25%" }}
-                className="bg-brand-purple/65 h-full transition-all duration-500"
+                className="bg-[#4D4D4D] h-full transition-all duration-500"
                 title="Shift Hours Target (25%)"
               />
               <div
                 style={{ width: "35%" }}
-                className="bg-brand-purple/35 h-full transition-all duration-500"
+                className="bg-[#808080] h-full transition-all duration-500"
                 title="Task Delivery & Execution (35%)"
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-secondary font-semibold">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[#4D4D4D] font-medium">
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-brand-purple shrink-0" />
+                <span className="w-2 h-2 rounded-full bg-[#A6F000] shrink-0" />
                 Attendance 40%
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-brand-purple/65 shrink-0" />
+                <span className="w-2 h-2 rounded-full bg-[#4D4D4D] shrink-0" />
                 Hours 25%
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-brand-purple/35 shrink-0" />
+                <span className="w-2 h-2 rounded-full bg-[#808080] shrink-0" />
                 Tasks 35%
               </span>
             </div>

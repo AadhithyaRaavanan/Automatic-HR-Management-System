@@ -35,10 +35,8 @@ export function KpiRadialGauge({
 
   const strokeColor =
     validScore == null
-      ? "#CBD5E1"
-      : validScore >= target
-      ? "#6C5CE7" // Primary brand purple
-      : "#8B5CF6"; // Refined purple tone
+      ? "#E6E6E6"
+      : "#A6F000"; // Neon Lime brand accent
 
   return (
     <div
@@ -56,11 +54,10 @@ export function KpiRadialGauge({
           cy={center}
           r={radius}
           fill="none"
-          stroke="currentColor"
+          stroke="#E6E6E6"
           strokeWidth={strokeWidth}
           strokeDasharray={`${circumference} ${circumference}`}
           strokeLinecap="round"
-          className="text-border-light/60"
         />
 
         {/* Foreground Progress Arc */}
@@ -83,7 +80,7 @@ export function KpiRadialGauge({
             cy={center}
             r={radius}
             fill="none"
-            stroke="#CBD5E1"
+            stroke="#E6E6E6"
             strokeWidth={strokeWidth}
             strokeDasharray="4 6"
             strokeLinecap="round"

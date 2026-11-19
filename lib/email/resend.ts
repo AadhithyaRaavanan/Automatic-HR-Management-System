@@ -45,9 +45,9 @@ export interface SendInviteEmailParams {
 /**
  * Builds responsive HTML email template for employee invitations adhering strictly
  * to the RemoteHR brand design system tokens:
- * - Brand Deep Indigo: #14123A
- * - Brand Electric Purple: #6C5CE7
- * - Brand Border / Accent: #e2e0f0
+ * - Brand Deep Indigo: #000000
+ * - Brand Electric Purple: #000000
+ * - Brand Border / Accent: #E6E6E6
  */
 export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
   const {
@@ -76,15 +76,15 @@ export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
       body {
         margin: 0;
         padding: 0;
-        background-color: #f7f6fd;
+        background-color: #F5F5F5;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-        color: #14123A;
+        color: #000000;
         -webkit-font-smoothing: antialiased;
       }
       .wrapper {
         width: 100%;
         table-layout: fixed;
-        background-color: #f7f6fd;
+        background-color: #F5F5F5;
         padding: 30px 10px;
       }
       .container {
@@ -92,12 +92,12 @@ export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
         margin: 0 auto;
         background-color: #ffffff;
         border-radius: 20px;
-        border: 1px solid #e2e0f0;
+        border: 1px solid #E6E6E6;
         overflow: hidden;
-        box-shadow: 0 4px 16px rgba(20, 18, 58, 0.06);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
       }
       .header {
-        background-color: #14123A;
+        background-color: #000000;
         padding: 28px 32px;
         text-align: center;
       }
@@ -109,7 +109,7 @@ export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
         margin: 0;
       }
       .brand-tag {
-        color: #6C5CE7;
+        color: #000000;
         font-size: 11px;
         font-weight: 700;
         text-transform: uppercase;
@@ -122,7 +122,7 @@ export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
       .welcome-heading {
         font-size: 20px;
         font-weight: 700;
-        color: #14123A;
+        color: #000000;
         margin-top: 0;
         margin-bottom: 12px;
       }
@@ -133,8 +133,8 @@ export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
         margin-bottom: 24px;
       }
       .details-card {
-        background-color: #fcfcff;
-        border: 1px solid #e2e0f0;
+        background-color: #FFFFFF;
+        border: 1px solid #E6E6E6;
         border-radius: 14px;
         padding: 6px 18px;
         margin-bottom: 24px;
@@ -144,21 +144,21 @@ export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
         border-collapse: collapse;
       }
       .detail-label {
-        color: #6C5CE7;
+        color: #000000;
         font-weight: 700;
         font-size: 13px;
         padding: 11px 12px 11px 0;
-        border-bottom: 1px solid #f1f0fa;
+        border-bottom: 1px solid #F5F5F5;
         width: 38%;
         white-space: nowrap;
         vertical-align: middle;
       }
       .detail-value {
-        color: #14123A;
+        color: #000000;
         font-weight: 700;
         font-size: 13px;
         padding: 11px 0 11px 12px;
-        border-bottom: 1px solid #f1f0fa;
+        border-bottom: 1px solid #F5F5F5;
         text-align: right;
         word-break: break-all;
         vertical-align: middle;
@@ -169,7 +169,7 @@ export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
       }
       .cta-button {
         display: inline-block;
-        background-color: #6C5CE7;
+        background-color: #000000;
         color: #ffffff !important;
         text-decoration: none;
         padding: 14px 32px;
@@ -177,11 +177,11 @@ export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
         font-weight: 700;
         font-size: 14px;
         letter-spacing: 0.2px;
-        box-shadow: 0 4px 12px rgba(108, 92, 231, 0.25);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       }
       .security-box {
-        background-color: #f7f6fd;
-        border-left: 4px solid #6C5CE7;
+        background-color: #F5F5F5;
+        border-left: 4px solid #000000;
         border-radius: 4px;
         padding: 14px 16px;
         margin-top: 24px;
@@ -190,7 +190,7 @@ export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
       .security-title {
         font-size: 12px;
         font-weight: 700;
-        color: #14123A;
+        color: #000000;
         margin-bottom: 4px;
         display: flex;
         align-items: center;
@@ -204,7 +204,7 @@ export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
       .footer {
         padding: 24px 32px;
         background-color: #faf9ff;
-        border-top: 1px solid #e2e0f0;
+        border-top: 1px solid #E6E6E6;
         text-align: center;
         font-size: 11px;
         color: #94a3b8;
@@ -240,7 +240,7 @@ export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
               <tr>
                 <td class="detail-label">Temporary Password :</td>
                 <td class="detail-value">
-                  <span style="display: inline-block; background-color: #f1f0fa; color: #6C5CE7; padding: 4px 10px; border-radius: 6px; font-weight: 800; font-family: monospace; font-size: 13px; letter-spacing: 0.5px; border: 1px dashed #d1cbf7;">
+                  <span style="display: inline-block; background-color: #F5F5F5; color: #000000; padding: 4px 10px; border-radius: 6px; font-weight: 800; font-family: monospace; font-size: 13px; letter-spacing: 0.5px; border: 1px dashed #E6E6E6;">
                     ${temporaryPassword}
                   </span>
                 </td>
@@ -311,13 +311,13 @@ export function buildAttendanceEmailTemplate(
   return `
     <!DOCTYPE html>
     <html>
-      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f7f6fd; padding: 24px;">
-        <div style="background-color: #ffffff; max-width: 520px; margin: 0 auto; border-radius: 20px; padding: 32px; border: 1px solid #e2e0f0;">
-          <h2 style="color: #6355DC; margin-top: 0;">Pulse</h2>
-          <h3 style="color: #14123A;">${title}</h3>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F5F5F5; padding: 24px;">
+        <div style="background-color: #ffffff; max-width: 520px; margin: 0 auto; border-radius: 20px; padding: 32px; border: 1px solid #E6E6E6;">
+          <h2 style="color: #000000; margin-top: 0;">Pulse</h2>
+          <h3 style="color: #000000;">${title}</h3>
           <p style="color: #4b5563; font-size: 14px; line-height: 1.5;">${message}</p>
           <div style="margin-top: 24px;">
-            <a href="${actionUrl}" style="background-color: #14123A; color: #ffffff; padding: 12px 24px; border-radius: 12px; text-decoration: none; font-size: 13px; font-weight: 700; display: inline-block;">
+            <a href="${actionUrl}" style="background-color: #000000; color: #ffffff; padding: 12px 24px; border-radius: 12px; text-decoration: none; font-size: 13px; font-weight: 700; display: inline-block;">
               ${actionText}
             </a>
           </div>
@@ -410,17 +410,17 @@ export function buildPasswordResetEmailHtml(params: SendPasswordResetParams): st
       body { margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; }
       .wrapper { width: 100%; padding: 40px 0; background-color: #f8fafc; }
       .card { max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; }
-      .header { background: #14123A; padding: 28px 32px; text-align: center; }
+      .header { background: #000000; padding: 28px 32px; text-align: center; }
       .brand { font-size: 20px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px; }
       .badge { display: inline-block; background: rgba(99, 85, 220, 0.25); color: #c4b5fd; font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase; margin-top: 8px; }
       .body { padding: 32px; }
       .title { font-size: 20px; font-weight: 700; color: #0f172a; margin: 0 0 12px; line-height: 1.3; }
       .paragraph { font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 24px; }
       .otp-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; text-align: center; margin: 24px 0; }
-      .otp-label { font-size: 11px; font-weight: 600; color: #6355DC; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
-      .otp-number { font-size: 32px; font-weight: 700; font-family: monospace; letter-spacing: 6px; color: #14123A; }
+      .otp-label { font-size: 11px; font-weight: 600; color: #000000; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+      .otp-number { font-size: 32px; font-weight: 700; font-family: monospace; letter-spacing: 6px; color: #000000; }
       .cta-box { text-align: center; margin: 28px 0; }
-      .cta-btn { display: inline-block; background: #6355DC; color: #ffffff !important; text-decoration: none; font-size: 14px; font-weight: 600; padding: 12px 28px; border-radius: 8px; }
+      .cta-btn { display: inline-block; background: #000000; color: #ffffff !important; text-decoration: none; font-size: 14px; font-weight: 600; padding: 12px 28px; border-radius: 8px; }
       .notice { background: #f1f5f9; border-radius: 8px; padding: 16px; font-size: 12px; color: #64748b; line-height: 1.5; margin-top: 24px; }
       .footer { text-align: center; padding: 24px 32px; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; }
     </style>
@@ -649,12 +649,12 @@ export function buildNotificationEmailHtml(params: SendNotificationEmailParams):
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${title}</title>
     <style>
-      body { margin: 0; padding: 0; background-color: #f7f6fd; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-      .container { max-width: 580px; margin: 32px auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e0f0; overflow: hidden; box-shadow: 0 4px 20px rgba(20, 18, 58, 0.05); }
-      .header { background: #14123A; padding: 28px 32px; text-align: left; }
+      body { margin: 0; padding: 0; background-color: #F5F5F5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+      .container { max-width: 580px; margin: 32px auto; background: #ffffff; border-radius: 16px; border: 1px solid #E6E6E6; overflow: hidden; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); }
+      .header { background: #000000; padding: 28px 32px; text-align: left; }
       .content { padding: 32px; }
-      .btn { display: inline-block; background: #6C5CE7; color: #ffffff !important; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 10px; font-size: 14px; margin-top: 20px; }
-      .footer { background: #faf9fe; padding: 20px 32px; border-top: 1px solid #e2e0f0; font-size: 12px; color: #718096; text-align: center; }
+      .btn { display: inline-block; background: #000000; color: #ffffff !important; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 10px; font-size: 14px; margin-top: 20px; }
+      .footer { background: #faf9fe; padding: 20px 32px; border-top: 1px solid #E6E6E6; font-size: 12px; color: #718096; text-align: center; }
     </style>
   </head>
   <body>
@@ -665,13 +665,13 @@ export function buildNotificationEmailHtml(params: SendNotificationEmailParams):
       </div>
       <div class="content">
         ${recipientName ? `<p style="font-size: 15px; color: #2d3748; margin-top: 0;">Hi <strong>${recipientName}</strong>,</p>` : ""}
-        <h2 style="font-size: 18px; color: #14123A; margin: 0 0 12px 0;">${title}</h2>
+        <h2 style="font-size: 18px; color: #000000; margin: 0 0 12px 0;">${title}</h2>
         <p style="font-size: 14px; line-height: 1.6; color: #4a5568; white-space: pre-line; margin: 0 0 20px 0;">${body}</p>
         ${link ? `<a href="${actionUrl}" class="btn" target="_blank" rel="noopener noreferrer">View in Pulse →</a>` : ""}
       </div>
       <div class="footer">
         <p style="margin: 0 0 6px 0;">You received this email according to your Pulse workplace notification settings.</p>
-        <p style="margin: 0;"><a href="${siteUrl}/settings" style="color: #6C5CE7; text-decoration: none;">Manage Notification Preferences</a></p>
+        <p style="margin: 0;"><a href="${siteUrl}/settings" style="color: #000000; text-decoration: none;">Manage Notification Preferences</a></p>
       </div>
     </div>
   </body>
@@ -750,15 +750,15 @@ export function buildApprovalEmailHtml(params: SendApprovalEmailParams): string 
       body {
         margin: 0;
         padding: 0;
-        background-color: #f7f6fd;
+        background-color: #F5F5F5;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-        color: #14123A;
+        color: #000000;
         -webkit-font-smoothing: antialiased;
       }
       .wrapper {
         width: 100%;
         table-layout: fixed;
-        background-color: #f7f6fd;
+        background-color: #F5F5F5;
         padding: 30px 10px;
       }
       .container {
@@ -766,12 +766,12 @@ export function buildApprovalEmailHtml(params: SendApprovalEmailParams): string 
         margin: 0 auto;
         background-color: #ffffff;
         border-radius: 20px;
-        border: 1px solid #e2e0f0;
+        border: 1px solid #E6E6E6;
         overflow: hidden;
-        box-shadow: 0 4px 16px rgba(20, 18, 58, 0.06);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
       }
       .header {
-        background-color: #14123A;
+        background-color: #000000;
         padding: 28px 32px;
         text-align: center;
       }
@@ -782,7 +782,7 @@ export function buildApprovalEmailHtml(params: SendApprovalEmailParams): string 
         margin: 0;
       }
       .brand-tag {
-        color: #6C5CE7;
+        color: #000000;
         font-size: 11px;
         font-weight: 700;
         text-transform: uppercase;
@@ -795,7 +795,7 @@ export function buildApprovalEmailHtml(params: SendApprovalEmailParams): string 
       .greeting {
         font-size: 18px;
         font-weight: 700;
-        color: #14123A;
+        color: #000000;
         margin-bottom: 12px;
       }
       .paragraph {
@@ -830,7 +830,7 @@ export function buildApprovalEmailHtml(params: SendApprovalEmailParams): string 
         margin: 28px 0;
       }
       .login-btn {
-        background-color: #14123A;
+        background-color: #000000;
         color: #ffffff !important;
         padding: 14px 32px;
         border-radius: 9999px;
@@ -848,12 +848,12 @@ export function buildApprovalEmailHtml(params: SendApprovalEmailParams): string 
         margin-top: 24px;
       }
       .footer {
-        background-color: #f7f6fd;
+        background-color: #F5F5F5;
         padding: 18px 32px;
         text-align: center;
         font-size: 11px;
         color: #8C8A9E;
-        border-top: 1px solid #e2e0f0;
+        border-top: 1px solid #E6E6E6;
       }
     </style>
   </head>
@@ -1024,7 +1024,7 @@ export function buildAdminDossierEmailHtml(params: SendAdminDossierEmailParams):
         <td align="right" style="padding: 10px 14px; border-bottom: 1px solid #E2E8F0; font-size: 12px; font-weight: 700;">
           ${
             doc.url
-              ? `<a href="${doc.url}" target="_blank" rel="noopener noreferrer" style="color: #6C5CE7; text-decoration: none; margin-right: 8px;">View Link</a>`
+              ? `<a href="${doc.url}" target="_blank" rel="noopener noreferrer" style="color: #000000; text-decoration: none; margin-right: 8px;">View Link</a>`
               : ""
           }
           <span style="display: inline-block; background-color: #ECFDF5; color: #059669; padding: 2px 8px; border-radius: 6px; font-size: 11px;">Approved</span>
@@ -1040,14 +1040,14 @@ export function buildAdminDossierEmailHtml(params: SendAdminDossierEmailParams):
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Candidate Onboarding Dossier</title>
   </head>
-  <body style="margin: 0; padding: 0; background-color: #F8F9FC; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #14123A;">
+  <body style="margin: 0; padding: 0; background-color: #F8F9FC; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #000000;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #F8F9FC; padding: 32px 0 48px;">
       <tr>
         <td align="center">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width: 620px; background-color: #ffffff; border-radius: 20px; border: 1px solid #E2E8F0; overflow: hidden; box-shadow: 0 4px 16px rgba(20, 18, 58, 0.06);">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width: 620px; background-color: #ffffff; border-radius: 20px; border: 1px solid #E2E8F0; overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);">
             <!-- Header -->
             <tr>
-              <td style="background: linear-gradient(135deg, #14123A 0%, #2A2566 100%); padding: 32px 36px 28px;">
+              <td style="background: #000000; padding: 32px 36px 28px;">
                 <p style="font-size: 20px; font-weight: 800; color: #ffffff; margin: 0; letter-spacing: -0.5px;">Pulse HRMS</p>
                 <p style="font-size: 11px; font-weight: 700; color: #A5B4FC; text-transform: uppercase; letter-spacing: 1.2px; margin: 4px 0 0 0;">Employee Onboarding Dossier</p>
               </td>
@@ -1060,7 +1060,7 @@ export function buildAdminDossierEmailHtml(params: SendAdminDossierEmailParams):
                   ✓ Approved & Activated
                 </div>
 
-                <h1 style="font-size: 22px; font-weight: 800; color: #14123A; margin: 0 0 10px; line-height: 1.3;">
+                <h1 style="font-size: 22px; font-weight: 800; color: #000000; margin: 0 0 10px; line-height: 1.3;">
                   Candidate Approved: ${candidateName}
                 </h1>
                 <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 24px;">
@@ -1110,7 +1110,7 @@ export function buildAdminDossierEmailHtml(params: SendAdminDossierEmailParams):
                 </div>
 
                 <!-- Verified Documents List -->
-                <p style="font-size: 13px; font-weight: 800; color: #14123A; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 12px;">
+                <p style="font-size: 13px; font-weight: 800; color: #000000; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 12px;">
                   Attached Documents (${attachments.length} files attached)
                 </p>
                 <div style="background-color: #ffffff; border: 1px solid #E2E8F0; border-radius: 12px; overflow: hidden; margin-bottom: 24px;">
@@ -1121,7 +1121,7 @@ export function buildAdminDossierEmailHtml(params: SendAdminDossierEmailParams):
 
                 <!-- Action Button -->
                 <div style="text-align: center; margin: 28px 0 16px;">
-                  <a href="${profileUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #14123A; color: #ffffff !important; padding: 13px 28px; font-size: 13px; font-weight: 800; text-decoration: none; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 12px rgba(20, 18, 58, 0.15);">
+                  <a href="${profileUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #000000; color: #ffffff !important; padding: 13px 28px; font-size: 13px; font-weight: 800; text-decoration: none; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);">
                     Open Employee Profile in Pulse
                   </a>
                 </div>
@@ -1227,17 +1227,17 @@ export function buildMagicLinkEmailHtml(params: SendMagicLinkParams): string {
       body { margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; }
       .wrapper { width: 100%; padding: 40px 0; background-color: #f8fafc; }
       .card { max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 24px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
-      .header { background: #14123A; padding: 32px 32px 28px; text-align: center; }
+      .header { background: #000000; padding: 32px 32px 28px; text-align: center; }
       .brand { font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; }
-      .badge { display: inline-block; background: rgba(108, 92, 231, 0.25); color: #a29bfe; font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase; margin-top: 8px; }
+      .badge { display: inline-block; background: rgba(0, 0, 0, 0.15); color: #a29bfe; font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase; margin-top: 8px; }
       .body { padding: 32px; }
       .title { font-size: 20px; font-weight: 800; color: #0f172a; margin: 0 0 12px; line-height: 1.3; }
       .paragraph { font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 24px; }
-      .otp-box { background: #f8fafc; border: 2px dashed #6C5CE7; border-radius: 16px; padding: 20px; text-align: center; margin: 24px 0; }
-      .otp-label { font-size: 11px; font-weight: 700; color: #6C5CE7; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
-      .otp-number { font-size: 32px; font-weight: 800; font-family: monospace; letter-spacing: 6px; color: #14123A; }
+      .otp-box { background: #f8fafc; border: 2px dashed #000000; border-radius: 16px; padding: 20px; text-align: center; margin: 24px 0; }
+      .otp-label { font-size: 11px; font-weight: 700; color: #000000; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+      .otp-number { font-size: 32px; font-weight: 800; font-family: monospace; letter-spacing: 6px; color: #000000; }
       .cta-box { text-align: center; margin: 28px 0; }
-      .cta-btn { display: inline-block; background: #6C5CE7; color: #ffffff !important; text-decoration: none; font-size: 14px; font-weight: 700; padding: 14px 32px; border-radius: 12px; box-shadow: 0 4px 12px rgba(108, 92, 231, 0.3); }
+      .cta-btn { display: inline-block; background: #000000; color: #ffffff !important; text-decoration: none; font-size: 14px; font-weight: 700; padding: 14px 32px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); }
       .notice { background: #f1f5f9; border-radius: 12px; padding: 16px; font-size: 12px; color: #64748b; line-height: 1.5; margin-top: 24px; }
       .footer { text-align: center; padding: 24px 32px; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; }
     </style>

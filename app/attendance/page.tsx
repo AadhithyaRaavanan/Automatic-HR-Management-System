@@ -71,6 +71,16 @@ function AttendanceCalendarContent() {
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = React.useState(now.getMonth() + 1);
   const [selectedYear, setSelectedYear] = React.useState(now.getFullYear());
+  const [selectedEmployeeId, setSelectedEmployeeId] = React.useState<string>("");
+  const [accessibleEmployees, setAccessibleEmployees] = React.useState<Array<{
+    id: string;
+    full_name: string;
+    email: string;
+    role?: string;
+    department?: string;
+    job_title?: string;
+  }>>([]);
+  const [targetEmployee, setTargetEmployee] = React.useState<any>(null);
   const [monthDays, setMonthDays] = React.useState<CalendarDayRow[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [selectedDayKey, setSelectedDayKey] = React.useState<string>(() =>
@@ -83,60 +93,48 @@ function AttendanceCalendarContent() {
     setLoading(true);
     const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
     const start = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`;
-    const end = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
 
     let daysMap = new Map<string, any>();
     let sessByDate = new Map<string, any[]>();
     let holidayByDate = new Map<string, any>();
 
     try {
-      const uid =
-        userId ||
-        (await supabase.auth.getSession()).data.session?.user?.id ||
-        (await supabase.auth.getUser()).data.user?.id;
-
-      const [holRes, daysRes, sessRes] = await Promise.all([
-        (supabase as any)
-          .from("holidays")
-          .select("date, name, local_name, region")
-          .eq("is_active", true)
-          .gte("date", start)
-          .lte("date", end),
-        uid && !isDemoModeEnabled()
-          ? (supabase as any)
-              .from("attendance_days")
-              .select("work_date, status, total_minutes, is_late, locked")
-              .eq("employee_id", uid)
-              .gte("work_date", start)
-              .lte("work_date", end)
-          : Promise.resolve({ data: [] }),
-        uid && !isDemoModeEnabled()
-          ? (supabase as any)
-              .from("attendance_sessions")
-              .select("id, work_date, check_in_at, check_out_at, source")
-              .eq("employee_id", uid)
-              .gte("work_date", start)
-              .lte("work_date", end)
-              .order("check_in_at", { ascending: true })
-          : Promise.resolve({ data: [] }),
-      ]);
-
-      for (const h of holRes.data || []) {
-        holidayByDate.set(h.date, {
-          ...h,
-          local_name: resolveTamilHolidayName(h.name, h.local_name),
-        });
+      // Fetch from multi-employee calendar API with RBAC support
+      const qParams = new URLSearchParams({
+        month: String(selectedMonth),
+        year: String(selectedYear),
+      });
+      if (selectedEmployeeId) {
+        qParams.set("employeeId", selectedEmployeeId);
       }
-      for (const d of daysRes.data || []) {
-        daysMap.set(d.work_date, d);
-      }
-      for (const s of sessRes.data || []) {
-        const list = sessByDate.get(s.work_date) || [];
-        list.push(s);
-        sessByDate.set(s.work_date, list);
+
+      const res = await fetch(`/api/attendance/calendar?${qParams.toString()}`);
+      if (res.ok) {
+        const calData = await res.json();
+        if (calData.targetEmployee) {
+          setTargetEmployee(calData.targetEmployee);
+        }
+        if (Array.isArray(calData.accessibleEmployees)) {
+          setAccessibleEmployees(calData.accessibleEmployees);
+        }
+
+        for (const h of calData.holidays || []) {
+          holidayByDate.set(h.date, {
+            ...h,
+            local_name: resolveTamilHolidayName(h.name, h.local_name),
+          });
+        }
+        for (const d of calData.days || []) {
+          daysMap.set(d.work_date, d);
+        }
+        for (const s of calData.sessions || []) {
+          const list = sessByDate.get(s.work_date) || [];
+          list.push(s);
+          sessByDate.set(s.work_date, list);
+        }
       }
     } catch {
-      // keep clean empty day scaffold
+      // fallback
     }
 
     // Merge stored demo sessions & days only if in demo mode
@@ -196,7 +194,6 @@ function AttendanceCalendarContent() {
       } else if (daySessions.length > 0) {
         dayStatus = (dbDay?.status || "present") as AttendanceDayStatus;
       } else {
-        // Working day with no punches recorded: render blank
         dayStatus = "unrecorded";
       }
 
@@ -221,7 +218,7 @@ function AttendanceCalendarContent() {
         : built[0]?.dateKey || start
     );
     setLoading(false);
-  }, [supabase, userId, selectedYear, selectedMonth]);
+  }, [selectedYear, selectedMonth, selectedEmployeeId]);
 
   React.useEffect(() => {
     loadMonthData();
@@ -242,21 +239,17 @@ function AttendanceCalendarContent() {
     monthDays.reduce((acc, curr) => acc + curr.totalMinutes, 0) / 60
   );
 
-  const tamilMonthInfo = React.useMemo(() => {
-    return getTamilMonthInfo(new Date(selectedYear, selectedMonth - 1, 15));
-  }, [selectedYear, selectedMonth]);
-
   const firstDayOfWeek = React.useMemo(() => {
     return new Date(selectedYear, selectedMonth - 1, 1).getDay();
   }, [selectedYear, selectedMonth]);
 
   const statusDotClass: Record<AttendanceDayStatus | "unrecorded", string> = {
-    present: "bg-status-success-dot",
-    half_day: "bg-status-warning-dot",
-    absent: "bg-status-danger-dot",
-    holiday: "bg-brand-purple",
-    weekend: "bg-text-tertiary/30",
-    leave: "bg-status-info-dot",
+    present: "bg-[#A6F000]",
+    half_day: "bg-amber-400",
+    absent: "bg-[#F00091]",
+    holiday: "bg-[#F00091]",
+    weekend: "bg-[#B3B3B3]",
+    leave: "bg-[#808080]",
     unrecorded: "transparent",
   };
 
@@ -266,61 +259,101 @@ function AttendanceCalendarContent() {
       <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold text-text-primary tracking-tight">
+            <h1 className="text-2xl font-bold text-black tracking-tight">
               Attendance
             </h1>
-            <span className="px-2 py-0.5 rounded-md bg-card-subtle text-text-secondary text-xs font-medium border border-border-light">
-              {timezone || "UTC"}
+            <span className="px-2 py-0.5 rounded-md bg-[#F5F5F5] text-[#808080] text-xs font-medium border border-[#E6E6E6]">
+              {timezone || "Asia/Kolkata"}
             </span>
           </div>
-          <p className="text-xs text-text-secondary mt-1">
+          <p className="text-xs text-[#808080] mt-1">
             Monthly punch records, public holidays, and timesheet adjustments.
           </p>
         </div>
 
-        {/* Month Switcher */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              if (selectedMonth === 1) {
-                setSelectedMonth(12);
-                setSelectedYear((y) => y - 1);
-              } else {
-                setSelectedMonth((m) => m - 1);
-              }
-            }}
-            className="p-1.5 rounded-lg bg-card border border-border-light text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors cursor-pointer"
-            title="Previous Month"
-            aria-label="Previous Month"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
+        {/* Controls: Employee selector (if allowed) + Month Switcher */}
+        <div className="flex flex-wrap items-center gap-2">
+          {accessibleEmployees.length > 1 && (
+            <div className="flex items-center gap-1.5">
+              <select
+                value={selectedEmployeeId}
+                onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                className="px-3 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black focus:outline-none focus:ring-2 focus:ring-black cursor-pointer shadow-none"
+                aria-label="Select employee attendance"
+              >
+                <option value="">My attendance</option>
+                {accessibleEmployees
+                  .filter((emp) => emp.id !== userId)
+                  .map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.full_name} ({emp.role ? emp.role.toUpperCase() : emp.department || "Employee"})
+                    </option>
+                  ))}
+              </select>
+            </div>
+          )}
 
-          <div className="flex flex-col items-center justify-center px-4 py-1.5 rounded-lg bg-card border border-border-light text-center min-w-[160px]">
-            <span className="text-xs font-semibold text-text-primary">
-              {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
-            </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedMonth === 1) {
+                  setSelectedMonth(12);
+                  setSelectedYear((y) => y - 1);
+                } else {
+                  setSelectedMonth((m) => m - 1);
+                }
+              }}
+              className="p-1.5 rounded-lg bg-white border border-[#E6E6E6] text-[#808080] hover:text-black hover:bg-[#F5F5F5] transition-colors cursor-pointer"
+              title="Previous Month"
+              aria-label="Previous Month"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <div className="flex flex-col items-center justify-center px-4 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-center min-w-[150px]">
+              <span className="text-xs font-semibold text-black">
+                {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedMonth === 12) {
+                  setSelectedMonth(1);
+                  setSelectedYear((y) => y + 1);
+                } else {
+                  setSelectedMonth((m) => m + 1);
+                }
+              }}
+              className="p-1.5 rounded-lg bg-white border border-[#E6E6E6] text-[#808080] hover:text-black hover:bg-[#F5F5F5] transition-colors cursor-pointer"
+              title="Next Month"
+              aria-label="Next Month"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              if (selectedMonth === 12) {
-                setSelectedMonth(1);
-                setSelectedYear((y) => y + 1);
-              } else {
-                setSelectedMonth((m) => m + 1);
-              }
-            }}
-            className="p-1.5 rounded-lg bg-card border border-border-light text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors cursor-pointer"
-            title="Next Month"
-            aria-label="Next Month"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
         </div>
       </section>
+
+      {/* Target Employee Banner if viewing someone else */}
+      {targetEmployee && selectedEmployeeId && selectedEmployeeId !== userId && (
+        <div className="p-3 rounded-[14px] bg-white border border-[#E6E6E6] flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#A6F000]" />
+            <span className="font-semibold text-black">Viewing: {targetEmployee.full_name}</span>
+            <span className="text-[#808080]">({targetEmployee.department} • {targetEmployee.job_title})</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSelectedEmployeeId("")}
+            className="text-xs text-[#808080] hover:text-black underline cursor-pointer"
+          >
+            Back to my attendance
+          </button>
+        </div>
+      )}
 
       {/* 4 Summary Stat Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -334,7 +367,7 @@ function AttendanceCalendarContent() {
           title="Days present"
           value={`${totalPresent} days`}
           subtitle="Full-day attendance credit"
-          icon={<CheckCircle2 className="w-4 h-4 text-status-success-dot" />}
+          icon={<CheckCircle2 className="w-4 h-4" />}
         />
         <StatCard
           title="Holidays"
@@ -346,7 +379,7 @@ function AttendanceCalendarContent() {
           title="Late arrivals"
           value={`${totalLates}`}
           subtitle="Arrivals past grace period"
-          icon={<AlertCircle className="w-4 h-4 text-status-warning-dot" />}
+          icon={<AlertCircle className="w-4 h-4" />}
         />
       </div>
 
@@ -360,8 +393,8 @@ function AttendanceCalendarContent() {
           data-tour-team="attendance-team-table"
           className="lg:col-span-8 p-6"
         >
-          <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-text-tertiary uppercase pb-3 border-b border-border-light/60">
-            <span className="text-status-danger-text/80">Sun</span>
+          <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-[#808080] uppercase pb-3 border-b border-[#E6E6E6]">
+            <span className="text-[#F00091]">Sun</span>
             <span>Mon</span>
             <span>Tue</span>
             <span>Wed</span>
@@ -371,7 +404,7 @@ function AttendanceCalendarContent() {
           </div>
 
           {loading ? (
-            <div className="h-64 rounded-2xl bg-card-subtle animate-pulse mt-3" />
+            <div className="h-64 rounded-xl bg-[#F5F5F5] animate-pulse mt-3" />
           ) : (
             <div className="grid grid-cols-7 gap-2 pt-3">
               {monthDays.map((day, idx) => {
@@ -386,23 +419,23 @@ function AttendanceCalendarContent() {
                     className={cn(
                       "h-20 p-2 rounded-xl border text-left flex flex-col justify-between transition-colors cursor-pointer relative",
                       isSelected
-                        ? "border-brand-purple bg-brand-purple/10"
-                        : "border-border-light/60 bg-card hover:bg-card-subtle/70",
-                      isSunday && "opacity-85 bg-card-subtle/30"
+                        ? "border-black bg-black/5"
+                        : "border-[#E6E6E6] bg-white hover:bg-[#F5F5F5]",
+                      isSunday && "opacity-85 bg-[#F5F5F5]/40"
                     )}
                   >
                     <div className="flex items-center justify-between w-full">
                       <span
                         className={cn(
                           "w-6 h-6 rounded-md flex items-center justify-center text-xs font-medium tabular-nums",
-                          isSelected ? "bg-brand-purple text-white" : "text-text-primary"
+                          isSelected ? "bg-[#A6F000] text-black font-bold" : "text-black"
                         )}
                       >
                         {day.dayNumber}
                       </span>
                       {day.locked && (
                         <span title="Finalized and locked">
-                          <Lock className="w-3 h-3 text-text-tertiary/60" />
+                          <Lock className="w-3 h-3 text-[#808080]" />
                         </span>
                       )}
                     </div>
@@ -410,27 +443,27 @@ function AttendanceCalendarContent() {
                     <div className="w-full">
                       {day.holidayName ? (
                         <>
-                          <span className="text-[9px] font-bold text-brand-purple line-clamp-1 block leading-tight">
+                          <span className="text-[9px] font-bold text-[#F00091] line-clamp-1 block leading-tight">
                             {day.holidayName}
                           </span>
                           <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-brand-purple" />
-                            <span className="text-[10px] font-medium text-brand-purple capitalize truncate">
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[#F00091]" />
+                            <span className="text-[10px] font-medium text-[#F00091] capitalize truncate">
                               Holiday
                             </span>
                           </div>
                         </>
                       ) : day.status === "weekend" ? (
                         <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-text-tertiary/30" />
-                          <span className="text-[10px] font-medium text-text-tertiary capitalize truncate">
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[#B3B3B3]" />
+                          <span className="text-[10px] font-medium text-[#808080] capitalize truncate">
                             Weekend
                           </span>
                         </div>
                       ) : day.status === "present" || day.status === "half_day" || day.status === "leave" ? (
                         <>
                           {day.totalMinutes > 0 && (
-                            <span className="text-[10px] font-mono font-semibold text-text-secondary">
+                            <span className="text-[10px] font-mono font-semibold text-[#4D4D4D]">
                               {formatDurationMinutes(day.totalMinutes)}
                             </span>
                           )}
@@ -441,12 +474,12 @@ function AttendanceCalendarContent() {
                                 statusDotClass[day.status]
                               )}
                             />
-                            <span className="text-[10px] font-medium text-text-tertiary capitalize truncate">
+                            <span className="text-[10px] font-medium text-[#808080] capitalize truncate">
                               {day.status.replace("_", " ")}
                             </span>
                           </div>
                         </>
-                      ) : null /* Blank unrecorded working days */}
+                      ) : null}
                     </div>
                   </button>
                 );
@@ -455,21 +488,21 @@ function AttendanceCalendarContent() {
           )}
 
           {/* Legend Footer */}
-          <div className="flex flex-wrap items-center gap-4 pt-5 mt-4 border-t border-border-light/60 text-xs text-text-secondary">
+          <div className="flex flex-wrap items-center gap-4 pt-5 mt-4 border-t border-[#E6E6E6] text-xs text-[#808080]">
             <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-status-success-dot" />
+              <span className="w-2.5 h-2.5 rounded-full bg-[#A6F000]" />
               Present
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-status-warning-dot" />
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
               Half Day
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-brand-purple" />
+              <span className="w-2.5 h-2.5 rounded-full bg-[#F00091]" />
               Holiday
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-status-info-dot" />
+              <span className="w-2.5 h-2.5 rounded-full bg-[#808080]" />
               Approved Leave
             </span>
           </div>
@@ -484,41 +517,41 @@ function AttendanceCalendarContent() {
           {selectedDay ? (
             <div>
               {selectedDay.holidayName && (
-                <div className="p-4 rounded-2xl bg-brand-purple/10 border border-brand-purple/30 mb-4">
-                  <div className="flex items-center gap-2 text-brand-purple font-bold text-sm">
-                    <Calendar className="w-4 h-4" />
+                <div className="p-4 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] mb-4">
+                  <div className="flex items-center gap-2 text-black font-bold text-sm">
+                    <Calendar className="w-4 h-4 text-[#F00091]" />
                     <span>{selectedDay.holidayName}</span>
                   </div>
                   {selectedDay.holidayLocalName && (
-                    <p className="text-xs text-text-primary font-semibold mt-1">
+                    <p className="text-xs text-[#4D4D4D] font-medium mt-1">
                       {selectedDay.holidayLocalName}
                     </p>
                   )}
-                  <span className="text-[10px] text-text-tertiary mt-1 block">
+                  <span className="text-[10px] text-[#808080] mt-1 block">
                     Region: {selectedDay.holidayRegion || "ORG"}
                   </span>
                 </div>
               )}
 
-              <div className="p-4 rounded-2xl bg-card-subtle mb-4 border border-border-light flex items-center justify-between">
+              <div className="p-4 rounded-xl bg-[#F5F5F5] mb-4 border border-[#E6E6E6] flex items-center justify-between">
                 <div>
-                  <span className="text-[11px] font-bold text-text-tertiary uppercase">
+                  <span className="text-[11px] font-medium text-[#808080] uppercase">
                     Logged Duration
                   </span>
-                  <div className="text-2xl font-extrabold text-text-primary tracking-tight font-mono">
+                  <div className="text-2xl font-bold text-black tracking-tight font-mono">
                     {formatDurationMinutes(selectedDay.totalMinutes)}
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="text-[11px] font-bold text-text-tertiary uppercase">
+                  <span className="text-[11px] font-medium text-[#808080] uppercase">
                     Punctuality
                   </span>
                   <div
                     className={cn(
-                      "text-xs font-bold mt-1",
+                      "text-xs font-semibold mt-1",
                       selectedDay.isLate
-                        ? "text-status-warning-text"
-                        : "text-status-success-text"
+                        ? "text-amber-600"
+                        : "text-black"
                     )}
                   >
                     {selectedDay.isLate ? "Late Arrival" : "On Time"}
@@ -526,7 +559,7 @@ function AttendanceCalendarContent() {
                 </div>
               </div>
 
-              <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider mb-2">
+              <h3 className="text-xs font-semibold text-black uppercase tracking-wider mb-2">
                 Session Intervals
               </h3>
 
@@ -535,20 +568,20 @@ function AttendanceCalendarContent() {
                   {selectedDay.sessions.map((sess) => (
                     <div
                       key={sess.id}
-                      className="p-3 rounded-xl bg-card border border-border-light shadow-sm flex items-center justify-between text-xs"
+                      className="p-3 rounded-lg bg-white border border-[#E6E6E6] flex items-center justify-between text-xs"
                     >
                       <div>
-                        <span className="font-bold text-text-primary block font-mono">
+                        <span className="font-semibold text-black block font-mono">
                           {formatTimeInTimezone(sess.checkIn, timezone || "UTC", "hh:mm a")} -{" "}
                           {sess.checkOut
                             ? formatTimeInTimezone(sess.checkOut, timezone || "UTC", "hh:mm a")
                             : "Open"}
                         </span>
-                        <span className="text-[10px] text-text-tertiary capitalize">
+                        <span className="text-[10px] text-[#808080] capitalize">
                           Source: {sess.source}
                         </span>
                       </div>
-                      <span className="font-bold text-brand-purple">
+                      <span className="font-bold text-black font-mono">
                         {formatDurationMinutes(sess.duration)}
                       </span>
                     </div>
@@ -556,8 +589,8 @@ function AttendanceCalendarContent() {
                 </div>
               ) : (
                 <EmptyState
-                  className="py-6 border-dashed shadow-none bg-card-subtle/40 mb-4"
-                  icon={<Clock className="w-5 h-5" />}
+                  className="py-6 border-dashed shadow-none bg-[#F5F5F5] mb-4"
+                  icon={<Clock className="w-5 h-5 text-[#808080]" />}
                   title="No sessions logged"
                   description={
                     selectedDay.holidayName
@@ -571,12 +604,12 @@ function AttendanceCalendarContent() {
             </div>
           ) : null}
 
-          <div className="pt-3 border-t border-border-light">
+          <div className="pt-3 border-t border-[#E6E6E6]">
             <button
               type="button"
               disabled={selectedDay?.locked}
               onClick={() => setRequestModalOpen(true)}
-              className="w-full py-2.5 px-4 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40"
+              className="w-full py-2.5 px-4 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40"
             >
               <PlusCircle className="w-3.5 h-3.5" />
               <span>{selectedDay?.locked ? "Month Locked" : "Regularize This Day"}</span>

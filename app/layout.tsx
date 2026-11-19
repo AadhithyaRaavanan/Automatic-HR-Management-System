@@ -18,6 +18,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: "#000000",
 };
 
 export const metadata: Metadata = {
@@ -31,21 +32,26 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={plusJakartaSans.variable}>
-      <body className="font-sans antialiased bg-canvas min-h-screen">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem={false}
-          disableTransitionOnChange
-        >
+    <html lang="en" className={plusJakartaSans.variable}>
+      <body className="font-sans antialiased bg-canvas min-h-screen text-text-primary selection:bg-lime selection:text-black">
+        <ThemeProvider>
           <QueryProvider>
             <DesktopOnlyGatekeeper>
               <AttendanceProvider>
                 {children}
               </AttendanceProvider>
             </DesktopOnlyGatekeeper>
-            <Toaster richColors position="top-right" />
+            <Toaster
+              position="top-right"
+              toastOptions={{
+                style: {
+                  background: "#000000",
+                  color: "#FFFFFF",
+                  border: "1px solid #1A1A1A",
+                  borderRadius: "10px",
+                },
+              }}
+            />
           </QueryProvider>
         </ThemeProvider>
       </body>

@@ -1,7 +1,6 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
-  darkMode: ["class"],
   content: [
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -14,6 +13,24 @@ const config: Config = {
         sans: ["var(--font-plus-jakarta-sans)", "sans-serif"],
       },
       colors: {
+        black: "#000000",
+        white: "#FFFFFF",
+        magenta: {
+          DEFAULT: "#F00091",
+          hover: "#D0007E",
+        },
+        lime: {
+          DEFAULT: "#A6F000",
+          hover: "#95D800",
+          light: "#F4FDE5",
+        },
+        grey: {
+          900: "#1A1A1A",
+          700: "#4D4D4D",
+          500: "#808080",
+          300: "#B3B3B3",
+          100: "#E6E6E6",
+        },
         canvas: "var(--canvas-bg)",
         shell: "var(--shell-bg)",
         card: {
@@ -22,6 +39,9 @@ const config: Config = {
           dashed: "var(--card-dashed)",
         },
         brand: {
+          lime: "var(--brand-lime)",
+          magenta: "var(--brand-magenta)",
+          black: "var(--brand-black)",
           purple: "var(--brand-purple)",
           "purple-hover": "var(--brand-purple-hover)",
           "purple-light": "var(--brand-purple-light)",
@@ -32,8 +52,10 @@ const config: Config = {
           primary: "var(--text-primary)",
           secondary: "var(--text-secondary)",
           tertiary: "var(--text-tertiary)",
+          muted: "var(--text-muted)",
           "on-purple": "var(--text-on-purple)",
           "on-navy": "var(--text-on-navy)",
+          "on-lime": "var(--text-on-lime)",
         },
         border: {
           light: "var(--border-light)",

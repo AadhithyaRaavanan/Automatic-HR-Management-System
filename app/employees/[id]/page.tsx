@@ -137,7 +137,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
     const onb = profileData?.onboarding || {};
     setFormData({
       full_name: emp.full_name || "",
-      employment_category: emp.employment_category || "full_time",
+      employment_category: emp.employment_category || onb.education_details?.employment_category || "full_time",
       department_id: emp.department_id || "",
       job_title_id: emp.job_title_id || "",
       work_mode: emp.work_mode || "remote",
@@ -605,8 +605,8 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
                       {idx === 0 && allQuals.length === 1
                         ? "Verified during mandatory employee onboarding intake."
                         : idx === 0
-                        ? "Secondary Academic Foundation (Verified)"
-                        : "Higher Professional Academic Qualification (Verified & Approved)"}
+                          ? "Secondary Academic Foundation (Verified)"
+                          : "Higher Professional Academic Qualification (Verified & Approved)"}
                     </span>
                   </div>
                 </div>
@@ -672,8 +672,8 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
                         d.document_status === "VERIFIED"
                           ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
                           : d.document_status === "REJECTED"
-                          ? "bg-rose-500/10 text-rose-500 border-rose-500/20"
-                          : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                            ? "bg-rose-500/10 text-rose-500 border-rose-500/20"
+                            : "bg-amber-500/10 text-amber-500 border-amber-500/20"
                       )}
                     >
                       {d.document_status || "VERIFIED"}
@@ -809,8 +809,8 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
                       p.status === "approved"
                         ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
                         : p.status === "rejected"
-                        ? "bg-rose-500/10 text-rose-500 border border-rose-500/20"
-                        : "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                          ? "bg-rose-500/10 text-rose-500 border border-rose-500/20"
+                          : "bg-amber-500/10 text-amber-500 border border-amber-500/20"
                     )}
                   >
                     {p.status}
@@ -865,10 +865,10 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
                               a.status === "present"
                                 ? "bg-emerald-500/10 text-emerald-500"
                                 : a.status === "absent"
-                                ? "bg-rose-500/10 text-rose-500"
-                                : a.status === "holiday"
-                                ? "bg-purple-500/10 text-purple-500"
-                                : "bg-neutral-500/10 text-neutral-400"
+                                  ? "bg-rose-500/10 text-rose-500"
+                                  : a.status === "holiday"
+                                    ? "bg-purple-500/10 text-purple-500"
+                                    : "bg-neutral-500/10 text-neutral-400"
                             )}
                           >
                             • {a.status}

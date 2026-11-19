@@ -458,7 +458,7 @@ export function OnboardingTour({
             height={targetRect.height + 12}
             rx={10}
             fill="none"
-            stroke="#818cf8"
+            stroke="#A6F000"
             strokeWidth="2.5"
             strokeDasharray="6 4"
             className="animate-pulse transition-all duration-200 ease-out"
@@ -466,7 +466,7 @@ export function OnboardingTour({
         </svg>
       ) : (
         <div
-          className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-[9998]"
+          className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[9998]"
           aria-hidden="true"
         />
       )}
@@ -474,20 +474,20 @@ export function OnboardingTour({
       {/* Floating Tour Card */}
       <div
         style={cardPositionStyle}
-        className="z-[9999] bg-card border border-border-light shadow-float rounded-xl p-5 md:p-6 transition-all duration-200 ease-out overflow-y-auto"
+        className="z-[9999] bg-[#000000] border border-[#262626] text-white shadow-2xl rounded-xl p-5 md:p-6 transition-all duration-200 ease-out overflow-y-auto"
       >
         {/* Card Header & Badges */}
         <div className="flex items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-card-subtle text-text-secondary border border-border-light">
-              <Compass className="w-3 h-3 text-text-tertiary" />
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-[#1A1A1A] text-[#B3B3B3] border border-[#333333]">
+              <Compass className="w-3 h-3 text-[#808080]" />
               Step {stepIndex + 1} of {steps.length}
             </span>
-            <span className="uppercase text-[11px] font-medium px-2 py-0.5 rounded-md bg-card-subtle border border-border-light text-text-secondary">
+            <span className="uppercase text-[11px] font-medium px-2 py-0.5 rounded-md bg-[#1A1A1A] border border-[#333333] text-[#B3B3B3]">
               {roleKey}
             </span>
             {isNavigating && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-card-subtle text-text-secondary border border-border-light">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-[#1A1A1A] text-[#B3B3B3] border border-[#333333]">
                 <Compass className="w-3 h-3 animate-spin" />
                 <span>Loading view...</span>
               </span>
@@ -498,39 +498,39 @@ export function OnboardingTour({
             onClick={finishOrSkipTour}
             disabled={submitting}
             title="Skip Walkthrough (Esc)"
-            className="text-text-muted hover:text-text-primary p-1 rounded-lg hover:bg-card-subtle transition-colors"
+            className="text-[#808080] hover:text-white p-1 rounded-lg hover:bg-[#1A1A1A] transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Progress Bar */}
-        <div className="w-full h-1 bg-border-light/60 rounded-full overflow-hidden mb-4">
+        <div className="w-full h-1 bg-[#262626] rounded-full overflow-hidden mb-4">
           <div
-            className="h-full bg-brand-purple transition-all duration-300"
+            className="h-full bg-[#A6F000] transition-all duration-300"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
 
         {/* Step Title & Body */}
         <div className="space-y-1.5 mb-4">
-          <h2 className="text-base font-semibold text-text-primary tracking-tight">
+          <h2 className="text-base font-semibold text-white tracking-tight">
             {currentStep.title}
           </h2>
-          <p className="text-xs md:text-sm text-text-secondary leading-relaxed">
+          <p className="text-xs md:text-sm text-[#B3B3B3] leading-relaxed">
             {currentStep.body}
           </p>
         </div>
 
         {/* "Good to know" Tip Callout */}
         {currentStep.tip && (
-          <div className="p-3 rounded-lg bg-card-subtle border border-border-light text-xs text-text-secondary flex items-start gap-2.5 mb-5">
-            <Compass className="w-4 h-4 text-text-tertiary shrink-0 mt-0.5" />
+          <div className="p-3 rounded-lg bg-[#1A1A1A] border border-[#2E2E2E] text-xs text-[#B3B3B3] flex items-start gap-2.5 mb-5">
+            <Compass className="w-4 h-4 text-[#808080] shrink-0 mt-0.5" />
             <div className="space-y-0.5">
-              <span className="font-medium text-text-primary block text-[11px]">
+              <span className="font-semibold text-white block text-[11px]">
                 Note
               </span>
-              <span className="text-xs leading-relaxed text-text-secondary">
+              <span className="text-xs leading-relaxed text-[#B3B3B3]">
                 {currentStep.tip}
               </span>
             </div>
@@ -538,12 +538,12 @@ export function OnboardingTour({
         )}
 
         {/* Action Controls */}
-        <div className="flex items-center justify-between pt-2 border-t border-border-light/60 gap-2">
+        <div className="flex items-center justify-between pt-2 border-t border-[#262626] gap-2">
           <button
             type="button"
             onClick={finishOrSkipTour}
             disabled={submitting}
-            className="text-xs text-text-secondary hover:text-text-primary px-2 py-1 rounded-lg transition-colors font-medium hover:bg-card-subtle cursor-pointer"
+            className="text-xs text-[#808080] hover:text-white px-2 py-1 rounded-lg transition-colors font-medium hover:bg-[#1A1A1A] cursor-pointer"
           >
             Skip walkthrough
           </button>
@@ -554,7 +554,7 @@ export function OnboardingTour({
                 type="button"
                 onClick={handleBack}
                 disabled={submitting}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border-light bg-card hover:bg-card-subtle text-xs font-medium text-text-primary transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#333333] bg-[#1A1A1A] hover:bg-[#262626] text-xs font-medium text-white transition-colors cursor-pointer"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
                 Back
@@ -565,7 +565,7 @@ export function OnboardingTour({
               type="button"
               onClick={handleNext}
               disabled={submitting}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-medium transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#A6F000] hover:bg-[#A6F000]/90 text-black text-xs font-semibold transition-colors cursor-pointer"
             >
               {isLast ? (
                 <>

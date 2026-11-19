@@ -50,6 +50,13 @@ export function CommandPalette({ open, onOpenChange, userRole = "employee" }: Co
     }
   }, []);
 
+  // Listen for custom open event
+  React.useEffect(() => {
+    const handleCustomOpen = () => onOpenChange(true);
+    window.addEventListener("pulse_open_command_palette", handleCustomOpen);
+    return () => window.removeEventListener("pulse_open_command_palette", handleCustomOpen);
+  }, [onOpenChange]);
+
   // Hotkey listener for Cmd/Ctrl+K and G-then-X, N
   React.useEffect(() => {
     let pendingG = false;
@@ -386,7 +393,7 @@ export function CommandPalette({ open, onOpenChange, userRole = "employee" }: Co
                   <span>Collapse sidebar</span>
                 </div>
                 <kbd className="px-1.5 py-0.5 rounded text-[10px] tabular-nums bg-card border border-border-light text-text-tertiary">
-                  {modKey} B
+                  {modKey === "⌘" ? "⌘B" : "Ctrl+B"}
                 </kbd>
               </Command.Item>
 
@@ -402,23 +409,8 @@ export function CommandPalette({ open, onOpenChange, userRole = "employee" }: Co
                   <span>Expand sidebar</span>
                 </div>
                 <kbd className="px-1.5 py-0.5 rounded text-[10px] tabular-nums bg-card border border-border-light text-text-tertiary">
-                  {modKey} B
+                  {modKey === "⌘" ? "⌘B" : "Ctrl+B"}
                 </kbd>
-              </Command.Item>
-
-              <Command.Item
-                onSelect={() => {
-                  setTheme(theme === "dark" ? "light" : "dark");
-                  onOpenChange(false);
-                }}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-text-primary hover:bg-card-subtle cursor-pointer transition-colors"
-              >
-                {theme === "dark" ? (
-                  <Sun className="w-4 h-4 text-status-warning-dot" />
-                ) : (
-                  <Moon className="w-4 h-4 text-text-secondary" />
-                )}
-                <span>Toggle theme</span>
               </Command.Item>
 
               <Command.Item

@@ -215,8 +215,16 @@ export async function GET(
       .eq("status", "active")
       .order("full_name", { ascending: true });
 
+    const resolvedCategory = onb?.education_details?.employment_category || (internship ? "intern" : "full_time");
+    const enhancedEmp = emp
+      ? {
+          ...emp,
+          employment_category: emp.employment_category || resolvedCategory,
+        }
+      : null;
+
     return NextResponse.json({
-      employee: emp,
+      employee: enhancedEmp,
       onboarding: onb,
       documents: docs || [],
       internship: internship || null,
@@ -317,7 +325,7 @@ export async function PATCH(
     if (body.department_id !== undefined) empUpdates.department_id = body.department_id || null;
     if (body.job_title_id !== undefined) empUpdates.job_title_id = body.job_title_id || null;
     if (body.work_mode !== undefined) empUpdates.work_mode = body.work_mode;
-    if (body.employment_category !== undefined) empUpdates.employment_category = body.employment_category;
+    // Note: employment_category is persisted via onboarding_profiles.education_details (employees table does not have an employment_category column)
     if (body.manager_id !== undefined) empUpdates.manager_id = body.manager_id || null;
     if (body.shift_start_time !== undefined) empUpdates.shift_start_time = body.shift_start_time;
     if (body.shift_end_time !== undefined) empUpdates.shift_end_time = body.shift_end_time;
@@ -336,54 +344,68 @@ export async function PATCH(
       return NextResponse.json({ error: empErr.message }, { status: 400 });
     }
 
-    // Fetch existing onboarding profile to update
+    // Fetch existing onboarding profile to update or insert
     const { data: onb } = await (supabaseAdmin as any)
       .from("onboarding_profiles")
       .select("*")
       .eq("user_id", targetUserId)
       .maybeSingle();
 
+    const edu = onb?.education_details || {};
+    const onbUpdates: any = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (body.employment_category !== undefined) {
+      edu.employment_category = body.employment_category;
+    }
+    if (body.bank_name !== undefined) onbUpdates.bank_name = body.bank_name;
+    if (body.bank_account_number !== undefined) onbUpdates.bank_account_number = body.bank_account_number;
+    if (body.bank_ifsc !== undefined) onbUpdates.bank_ifsc = body.bank_ifsc;
+    if (body.pan_number !== undefined) onbUpdates.pan_number = body.pan_number;
+    if (body.phone !== undefined) onbUpdates.phone = body.phone;
+    if (body.highest_qualification !== undefined) {
+      onbUpdates.highest_qualification = body.highest_qualification;
+      edu.highest_qualification = body.highest_qualification;
+    }
+    if (Array.isArray(body.all_qualifications)) {
+      edu.all_qualifications = body.all_qualifications;
+    }
+
+    // Check for designation or department change to automatically append to Career Timeline
+    if (
+      (body.job_title_id && body.job_title_id !== emp.job_title_id) ||
+      (body.department_id && body.department_id !== emp.department_id)
+    ) {
+      const timeline = Array.isArray(edu.career_timeline) ? [...edu.career_timeline] : [];
+      timeline.unshift({
+        id: `car-${Date.now()}`,
+        effective_date: new Date().toISOString().slice(0, 10),
+        event_type: "Role / Department Updated",
+        notes: `Parameters adjusted by HR Admin (${authResult.context.email || "Admin"}).`,
+        created_at: new Date().toISOString(),
+      });
+      edu.career_timeline = timeline;
+    }
+
+    onbUpdates.education_details = edu;
+
     if (onb) {
-      const edu = onb.education_details || {};
-      const onbUpdates: any = {
-        updated_at: new Date().toISOString(),
-      };
-
-      if (body.bank_name !== undefined) onbUpdates.bank_name = body.bank_name;
-      if (body.bank_account_number !== undefined) onbUpdates.bank_account_number = body.bank_account_number;
-      if (body.bank_ifsc !== undefined) onbUpdates.bank_ifsc = body.bank_ifsc;
-      if (body.pan_number !== undefined) onbUpdates.pan_number = body.pan_number;
-      if (body.phone !== undefined) onbUpdates.phone = body.phone;
-      if (body.highest_qualification !== undefined) {
-        onbUpdates.highest_qualification = body.highest_qualification;
-        edu.highest_qualification = body.highest_qualification;
-      }
-      if (Array.isArray(body.all_qualifications)) {
-        edu.all_qualifications = body.all_qualifications;
-      }
-
-      // Check for designation or department change to automatically append to Career Timeline
-      if (
-        (body.job_title_id && body.job_title_id !== emp.job_title_id) ||
-        (body.department_id && body.department_id !== emp.department_id)
-      ) {
-        const timeline = Array.isArray(edu.career_timeline) ? [...edu.career_timeline] : [];
-        timeline.unshift({
-          id: `car-${Date.now()}`,
-          effective_date: new Date().toISOString().slice(0, 10),
-          event_type: "Role / Department Updated",
-          notes: `Parameters adjusted by HR Admin (${authResult.context.email || "Admin"}).`,
-          created_at: new Date().toISOString(),
-        });
-        edu.career_timeline = timeline;
-      }
-
-      onbUpdates.education_details = edu;
-
       await (supabaseAdmin as any)
         .from("onboarding_profiles")
         .update(onbUpdates)
         .eq("user_id", targetUserId);
+    } else {
+      await (supabaseAdmin as any)
+        .from("onboarding_profiles")
+        .insert({
+          user_id: targetUserId,
+          full_name: empUpdates.full_name || emp.full_name,
+          personal_email: emp.email,
+          candidate_type: body.employment_category === "intern" ? "STUDENT_INTERN" : "EXPERIENCED",
+          status: "approved",
+          ...onbUpdates,
+        });
     }
 
     return NextResponse.json({ success: true, message: "Profile parameters updated successfully." });

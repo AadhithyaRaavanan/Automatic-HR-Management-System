@@ -26,6 +26,8 @@ import {
   Target,
   UserPlus,
   Palette,
+  Search,
+  PanelLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isDemoModeEnabled } from "@/lib/config/demo";
@@ -40,22 +42,23 @@ export interface NavItem {
   badge?: string | number;
   badgeColor?: "green" | "purple" | "amber";
   roles?: string[];
+  group?: "main" | "settings";
 }
 
 const baseNavItems: NavItem[] = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
-  { label: "Employees", href: "/ems", icon: Users, badgeColor: "purple", roles: ["hr", "admin"] },
-  { label: "Attendance", href: "/attendance", icon: Clock },
-  { label: "Tasks", href: "/tasks", icon: CheckSquare },
-  { label: "KPI", href: "/kpi", icon: Target },
-  { label: "Leave", href: "/leave", icon: CalendarDays },
-  { label: "Requests", href: "/requests", icon: FileCheck2 },
-  { label: "Reports", href: "/reports", icon: BarChart3, roles: ["hr", "admin"] },
-  { label: "Locations", href: "/admin/locations", icon: MapPin, roles: ["admin"] },
-  { label: "Shifts", href: "/admin/shifts", icon: CalendarClock, roles: ["admin"] },
-  { label: "Audits", href: "/admin/audits", icon: ScrollText, roles: ["admin"] },
-  { label: "Holidays", href: "/holidays", icon: CalendarDays },
-  { label: "Admin settings", href: "/admin/settings", icon: ShieldAlert, roles: ["admin"] },
+  { label: "Dashboard", href: "/", icon: LayoutDashboard, group: "main" },
+  { label: "Employees", href: "/ems", icon: Users, roles: ["hr", "admin"], group: "main" },
+  { label: "Attendance", href: "/attendance", icon: Clock, group: "main" },
+  { label: "Tasks", href: "/tasks", icon: CheckSquare, group: "main" },
+  { label: "KPI", href: "/kpi", icon: Target, group: "main" },
+  { label: "Leave", href: "/leave", icon: CalendarDays, group: "main" },
+  { label: "Requests", href: "/requests", icon: FileCheck2, group: "main" },
+  { label: "Reports", href: "/reports", icon: BarChart3, roles: ["hr", "admin"], group: "main" },
+  { label: "Locations", href: "/admin/locations", icon: MapPin, roles: ["admin"], group: "settings" },
+  { label: "Shifts", href: "/admin/shifts", icon: CalendarClock, roles: ["admin"], group: "settings" },
+  { label: "Audits", href: "/admin/audits", icon: ScrollText, roles: ["admin"], group: "settings" },
+  { label: "Holidays", href: "/holidays", icon: CalendarDays, group: "settings" },
+  { label: "Admin settings", href: "/admin/settings", icon: ShieldAlert, roles: ["admin"], group: "settings" },
 ];
 
 export function CurvedSidebar({
@@ -200,10 +203,10 @@ export function CurvedSidebar({
   return (
     <aside
       className={cn(
-        "sticky top-0 left-0 hidden md:flex flex-col justify-between py-3.5 h-screen max-h-screen bg-card text-text-primary border-r border-border-light select-none shrink-0 z-40 transition-[width,padding] duration-200 ease-in-out overflow-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0",
+        "sticky top-0 left-0 hidden md:flex flex-col justify-between py-4 h-screen max-h-screen bg-[#000000] text-white select-none shrink-0 z-40 transition-[width,padding] duration-200 ease-in-out overflow-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0",
         isCollapsed
-          ? "w-[68px] lg:w-[72px] px-2 items-center"
-          : "w-[240px] lg:w-[250px] px-3 items-stretch",
+          ? "w-[72px] px-2 items-center"
+          : "w-[260px] px-3.5 items-stretch",
         className
       )}
       aria-label="Sidebar navigation"
@@ -211,48 +214,73 @@ export function CurvedSidebar({
       data-collapsed={isCollapsed}
     >
       {/* Top Header & Brand Section */}
-      <div className="shrink-0 mb-3 px-1">
+      <div className="shrink-0 mb-2">
         {isCollapsed ? (
-          <div className="flex flex-col items-center">
+          <div className="flex flex-col items-center gap-3">
             <Link
               href="/"
-              className="w-8 h-8 rounded-lg bg-brand-purple-light flex items-center justify-center text-brand-purple transition-colors"
+              className="w-9 h-9 rounded-xl bg-[#A6F000] flex items-center justify-center text-[#000000] font-black text-sm shadow-sm hover:opacity-90 transition-opacity"
               title="RemoteHR Home"
               aria-label="Pulse Home"
             >
-              <div className="grid grid-cols-2 gap-0.5 p-1">
-                <span className="w-1.5 h-1.5 rounded-sm bg-brand-purple" />
-                <span className="w-1.5 h-1.5 rounded-sm bg-brand-purple/70" />
-                <span className="w-1.5 h-1.5 rounded-sm bg-brand-purple/70" />
-                <span className="w-1.5 h-1.5 rounded-sm bg-brand-purple" />
-              </div>
+              P
             </Link>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent("pulse_open_command_palette"))}
+              className="w-9 h-9 rounded-lg bg-[#1A1A1A] border border-[#2E2E2E] hover:border-[#4D4D4D] text-[#808080] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+              title="Search (Cmd/Ctrl+K)"
+              aria-label="Search"
+            >
+              <Search className="w-4 h-4" />
+            </button>
           </div>
         ) : (
-          <div className="flex items-center">
-            <Link
-              href="/"
-              className="flex items-center gap-2.5 group transition-opacity hover:opacity-90 min-w-0"
-              title="RemoteHR Home"
-            >
-              <div className="w-8 h-8 rounded-lg bg-brand-purple-light flex items-center justify-center text-brand-purple transition-colors shrink-0">
-                <div className="grid grid-cols-2 gap-0.5 p-1">
-                  <span className="w-1.5 h-1.5 rounded-sm bg-brand-purple" />
-                  <span className="w-1.5 h-1.5 rounded-sm bg-brand-purple/70" />
-                  <span className="w-1.5 h-1.5 rounded-sm bg-brand-purple/70" />
-                  <span className="w-1.5 h-1.5 rounded-sm bg-brand-purple" />
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between px-1">
+              <Link
+                href="/"
+                className="flex items-center gap-2.5 group transition-opacity hover:opacity-90 min-w-0"
+                title="RemoteHR Home"
+              >
+                <div className="w-8 h-8 rounded-lg bg-[#A6F000] flex items-center justify-center text-[#000000] font-black text-sm shrink-0 shadow-sm">
+                  P
                 </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="font-bold text-sm tracking-tight leading-tight text-white truncate">
+                    Pulse
+                  </span>
+                  <span className="sr-only">RemoteHR</span>
+                  <span className="text-[11px] text-[#808080] font-medium truncate">
+                    by Zenxea
+                  </span>
+                </div>
+              </Link>
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                className="p-1.5 rounded-lg text-[#808080] hover:text-white hover:bg-[#1A1A1A] transition-colors cursor-pointer"
+                title="Toggle sidebar"
+                aria-label="Toggle sidebar"
+              >
+                <PanelLeft className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Dark Search Box matching Decko Reference */}
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent("pulse_open_command_palette"))}
+              className="w-full px-3 py-2 rounded-lg bg-[#1A1A1A] border border-[#2E2E2E] hover:border-[#4D4D4D] text-[#808080] hover:text-[#B3B3B3] flex items-center justify-between text-xs transition-colors cursor-pointer group"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Search className="w-3.5 h-3.5 text-[#808080] group-hover:text-[#B3B3B3] shrink-0" />
+                <span className="truncate">Search here...</span>
               </div>
-              <div className="flex flex-col min-w-0">
-                <span className="font-semibold text-sm tracking-tight leading-tight text-text-primary truncate">
-                  Pulse
-                </span>
-                <span className="sr-only">RemoteHR</span>
-                <span className="text-[11px] text-text-tertiary font-medium truncate">
-                  Workspace
-                </span>
-              </div>
-            </Link>
+              <kbd className="px-1.5 py-0.5 rounded text-[10px] font-sans bg-[#262626] border border-[#333333] text-[#B3B3B3] shrink-0">
+                {isMac ? "⌘K" : "Ctrl+K"}
+              </kbd>
+            </button>
           </div>
         )}
       </div>
@@ -265,97 +293,120 @@ export function CurvedSidebar({
         )}
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
-        {navItems.map((item) => {
-          const isActive =
-            item.href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(item.href);
-          const Icon = item.icon;
+        {(() => {
+          const mainItems = navItems.filter((i) => i.group !== "settings");
+          const settingsItems = navItems.filter((i) => i.group === "settings");
 
-          if (isCollapsed) {
-            return (
-              <div key={item.href} className="relative group shrink-0">
-                <Link
-                  href={item.href}
-                  onMouseEnter={() => router.prefetch(item.href)}
-                  onFocus={() => router.prefetch(item.href)}
-                  className={cn(
-                    "relative flex items-center justify-center w-8 h-8 lg:w-8.5 lg:h-8.5 rounded-lg transition-colors duration-150",
-                    isActive
-                      ? "bg-brand-purple-light text-brand-purple font-semibold"
-                      : "text-text-secondary hover:text-text-primary hover:bg-card-subtle"
-                  )}
-                  title={item.label}
-                  aria-label={item.label}
-                >
-                  <Icon className="w-4 h-4 shrink-0" />
+          const renderItem = (item: NavItem) => {
+            const isActive =
+              item.href === "/"
+                ? pathname === "/"
+                : pathname.startsWith(item.href);
+            const Icon = item.icon;
 
-                  {/* Badge */}
-                  {item.badge && (
-                    <span
-                      className={cn(
-                        "absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full text-[8.5px] font-bold border border-card",
-                        item.badgeColor === "green"
-                          ? "bg-status-success-dot text-white"
-                          : "bg-status-warning-dot text-brand-navy"
-                      )}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
-                </Link>
+            if (isCollapsed) {
+              return (
+                <div key={item.href} className="relative group shrink-0 my-0.5">
+                  <Link
+                    href={item.href}
+                    onMouseEnter={() => router.prefetch(item.href)}
+                    onFocus={() => router.prefetch(item.href)}
+                    className={cn(
+                      "relative flex items-center justify-center w-9 h-9 rounded-lg transition-colors duration-150",
+                      isActive
+                        ? "bg-[#A6F000] text-[#000000] font-semibold shadow-sm"
+                        : "text-[#B3B3B3] hover:text-white hover:bg-[#1A1A1A]"
+                    )}
+                    title={item.label}
+                    aria-label={item.label}
+                  >
+                    <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-[#000000]" : "text-[#B3B3B3] group-hover:text-white")} />
 
-                {/* Tooltip on Hover */}
-                <div className="absolute left-full ml-2.5 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center z-50 pointer-events-none">
-                  <div className="bg-text-primary text-card text-xs font-medium px-2 py-1 rounded-md shadow-md whitespace-nowrap">
-                    {item.label}
+                    {item.badge && (
+                      <span className="absolute -top-1 -right-1 px-1 rounded-full text-[8px] font-bold bg-[#A6F000] text-[#000000] border border-black">
+                        {item.badge}
+                      </span>
+                    )}
+                  </Link>
+
+                  {/* Tooltip on Hover */}
+                  <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center z-50 pointer-events-none">
+                    <div className="bg-[#1A1A1A] text-white text-xs font-medium px-2 py-1 rounded shadow-md border border-[#333333] whitespace-nowrap">
+                      {item.label}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          }
+              );
+            }
 
-          // Expanded view
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onMouseEnter={() => router.prefetch(item.href)}
-              onFocus={() => router.prefetch(item.href)}
-              className={cn(
-                "flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors duration-150 w-full group select-none shrink-0 text-xs",
-                isActive
-                  ? "bg-brand-purple-light text-brand-purple font-semibold"
-                  : "text-text-secondary hover:text-text-primary hover:bg-card-subtle font-medium"
-              )}
-              title={item.label}
-            >
-              <Icon className="w-4 h-4 shrink-0" />
-              <span className="truncate flex-1 text-left">
-                {item.label}
-              </span>
-
-              {item.badge && (
-                <span
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onMouseEnter={() => router.prefetch(item.href)}
+                onFocus={() => router.prefetch(item.href)}
+                className={cn(
+                  "flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-150 w-full group select-none shrink-0 text-xs",
+                  isActive
+                    ? "bg-[#A6F000] text-[#000000] font-semibold shadow-sm"
+                    : "text-[#B3B3B3] hover:text-white hover:bg-[#1A1A1A] font-medium"
+                )}
+                title={item.label}
+              >
+                <Icon
                   className={cn(
-                    "px-1.5 py-0.2 rounded-full text-[9px] font-bold shrink-0",
-                    isActive
-                      ? "bg-brand-purple text-white"
-                      : "bg-card-subtle text-text-secondary border border-border-light"
+                    "w-4 h-4 shrink-0 transition-colors",
+                    isActive ? "text-[#000000]" : "text-[#B3B3B3] group-hover:text-white"
                   )}
-                >
-                  {item.badge}
+                />
+                <span className={cn("truncate flex-1 text-left", isActive ? "text-[#000000] font-semibold" : "text-[#B3B3B3] group-hover:text-white")}>
+                  {item.label}
                 </span>
+
+                {item.badge && (
+                  <span
+                    className={cn(
+                      "px-1.5 py-0.2 rounded-full text-[9px] font-bold shrink-0",
+                      isActive
+                        ? "bg-[#000000] text-[#A6F000]"
+                        : "bg-[#262626] text-[#B3B3B3]"
+                    )}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </Link>
+            );
+          };
+
+          return (
+            <>
+              {!isCollapsed && (
+                <div className="px-3 pt-2 pb-1 text-[11px] font-medium text-[#808080]">
+                  Main menu
+                </div>
               )}
-            </Link>
+              {mainItems.map(renderItem)}
+
+              {settingsItems.length > 0 && (
+                <>
+                  {!isCollapsed && (
+                    <div className="px-3 pt-4 pb-1 text-[11px] font-medium text-[#808080]">
+                      Management
+                    </div>
+                  )}
+                  {settingsItems.map(renderItem)}
+                </>
+              )}
+            </>
           );
-        })}
+        })()}
       </nav>
 
       {/* Bottom Profile / Quick Action Stack */}
       <div
         className={cn(
-          "shrink-0 pt-2 border-t border-border-light flex flex-col gap-1",
+          "shrink-0 pt-3 border-t border-[#1A1A1A] flex flex-col gap-1.5",
           isCollapsed ? "items-center" : "items-stretch"
         )}
       >
@@ -364,10 +415,10 @@ export function CurvedSidebar({
             <Link
               href="/profile"
               className={cn(
-                "w-7.5 h-7.5 lg:w-8 lg:h-8 rounded-lg flex items-center justify-center transition-colors",
+                "w-9 h-9 rounded-lg flex items-center justify-center transition-colors",
                 pathname.startsWith("/profile")
-                  ? "bg-brand-purple-light text-brand-purple"
-                  : "text-text-secondary hover:text-text-primary hover:bg-card-subtle"
+                  ? "bg-[#A6F000] text-[#000000]"
+                  : "text-[#B3B3B3] hover:text-white hover:bg-[#1A1A1A]"
               )}
               title={mounted && session.fullName ? `${session.fullName} (Profile)` : "My profile"}
               aria-label="My profile"
@@ -377,10 +428,10 @@ export function CurvedSidebar({
             <Link
               href="/settings"
               className={cn(
-                "w-7.5 h-7.5 lg:w-8 lg:h-8 rounded-lg flex items-center justify-center transition-colors",
+                "w-9 h-9 rounded-lg flex items-center justify-center transition-colors",
                 pathname.startsWith("/settings")
-                  ? "bg-brand-purple-light text-brand-purple"
-                  : "text-text-secondary hover:text-text-primary hover:bg-card-subtle"
+                  ? "bg-[#A6F000] text-[#000000]"
+                  : "text-[#B3B3B3] hover:text-white hover:bg-[#1A1A1A]"
               )}
               title="Settings"
               aria-label="Settings"
@@ -390,7 +441,7 @@ export function CurvedSidebar({
             <button
               type="button"
               onClick={handleSignOut}
-              className="w-7.5 h-7.5 lg:w-8 lg:h-8 rounded-lg text-text-secondary hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 flex items-center justify-center transition-colors cursor-pointer"
+              className="w-9 h-9 rounded-lg text-[#808080] hover:text-[#F00091] hover:bg-[#1A1A1A] flex items-center justify-center transition-colors cursor-pointer"
               title="Sign out"
               aria-label="Sign out"
             >
@@ -399,56 +450,40 @@ export function CurvedSidebar({
           </>
         ) : (
           <>
-            <Link
-              href="/profile"
-              className={cn(
-                "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs transition-colors",
-                pathname.startsWith("/profile")
-                  ? "bg-brand-purple-light text-brand-purple font-semibold"
-                  : "text-text-secondary hover:text-text-primary hover:bg-card-subtle font-medium"
-              )}
-              title="My profile"
-            >
-              <UserCircle className="w-4 h-4 shrink-0" />
-              <div className="flex flex-col min-w-0 flex-1 text-left">
-                <span className="truncate font-semibold text-text-primary">
-                  {mounted && session.fullName ? session.fullName : "My profile"}
-                </span>
-                <span className="text-[11px] text-text-tertiary truncate capitalize">
-                  {mounted && session.jobTitleName
-                    ? session.jobTitleName
-                    : mounted
-                    ? effectiveRole
-                    : "Profile"}
-                </span>
-              </div>
-            </Link>
+            <div className="flex items-center justify-between p-1.5 rounded-lg bg-[#1A1A1A] border border-[#262626]">
+              <Link
+                href="/profile"
+                className="flex items-center gap-2.5 min-w-0 flex-1 hover:opacity-90 transition-opacity"
+                title="My profile"
+              >
+                <div className="w-7 h-7 rounded-full bg-[#2E2E2E] text-white flex items-center justify-center text-xs font-semibold shrink-0">
+                  {mounted && session.fullName ? session.fullName.charAt(0).toUpperCase() : "U"}
+                </div>
+                <div className="flex flex-col min-w-0 flex-1 text-left">
+                  <span className="truncate font-semibold text-xs text-white">
+                    {mounted && session.fullName ? session.fullName : "My profile"}
+                  </span>
+                  <span className="text-[10px] text-[#808080] truncate capitalize">
+                    {mounted && session.jobTitleName
+                      ? session.jobTitleName
+                      : mounted
+                      ? effectiveRole
+                      : "Profile"}
+                  </span>
+                </div>
+              </Link>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="p-1.5 rounded-md text-[#808080] hover:text-[#F00091] hover:bg-[#262626] transition-colors cursor-pointer shrink-0"
+                title="Sign out"
+                aria-label="Sign out"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
 
-            <Link
-              href="/settings"
-              className={cn(
-                "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs transition-colors",
-                pathname.startsWith("/settings")
-                  ? "bg-brand-purple-light text-brand-purple font-semibold"
-                  : "text-text-secondary hover:text-text-primary hover:bg-card-subtle font-medium"
-              )}
-              title="Settings"
-            >
-              <Settings className="w-4 h-4 shrink-0" />
-              <span className="truncate flex-1 text-left">Settings</span>
-            </Link>
-
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs text-text-secondary hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-colors cursor-pointer"
-              title="Sign out"
-            >
-              <LogOut className="w-4 h-4 shrink-0" />
-              <span className="truncate flex-1 text-left">Sign out</span>
-            </button>
-
-            <div className="text-[10px] text-text-tertiary text-center pt-1 font-sans">
+            <div className="text-[10px] text-[#808080] text-center pt-1 font-sans">
               Press {isMac ? "⌘B" : "Ctrl+B"} to collapse
             </div>
           </>
