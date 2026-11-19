@@ -476,16 +476,16 @@ function ProfilePageContent() {
           {!isVerified && (
             <Link
               href="/onboarding"
-              className="px-4 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
+              className="px-3.5 py-1.5 rounded-lg bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-medium transition-colors flex items-center gap-1.5"
             >
-              <span>{isSubmitted ? "Review Submission →" : "Onboarding Portal →"}</span>
+              <span>{isSubmitted ? "Review submission" : "Onboarding"}</span>
             </Link>
           )}
           <Link
             href="/settings"
-            className="px-4 py-2 rounded-xl bg-card border border-border-light text-xs font-bold text-text-primary hover:bg-card-subtle transition-colors shadow-sm"
+            className="px-3.5 py-1.5 rounded-lg bg-card border border-border-light text-xs font-medium text-text-primary hover:bg-card-subtle transition-colors"
           >
-            Security & Preferences →
+            Settings
           </Link>
         </div>
       </section>
@@ -496,11 +496,11 @@ function ProfilePageContent() {
         <BentoCard
           title={
             <div className="flex items-center gap-2">
-              <UserCircle className="w-4 h-4 text-brand-purple" />
-              <span>Identity & Avatar</span>
+              <UserCircle className="w-4 h-4 text-text-secondary" />
+              <span>Identity and profile</span>
             </div>
           }
-          subtitle="Private tenant-isolated storage"
+          subtitle="Account profile"
           className="w-full p-6 flex flex-col justify-between space-y-5"
         >
           <div className="flex flex-col items-center text-center space-y-4 py-2">
@@ -509,10 +509,10 @@ function ProfilePageContent() {
                 <img
                   src={avatarSignedUrl}
                   alt={fullName || "User avatar"}
-                  className="w-28 h-28 rounded-full object-cover border-4 border-brand-purple/25 shadow-float"
+                  className="w-24 h-24 rounded-full object-cover border border-border-light"
                 />
               ) : (
-                <div className="w-28 h-28 rounded-full bg-brand-purple-light text-brand-purple font-extrabold text-2xl flex items-center justify-center border-4 border-brand-purple/20 shadow-float">
+                <div className="w-24 h-24 rounded-full bg-card-subtle text-text-primary font-semibold text-xl flex items-center justify-center border border-border-light">
                   {initials}
                 </div>
               )}
@@ -522,7 +522,7 @@ function ProfilePageContent() {
                 disabled={uploadingAvatar || loading}
                 onClick={() => fileInputRef.current?.click()}
                 aria-label="Upload avatar photo"
-                className="absolute bottom-0 right-0 w-9 h-9 rounded-full bg-brand-purple hover:bg-brand-purple-hover text-white flex items-center justify-center shadow-md cursor-pointer transition-all disabled:opacity-50"
+                className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-brand-navy hover:bg-brand-navy-hover text-white flex items-center justify-center cursor-pointer transition-colors disabled:opacity-50"
               >
                 <Camera className="w-4 h-4" />
               </button>

@@ -30,7 +30,7 @@ export async function sendSlackAlert({
           title,
           text: message,
           fields,
-          footer: "RemoteHR Attendance Management",
+          footer: "Pulse Attendance Management",
           ts: Math.floor(Date.now() / 1000),
         },
       ],

@@ -401,13 +401,13 @@ function HrOnboardingContent() {
   return (
     <div className="space-y-6">
         {/* Page Header */}
-        <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <section data-tour="onboarding-hub" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-text-primary tracking-tight">
-              Employee Onboarding Verification
+            <h1 className="text-2xl font-semibold text-text-primary tracking-tight">
+              Onboarding reviews
             </h1>
             <p className="text-xs sm:text-sm text-text-secondary mt-1">
-              Verify candidate documents, request corrections, and approve employee profile activations.
+              Review candidate documents, request corrections, and approve employee profile activations.
             </p>
           </div>
 
@@ -416,9 +416,9 @@ function HrOnboardingContent() {
               href="https://drive.google.com/drive/folders/1lDOzwBbZa4FG1M3pRzQDj7cNt8RJ-mdZ?usp=sharing"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-4 py-2 rounded-xl bg-card border border-border-light hover:bg-card-subtle text-xs font-bold text-text-primary transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+              className="px-3.5 py-1.5 rounded-lg bg-card border border-border-light hover:bg-card-subtle text-xs font-medium text-text-primary transition-colors flex items-center gap-1.5 cursor-pointer"
             >
-              <FolderOpen className="w-3.5 h-3.5 text-brand-purple" />
+              <FolderOpen className="w-3.5 h-3.5 text-text-secondary" />
               <span>Google Drive</span>
               <ExternalLink className="w-3 h-3 text-text-tertiary" />
             </a>
@@ -426,9 +426,9 @@ function HrOnboardingContent() {
             <button
               type="button"
               onClick={loadCandidates}
-              className="px-4 py-2 rounded-xl bg-card border border-border-light hover:bg-card-subtle text-xs font-bold text-text-primary transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+              className="px-3.5 py-1.5 rounded-lg bg-card border border-border-light hover:bg-card-subtle text-xs font-medium text-text-primary transition-colors flex items-center gap-1.5 cursor-pointer"
             >
-              <RotateCcw className="w-3.5 h-3.5 text-brand-purple" />
+              <RotateCcw className="w-3.5 h-3.5 text-text-secondary" />
               <span>Refresh</span>
             </button>
           </div>
@@ -436,47 +436,47 @@ function HrOnboardingContent() {
 
         {/* Summary Metric Cards */}
         <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div className="p-4 rounded-2xl bg-card border border-border-light shadow-sm">
-            <p className="text-[11px] font-bold text-text-tertiary uppercase tracking-wider">Total</p>
-            <p className="text-2xl font-black text-text-primary mt-1">{summary.total}</p>
+          <div className="p-3.5 rounded-xl bg-card border border-border-light">
+            <p className="text-xs font-medium text-text-secondary">Total</p>
+            <p className="text-2xl font-semibold text-text-primary tabular-nums mt-1">{summary.total}</p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-card border border-border-light shadow-sm">
-            <p className="text-[11px] font-bold text-brand-purple uppercase tracking-wider">Pending</p>
-            <p className="text-2xl font-black text-brand-purple mt-1">{summary.pending}</p>
+          <div className="p-3.5 rounded-xl bg-card border border-border-light">
+            <p className="text-xs font-medium text-text-secondary">Pending</p>
+            <p className="text-2xl font-semibold text-brand-purple tabular-nums mt-1">{summary.pending}</p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-card border border-border-light shadow-sm">
-            <p className="text-[11px] font-bold text-status-warning uppercase tracking-wider">Under Review</p>
-            <p className="text-2xl font-black text-status-warning mt-1">{summary.under_review}</p>
+          <div className="p-3.5 rounded-xl bg-card border border-border-light">
+            <p className="text-xs font-medium text-text-secondary">Under review</p>
+            <p className="text-2xl font-semibold text-text-primary tabular-nums mt-1">{summary.under_review}</p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-card border border-border-light shadow-sm">
-            <p className="text-[11px] font-bold text-status-danger uppercase tracking-wider">Corrections</p>
-            <p className="text-2xl font-black text-status-danger mt-1">{summary.correction_required}</p>
+          <div className="p-3.5 rounded-xl bg-card border border-border-light">
+            <p className="text-xs font-medium text-text-secondary">Corrections</p>
+            <p className="text-2xl font-semibold text-status-danger-text tabular-nums mt-1">{summary.correction_required}</p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-card border border-border-light shadow-sm">
-            <p className="text-[11px] font-bold text-status-success uppercase tracking-wider">Approved</p>
-            <p className="text-2xl font-black text-status-success mt-1">{summary.approved}</p>
+          <div className="p-3.5 rounded-xl bg-card border border-border-light">
+            <p className="text-xs font-medium text-text-secondary">Approved</p>
+            <p className="text-2xl font-semibold text-status-success-text tabular-nums mt-1">{summary.approved}</p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-card border border-border-light shadow-sm">
-            <p className="text-[11px] font-bold text-text-secondary uppercase tracking-wider">Completed</p>
-            <p className="text-2xl font-black text-text-primary mt-1">{summary.completed}</p>
+          <div className="p-3.5 rounded-xl bg-card border border-border-light">
+            <p className="text-xs font-medium text-text-secondary">Completed</p>
+            <p className="text-2xl font-semibold text-text-primary tabular-nums mt-1">{summary.completed}</p>
           </div>
         </section>
 
         {/* Filters and Search Bar */}
         <section className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-text-tertiary absolute left-3 top-3" />
+            <Search className="w-4 h-4 text-text-tertiary absolute left-3 top-2.5" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by candidate name, employee ID, or department..."
-              className="w-full pl-9 pr-4 py-2 rounded-xl bg-card border border-border-light text-xs font-semibold text-text-primary focus:outline-none focus:border-brand-purple shadow-sm"
+              className="w-full pl-9 pr-4 py-2 rounded-lg bg-card border border-border-light text-xs font-medium text-text-primary focus:outline-none focus:border-brand-purple"
             />
           </div>
 

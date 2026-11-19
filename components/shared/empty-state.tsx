@@ -22,20 +22,20 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "py-12 px-6 text-center rounded-3xl bg-card border border-border-light shadow-sm flex flex-col items-center justify-center",
+        "py-10 px-6 text-center rounded-xl bg-card border border-border-light flex flex-col items-center justify-center",
         className
       )}
     >
-      <div className="w-12 h-12 rounded-2xl bg-brand-purple-light text-brand-purple flex items-center justify-center mb-3">
+      <div className="text-text-tertiary mb-2.5">
         {icon || <Inbox className="w-6 h-6" />}
       </div>
-      <h3 className="text-sm font-extrabold text-text-primary">{title}</h3>
+      <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
       {description && (
         <p className="text-xs text-text-secondary mt-1 max-w-sm leading-relaxed">
           {description}
         </p>
       )}
-      {action && <div className="mt-4">{action}</div>}
+      {action && <div className="mt-3.5">{action}</div>}
     </div>
   );
 }

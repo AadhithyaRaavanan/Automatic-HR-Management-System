@@ -31,39 +31,32 @@ export function BentoCard({
 
   const variantStyles = {
     default:
-      "bg-card text-text-primary border border-border-light/70 shadow-card hover:shadow-float",
+      "bg-card text-text-primary border border-border-light shadow-none",
     purple:
-      "bg-brand-purple text-white border-0 shadow-float",
+      "bg-card text-text-primary border border-border-light shadow-none",
     dashed:
-      "bg-card/60 border-2 border-dashed border-card-dashed hover:border-brand-purple hover:bg-brand-purple-light/10 text-text-secondary cursor-pointer",
+      "bg-card-subtle/50 border border-dashed border-border-light hover:border-brand-purple/50 text-text-secondary cursor-pointer",
     subtle:
-      "bg-card-subtle text-text-primary border border-border-light shadow-sm",
+      "bg-card-subtle text-text-primary border border-border-light shadow-none",
   };
 
   const isInteractive = Boolean(onClick);
 
   return (
-    <motion.section
-      whileHover={!shouldReduceMotion && (isInteractive || variant === "default") ? { y: -3 } : {}}
-      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+    <section
       onClick={onClick}
       className={cn(
-        "relative rounded-[26px] p-6 flex flex-col justify-between transition-colors duration-200",
+        "relative rounded-xl p-5 flex flex-col justify-between transition-colors duration-150",
         variantStyles[variant],
         isInteractive && "cursor-pointer",
         className
       )}
     >
       {(title || action || badge) && (
-        <header className="flex items-center justify-between gap-3 mb-4 select-none">
+        <header className="flex items-center justify-between gap-3 mb-3.5 select-none">
           <div className="flex items-center gap-2 min-w-0">
             {typeof title === "string" ? (
-              <h3
-                className={cn(
-                  "text-lg font-bold tracking-tight truncate",
-                  variant === "purple" ? "text-white" : "text-text-primary"
-                )}
-              >
+              <h3 className="text-sm sm:text-base font-semibold tracking-tight text-text-primary truncate">
                 {title}
               </h3>
             ) : (
@@ -81,18 +74,13 @@ export function BentoCard({
       )}
 
       {subtitle && (
-        <p
-          className={cn(
-            "text-xs mb-3 -mt-2",
-            variant === "purple" ? "text-white/80" : "text-text-secondary"
-          )}
-        >
+        <p className="text-xs text-text-secondary mb-3 -mt-1.5">
           {subtitle}
         </p>
       )}
 
       <div className={cn("w-full flex-1", bodyClassName)}>{children}</div>
-    </motion.section>
+    </section>
   );
 }
 

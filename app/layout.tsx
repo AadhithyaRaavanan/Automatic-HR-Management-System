@@ -21,8 +21,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "RemoteHR - Attendance & Time Management",
-  description: "Production-grade scalable attendance management for remote teams",
+  title: "Pulse",
+  description: "Internal attendance and workforce management for Zenxea.",
 };
 
 export default function RootLayout({

@@ -79,13 +79,13 @@ export function Modal({
       aria-labelledby={titleId}
       aria-describedby={description ? descId : undefined}
       className={cn(
-        "m-auto bg-card border border-border-light rounded-3xl w-full max-w-lg shadow-float overflow-hidden",
+        "m-auto bg-card border border-border-light rounded-xl w-full max-w-lg shadow-float overflow-hidden",
         className
       )}
     >
       <div className="flex items-start justify-between p-5 border-b border-border-light/60">
         <div>
-          <h2 id={titleId} className="text-base font-extrabold text-text-primary">
+          <h2 id={titleId} className="text-base font-semibold text-text-primary">
             {title}
           </h2>
           {description && (

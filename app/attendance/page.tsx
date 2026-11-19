@@ -266,15 +266,15 @@ function AttendanceCalendarContent() {
       <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight">
-              Attendance Calendar
+            <h1 className="text-2xl font-semibold text-text-primary tracking-tight">
+              Attendance
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full bg-brand-purple-light text-brand-purple text-[11px] font-bold border border-brand-purple/20">
+            <span className="px-2 py-0.5 rounded-md bg-card-subtle text-text-secondary text-xs font-medium border border-border-light">
               {timezone || "UTC"}
             </span>
           </div>
-          <p className="text-xs sm:text-sm text-text-secondary mt-1">
-            Monthly punch records, public holidays, and timesheet regularization.
+          <p className="text-xs text-text-secondary mt-1">
+            Monthly punch records, public holidays, and timesheet adjustments.
           </p>
         </div>
 
@@ -290,15 +290,15 @@ function AttendanceCalendarContent() {
                 setSelectedMonth((m) => m - 1);
               }
             }}
-            className="p-2 rounded-full bg-card border border-border-light text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors shadow-sm cursor-pointer"
+            className="p-1.5 rounded-lg bg-card border border-border-light text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors cursor-pointer"
             title="Previous Month"
             aria-label="Previous Month"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
 
-          <div className="flex flex-col items-center justify-center px-4 py-2 rounded-2xl bg-card-subtle border border-border-light text-center min-w-[170px]">
-            <span className="text-xs font-bold text-text-primary">
+          <div className="flex flex-col items-center justify-center px-4 py-1.5 rounded-lg bg-card border border-border-light text-center min-w-[160px]">
+            <span className="text-xs font-semibold text-text-primary">
               {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
             </span>
           </div>
@@ -313,7 +313,7 @@ function AttendanceCalendarContent() {
                 setSelectedMonth((m) => m + 1);
               }
             }}
-            className="p-2 rounded-full bg-card border border-border-light text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors shadow-sm cursor-pointer"
+            className="p-1.5 rounded-lg bg-card border border-border-light text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors cursor-pointer"
             title="Next Month"
             aria-label="Next Month"
           >
@@ -325,14 +325,14 @@ function AttendanceCalendarContent() {
       {/* 4 Summary Stat Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
-          title="Total Hours"
+          title="Total hours"
           value={`${totalHours} hrs`}
           subtitle={`Timezone: ${timezone || "UTC"}`}
           icon={<Clock className="w-4 h-4" />}
         />
         <StatCard
-          title="Days Present"
-          value={`${totalPresent} Days`}
+          title="Days present"
+          value={`${totalPresent} days`}
           subtitle="Full-day attendance credit"
           icon={<CheckCircle2 className="w-4 h-4 text-status-success-dot" />}
         />
@@ -340,10 +340,10 @@ function AttendanceCalendarContent() {
           title="Holidays"
           value={`${totalHolidays}`}
           subtitle="Org holidays this month"
-          icon={<Calendar className="w-4 h-4 text-brand-purple" />}
+          icon={<Calendar className="w-4 h-4" />}
         />
         <StatCard
-          title="Late Arrivals"
+          title="Late arrivals"
           value={`${totalLates}`}
           subtitle="Arrivals past grace period"
           icon={<AlertCircle className="w-4 h-4 text-status-warning-dot" />}
@@ -354,8 +354,8 @@ function AttendanceCalendarContent() {
       <BentoGrid>
         {/* Left: Full Monthly Grid View */}
         <BentoCard
-          title="Monthly Timesheet Grid"
-          subtitle="Click any date to inspect shift punches and holidays"
+          title="Monthly timesheets"
+          subtitle="Select a date to inspect shift punches and holidays"
           data-tour="attendance-timesheet"
           data-tour-team="attendance-team-table"
           className="lg:col-span-8 p-6"
@@ -384,9 +384,9 @@ function AttendanceCalendarContent() {
                     onClick={() => setSelectedDayKey(day.dateKey)}
                     style={idx === 0 ? { gridColumnStart: firstDayOfWeek + 1 } : undefined}
                     className={cn(
-                      "h-20 p-2 rounded-2xl border text-left flex flex-col justify-between transition-all cursor-pointer relative",
+                      "h-20 p-2 rounded-xl border text-left flex flex-col justify-between transition-colors cursor-pointer relative",
                       isSelected
-                        ? "border-brand-purple bg-brand-purple/10 shadow-sm"
+                        ? "border-brand-purple bg-brand-purple/10"
                         : "border-border-light/60 bg-card hover:bg-card-subtle/70",
                       isSunday && "opacity-85 bg-card-subtle/30"
                     )}
@@ -394,7 +394,7 @@ function AttendanceCalendarContent() {
                     <div className="flex items-center justify-between w-full">
                       <span
                         className={cn(
-                          "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold font-mono",
+                          "w-6 h-6 rounded-md flex items-center justify-center text-xs font-medium tabular-nums",
                           isSelected ? "bg-brand-purple text-white" : "text-text-primary"
                         )}
                       >

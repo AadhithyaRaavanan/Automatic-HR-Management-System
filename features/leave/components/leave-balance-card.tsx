@@ -24,40 +24,40 @@ export function LeaveBalanceCard({ balance }: LeaveBalanceCardProps) {
   const isSick = typeCode === "SICK";
 
   return (
-    <div className="bg-card border border-border-light rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+    <div className="bg-card border border-border-light rounded-xl p-5 relative overflow-hidden">
       <div className="flex items-start justify-between">
         <div>
           <span
             className={cn(
-              "px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider",
+              "px-2 py-0.5 rounded-md text-[11px] font-medium uppercase",
               isCasual
-                ? "bg-brand-purple/10 text-brand-purple"
+                ? "bg-card-subtle text-brand-purple border border-border-light"
                 : isSick
-                ? "bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400"
-                : "bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400"
+                ? "bg-status-danger-bg text-status-danger-text"
+                : "bg-card-subtle text-text-secondary border border-border-light"
             )}
           >
             {typeCode}
           </span>
-          <h3 className="text-base font-bold text-text-primary mt-2">{typeName}</h3>
+          <h3 className="text-sm font-semibold text-text-primary mt-1.5">{typeName}</h3>
         </div>
 
-        <div className="w-9 h-9 rounded-xl bg-card-subtle flex items-center justify-center text-text-secondary border border-border-light">
+        <div className="w-8 h-8 rounded-lg bg-card-subtle flex items-center justify-center text-text-secondary border border-border-light">
           {isCasual ? (
-            <Calendar className="w-4 h-4 text-brand-purple" />
+            <Calendar className="w-4 h-4 text-text-secondary" />
           ) : isSick ? (
-            <ShieldCheck className="w-4 h-4 text-rose-500" />
+            <ShieldCheck className="w-4 h-4 text-status-danger-dot" />
           ) : (
-            <Clock className="w-4 h-4 text-blue-500" />
+            <Clock className="w-4 h-4 text-text-secondary" />
           )}
         </div>
       </div>
 
       <div className="mt-4 flex items-baseline justify-between">
         <div>
-          <div className="text-3xl font-extrabold text-text-primary tracking-tight">
+          <div className="text-2xl font-semibold text-text-primary tracking-tight tabular-nums">
             {remaining}
-            <span className="text-xs font-medium text-text-tertiary ml-1">days left</span>
+            <span className="text-xs font-normal text-text-tertiary ml-1">days left</span>
           </div>
           <p className="text-xs text-text-secondary mt-0.5">
             {used} used of {total} total

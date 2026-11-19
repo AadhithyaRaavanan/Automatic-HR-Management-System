@@ -71,7 +71,7 @@ export function buildWelcomeEmailHtml(params: SendInviteEmailParams): string {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Welcome to RemoteHR</title>
+    <title>Welcome to Pulse</title>
     <style>
       body {
         margin: 0;
@@ -313,7 +313,7 @@ export function buildAttendanceEmailTemplate(
     <html>
       <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f7f6fd; padding: 24px;">
         <div style="background-color: #ffffff; max-width: 520px; margin: 0 auto; border-radius: 20px; padding: 32px; border: 1px solid #e2e0f0;">
-          <h2 style="color: #6C5CE7; margin-top: 0;">RemoteHR Workplace</h2>
+          <h2 style="color: #6355DC; margin-top: 0;">Pulse</h2>
           <h3 style="color: #14123A;">${title}</h3>
           <p style="color: #4b5563; font-size: 14px; line-height: 1.5;">${message}</p>
           <div style="margin-top: 24px;">
@@ -360,7 +360,7 @@ export async function sendWelcomeCredentialsEmail(params: SendInviteEmailParams)
   if (process.env.RESEND_API_KEY) {
     const client = resend || new Resend(process.env.RESEND_API_KEY);
     try {
-      const fromAddress = process.env.RESEND_FROM_EMAIL || "RemoteHR <onboarding@remotehr.io>";
+      const fromAddress = process.env.RESEND_FROM_EMAIL || "Pulse <onboarding@remotehr.io>";
       const response = await client.emails.send({
         from: fromAddress,
         to: [to],
@@ -405,23 +405,23 @@ export function buildPasswordResetEmailHtml(params: SendPasswordResetParams): st
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Reset Your Password — RemoteHR</title>
+    <title>Reset your password - Pulse</title>
     <style>
       body { margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; }
       .wrapper { width: 100%; padding: 40px 0; background-color: #f8fafc; }
-      .card { max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 24px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
-      .header { background: #14123A; padding: 32px 32px 28px; text-align: center; }
-      .brand { font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; }
-      .badge { display: inline-block; background: rgba(108, 92, 231, 0.25); color: #a29bfe; font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase; margin-top: 8px; }
+      .card { max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; }
+      .header { background: #14123A; padding: 28px 32px; text-align: center; }
+      .brand { font-size: 20px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px; }
+      .badge { display: inline-block; background: rgba(99, 85, 220, 0.25); color: #c4b5fd; font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase; margin-top: 8px; }
       .body { padding: 32px; }
-      .title { font-size: 20px; font-weight: 800; color: #0f172a; margin: 0 0 12px; line-height: 1.3; }
+      .title { font-size: 20px; font-weight: 700; color: #0f172a; margin: 0 0 12px; line-height: 1.3; }
       .paragraph { font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 24px; }
-      .otp-box { background: #f8fafc; border: 2px dashed #6C5CE7; border-radius: 16px; padding: 20px; text-align: center; margin: 24px 0; }
-      .otp-label { font-size: 11px; font-weight: 700; color: #6C5CE7; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
-      .otp-number { font-size: 32px; font-weight: 800; font-family: monospace; letter-spacing: 6px; color: #14123A; }
+      .otp-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; text-align: center; margin: 24px 0; }
+      .otp-label { font-size: 11px; font-weight: 600; color: #6355DC; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+      .otp-number { font-size: 32px; font-weight: 700; font-family: monospace; letter-spacing: 6px; color: #14123A; }
       .cta-box { text-align: center; margin: 28px 0; }
-      .cta-btn { display: inline-block; background: #6C5CE7; color: #ffffff !important; text-decoration: none; font-size: 14px; font-weight: 700; padding: 14px 32px; border-radius: 12px; box-shadow: 0 4px 12px rgba(108, 92, 231, 0.3); }
-      .notice { background: #f1f5f9; border-radius: 12px; padding: 16px; font-size: 12px; color: #64748b; line-height: 1.5; margin-top: 24px; }
+      .cta-btn { display: inline-block; background: #6355DC; color: #ffffff !important; text-decoration: none; font-size: 14px; font-weight: 600; padding: 12px 28px; border-radius: 8px; }
+      .notice { background: #f1f5f9; border-radius: 8px; padding: 16px; font-size: 12px; color: #64748b; line-height: 1.5; margin-top: 24px; }
       .footer { text-align: center; padding: 24px 32px; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; }
     </style>
   </head>
@@ -429,13 +429,13 @@ export function buildPasswordResetEmailHtml(params: SendPasswordResetParams): st
     <div class="wrapper">
       <div class="card">
         <div class="header">
-          <div class="brand">RemoteHR</div>
+          <div class="brand">Pulse</div>
           <div class="badge">Security &amp; Account Access</div>
         </div>
         <div class="body">
           <h1 class="title">Password Reset Verification</h1>
           <p class="paragraph">
-            We received a request to reset the password for your RemoteHR account. You can verify your identity using the 6-digit code below or click the direct button.
+            We received a request to reset the password for your Pulse account. You can verify your identity using the 6-digit code below or click the direct button.
           </p>
 
           ${
@@ -555,7 +555,7 @@ export async function sendOnboardingSubmittedEmail(params: SendOnboardingSubmitt
   if (process.env.RESEND_API_KEY) {
     const client = resend || new Resend(process.env.RESEND_API_KEY);
     try {
-      const fromAddress = process.env.RESEND_FROM_EMAIL || "RemoteHR <onboarding@remotehr.io>";
+      const fromAddress = process.env.RESEND_FROM_EMAIL || "Pulse <onboarding@remotehr.io>";
       const response = await client.emails.send({
         from: fromAddress,
         to: [hrRecipient],
@@ -608,7 +608,7 @@ export async function sendPasswordResetEmail(params: SendPasswordResetParams): P
   if (process.env.RESEND_API_KEY) {
     const client = resend || new Resend(process.env.RESEND_API_KEY);
     try {
-      const fromAddress = process.env.RESEND_FROM_EMAIL || "RemoteHR <onboarding@remotehr.io>";
+      const fromAddress = process.env.RESEND_FROM_EMAIL || "Pulse <onboarding@remotehr.io>";
       const response = await client.emails.send({
         from: fromAddress,
         to: [to],
@@ -956,7 +956,7 @@ export async function sendOnboardingApprovalEmail(params: SendApprovalEmailParam
   if (process.env.RESEND_API_KEY) {
     const client = resend || new Resend(process.env.RESEND_API_KEY);
     try {
-      const fromAddress = process.env.RESEND_FROM_EMAIL || "RemoteHR <onboarding@remotehr.io>";
+      const fromAddress = process.env.RESEND_FROM_EMAIL || "Pulse <onboarding@remotehr.io>";
       const response = await client.emails.send({
         from: fromAddress,
         to: [to],

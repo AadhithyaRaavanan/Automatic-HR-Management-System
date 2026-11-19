@@ -260,11 +260,11 @@ function DashboardContent({
           <button
             type="button"
             onClick={() => refetch()}
-            className="p-2 rounded-full bg-card border border-border-light text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors shadow-sm cursor-pointer"
+            className="p-2 rounded-lg bg-card border border-border-light text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors cursor-pointer"
             title="Refresh attendance records"
             aria-label="Refresh attendance records"
           >
-            <RefreshCw className="w-4 h-4 text-brand-purple" />
+            <RefreshCw className="w-4 h-4 text-text-secondary" />
           </button>
 
           {/* Synchronized Header Action Button */}
@@ -274,7 +274,7 @@ function DashboardContent({
             onClick={onTogglePunch}
             title={!isCheckedIn && lockStatus.isLocked ? lockStatus.message : undefined}
             className={cn(
-              "px-4 py-2 rounded-full text-xs font-bold transition-all shadow-sm flex items-center gap-1.5",
+              "px-4 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5",
               !isCheckedIn && lockStatus.isLocked
                 ? "bg-card-subtle text-text-tertiary border border-border-light cursor-not-allowed opacity-75"
                 : "bg-brand-navy hover:bg-brand-navy-hover text-white cursor-pointer"
@@ -282,10 +282,10 @@ function DashboardContent({
           >
             {!isCheckedIn && lockStatus.isLocked && <Lock className="w-3.5 h-3.5" />}
             {isCheckedIn
-              ? "Check Out Now"
+              ? "Check out"
               : lockStatus.isLocked
-                ? "Outside Shift Hours"
-                : "Check In Now"}
+                ? "Outside shift hours"
+                : "Check in"}
           </button>
         </div>
       </section>
@@ -293,22 +293,22 @@ function DashboardContent({
       {/* Row 1: Full-Width 3 Stat Cards (Titles in full, no truncation, big tabular-nums values, identical structure) */}
       <div className="grid grid-cols-3 gap-5">
         <StatCard
-          title="Today's Hours"
+          title="Today's hours"
           value={formatDurationMinutes(todayMinutes)}
           subtitle={`Goal: ${formatDurationMinutes(targetMinutes)}`}
           progress={todayProgress}
           icon={<Clock className="w-4 h-4" />}
         />
         <StatCard
-          title="Week Total"
+          title="Week total"
           value={formatDurationMinutes(weekMinutes)}
           subtitle={`${weekProgress}% of target completed`}
           progress={weekProgress}
           icon={<Calendar className="w-4 h-4" />}
         />
         <StatCard
-          title="On-Time Streak"
-          value={`${data?.streakDays || 0} Days`}
+          title="On-time streak"
+          value={`${data?.streakDays || 0} days`}
           subtitle="Recent consistent punches"
           progress={Math.min(Math.max((data?.streakDays || 0) * 15, 10), 100)}
           icon={<Flame className="w-4 h-4 text-status-warning-dot" />}
@@ -367,17 +367,17 @@ function DashboardContent({
 
           {/* (c) Next Holiday & Shift Information */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 rounded-2xl bg-card border border-border-light shadow-card space-y-1">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-text-tertiary flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-brand-purple" />
-                Upcoming Holiday
+            <div className="p-4 rounded-xl bg-card border border-border-light space-y-1">
+              <span className="text-xs font-medium text-text-secondary flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-text-tertiary" />
+                Upcoming holiday
               </span>
               {nextHoliday ? (
                 <div>
-                  <h4 className="text-xs font-bold text-text-primary truncate">
+                  <h4 className="text-xs font-semibold text-text-primary truncate">
                     {nextHoliday.name}
                   </h4>
-                  <p className="text-[11px] font-mono text-text-secondary mt-0.5">
+                  <p className="text-xs text-text-secondary mt-0.5 tabular-nums">
                     {nextHoliday.date}
                   </p>
                 </div>
@@ -386,16 +386,16 @@ function DashboardContent({
               )}
             </div>
 
-            <div className="p-4 rounded-2xl bg-card border border-border-light shadow-card space-y-1">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-text-tertiary flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-brand-purple" />
-                Scheduled Shift
+            <div className="p-4 rounded-xl bg-card border border-border-light space-y-1">
+              <span className="text-xs font-medium text-text-secondary flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-text-tertiary" />
+                Scheduled shift
               </span>
               <div>
-                <h4 className="text-xs font-bold text-text-primary">
+                <h4 className="text-xs font-semibold text-text-primary tabular-nums">
                   {shiftStartTime.slice(0, 5)} – {shiftEndTime.slice(0, 5)}
                 </h4>
-                <p className="text-[11px] text-text-secondary mt-0.5">
+                <p className="text-xs text-text-secondary mt-0.5">
                   Timezone: {userTimezone}
                 </p>
               </div>

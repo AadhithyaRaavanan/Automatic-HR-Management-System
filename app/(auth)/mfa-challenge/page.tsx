@@ -133,19 +133,19 @@ function MfaChallengeForm() {
   };
 
   return (
-    <div className="w-full max-w-md bg-shell rounded-[32px] shadow-shell border border-border-light/60 p-8 sm:p-10 relative overflow-hidden">
+    <div className="w-full max-w-md bg-card rounded-xl border border-border-light p-8 relative overflow-hidden">
       {/* Top Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-2xl bg-brand-purple flex items-center justify-center text-white shadow-float">
-            <KeyRound className="w-5 h-5" />
+          <div className="w-8 h-8 rounded-lg bg-brand-navy flex items-center justify-center text-white font-semibold text-sm">
+            <KeyRound className="w-4 h-4" />
           </div>
           <div>
-            <h2 className="text-base font-extrabold text-text-primary tracking-tight">
-              Two-Factor Challenge
+            <h2 className="text-sm font-semibold text-text-primary tracking-tight">
+              Two-factor challenge
             </h2>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-brand-purple">
-              AAL2 Authentication
+            <span className="text-xs text-text-tertiary">
+              Authentication required
             </span>
           </div>
         </div>
@@ -153,11 +153,11 @@ function MfaChallengeForm() {
       </div>
 
       <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-text-primary tracking-tight">
-          Enter Authenticator Code
+        <h1 className="text-xl font-semibold text-text-primary tracking-tight">
+          Enter authenticator code
         </h1>
         <p className="text-xs text-text-secondary mt-1">
-          Open your authenticator app (Google Authenticator, Authy, etc.) and enter the 6-digit security code for your RemoteHR account.
+          Open your authenticator app (Google Authenticator, Authy, etc.) and enter the 6-digit security code for your Pulse account.
         </p>
       </div>
 

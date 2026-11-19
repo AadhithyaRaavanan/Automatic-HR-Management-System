@@ -301,31 +301,31 @@ function LoginForm() {
   const isFormDisabled = isLoading || isAuthenticating;
 
   return (
-    <div className="w-full max-w-md bg-shell rounded-[32px] shadow-shell border border-border-light/60 p-8 sm:p-10 relative overflow-hidden">
+    <div className="w-full max-w-md bg-card rounded-xl border border-border-light p-8 relative overflow-hidden">
       {/* Instant Authentication Loading Overlay */}
       {isAuthenticating && (
-        <div className="absolute inset-0 z-50 bg-shell/85 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-200">
-          <div className="w-12 h-12 rounded-full border-4 border-brand-purple/20 border-t-brand-purple animate-spin mb-4" />
-          <p className="text-sm font-bold text-text-primary tracking-tight">
-            Authenticating &amp; Syncing Session...
+        <div className="absolute inset-0 z-50 bg-card/90 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-150">
+          <div className="w-8 h-8 rounded-full border-2 border-brand-purple/20 border-t-brand-purple animate-spin mb-3" />
+          <p className="text-sm font-semibold text-text-primary tracking-tight">
+            Signing in...
           </p>
           <p className="text-xs text-text-secondary mt-1 max-w-[240px]">
-            Please wait while we verify your credentials and configure your session.
+            Please wait while we verify your account.
           </p>
         </div>
       )}
       {/* Top Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-2xl bg-brand-purple flex items-center justify-center text-white shadow-float">
-            <Clock className="w-5 h-5" />
+          <div className="w-8 h-8 rounded-lg bg-brand-navy flex items-center justify-center text-white font-semibold text-sm">
+            P
           </div>
           <div>
-            <h2 className="text-base font-extrabold text-text-primary tracking-tight">
-              RemoteHR
+            <h2 className="text-sm font-semibold text-text-primary tracking-tight">
+              Pulse
             </h2>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-brand-purple">
-              Attendance Module
+            <span className="text-xs text-text-tertiary">
+              Zenxea workspace
             </span>
           </div>
         </div>
@@ -334,25 +334,25 @@ function LoginForm() {
 
       {/* Title */}
       <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-text-primary tracking-tight">
+        <h1 className="text-xl font-semibold text-text-primary tracking-tight">
           {authMode === "otp-request"
-            ? "Forgot Password"
+            ? "Forgot password"
             : authMode === "otp-verify"
-            ? "Verify Email OTP"
-            : "Sign In to Workplace"}
+            ? "Verify email code"
+            : "Sign in to Pulse"}
         </h1>
         <p className="text-xs text-text-secondary mt-1">
           {authMode === "otp-request"
-            ? "Enter your work email to receive a secure one-time login code (OTP)."
+            ? "Enter your work email to receive a secure one-time login code."
             : authMode === "otp-verify"
-            ? `Enter the 6-digit OTP code dispatched to ${email}.`
-            : "Log your daily sessions, review attendance, and manage team schedules."}
+            ? `Enter the 6-digit code sent to ${email}.`
+            : "Enter your credentials to access your account."}
         </p>
       </div>
 
       {/* Lockout Warning Banner */}
       {lockoutMessage && (
-        <div className="mb-4 p-3 rounded-xl bg-status-danger/10 border border-status-danger/30 text-status-danger text-xs font-medium flex items-start gap-2">
+        <div className="mb-4 p-3 rounded-lg bg-status-danger/10 border border-status-danger/30 text-status-danger text-xs font-medium flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>{lockoutMessage}</span>
         </div>
@@ -362,8 +362,8 @@ function LoginForm() {
       {authMode === "otp-request" && (
         <form onSubmit={handleSendOtp} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1.5">
-              Work Email
+            <label className="block text-xs font-medium text-text-primary mb-1.5">
+              Work email
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 text-text-tertiary absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -374,7 +374,7 @@ function LoginForm() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@company.com"
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-medium text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-brand-purple focus:ring-2 focus:ring-brand-purple/20 transition-all disabled:opacity-50"
+                className="w-full pl-10 pr-4 py-2 rounded-lg bg-card-subtle border border-border-light text-xs font-medium text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-brand-purple focus:ring-1 focus:ring-brand-purple/20 transition-colors disabled:opacity-50"
               />
             </div>
           </div>
@@ -382,9 +382,9 @@ function LoginForm() {
           <button
             type="submit"
             disabled={isFormDisabled}
-            className="w-full mt-2 py-3 px-4 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50"
+            className="w-full mt-2 py-2.5 px-4 rounded-lg bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
           >
-            <span>{isLoading ? "Sending OTP..." : "Send OTP"}</span>
+            <span>{isLoading ? "Sending code..." : "Send code"}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
 
@@ -392,7 +392,7 @@ function LoginForm() {
             <button
               type="button"
               onClick={() => setAuthMode("password")}
-              className="text-xs text-text-secondary hover:text-brand-purple font-semibold inline-flex items-center gap-1 cursor-pointer"
+              className="text-xs text-text-secondary hover:text-brand-purple font-medium inline-flex items-center gap-1 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Back to password sign in</span>
@@ -405,8 +405,8 @@ function LoginForm() {
       {authMode === "otp-verify" && (
         <form onSubmit={handleVerifyOtp} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1.5">
-              6-Digit Verification Code
+            <label className="block text-xs font-medium text-text-primary mb-1.5">
+              6-digit verification code
             </label>
             <div className="relative">
               <KeyRound className="w-4 h-4 text-text-tertiary absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -420,7 +420,7 @@ function LoginForm() {
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 placeholder="123456"
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-card-subtle border border-border-light text-center font-mono tracking-widest text-base font-bold text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-brand-purple focus:ring-2 focus:ring-brand-purple/20 transition-all disabled:opacity-50"
+                className="w-full pl-10 pr-4 py-2 rounded-lg bg-card-subtle border border-border-light text-center font-mono tracking-widest text-base font-semibold text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-brand-purple focus:ring-1 focus:ring-brand-purple/20 transition-colors disabled:opacity-50"
               />
             </div>
           </div>
@@ -428,9 +428,9 @@ function LoginForm() {
           <button
             type="submit"
             disabled={isFormDisabled || otpCode.length < 6}
-            className="w-full mt-2 py-3 px-4 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50"
+            className="w-full mt-2 py-2.5 px-4 rounded-lg bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
           >
-            <span>{isAuthenticating ? "Verifying..." : "Verify & Login"}</span>
+            <span>{isAuthenticating ? "Verifying..." : "Verify and sign in"}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
 
@@ -438,7 +438,7 @@ function LoginForm() {
             <button
               type="button"
               onClick={() => setAuthMode("otp-request")}
-              className="text-text-secondary hover:text-text-primary font-semibold flex items-center gap-1 cursor-pointer"
+              className="text-text-secondary hover:text-text-primary font-medium flex items-center gap-1 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Change email</span>
@@ -448,10 +448,10 @@ function LoginForm() {
               type="button"
               disabled={resendingOtp}
               onClick={handleResendOtp}
-              className="text-brand-purple font-semibold hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
+              className="text-brand-purple font-medium hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
             >
               <RefreshCw className={`w-3 h-3 ${resendingOtp ? "animate-spin" : ""}`} />
-              <span>Resend OTP</span>
+              <span>Resend code</span>
             </button>
           </div>
         </form>
@@ -461,8 +461,8 @@ function LoginForm() {
       {(authMode === "password" || authMode === "magic-link") && (
         <form onSubmit={handleAuth} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1.5">
-              Work Email
+            <label className="block text-xs font-medium text-text-primary mb-1.5">
+              Work email
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 text-text-tertiary absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -473,7 +473,7 @@ function LoginForm() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@company.com"
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-medium text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-brand-purple focus:ring-2 focus:ring-brand-purple/20 transition-all disabled:opacity-50"
+                className="w-full pl-10 pr-4 py-2 rounded-lg bg-card-subtle border border-border-light text-xs font-medium text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-brand-purple focus:ring-1 focus:ring-brand-purple/20 transition-colors disabled:opacity-50"
               />
             </div>
           </div>
@@ -481,7 +481,7 @@ function LoginForm() {
           {authMode === "password" && (
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-bold text-text-primary uppercase tracking-wider">
+                <label className="text-xs font-medium text-text-primary">
                   Password
                 </label>
                 <div className="flex items-center gap-3">
@@ -489,17 +489,17 @@ function LoginForm() {
                     type="button"
                     disabled={isFormDisabled}
                     onClick={() => setAuthMode("otp-request")}
-                    className="text-xs text-text-secondary hover:text-brand-purple font-semibold hover:underline disabled:opacity-50 cursor-pointer"
+                    className="text-xs text-text-secondary hover:text-brand-purple font-medium hover:underline disabled:opacity-50 cursor-pointer"
                   >
-                    Forgot Password?
+                    Forgot password?
                   </button>
                   <button
                     type="button"
                     disabled={isFormDisabled}
                     onClick={() => setAuthMode("magic-link")}
-                    className="text-xs text-brand-purple font-semibold hover:underline disabled:opacity-50 cursor-pointer"
+                    className="text-xs text-brand-purple font-medium hover:underline disabled:opacity-50 cursor-pointer"
                   >
-                    Use Magic Link
+                    Use magic link
                   </button>
                 </div>
               </div>
@@ -512,7 +512,7 @@ function LoginForm() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-medium text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-brand-purple focus:ring-2 focus:ring-brand-purple/20 transition-all disabled:opacity-50"
+                  className="w-full pl-10 pr-4 py-2 rounded-lg bg-card-subtle border border-border-light text-xs font-medium text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-brand-purple focus:ring-1 focus:ring-brand-purple/20 transition-colors disabled:opacity-50"
                 />
               </div>
             </div>
@@ -522,17 +522,17 @@ function LoginForm() {
             <div className="flex items-center justify-between">
               <Link
                 href="/forgot-password"
-                className="text-xs text-text-secondary hover:text-brand-purple font-semibold hover:underline"
+                className="text-xs text-text-secondary hover:text-brand-purple font-medium hover:underline"
               >
-                Forgot Password?
+                Forgot password?
               </Link>
               <button
                 type="button"
                 disabled={isFormDisabled}
                 onClick={() => setAuthMode("password")}
-                className="text-xs text-brand-purple font-semibold hover:underline disabled:opacity-50 cursor-pointer"
+                className="text-xs text-brand-purple font-medium hover:underline disabled:opacity-50 cursor-pointer"
               >
-                Use Password instead
+                Use password instead
               </button>
             </div>
           )}
@@ -547,16 +547,16 @@ function LoginForm() {
           <button
             type="submit"
             disabled={isFormDisabled}
-            className="w-full mt-2 py-3 px-4 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50"
+            className="w-full mt-2 py-2.5 px-4 rounded-lg bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
           >
             <span>
               {isAuthenticating
-                ? "Authenticating..."
+                ? "Signing in..."
                 : isLoading
                 ? "Signing in..."
                 : authMode === "magic-link"
-                ? "Send Magic Link"
-                : "Sign In"}
+                ? "Send magic link"
+                : "Sign in"}
             </span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
@@ -565,13 +565,13 @@ function LoginForm() {
 
       {/* Demo Roles Quick-Fill Card (Gated behind NEXT_PUBLIC_DEMO_MODE=true) */}
       {isDemoMode && (
-        <div className="mt-8 pt-6 border-t border-border-light/60">
-          <div className="flex items-center justify-between mb-2.5">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-text-tertiary">
-              Demo Mode Presets:
+        <div className="mt-6 pt-5 border-t border-border-light/60">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-text-tertiary">
+              Demo preset:
             </span>
-            <span className="text-[10px] font-bold text-brand-purple bg-brand-purple-light/40 px-2 py-0.5 rounded-full">
-              Non-Production
+            <span className="text-[10px] font-medium text-text-tertiary bg-card-subtle border border-border-light px-2 py-0.5 rounded">
+              Development
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -580,9 +580,9 @@ function LoginForm() {
               aria-label="Admin Preset"
               disabled={isFormDisabled}
               onClick={() => handleQuickDemoRole("Super Admin", "aadhithya.raavanan@gmail.com")}
-              className="w-full py-2 px-3 rounded-xl bg-card-subtle hover:bg-brand-purple-light/50 text-text-primary hover:text-brand-purple text-xs font-semibold border border-border-light flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+              className="w-full py-2 px-3 rounded-lg bg-card-subtle hover:bg-card text-text-primary text-xs font-medium border border-border-light flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
             >
-              <ShieldCheck className="w-3.5 h-3.5 text-brand-purple" />
+              <ShieldCheck className="w-3.5 h-3.5 text-text-secondary" />
               <span>Fill Super Admin (Aadhithya Raavanan)</span>
             </button>
           </div>
@@ -590,15 +590,12 @@ function LoginForm() {
       )}
 
       {/* Security & Privacy Notice Footer */}
-      <div className="mt-6 flex items-center justify-between text-[11px] text-text-tertiary">
+      <div className="mt-6 flex items-center justify-between text-xs text-text-tertiary">
         <span className="flex items-center gap-1">
-          <ShieldCheck className="w-3.5 h-3.5 text-status-success-dot" />
-          Supabase Auth RLS
+          <ShieldCheck className="w-3.5 h-3.5 text-text-tertiary" />
+          Role-based security
         </span>
-        <span className="flex items-center gap-1">
-          <CheckCircle2 className="w-3.5 h-3.5 text-brand-purple" />
-          Zero Invasive Monitoring
-        </span>
+        <span>Zenxea</span>
       </div>
     </div>
   );

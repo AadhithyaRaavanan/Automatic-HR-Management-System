@@ -209,7 +209,7 @@ export function StatusPill({ status, label, className, showIcon = true }: Status
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold tracking-wide border border-transparent select-none",
+        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium select-none",
         config.bg,
         config.text,
         className

@@ -114,25 +114,19 @@ export default function EmployeeDirectoryPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-bold tracking-widest uppercase text-brand-purple bg-brand-purple/10 px-2 py-0.5 rounded-full">
-                ZEN XEA HRMS
-              </span>
-              <span className="text-xs text-text-muted">• Build Business Beyond Limits</span>
-            </div>
-            <h1 className="text-2xl font-bold text-text-primary tracking-tight">Employee Directory</h1>
+            <h1 className="text-2xl font-semibold text-text-primary tracking-tight">Employee Directory</h1>
             <p className="text-xs text-text-secondary mt-1">
-              Centralized workforce registry containing full-time staff, contract personnel, and interns.
+              Workforce directory with full-time staff, contract personnel, and interns.
             </p>
           </div>
 
           <div className="flex items-center gap-3">
             <button
               onClick={handleExportCSV}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-card-subtle border border-border-light text-text-primary hover:bg-card-subtle/80 flex items-center gap-2 shadow-sm transition-all"
+              className="px-3.5 py-1.5 rounded-lg text-xs font-medium bg-card border border-border-light text-text-primary hover:bg-card-subtle flex items-center gap-2 transition-colors cursor-pointer"
             >
-              <Download className="w-3.5 h-3.5 text-brand-purple" />
-              Export Directory (.csv)
+              <Download className="w-3.5 h-3.5 text-text-secondary" />
+              Export directory
             </button>
           </div>
         </div>

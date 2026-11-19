@@ -269,65 +269,65 @@ function SettingsPageContent() {
           title={
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-status-success-dot" />
-              <span className="text-lg">Zero-Invasive Privacy Manifesto</span>
+              <span className="text-base font-semibold">Workplace privacy</span>
             </div>
           }
-          subtitle="Our zero-surveillance remote workplace commitment"
-          className="lg:col-span-12 p-6 bg-gradient-to-r from-card to-brand-purple-light/10"
+          subtitle="Workplace privacy protections"
+          className="lg:col-span-12 p-6 bg-card border border-border-light"
         >
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
-            <div className="p-4 rounded-2xl bg-card border border-border-light shadow-sm flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-status-danger-bg text-status-danger-text flex items-center justify-center shrink-0">
+            <div className="p-3.5 rounded-xl bg-card-subtle border border-border-light flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-status-danger-bg text-status-danger-text flex items-center justify-center shrink-0">
                 <MapPin className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-xs font-bold text-text-primary">
-                  NO Location Tracking / GPS
+                <h3 className="text-xs font-semibold text-text-primary">
+                  No location tracking
                 </h3>
-                <p className="text-[11px] text-text-tertiary mt-1">
-                  We never record your physical GPS coordinates, IP locations, or Wi-Fi telemetry.
+                <p className="text-xs text-text-tertiary mt-0.5">
+                  We do not record physical GPS coordinates or Wi-Fi telemetry.
                 </p>
               </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-card border border-border-light shadow-sm flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-status-danger-bg text-status-danger-text flex items-center justify-center shrink-0">
+            <div className="p-3.5 rounded-xl bg-card-subtle border border-border-light flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-status-danger-bg text-status-danger-text flex items-center justify-center shrink-0">
                 <Camera className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-xs font-bold text-text-primary">
-                  NO Webcam / Screen Captures
+                <h3 className="text-xs font-semibold text-text-primary">
+                  No screen capture
                 </h3>
-                <p className="text-[11px] text-text-tertiary mt-1">
-                  No background screenshots, webcam snapshots, or browser tab monitoring.
+                <p className="text-xs text-text-tertiary mt-0.5">
+                  No background screenshots, webcam captures, or browser monitoring.
                 </p>
               </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-card border border-border-light shadow-sm flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-status-danger-bg text-status-danger-text flex items-center justify-center shrink-0">
+            <div className="p-3.5 rounded-xl bg-card-subtle border border-border-light flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-status-danger-bg text-status-danger-text flex items-center justify-center shrink-0">
                 <EyeOff className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-xs font-bold text-text-primary">
-                  NO Keystroke / Activity Logging
+                <h3 className="text-xs font-semibold text-text-primary">
+                  No keystroke logging
                 </h3>
-                <p className="text-[11px] text-text-tertiary mt-1">
-                  No keyloggers or mouse movement tracking. Remote trust is measured by outcomes.
+                <p className="text-xs text-text-tertiary mt-0.5">
+                  No keystroke logging or mouse tracking.
                 </p>
               </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-card border border-border-light shadow-sm flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-status-success-bg text-status-success-text flex items-center justify-center shrink-0">
+            <div className="p-3.5 rounded-xl bg-card-subtle border border-border-light flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-status-success-bg text-status-success-text flex items-center justify-center shrink-0">
                 <Clock className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-xs font-bold text-text-primary">
-                  What IS Recorded
+                <h3 className="text-xs font-semibold text-text-primary">
+                  What is recorded
                 </h3>
-                <p className="text-[11px] text-text-tertiary mt-1">
-                  Only check-in and check-out timestamps, employee timezone, and self-reported punch notes.
+                <p className="text-xs text-text-tertiary mt-0.5">
+                  Check-in and check-out timestamps, shift hours, and submitted notes.
                 </p>
               </div>
             </div>

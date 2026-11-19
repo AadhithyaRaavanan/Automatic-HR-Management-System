@@ -26,27 +26,27 @@ export function SectionCard({
   return (
     <section
       className={cn(
-        "rounded-[24px] bg-card border border-border-light shadow-card p-5 lg:p-6 transition-all",
+        "rounded-xl bg-card border border-border-light p-5 transition-colors",
         className
       )}
       {...props}
     >
       {(title || action) && (
-        <div className={cn("flex items-center justify-between gap-3 mb-4", headerClassName)}>
+        <div className={cn("flex items-center justify-between gap-3 mb-3.5", headerClassName)}>
           <div className="flex items-center gap-2.5 min-w-0">
             {icon && (
-              <div className="w-8 h-8 rounded-xl bg-brand-purple-light flex items-center justify-center text-brand-purple shrink-0">
+              <div className="text-text-secondary shrink-0 flex items-center justify-center">
                 {icon}
               </div>
             )}
             <div className="min-w-0">
               {title && (
-                <h2 className="text-sm font-extrabold text-text-primary tracking-tight truncate">
+                <h2 className="text-sm sm:text-base font-semibold text-text-primary tracking-tight truncate">
                   {title}
                 </h2>
               )}
               {subtitle && (
-                <p className="text-[11px] text-text-tertiary font-medium truncate mt-0.5">
+                <p className="text-xs text-text-secondary truncate mt-0.5">
                   {subtitle}
                 </p>
               )}

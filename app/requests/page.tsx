@@ -292,11 +292,11 @@ function RequestsPageContent() {
       {/* Page Header */}
       <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-3">
         <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight">
-            {isManagerOrAbove ? "Manager Approvals & Delegations" : "Approvals, Requests & Delegations"}
+          <h1 className="text-2xl font-semibold text-text-primary tracking-tight">
+            Requests
           </h1>
-          <p className="text-xs sm:text-sm text-text-secondary mt-1">
-            Review attendance regularizations, team leave requests, and temporary approval delegations.
+          <p className="text-xs text-text-secondary mt-1">
+            Review correction requests, leave applications, and approval delegations.
           </p>
         </div>
 
@@ -304,51 +304,51 @@ function RequestsPageContent() {
           <button
             type="button"
             onClick={handleRefresh}
-            className="p-2 rounded-full bg-card border border-border-light text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors shadow-sm cursor-pointer"
+            className="p-1.5 rounded-lg bg-card border border-border-light text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors cursor-pointer"
             title="Refresh requests"
             aria-label="Refresh requests"
           >
-            <RefreshCw className="w-4 h-4 text-brand-purple" />
+            <RefreshCw className="w-4 h-4 text-text-secondary" />
           </button>
 
           {inboxModule === "delegations" && isManagerOrAbove ? (
             <button
               type="button"
               onClick={openCreateDelegation}
-              className="px-4 py-2 rounded-full bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+              className="px-3.5 py-1.5 rounded-lg bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>New Delegation</span>
+              <span>New delegation</span>
             </button>
           ) : (
             <button
               type="button"
               onClick={() => setModalOpen(true)}
-              className="px-4 py-2 rounded-full bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95"
+              className="px-3.5 py-1.5 rounded-lg bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Apply Correction</span>
+              <span>Submit correction</span>
             </button>
           )}
         </div>
       </section>
 
       {/* Module Switcher Tabs */}
-      <div data-tour="requests-form" className="flex flex-wrap items-center gap-2 p-1.5 bg-card-subtle border border-border-light rounded-2xl w-fit">
+      <div data-tour="requests-form" className="flex flex-wrap items-center gap-1 p-1 bg-card border border-border-light rounded-lg w-fit">
         <button
           type="button"
           onClick={() => setInboxModule("regularization")}
           className={cn(
-            "px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2",
+            "px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-2",
             inboxModule === "regularization"
-              ? "bg-brand-purple text-white shadow-sm"
+              ? "bg-brand-purple text-white"
               : "text-text-secondary hover:text-text-primary"
           )}
         >
           <Clock className="w-3.5 h-3.5" />
-          <span>Regularizations</span>
+          <span>Correction requests</span>
           {pendingRegCount > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-400 text-slate-900 font-extrabold">
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-status-warning-bg text-status-warning-text font-medium">
               {pendingRegCount}
             </span>
           )}
@@ -358,16 +358,16 @@ function RequestsPageContent() {
           type="button"
           onClick={() => setInboxModule("leave")}
           className={cn(
-            "px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2",
+            "px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-2",
             inboxModule === "leave"
-              ? "bg-brand-purple text-white shadow-sm"
+              ? "bg-brand-purple text-white"
               : "text-text-secondary hover:text-text-primary"
           )}
         >
           <Calendar className="w-3.5 h-3.5" />
-          <span>Leave Approvals</span>
+          <span>Leave requests</span>
           {pendingLeaveCount > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-400 text-slate-900 font-extrabold">
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-status-warning-bg text-status-warning-text font-medium">
               {pendingLeaveCount}
             </span>
           )}
@@ -378,16 +378,16 @@ function RequestsPageContent() {
             type="button"
             onClick={() => setInboxModule("delegations")}
             className={cn(
-              "px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2",
+              "px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-2",
               inboxModule === "delegations"
-                ? "bg-brand-purple text-white shadow-sm"
+                ? "bg-brand-purple text-white"
                 : "text-text-secondary hover:text-text-primary"
             )}
           >
             <UserCheck className="w-3.5 h-3.5" />
-            <span>Approval Delegations</span>
+            <span>Delegations</span>
             {activeDelegationsCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-400 text-slate-900 font-extrabold">
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-status-success-bg text-status-success-text font-medium">
                 {activeDelegationsCount}
               </span>
             )}
@@ -482,11 +482,11 @@ function RequestsPageContent() {
 
       {/* Leave Approvals Inbox */}
       {inboxModule === "leave" && (
-        <div>
+        <div data-tour="hr-leave-queue">
           {leaveLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[1, 2].map((i) => (
-                <div key={i} className="h-36 rounded-2xl bg-card border border-border-light animate-pulse p-5" />
+                <div key={i} className="h-36 rounded-xl bg-card border border-border-light animate-pulse p-5" />
               ))}
             </div>
           ) : filteredLeaves.length > 0 ? (
@@ -498,23 +498,23 @@ function RequestsPageContent() {
                 return (
                   <div
                     key={leave.id}
-                    className="bg-card border border-border-light rounded-2xl p-5 shadow-sm space-y-3"
+                    className="bg-card border border-border-light rounded-xl p-5 space-y-3"
                   >
                     <div className="flex items-start justify-between">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-sm text-text-primary block">
+                          <span className="font-semibold text-sm text-text-primary block">
                             {leave.employees?.full_name || "Team Member"}
                           </span>
                           <KpiBadge employeeId={leave.employee_id} />
                         </div>
-                        <span className="text-[11px] text-text-tertiary">
+                        <span className="text-xs text-text-tertiary">
                           {leave.employees?.email}
                         </span>
                       </div>
                       <span
                         className={cn(
-                          "px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase",
+                          "px-2 py-0.5 rounded-md text-[11px] font-medium uppercase",
                           leave.status === "approved" && "bg-emerald-50 text-emerald-600 border border-emerald-200",
                           leave.status === "pending" && "bg-amber-50 text-amber-600 border border-amber-200",
                           leave.status === "rejected" && "bg-rose-50 text-rose-600 border border-rose-200",
@@ -726,8 +726,8 @@ function RequestsPageContent() {
       <Modal
         open={delegationModalOpen}
         onOpenChange={setDelegationModalOpen}
-        title="Create Approval Delegation"
-        description="Empowers the selected delegate to review team requests during the active window"
+        title="Create approval delegation"
+        description="Allows the selected delegate to review team requests during the active window"
       >
         <form onSubmit={handleCreateDelegation} className="space-y-4">
           {isHrOrAdmin && (

@@ -415,72 +415,72 @@ function TasksWorkspaceContent() {
           <button
             type="button"
             onClick={() => setCreateTaskOpen(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-medium transition-colors cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>New Task</span>
+            <span>New task</span>
           </button>
         </div>
       </section>
 
       {/* Metrics Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <BentoCard title="Open Tasks" className="py-4">
-          <div className="text-2xl font-extrabold text-text-primary">{summary.open}</div>
-          <p className="text-[11px] text-text-tertiary mt-1">
+        <BentoCard title="Open tasks" className="py-4">
+          <div className="text-2xl font-semibold text-text-primary tabular-nums">{summary.open}</div>
+          <p className="text-xs text-text-tertiary mt-1">
             To do, in progress, or blocked
           </p>
         </BentoCard>
         <BentoCard title="Overdue" className="py-4">
-          <div className="text-2xl font-extrabold text-status-danger-text">
+          <div className="text-2xl font-semibold text-status-danger-text tabular-nums">
             {summary.overdue}
           </div>
-          <p className="text-[11px] text-text-tertiary mt-1">Past target due date</p>
+          <p className="text-xs text-text-tertiary mt-1">Past target due date</p>
         </BentoCard>
-        <BentoCard title="Due Soon" className="py-4">
-          <div className="text-2xl font-extrabold text-status-warning-text">
+        <BentoCard title="Due soon" className="py-4">
+          <div className="text-2xl font-semibold text-status-warning-text tabular-nums">
             {summary.dueSoon}
           </div>
-          <p className="text-[11px] text-text-tertiary mt-1">Due today or tomorrow</p>
+          <p className="text-xs text-text-tertiary mt-1">Due today or tomorrow</p>
         </BentoCard>
         <BentoCard title="Completed" className="py-4">
-          <div className="text-2xl font-extrabold text-status-success-text">
+          <div className="text-2xl font-semibold text-status-success-text tabular-nums">
             {summary.completed}
           </div>
-          <p className="text-[11px] text-text-tertiary mt-1">Delivered tasks</p>
+          <p className="text-xs text-text-tertiary mt-1">Delivered tasks</p>
         </BentoCard>
       </div>
 
       {/* Controls & Filters */}
-      <div data-tour="tasks-board" className="bg-card rounded-[24px] p-4 border border-border-light shadow-card space-y-3">
+      <div data-tour="tasks-board" className="bg-card rounded-xl p-4 border border-border-light space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             {/* Scope Toggle for Manager/HR/Admin */}
             {userRole !== "employee" && (
-              <div className="inline-flex rounded-full bg-card-subtle p-1 border border-border-light">
+              <div className="inline-flex rounded-lg bg-card p-1 border border-border-light">
                 <button
                   type="button"
                   onClick={() => setScope("mine")}
                   className={cn(
-                    "px-3 py-1 rounded-full text-xs font-bold transition-colors cursor-pointer",
+                    "px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer",
                     scope === "mine"
-                      ? "bg-brand-purple text-white shadow-xs"
+                      ? "bg-brand-purple text-white"
                       : "text-text-secondary hover:text-text-primary"
                   )}
                 >
-                  My Tasks
+                  My tasks
                 </button>
                 <button
                   type="button"
                   onClick={() => setScope("team")}
                   className={cn(
-                    "px-3 py-1 rounded-full text-xs font-bold transition-colors cursor-pointer",
+                    "px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer",
                     scope === "team"
-                      ? "bg-brand-purple text-white shadow-xs"
+                      ? "bg-brand-purple text-white"
                       : "text-text-secondary hover:text-text-primary"
                   )}
                 >
-                  {userRole === "manager" ? "Team Tasks" : "All Org Tasks"}
+                  {userRole === "manager" ? "Team tasks" : "All org tasks"}
                 </button>
               </div>
             )}

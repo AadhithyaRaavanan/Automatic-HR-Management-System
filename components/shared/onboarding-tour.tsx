@@ -474,20 +474,20 @@ export function OnboardingTour({
       {/* Floating Tour Card */}
       <div
         style={cardPositionStyle}
-        className="z-[9999] bg-card border border-border-light shadow-2xl rounded-2xl p-5 md:p-6 transition-all duration-200 ease-out overflow-y-auto"
+        className="z-[9999] bg-card border border-border-light shadow-float rounded-xl p-5 md:p-6 transition-all duration-200 ease-out overflow-y-auto"
       >
         {/* Card Header & Badges */}
         <div className="flex items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-brand-purple/15 text-brand-purple border border-brand-purple/20">
-              <Compass className="w-3 h-3" />
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-card-subtle text-text-secondary border border-border-light">
+              <Compass className="w-3 h-3 text-text-tertiary" />
               Step {stepIndex + 1} of {steps.length}
             </span>
-            <span className="uppercase tracking-wider text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-card-subtle border border-border-light text-text-secondary">
+            <span className="uppercase text-[11px] font-medium px-2 py-0.5 rounded-md bg-card-subtle border border-border-light text-text-secondary">
               {roleKey}
             </span>
             {isNavigating && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-brand-purple/10 text-brand-purple border border-brand-purple/20 animate-pulse">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-card-subtle text-text-secondary border border-border-light">
                 <Compass className="w-3 h-3 animate-spin" />
                 <span>Loading view...</span>
               </span>
@@ -505,16 +505,16 @@ export function OnboardingTour({
         </div>
 
         {/* Progress Bar */}
-        <div className="w-full h-1.5 bg-card-subtle rounded-full overflow-hidden mb-4 border border-border-light">
+        <div className="w-full h-1 bg-border-light/60 rounded-full overflow-hidden mb-4">
           <div
-            className="h-full bg-gradient-to-r from-brand-purple to-indigo-500 transition-all duration-300"
+            className="h-full bg-brand-purple transition-all duration-300"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
 
         {/* Step Title & Body */}
-        <div className="space-y-2 mb-4">
-          <h2 className="text-base md:text-lg font-bold text-text-primary tracking-tight">
+        <div className="space-y-1.5 mb-4">
+          <h2 className="text-base font-semibold text-text-primary tracking-tight">
             {currentStep.title}
           </h2>
           <p className="text-xs md:text-sm text-text-secondary leading-relaxed">
@@ -524,13 +524,13 @@ export function OnboardingTour({
 
         {/* "Good to know" Tip Callout */}
         {currentStep.tip && (
-          <div className="p-3 rounded-xl bg-brand-purple/5 border border-brand-purple/15 text-xs text-text-secondary flex items-start gap-2.5 mb-5">
-            <Compass className="w-4 h-4 text-brand-purple shrink-0 mt-0.5" />
+          <div className="p-3 rounded-lg bg-card-subtle border border-border-light text-xs text-text-secondary flex items-start gap-2.5 mb-5">
+            <Compass className="w-4 h-4 text-text-tertiary shrink-0 mt-0.5" />
             <div className="space-y-0.5">
-              <span className="font-semibold text-brand-purple block text-[11px] uppercase tracking-wide">
-                Good to know
+              <span className="font-medium text-text-primary block text-[11px]">
+                Note
               </span>
-              <span className="text-[12px] leading-relaxed text-text-secondary">
+              <span className="text-xs leading-relaxed text-text-secondary">
                 {currentStep.tip}
               </span>
             </div>
@@ -543,9 +543,9 @@ export function OnboardingTour({
             type="button"
             onClick={finishOrSkipTour}
             disabled={submitting}
-            className="text-xs text-text-muted hover:text-text-primary px-2.5 py-1.5 rounded-lg transition-colors font-medium hover:bg-card-subtle"
+            className="text-xs text-text-secondary hover:text-text-primary px-2 py-1 rounded-lg transition-colors font-medium hover:bg-card-subtle cursor-pointer"
           >
-            Skip Walkthrough
+            Skip walkthrough
           </button>
 
           <div className="flex items-center gap-2">
@@ -554,7 +554,7 @@ export function OnboardingTour({
                 type="button"
                 onClick={handleBack}
                 disabled={submitting}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-border-light bg-card-subtle hover:bg-card text-xs font-semibold text-text-primary transition-colors"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border-light bg-card hover:bg-card-subtle text-xs font-medium text-text-primary transition-colors cursor-pointer"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
                 Back
@@ -565,7 +565,7 @@ export function OnboardingTour({
               type="button"
               onClick={handleNext}
               disabled={submitting}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-brand-purple hover:bg-brand-purple/90 text-white text-xs font-bold shadow-md shadow-brand-purple/20 transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-medium transition-colors cursor-pointer"
             >
               {isLast ? (
                 <>

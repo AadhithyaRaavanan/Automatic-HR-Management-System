@@ -87,9 +87,9 @@ export default function EmsRolesPage() {
         <EmsNavigationHeader />
 
         <div>
-          <h2 className="text-base font-bold text-text-primary">System Roles & Permission Matrix</h2>
+          <h2 className="text-base font-semibold text-text-primary">System roles and permission matrix</h2>
           <p className="text-xs text-text-secondary mt-0.5">
-            ZEN XEA HRMS strictly enforces five system security roles with database-backed Row Level Security (RLS).
+            Pulse enforces five system security roles with database-backed Row Level Security (RLS).
           </p>
         </div>
 
@@ -97,12 +97,12 @@ export default function EmsRolesPage() {
           {rolesList.map((r) => (
             <div
               key={r.code}
-              className="p-5 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light shadow-sm flex flex-col justify-between space-y-4 hover:border-brand-purple/30 transition-all"
+              className="p-5 rounded-xl bg-card border border-border-light flex flex-col justify-between space-y-4"
             >
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-bold text-sm text-text-primary">{r.role}</h3>
-                  <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase", r.badgeColor)}>
+                  <h3 className="font-semibold text-sm text-text-primary">{r.role}</h3>
+                  <span className={cn("text-[11px] font-medium px-2 py-0.5 rounded-md border uppercase", r.badgeColor)}>
                     {r.code}
                   </span>
                 </div>

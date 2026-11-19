@@ -165,7 +165,7 @@ export default function NewEmployeeWizardPage() {
 
   const handleCopy = () => {
     if (!createdResult) return;
-    const text = `ZEN XEA HRMS Account Provisioned\nName: ${fullName}\nOfficial Email: ${email}\nRole: ${systemRole.toUpperCase()}\nEmployment Category: ${employmentCategory.replace("_", " ").toUpperCase()}\nPortal: ${window.location.origin}/login`;
+    const text = `Pulse Account Provisioned\nName: ${fullName}\nOfficial Email: ${email}\nRole: ${systemRole.toUpperCase()}\nEmployment Category: ${employmentCategory.replace("_", " ").toUpperCase()}\nPortal: ${window.location.origin}/login`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     toast.success("Account details copied to clipboard!");

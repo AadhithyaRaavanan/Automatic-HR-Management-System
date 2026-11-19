@@ -747,15 +747,15 @@ export default function OnboardingPage() {
       {/* Top Professional Header Banner */}
       <header className="sticky top-0 z-30 bg-card/90 backdrop-blur-md border-b border-border-light px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-brand-navy flex items-center justify-center text-white font-extrabold text-base shadow-sm">
-            Z
+          <div className="w-8 h-8 rounded-lg bg-brand-navy flex items-center justify-center text-white font-semibold text-sm">
+            P
           </div>
           <div>
-            <h1 className="text-base font-extrabold tracking-tight text-text-primary">
-              ZEN XEA HRMS
+            <h1 className="text-sm font-semibold tracking-tight text-text-primary">
+              Pulse
             </h1>
-            <p className="text-[11px] font-bold text-text-tertiary">
-              Employee Onboarding & Document Verification
+            <p className="text-xs text-text-tertiary">
+              Employee onboarding intake
             </p>
           </div>
         </div>

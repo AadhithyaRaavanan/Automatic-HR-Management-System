@@ -22,11 +22,11 @@ export function PageHeader({
     <header className={cn("flex items-center justify-between gap-4 pt-1 pb-4", className)}>
       <div className="space-y-1 min-w-0">
         <div className="flex items-center gap-2.5 flex-wrap">
-          <h1 className="text-2xl lg:text-3xl font-extrabold text-text-primary tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-semibold text-text-primary tracking-tight">
             {title}
           </h1>
           {tag && (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-brand-purple-light text-brand-purple text-[11px] font-bold border border-brand-purple/20">
+            <span className="inline-flex items-center px-2 py-0.5 rounded bg-card-subtle text-text-secondary text-xs font-medium border border-border-light">
               {tag}
             </span>
           )}

@@ -109,10 +109,7 @@ export function HeroCheckInCard({
   return (
     <BentoCard
       className={cn(
-        "p-6 relative overflow-hidden transition-all duration-300",
-        isCheckedIn
-          ? "border-brand-purple/40 shadow-float"
-          : "border-border-light",
+        "p-6 relative overflow-hidden transition-all duration-200 border-border-light",
         className
       )}
     >
@@ -121,7 +118,7 @@ export function HeroCheckInCard({
           <div className="flex flex-wrap items-center gap-2">
             <span
               className={cn(
-                "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold",
+                "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium",
                 isCheckedIn
                   ? "bg-status-success-bg text-status-success-text"
                   : "bg-card-subtle text-text-secondary"
@@ -129,18 +126,18 @@ export function HeroCheckInCard({
             >
               <span
                 className={cn(
-                  "w-2 h-2 rounded-full",
+                  "w-1.5 h-1.5 rounded-full",
                   isCheckedIn
-                    ? "bg-status-success-dot animate-pulse"
+                    ? "bg-status-success-dot"
                     : "bg-text-tertiary"
                 )}
               />
-              {isCheckedIn ? "Active Session" : "Checked Out"}
+              {isCheckedIn ? "Active session" : "Checked out"}
             </span>
 
             {/* Shift Lock Status Badge */}
             {!isCheckedIn && lockStatus.isLocked && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-status-warning/10 text-status-warning border border-status-warning/30 animate-in fade-in">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-status-warning/10 text-status-warning border border-status-warning/30">
                 <Lock className="w-3 h-3" />
                 <span>
                   {lockStatus.reason === "after_shift"
@@ -156,7 +153,7 @@ export function HeroCheckInCard({
           </div>
 
           <div className="mt-3">
-            <div className="text-3xl md:text-4xl font-extrabold tracking-tight text-text-primary font-mono">
+            <div className="text-3xl md:text-4xl font-semibold tracking-tight text-text-primary tabular-nums">
               {isCheckedIn ? activeTime : "00:00:00"}
             </div>
             <p className="text-xs text-text-secondary mt-1 flex items-center gap-1">
@@ -178,38 +175,38 @@ export function HeroCheckInCard({
             onClick={handleToggle}
             disabled={isCheckInDisabled}
             className={cn(
-              "w-full sm:w-auto px-6 py-3.5 rounded-2xl font-bold text-sm tracking-wide shadow-md transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer active:scale-95 select-none disabled:opacity-50 disabled:cursor-not-allowed",
+              "w-full sm:w-auto px-5 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed",
               isCheckedIn
                 ? "bg-status-danger-bg text-status-danger-text hover:bg-status-danger-bg/80 border border-status-danger-dot/20"
                 : lockStatus.isLocked
                   ? "bg-card-subtle text-text-tertiary border border-border-light hover:bg-card-subtle"
-                  : "bg-brand-navy text-white hover:bg-brand-navy-hover hover:shadow-lg border border-border-light/20"
+                  : "bg-brand-navy text-white hover:bg-brand-navy-hover border border-border-light/20"
             )}
           >
             {isCheckedIn ? (
               <>
-                <Square className="w-4 h-4 fill-current" />
+                <Square className="w-3.5 h-3.5 fill-current" />
                 <span>Check Out Now</span>
               </>
             ) : lockStatus.isLocked ? (
               <>
-                <Lock className="w-4 h-4" />
+                <Lock className="w-3.5 h-3.5" />
                 <span>
                   {lockStatus.reason === "after_shift"
-                    ? "Outside Shift Hours"
-                    : "Check In Locked"}
+                    ? "Outside shift hours"
+                    : "Check-in locked"}
                 </span>
               </>
             ) : (
               <>
-                <Play className="w-4 h-4 fill-current" />
-                <span>Check In</span>
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Check in</span>
               </>
             )}
           </button>
 
           {!isCheckedIn && lockStatus.isLocked && (
-            <span className="text-[10px] text-text-tertiary text-right">
+            <span className="text-[11px] text-text-tertiary text-right">
               {lockStatus.reason === "after_shift"
                 ? `Shift: ${shiftStartTime.slice(0, 5)} - ${shiftEndTime.slice(0, 5)}`
                 : `Opens 5m prior to ${shiftStartTime.slice(0, 5)}`}
@@ -220,14 +217,10 @@ export function HeroCheckInCard({
 
       <div className="mt-5 pt-4 border-t border-border-light/60 flex items-center justify-between text-xs text-text-tertiary">
         <span className="flex items-center gap-1">
-          <ShieldCheck className="w-3.5 h-3.5 text-brand-purple" />
+          <ShieldCheck className="w-3.5 h-3.5 text-text-tertiary" />
           {FEATURES.SHIFTS
             ? `Shift: ${shiftStartTime.slice(0, 5)} - ${shiftEndTime.slice(0, 5)} (${userTimezone})`
             : `Timezone: ${userTimezone}`}
-        </span>
-        <span className="flex items-center gap-1 font-semibold text-brand-purple">
-          <CheckCircle2 className="w-3.5 h-3.5" />
-          Auto-regularization supported
         </span>
       </div>
     </BentoCard>

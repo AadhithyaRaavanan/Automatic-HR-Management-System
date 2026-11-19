@@ -5,24 +5,24 @@
 
 export const DESIGN_TOKENS = {
   radius: {
-    card: "rounded-[24px]",
-    cardLarge: "rounded-[28px]",
-    button: "rounded-xl",
-    pill: "rounded-full",
-    badge: "rounded-full",
+    card: "rounded-xl",
+    cardLarge: "rounded-xl",
+    button: "rounded-lg",
+    pill: "rounded-md",
+    badge: "rounded-md",
   },
   shadow: {
-    card: "shadow-card",
-    elevated: "shadow-shell",
-    subtle: "shadow-xs",
+    card: "",
+    elevated: "shadow-float",
+    subtle: "",
   },
   border: {
     default: "border border-border-light",
     subtle: "border border-border-light/60",
-    focus: "focus-visible:ring-2 focus-visible:ring-brand-purple focus-visible:outline-none",
+    focus: "focus-visible:ring-1 focus-visible:ring-brand-purple focus-visible:outline-none",
   },
   colors: {
-    brandPurple: "#6366F1",
+    brandPurple: "#6355DC",
     brandNavy: "#0B0E14",
     cardBg: "bg-card",
     cardSubtle: "bg-card-subtle",

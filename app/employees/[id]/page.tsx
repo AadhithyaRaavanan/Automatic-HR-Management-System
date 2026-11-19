@@ -359,20 +359,20 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
       </div>
 
       {/* Hero Card */}
-      <div className="p-6 rounded-3xl bg-gradient-to-r from-card/80 to-card-subtle/80 backdrop-blur-md border border-border-light shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-        <div className="flex items-center gap-5">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-purple to-brand-cyan flex items-center justify-center text-xl font-bold text-white shadow-lg">
+      <div className="p-6 rounded-xl bg-card border border-border-light flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-lg bg-card-subtle border border-border-light flex items-center justify-center text-base font-semibold text-text-primary">
             {emp.full_name?.slice(0, 2).toUpperCase() || "ZX"}
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-text-primary">{emp.full_name}</h1>
-              <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-brand-purple/10 text-brand-purple border border-brand-purple/20">
+              <h1 className="text-xl font-semibold text-text-primary">{emp.full_name}</h1>
+              <span className="text-xs font-mono font-medium px-2 py-0.5 rounded bg-card-subtle text-text-secondary border border-border-light">
                 {emp.employee_number || emp.id?.slice(0, 8)}
               </span>
             </div>
             <p className="text-xs text-text-secondary mt-1">
-              {emp.job_titles?.title_name || "Specialist"} • {emp.departments?.name || "ZEN XEA"}
+              {emp.job_titles?.title_name || "Specialist"} • {emp.departments?.name || "Zenxea"}
             </p>
             <div className="flex items-center gap-3 mt-2 text-xs text-text-muted">
               <span className="flex items-center gap-1">
@@ -534,7 +534,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
 
       {/* Tab 2: Employment & Governance */}
       {activeTab === "employment" && (
-        <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-4">
+        <div className="p-6 rounded-xl bg-card border border-border-light space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold text-text-primary">Employment Governance Parameters</h3>
@@ -571,7 +571,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
 
       {/* Tab 3: Education */}
       {activeTab === "education" && (
-        <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-4">
+        <div className="p-6 rounded-xl bg-card border border-border-light space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold text-text-primary">Verified Educational Qualifications</h3>
@@ -621,7 +621,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
 
       {/* Tab 4: Documents */}
       {activeTab === "documents" && (
-        <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-4">
+        <div className="p-6 rounded-xl bg-card border border-border-light space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-bold text-text-primary">Verified Employee Documents</h3>
@@ -726,7 +726,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
 
       {/* Tab 5: Internship Details */}
       {activeTab === "internship" && (
-        <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-6">
+        <div className="p-6 rounded-xl bg-card border border-border-light space-y-6">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-base font-bold text-text-primary">Internship Management Dossier</h3>
@@ -765,12 +765,12 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
 
       {/* Tab 6: Hourly Permissions */}
       {activeTab === "permissions" && (
-        <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-4">
+        <div className="p-6 rounded-xl bg-card border border-border-light space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-base font-bold text-text-primary">Hourly Permission Requests</h3>
+              <h3 className="text-base font-semibold text-text-primary">Hourly permission requests</h3>
               <p className="text-xs text-text-secondary mt-0.5">
-                Short-duration permissions (personal, medical, emergency, examination) seamlessly integrated with attendance.
+                Short-duration permissions (personal, medical, emergency, examination) recorded with attendance.
               </p>
             </div>
             {isLoaded && (
@@ -824,7 +824,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
 
       {/* Tab 7: Attendance Summary */}
       {activeTab === "attendance" && (
-        <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-4">
+        <div className="p-6 rounded-xl bg-card border border-border-light space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-base font-bold text-text-primary">Attendance Logs & Summary</h3>
@@ -893,7 +893,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
 
       {/* Tab 8: Career Timeline */}
       {activeTab === "history" && (
-        <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-4">
+        <div className="p-6 rounded-xl bg-card border border-border-light space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-base font-bold text-text-primary">Effective-Dated Career Timeline</h3>
@@ -933,7 +933,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
       {/* EDIT PARAMETERS MODAL */}
       {editModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="w-full max-w-2xl rounded-3xl bg-card border border-border-light p-6 shadow-2xl space-y-4 my-8 max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-2xl rounded-xl bg-card border border-border-light p-6 shadow-float space-y-4 my-8 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-border-light pb-3">
               <h3 className="text-base font-bold text-text-primary">Edit Employee Parameters</h3>
               <button onClick={() => setEditModalOpen(false)} className="text-text-muted hover:text-text-primary">
@@ -1188,7 +1188,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
       {/* SUBMIT ADDITIONAL DOCUMENT MODAL */}
       {docModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-3xl bg-card border border-border-light p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-md rounded-xl bg-card border border-border-light p-6 shadow-float space-y-4">
             <div className="flex items-center justify-between border-b border-border-light pb-3">
               <h3 className="text-base font-bold text-text-primary">Submit Additional Document</h3>
               <button onClick={() => setDocModalOpen(false)} className="text-text-muted hover:text-text-primary">
@@ -1257,7 +1257,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
       {/* REJECT DOCUMENT MODAL */}
       {rejectModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-3xl bg-card border border-border-light p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-md rounded-xl bg-card border border-border-light p-6 shadow-float space-y-4">
             <h3 className="text-base font-bold text-text-primary">Reject Document</h3>
             <p className="text-xs text-text-secondary">Please enter the reason for rejecting this document:</p>
             <textarea
@@ -1290,7 +1290,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
       {/* ADD CAREER MILESTONE MODAL */}
       {careerModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-3xl bg-card border border-border-light p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-md rounded-xl bg-card border border-border-light p-6 shadow-float space-y-4">
             <div className="flex items-center justify-between border-b border-border-light pb-3">
               <h3 className="text-base font-bold text-text-primary">Add Career Milestone</h3>
               <button onClick={() => setCareerModalOpen(false)} className="text-text-muted hover:text-text-primary">
@@ -1362,7 +1362,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
       {/* HOURLY PERMISSION REQUEST MODAL */}
       {permissionModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-3xl bg-card border border-border-light p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-md rounded-xl bg-card border border-border-light p-6 shadow-float space-y-4">
             <h3 className="text-base font-bold text-text-primary">Submit Hourly Permission Request</h3>
             <p className="text-xs text-text-secondary">
               Apply for up to 4 hours of short permission without affecting full-day leave balance.

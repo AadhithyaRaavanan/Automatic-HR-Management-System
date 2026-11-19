@@ -31,26 +31,20 @@ export const emsNavItems = [
   { label: "Roles & Permissions", href: "/ems/roles", icon: ShieldCheck },
   { label: "Organization Tree", href: "/ems/organization", icon: GitPullRequest },
   { label: "Internships", href: "/ems/internships", icon: GraduationCap },
-  { label: "Onboarding Hub", href: "/hr/onboarding", icon: UserPlus },
+  { label: "Onboarding reviews", href: "/hr/onboarding", icon: UserPlus },
 ];
 
 export function EmsNavigationHeader({ currentTab }: EmsNavProps) {
   const pathname = usePathname();
 
   return (
-    <div className="space-y-4">
-      {/* Module Title & Tagline */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-border-light pb-4">
+    <div data-tour="ems-hub" data-tour-mgr="ems-department" className="space-y-4">
+      {/* Module Title */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-border-light pb-3">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-bold tracking-widest uppercase text-brand-purple bg-brand-purple/10 px-2 py-0.5 rounded-full">
-              EMS • Employee Management System
-            </span>
-            <span className="text-xs text-text-muted">• ZEN XEA HRMS</span>
-          </div>
-          <h1 className="text-2xl font-bold text-text-primary tracking-tight">Workforce Command Center</h1>
+          <h1 className="text-2xl font-semibold text-text-primary tracking-tight">Employees</h1>
           <p className="text-xs text-text-secondary mt-0.5">
-            Unified administration for staff, organizational hierarchy, teams, roles, designations, and internships.
+            Manage staff, teams, organizational hierarchy, and internships for Zenxea.
           </p>
         </div>
       </div>

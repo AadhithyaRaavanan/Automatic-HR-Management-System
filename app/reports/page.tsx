@@ -403,13 +403,13 @@ function ReportsPageContent() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <section className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pt-1 pb-2">
+      <section data-tour="reports-hub" className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pt-1 pb-2">
         <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight">
-            Attendance Reports & Month-End Close
+          <h1 className="text-2xl font-semibold text-text-primary tracking-tight">
+            Reports
           </h1>
-          <p className="text-xs sm:text-sm text-text-secondary mt-1">
-            Audit-logged punch corrections, pre-close compliance checklist, payroll locking, and exports.
+          <p className="text-xs text-text-secondary mt-1">
+            Monthly attendance records, compliance checklist, payroll locking, and exports.
           </p>
         </div>
 
@@ -418,7 +418,7 @@ function ReportsPageContent() {
             aria-label="Report Month"
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(Number(e.target.value))}
-            className="px-3 py-2 rounded-full bg-card border border-border-light text-xs font-bold text-text-primary shadow-sm"
+            className="px-3 py-1.5 rounded-lg bg-card border border-border-light text-xs font-medium text-text-primary"
           >
             {Array.from({ length: 12 }, (_, idx) => (
               <option key={idx + 1} value={idx + 1}>
@@ -431,7 +431,7 @@ function ReportsPageContent() {
             aria-label="Report Year"
             value={selectedYear}
             onChange={(e) => setSelectedYear(Number(e.target.value))}
-            className="px-3 py-2 rounded-full bg-card border border-border-light text-xs font-bold text-text-primary shadow-sm"
+            className="px-3 py-1.5 rounded-lg bg-card border border-border-light text-xs font-medium text-text-primary"
           >
             {[now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map((yr) => (
               <option key={yr} value={yr}>
@@ -444,16 +444,16 @@ function ReportsPageContent() {
             type="button"
             onClick={() => openCorrectionForRow()}
             disabled={eligibleOtherEmployees.length === 0}
-            className="px-4 py-2 rounded-full bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+            className="px-3.5 py-1.5 rounded-lg bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
           >
             <Edit3 className="w-3.5 h-3.5" />
-            <span>Correct Attendance</span>
+            <span>Correct attendance</span>
           </button>
 
           <button
             type="button"
             onClick={handleExportCsv}
-            className="px-3.5 py-2 rounded-full bg-card border border-border-light text-xs font-bold text-text-secondary hover:text-text-primary shadow-sm cursor-pointer"
+            className="px-3 py-1.5 rounded-lg bg-card border border-border-light text-xs font-medium text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
           >
             CSV
           </button>
@@ -461,10 +461,10 @@ function ReportsPageContent() {
           <button
             type="button"
             onClick={handleExportXlsx}
-            className="px-4 py-2 rounded-full bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold shadow-md flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 py-1.5 rounded-lg bg-card border border-border-light hover:bg-card-subtle text-text-primary text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export .XLSX</span>
+            <Download className="w-3.5 h-3.5 text-text-secondary" />
+            <span>Export data</span>
           </button>
         </div>
       </section>
@@ -472,25 +472,25 @@ function ReportsPageContent() {
       {/* 4 Summary Stat Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
-          title="Company Attendance"
+          title="Company attendance"
           value={summaryStats.attendancePct}
           subtitle={`${periodRange.start} – ${periodRange.end}`}
-          icon={<Users className="w-4 h-4 text-brand-purple" />}
+          icon={<Users className="w-4 h-4" />}
         />
         <StatCard
-          title="Average Shift"
+          title="Average shift"
           value={summaryStats.avgShift}
           subtitle="Across logged days"
           icon={<Clock className="w-4 h-4" />}
         />
         <StatCard
-          title="Absenteeism Rate"
+          title="Absenteeism rate"
           value={summaryStats.absentPct}
           subtitle="Working days missed"
           icon={<TrendingDown className="w-4 h-4 text-status-danger-dot" />}
         />
         <StatCard
-          title="Punctuality Rate"
+          title="Punctuality rate"
           value={summaryStats.punctualityPct}
           subtitle="Arrivals within grace"
           icon={<TrendingUp className="w-4 h-4 text-status-success-dot" />}

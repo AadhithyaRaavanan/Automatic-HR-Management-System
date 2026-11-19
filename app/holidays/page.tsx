@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { getTamilMonthInfo, resolveTamilHolidayName } from "@/lib/date/holidays-tn";
+import { resolveTamilHolidayName } from "@/lib/date/holidays-tn";
 import { createClient } from "@/lib/supabase/client";
 import { HolidayType } from "@/types/database.types";
 import { isDemoModeEnabled } from "@/lib/config/demo";
@@ -409,30 +409,29 @@ function HolidaysPageContent() {
     return h.region === regionFilter;
   });
 
-  const currentTamilMonth = getTamilMonthInfo();
   const yearsList = [currentYear - 1, currentYear, nextYear, nextYear + 1];
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-2">
+      <section data-tour="holidays-management" className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-2">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight">
-              Holidays & Company Policies
+            <h1 className="text-2xl font-semibold text-text-primary tracking-tight">
+              Holidays
             </h1>
-            <span className="px-3 py-1 rounded-full bg-brand-purple-light text-brand-purple text-xs font-bold border border-brand-purple/20 flex items-center gap-1.5">
+            <span className="px-2.5 py-0.5 rounded-md bg-card-subtle text-text-secondary text-xs font-medium border border-border-light flex items-center gap-1.5">
               <MapPin className="w-3.5 h-3.5" />
-              <span>Organization Calendar ({selectedYear})</span>
+              <span>{selectedYear}</span>
             </span>
           </div>
-          <p className="text-xs sm:text-sm text-text-secondary mt-1">
-            Database-driven public holidays, regional templates, and shift evaluation thresholds.
+          <p className="text-xs text-text-secondary mt-1">
+            Statutory holidays, regional calendars, and shift evaluation thresholds.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 bg-card border border-border-light rounded-full p-1 shadow-sm">
+          <div className="flex items-center gap-1 bg-card border border-border-light rounded-lg p-1">
             {yearsList.map((yr) => (
               <button
                 key={yr}
@@ -513,40 +512,36 @@ function HolidaysPageContent() {
       )}
 
       {/* Calendar Highlight Banner + Filter */}
-      <div className="p-4 rounded-3xl bg-gradient-to-r from-brand-purple/15 via-brand-purple/5 to-card-subtle border border-brand-purple/25 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="p-4 rounded-xl bg-card border border-border-light flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-brand-purple text-white flex items-center justify-center shadow-float shrink-0">
-            <Calendar className="w-5 h-5" />
+          <div className="w-9 h-9 rounded-lg bg-card-subtle border border-border-light text-text-secondary flex items-center justify-center shrink-0">
+            <Calendar className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-extrabold text-text-primary">
-                Regional Calendar Sync Active
+              <h2 className="text-sm font-semibold text-text-primary">
+                Regional calendar
               </h2>
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-brand-purple text-white">
-                {holidays.length} in {selectedYear}
+              <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-card-subtle text-text-secondary border border-border-light">
+                {holidays.length} holidays in {selectedYear}
               </span>
             </div>
             <p className="text-xs text-text-secondary mt-0.5">
-              Tamil Solar Month:{" "}
-              <span className="font-bold text-brand-purple">
-                {currentTamilMonth.tamil} ({currentTamilMonth.english})
-              </span>{" "}
-              • {currentTamilMonth.seasonTa}
+              Statutory and regional holidays for {selectedYear}.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1 bg-card rounded-2xl p-1 border border-border-light shadow-sm overflow-x-auto">
+        <div className="flex items-center gap-1 bg-card rounded-lg p-1 border border-border-light overflow-x-auto">
           {distinctRegions.map((rf) => (
             <button
               key={rf}
               type="button"
               onClick={() => setRegionFilter(rf)}
               className={cn(
-                "px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap",
+                "px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer whitespace-nowrap",
                 regionFilter === rf
-                  ? "bg-brand-purple text-white shadow-sm"
+                  ? "bg-brand-purple text-white"
                   : "text-text-secondary hover:text-text-primary"
               )}
             >
@@ -684,7 +679,7 @@ function HolidaysPageContent() {
               <input
                 type="text"
                 aria-label="Local Holiday Name"
-                placeholder="Local Name (e.g. தமிழ்)"
+                placeholder="Regional name (optional)"
                 value={newLocalName}
                 onChange={(e) => setNewLocalName(e.target.value)}
                 className="sm:col-span-2 px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs font-medium text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-brand-purple"

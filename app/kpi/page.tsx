@@ -472,6 +472,7 @@ function KpiContent() {
       </section>
 
       {/* 2. Unified Sticky Toolbar spanning full width */}
+      <div data-tour="kpi-filters">
       <KpiToolbar
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -494,6 +495,7 @@ function KpiContent() {
         deptFilter={deptFilter}
         onDeptFilterChange={setDeptFilter}
       />
+      </div>
 
       {/* 3. TAB CONTENT */}
       {showSkeleton ? (
@@ -522,7 +524,7 @@ function KpiContent() {
           {/* Hero Row: Two Columns (40% Left + 60% Right) */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
             {/* Left: Overall Performance Index Card (~40%) */}
-            <div className="lg:col-span-5 flex flex-col">
+            <div data-tour="kpi-overview" className="lg:col-span-5 flex flex-col">
               <KpiHeroCard
                 overallScore={overallScore}
                 trend={trend}
@@ -608,7 +610,7 @@ function KpiContent() {
         </div>
       ) : activeTab === "reviews" ? (
         /* TAB 2: MANAGER REVIEWS */
-        <div className="space-y-4">
+        <div data-tour="kpi-reviews-tab" className="space-y-4">
           <div className="flex items-center justify-between pb-1">
             <div>
               <h2 className="text-sm font-extrabold text-text-primary tracking-tight">
@@ -732,7 +734,7 @@ function KpiContent() {
         </div>
       ) : (
         /* TAB 3: GOALS */
-        <div className="space-y-4">
+        <div data-tour="kpi-goals-tab" className="space-y-4">
           <div className="flex items-center justify-between pb-1">
             <div>
               <h2 className="text-sm font-extrabold text-text-primary tracking-tight">

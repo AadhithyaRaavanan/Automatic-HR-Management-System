@@ -4,7 +4,7 @@ import { FileText, ArrowLeft } from "lucide-react";
 
 export const metadata = {
   title: `Terms of Service — ${appConfig.companyName}`,
-  description: "Terms and conditions governing the use of RemoteHR platforms.",
+  description: "Terms and conditions governing the use of Pulse platforms.",
 };
 
 export default function TermsOfServicePage() {

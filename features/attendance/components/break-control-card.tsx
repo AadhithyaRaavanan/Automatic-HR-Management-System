@@ -151,23 +151,23 @@ export function BreakControlCard({ isCheckedIn, className }: BreakControlCardPro
               type="button"
               disabled={submitting}
               onClick={handleEndBreak}
-              className="w-full py-2.5 px-4 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm disabled:opacity-50"
+              className="w-full py-2 px-4 rounded-lg bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-medium flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
             >
               <Square className="w-3.5 h-3.5 fill-current" />
-              <span>{submitting ? "Ending Break..." : "End Break & Resume Work"}</span>
+              <span>{submitting ? "Ending break..." : "End break and resume work"}</span>
             </button>
           </div>
         ) : (
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* 15-Minute Short Break */}
-            <div className="p-3.5 rounded-2xl bg-card-subtle border border-border-light flex flex-col justify-between space-y-3">
+            <div className="p-3.5 rounded-xl bg-card-subtle border border-border-light flex flex-col justify-between space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-xl bg-brand-purple-light flex items-center justify-center text-brand-purple">
+                  <div className="w-7 h-7 rounded-lg bg-card border border-border-light flex items-center justify-center text-text-secondary">
                     <Coffee className="w-3.5 h-3.5" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-text-primary">Short Break</h4>
+                    <h4 className="text-xs font-semibold text-text-primary">Short break</h4>
                     <p className="text-[10px] text-text-tertiary">15 minutes allowance</p>
                   </div>
                 </div>
@@ -182,22 +182,22 @@ export function BreakControlCard({ isCheckedIn, className }: BreakControlCardPro
                 type="button"
                 disabled={submitting || !canTakeShort || !isCheckedIn}
                 onClick={() => handleStartBreak("short_break")}
-                className="w-full py-2 px-3 rounded-xl bg-card border border-border-light hover:bg-brand-purple hover:text-white text-xs font-bold text-text-primary transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                className="w-full py-1.5 px-3 rounded-lg bg-card border border-border-light hover:bg-brand-purple hover:text-white text-xs font-medium text-text-primary transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Play className="w-3 h-3 fill-current" />
-                <span>{shortBreakTaken ? "Already Taken" : "Take Break (15m)"}</span>
+                <span>{shortBreakTaken ? "Already taken" : "Take break (15m)"}</span>
               </button>
             </div>
 
             {/* 1-Hour Lunch Break */}
-            <div className="p-3.5 rounded-2xl bg-card-subtle border border-border-light flex flex-col justify-between space-y-3">
+            <div className="p-3.5 rounded-xl bg-card-subtle border border-border-light flex flex-col justify-between space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-xl bg-brand-purple-light flex items-center justify-center text-brand-purple">
+                  <div className="w-7 h-7 rounded-lg bg-card border border-border-light flex items-center justify-center text-text-secondary">
                     <Utensils className="w-3.5 h-3.5" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-text-primary">Lunch Break</h4>
+                    <h4 className="text-xs font-semibold text-text-primary">Lunch break</h4>
                     <p className="text-[10px] text-text-tertiary">1 hour allowance</p>
                   </div>
                 </div>
@@ -212,10 +212,10 @@ export function BreakControlCard({ isCheckedIn, className }: BreakControlCardPro
                 type="button"
                 disabled={submitting || !canTakeLunch || !isCheckedIn}
                 onClick={() => handleStartBreak("lunch_break")}
-                className="w-full py-2 px-3 rounded-xl bg-card border border-border-light hover:bg-brand-purple hover:text-white text-xs font-bold text-text-primary transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                className="w-full py-1.5 px-3 rounded-lg bg-card border border-border-light hover:bg-brand-purple hover:text-white text-xs font-medium text-text-primary transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Play className="w-3 h-3 fill-current" />
-                <span>{lunchBreakTaken ? "Already Taken" : "Take Lunch (1 hr)"}</span>
+                <span>{lunchBreakTaken ? "Already taken" : "Take lunch (1 hr)"}</span>
               </button>
             </div>
           </div>

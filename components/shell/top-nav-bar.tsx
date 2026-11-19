@@ -24,8 +24,8 @@ export function TopNavBar({
   const { unreadCount } = useNotifications();
 
   const handleExport = () => {
-    toast.success("Preparing Excel (.xlsx) export...", {
-      description: "Generating and downloading your team attendance sheet.",
+    toast.success("Preparing export", {
+      description: "Downloading attendance records.",
     });
     window.open("/api/attendance/export?format=xlsx", "_blank");
   };
@@ -34,7 +34,7 @@ export function TopNavBar({
     <>
       <header
         className={cn(
-          "w-full flex items-center justify-end gap-2 sm:gap-3 pb-6 select-none",
+          "w-full flex items-center justify-end gap-2 pb-5 select-none",
           className
         )}
       >
@@ -42,12 +42,12 @@ export function TopNavBar({
         <button
           type="button"
           onClick={() => setCommandOpen(true)}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-card-subtle hover:bg-card border border-border-light text-xs text-text-tertiary hover:text-text-primary transition-colors cursor-pointer shadow-sm group"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card hover:bg-card-subtle border border-border-light text-xs text-text-secondary hover:text-text-primary transition-colors cursor-pointer group"
         >
-          <Search className="w-3.5 h-3.5 text-brand-purple" />
+          <Search className="w-3.5 h-3.5 text-text-tertiary group-hover:text-text-primary" />
           <span className="hidden sm:inline">Search or type command</span>
           <span className="sm:hidden">Search</span>
-          <kbd className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-card border border-border-light text-text-tertiary group-hover:text-text-primary">
+          <kbd className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-sans bg-card-subtle border border-border-light text-text-tertiary">
             ⌘K
           </kbd>
         </button>
@@ -67,11 +67,11 @@ export function TopNavBar({
               : "Notifications"
           }
           onClick={() => setNotificationsOpen(true)}
-          className="relative p-2 rounded-full bg-card-subtle hover:bg-card border border-border-light text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
+          className="relative p-2 rounded-lg bg-card hover:bg-card-subtle border border-border-light text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
         >
           <Bell className="w-4 h-4" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-brand-purple text-white text-[9px] font-extrabold flex items-center justify-center ring-2 ring-card">
+            <span className="absolute -top-1 -right-1 min-w-[15px] h-3.5 px-0.5 rounded-full bg-brand-purple text-white text-[9px] font-semibold flex items-center justify-center">
               {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           )}
@@ -81,7 +81,7 @@ export function TopNavBar({
         <button
           type="button"
           onClick={handleExport}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-card-subtle hover:bg-card border border-border-light text-xs font-bold text-text-primary transition-colors cursor-pointer shadow-sm"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card hover:bg-card-subtle border border-border-light text-xs font-medium text-text-primary transition-colors cursor-pointer"
         >
           <Download className="w-3.5 h-3.5 text-text-secondary" />
           <span className="hidden md:inline">Export data</span>

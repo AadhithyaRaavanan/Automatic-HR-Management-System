@@ -75,7 +75,7 @@ export default function OrganizationSettingsAdminPage() {
   const [activeTab, setActiveTab] = React.useState<"profile" | "policy" | "health">("profile");
 
   // Org Settings State
-  const [orgName, setOrgName] = React.useState("RemoteHR Global Corp");
+  const [orgName, setOrgName] = React.useState("Zenxea");
   const [orgTimezone, setOrgTimezone] = React.useState("UTC");
   const [orgWorkMode, setOrgWorkMode] = React.useState("hybrid");
   const [isSavingOrg, setIsSavingOrg] = React.useState(false);

@@ -58,8 +58,8 @@ function MfaSetupForm() {
         const friendlySuffix = `${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
         const { data, error } = await supabase.auth.mfa.enroll({
           factorType: "totp",
-          issuer: "RemoteHR",
-          friendlyName: `RemoteHR-${friendlySuffix}`,
+          issuer: "Pulse",
+          friendlyName: `Pulse-${friendlySuffix}`,
         });
 
         if (!active) return;

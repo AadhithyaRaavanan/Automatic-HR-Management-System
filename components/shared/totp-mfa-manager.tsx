@@ -240,7 +240,7 @@ export function TotpMfaManager() {
               )}
             </button>
             <p className="text-[10px] text-text-tertiary mt-2">
-              Account: RemoteHR • Key Type: Time-based (TOTP)
+              Account: Pulse • Key Type: Time-based (TOTP)
             </p>
           </div>
 

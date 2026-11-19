@@ -78,18 +78,18 @@ export default function EmsOrganizationTreePage() {
         ) : (
           <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light shadow-sm space-y-6">
             {/* Root Node: ZEN XEA */}
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-brand-purple/20 to-brand-cyan/20 border border-brand-purple/30 flex items-center justify-between">
+            <div className="p-4 rounded-xl bg-card border border-border-light flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-brand-purple text-white flex items-center justify-center font-bold">
+                <div className="w-9 h-9 rounded-lg bg-card-subtle border border-border-light text-text-secondary flex items-center justify-center font-medium text-xs">
                   ZX
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-text-primary">ZEN XEA Global Headquarters</h3>
-                  <p className="text-xs text-text-secondary">Build Business Beyond Limits • Root Node</p>
+                  <h3 className="text-sm font-semibold text-text-primary">Zenxea Headquarters</h3>
+                  <p className="text-xs text-text-secondary">Organization root</p>
                 </div>
               </div>
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-card border border-border-light">
-                {employees.length} Total Workforce
+              <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-card-subtle text-text-secondary border border-border-light">
+                {employees.length} employees
               </span>
             </div>
 

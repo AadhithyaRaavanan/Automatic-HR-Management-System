@@ -56,7 +56,7 @@ export function KpiBadge({
       <span
         title="No sufficient KPI data recorded yet"
         className={cn(
-          "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-card-subtle text-text-tertiary border border-border-light hover:border-brand-purple/40 transition-colors",
+          "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-card-subtle text-text-tertiary border border-border-light hover:border-brand-purple/40 transition-colors",
           className
         )}
       >
@@ -89,7 +89,7 @@ export function KpiBadge({
     <span
       title={`Performance Index: ${overallScore}% - Click to view detailed KPI metrics`}
       className={cn(
-        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border shadow-xs transition-colors hover:opacity-90 cursor-pointer",
+        "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border transition-colors hover:opacity-90 cursor-pointer tabular-nums",
         colorClasses,
         className
       )}

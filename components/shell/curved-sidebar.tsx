@@ -44,7 +44,7 @@ export interface NavItem {
 
 const baseNavItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
-  { label: "EMS Hub", href: "/ems", icon: Users, badgeColor: "purple", roles: ["hr", "admin"] },
+  { label: "Employees", href: "/ems", icon: Users, badgeColor: "purple", roles: ["hr", "admin"] },
   { label: "Attendance", href: "/attendance", icon: Clock },
   { label: "Tasks", href: "/tasks", icon: CheckSquare },
   { label: "KPI", href: "/kpi", icon: Target },
@@ -55,7 +55,7 @@ const baseNavItems: NavItem[] = [
   { label: "Shifts", href: "/admin/shifts", icon: CalendarClock, roles: ["admin"] },
   { label: "Audits", href: "/admin/audits", icon: ScrollText, roles: ["admin"] },
   { label: "Holidays", href: "/holidays", icon: CalendarDays },
-  { label: "Admin Settings", href: "/admin/settings", icon: ShieldAlert, roles: ["admin"] },
+  { label: "Admin settings", href: "/admin/settings", icon: ShieldAlert, roles: ["admin"] },
 ];
 
 export function CurvedSidebar({
@@ -200,10 +200,10 @@ export function CurvedSidebar({
   return (
     <aside
       className={cn(
-        "sticky top-0 left-0 hidden md:flex flex-col justify-between py-3 h-screen max-h-screen bg-brand-purple text-white shadow-float select-none shrink-0 z-40 rounded-r-[24px] lg:rounded-r-[28px] transition-[width,padding] duration-300 ease-in-out overflow-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0",
+        "sticky top-0 left-0 hidden md:flex flex-col justify-between py-3.5 h-screen max-h-screen bg-card text-text-primary border-r border-border-light select-none shrink-0 z-40 transition-[width,padding] duration-200 ease-in-out overflow-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0",
         isCollapsed
           ? "w-[68px] lg:w-[72px] px-2 items-center"
-          : "w-[240px] lg:w-[260px] px-3.5 items-stretch",
+          : "w-[240px] lg:w-[250px] px-3 items-stretch",
         className
       )}
       aria-label="Sidebar navigation"
@@ -211,42 +211,44 @@ export function CurvedSidebar({
       data-collapsed={isCollapsed}
     >
       {/* Top Header & Brand Section */}
-      <div className="shrink-0 mb-2">
+      <div className="shrink-0 mb-3 px-1">
         {isCollapsed ? (
           <div className="flex flex-col items-center">
             <Link
               href="/"
-              className="w-8 h-8 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-md flex items-center justify-center text-white transition-all shadow-inner"
+              className="w-8 h-8 rounded-lg bg-brand-purple-light flex items-center justify-center text-brand-purple transition-colors"
               title="RemoteHR Home"
+              aria-label="Pulse Home"
             >
               <div className="grid grid-cols-2 gap-0.5 p-1">
-                <span className="w-1.5 h-1.5 rounded-sm bg-white" />
-                <span className="w-1.5 h-1.5 rounded-sm bg-white/70" />
-                <span className="w-1.5 h-1.5 rounded-sm bg-white/70" />
-                <span className="w-1.5 h-1.5 rounded-sm bg-white" />
+                <span className="w-1.5 h-1.5 rounded-sm bg-brand-purple" />
+                <span className="w-1.5 h-1.5 rounded-sm bg-brand-purple/70" />
+                <span className="w-1.5 h-1.5 rounded-sm bg-brand-purple/70" />
+                <span className="w-1.5 h-1.5 rounded-sm bg-brand-purple" />
               </div>
             </Link>
           </div>
         ) : (
-          <div className="flex items-center px-1">
+          <div className="flex items-center">
             <Link
               href="/"
-              className="flex items-center gap-2.5 group transition-opacity hover:opacity-95 min-w-0"
+              className="flex items-center gap-2.5 group transition-opacity hover:opacity-90 min-w-0"
               title="RemoteHR Home"
             >
-              <div className="w-8 h-8 rounded-xl bg-white/20 group-hover:bg-white/30 backdrop-blur-md flex items-center justify-center text-white transition-all shadow-inner shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-brand-purple-light flex items-center justify-center text-brand-purple transition-colors shrink-0">
                 <div className="grid grid-cols-2 gap-0.5 p-1">
-                  <span className="w-1.5 h-1.5 rounded-sm bg-white" />
-                  <span className="w-1.5 h-1.5 rounded-sm bg-white/70" />
-                  <span className="w-1.5 h-1.5 rounded-sm bg-white/70" />
-                  <span className="w-1.5 h-1.5 rounded-sm bg-white" />
+                  <span className="w-1.5 h-1.5 rounded-sm bg-brand-purple" />
+                  <span className="w-1.5 h-1.5 rounded-sm bg-brand-purple/70" />
+                  <span className="w-1.5 h-1.5 rounded-sm bg-brand-purple/70" />
+                  <span className="w-1.5 h-1.5 rounded-sm bg-brand-purple" />
                 </div>
               </div>
               <div className="flex flex-col min-w-0">
-                <span className="font-extrabold text-sm tracking-tight leading-tight text-white truncate">
-                  RemoteHR
+                <span className="font-semibold text-sm tracking-tight leading-tight text-text-primary truncate">
+                  Pulse
                 </span>
-                <span className="text-[10px] text-white/70 font-semibold tracking-wider uppercase truncate">
+                <span className="sr-only">RemoteHR</span>
+                <span className="text-[11px] text-text-tertiary font-medium truncate">
                   Workspace
                 </span>
               </div>
@@ -258,7 +260,7 @@ export function CurvedSidebar({
       {/* Navigation Items Stack */}
       <nav
         className={cn(
-          "flex-1 w-full overflow-y-auto overflow-x-hidden flex flex-col gap-1 py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0",
+          "flex-1 w-full overflow-y-auto overflow-x-hidden flex flex-col gap-0.5 py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0",
           isCollapsed ? "items-center" : "items-stretch"
         )}
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
@@ -278,10 +280,10 @@ export function CurvedSidebar({
                   onMouseEnter={() => router.prefetch(item.href)}
                   onFocus={() => router.prefetch(item.href)}
                   className={cn(
-                    "relative flex items-center justify-center w-8 h-8 lg:w-8.5 lg:h-8.5 rounded-xl transition-all duration-150",
+                    "relative flex items-center justify-center w-8 h-8 lg:w-8.5 lg:h-8.5 rounded-lg transition-colors duration-150",
                     isActive
-                      ? "bg-white text-brand-purple shadow-md scale-105"
-                      : "text-white/80 hover:text-white hover:bg-white/15"
+                      ? "bg-brand-purple-light text-brand-purple font-semibold"
+                      : "text-text-secondary hover:text-text-primary hover:bg-card-subtle"
                   )}
                   title={item.label}
                   aria-label={item.label}
@@ -292,7 +294,7 @@ export function CurvedSidebar({
                   {item.badge && (
                     <span
                       className={cn(
-                        "absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full text-[8.5px] font-bold border border-brand-purple",
+                        "absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full text-[8.5px] font-bold border border-card",
                         item.badgeColor === "green"
                           ? "bg-status-success-dot text-white"
                           : "bg-status-warning-dot text-brand-navy"
@@ -303,9 +305,9 @@ export function CurvedSidebar({
                   )}
                 </Link>
 
-                {/* Floating Tooltip on Hover */}
-                <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center z-50 pointer-events-none">
-                  <div className="bg-brand-navy text-white text-xs font-semibold px-2.5 py-1.5 rounded-xl shadow-lg whitespace-nowrap border border-border-light/30">
+                {/* Tooltip on Hover */}
+                <div className="absolute left-full ml-2.5 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center z-50 pointer-events-none">
+                  <div className="bg-text-primary text-card text-xs font-medium px-2 py-1 rounded-md shadow-md whitespace-nowrap">
                     {item.label}
                   </div>
                 </div>
@@ -313,7 +315,7 @@ export function CurvedSidebar({
             );
           }
 
-          // Expanded view: Icon and label displayed side-by-side at the same time
+          // Expanded view
           return (
             <Link
               key={item.href}
@@ -321,15 +323,15 @@ export function CurvedSidebar({
               onMouseEnter={() => router.prefetch(item.href)}
               onFocus={() => router.prefetch(item.href)}
               className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-150 w-full group select-none shrink-0",
+                "flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors duration-150 w-full group select-none shrink-0 text-xs",
                 isActive
-                  ? "bg-white text-brand-purple shadow-sm font-bold"
-                  : "text-white/85 hover:text-white hover:bg-white/15 font-medium"
+                  ? "bg-brand-purple-light text-brand-purple font-semibold"
+                  : "text-text-secondary hover:text-text-primary hover:bg-card-subtle font-medium"
               )}
               title={item.label}
             >
               <Icon className="w-4 h-4 shrink-0" />
-              <span className="text-xs truncate flex-1 text-left">
+              <span className="truncate flex-1 text-left">
                 {item.label}
               </span>
 
@@ -338,12 +340,8 @@ export function CurvedSidebar({
                   className={cn(
                     "px-1.5 py-0.2 rounded-full text-[9px] font-bold shrink-0",
                     isActive
-                      ? item.badgeColor === "green"
-                        ? "bg-status-success-dot text-white"
-                        : "bg-brand-purple text-white"
-                      : item.badgeColor === "green"
-                        ? "bg-status-success-dot text-white"
-                        : "bg-white/20 text-white"
+                      ? "bg-brand-purple text-white"
+                      : "bg-card-subtle text-text-secondary border border-border-light"
                   )}
                 >
                   {item.badge}
@@ -357,7 +355,7 @@ export function CurvedSidebar({
       {/* Bottom Profile / Quick Action Stack */}
       <div
         className={cn(
-          "shrink-0 pt-2 border-t border-white/15 flex flex-col gap-1",
+          "shrink-0 pt-2 border-t border-border-light flex flex-col gap-1",
           isCollapsed ? "items-center" : "items-stretch"
         )}
       >
@@ -366,35 +364,35 @@ export function CurvedSidebar({
             <Link
               href="/profile"
               className={cn(
-                "w-7.5 h-7.5 lg:w-8 lg:h-8 rounded-lg flex items-center justify-center text-white transition-colors",
+                "w-7.5 h-7.5 lg:w-8 lg:h-8 rounded-lg flex items-center justify-center transition-colors",
                 pathname.startsWith("/profile")
-                  ? "bg-white text-brand-purple shadow-sm"
-                  : "bg-white/10 hover:bg-white/20"
+                  ? "bg-brand-purple-light text-brand-purple"
+                  : "text-text-secondary hover:text-text-primary hover:bg-card-subtle"
               )}
-              title={mounted && session.fullName ? `${session.fullName} (Profile)` : "My Profile"}
-              aria-label="My Profile"
+              title={mounted && session.fullName ? `${session.fullName} (Profile)` : "My profile"}
+              aria-label="My profile"
             >
               <UserCircle className="w-4 h-4" />
             </Link>
             <Link
               href="/settings"
               className={cn(
-                "w-7.5 h-7.5 lg:w-8 lg:h-8 rounded-lg flex items-center justify-center text-white transition-colors",
+                "w-7.5 h-7.5 lg:w-8 lg:h-8 rounded-lg flex items-center justify-center transition-colors",
                 pathname.startsWith("/settings")
-                  ? "bg-white text-brand-purple shadow-sm"
-                  : "bg-white/10 hover:bg-white/20"
+                  ? "bg-brand-purple-light text-brand-purple"
+                  : "text-text-secondary hover:text-text-primary hover:bg-card-subtle"
               )}
-              title="Account Settings"
-              aria-label="Account Settings"
+              title="Settings"
+              aria-label="Settings"
             >
               <Settings className="w-4 h-4" />
             </Link>
             <button
               type="button"
               onClick={handleSignOut}
-              className="w-7.5 h-7.5 lg:w-8 lg:h-8 rounded-lg bg-white/10 hover:bg-red-500/80 flex items-center justify-center text-white transition-colors cursor-pointer"
-              title="Sign Out"
-              aria-label="Sign Out"
+              className="w-7.5 h-7.5 lg:w-8 lg:h-8 rounded-lg text-text-secondary hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 flex items-center justify-center transition-colors cursor-pointer"
+              title="Sign out"
+              aria-label="Sign out"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -404,19 +402,19 @@ export function CurvedSidebar({
             <Link
               href="/profile"
               className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium w-full transition-colors",
+                "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs transition-colors",
                 pathname.startsWith("/profile")
-                  ? "bg-white text-brand-purple shadow-sm font-bold"
-                  : "text-white/85 hover:text-white hover:bg-white/15"
+                  ? "bg-brand-purple-light text-brand-purple font-semibold"
+                  : "text-text-secondary hover:text-text-primary hover:bg-card-subtle font-medium"
               )}
-              title="My Profile"
+              title="My profile"
             >
               <UserCircle className="w-4 h-4 shrink-0" />
               <div className="flex flex-col min-w-0 flex-1 text-left">
-                <span className="truncate font-semibold">
-                  {mounted && session.fullName ? session.fullName : "My Profile"}
+                <span className="truncate font-semibold text-text-primary">
+                  {mounted && session.fullName ? session.fullName : "My profile"}
                 </span>
-                <span className="text-[10px] opacity-75 truncate capitalize">
+                <span className="text-[11px] text-text-tertiary truncate capitalize">
                   {mounted && session.jobTitleName
                     ? session.jobTitleName
                     : mounted
@@ -429,12 +427,12 @@ export function CurvedSidebar({
             <Link
               href="/settings"
               className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium w-full transition-colors",
+                "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs transition-colors",
                 pathname.startsWith("/settings")
-                  ? "bg-white text-brand-purple shadow-sm font-bold"
-                  : "text-white/85 hover:text-white hover:bg-white/15"
+                  ? "bg-brand-purple-light text-brand-purple font-semibold"
+                  : "text-text-secondary hover:text-text-primary hover:bg-card-subtle font-medium"
               )}
-              title="Account Settings"
+              title="Settings"
             >
               <Settings className="w-4 h-4 shrink-0" />
               <span className="truncate flex-1 text-left">Settings</span>
@@ -443,14 +441,14 @@ export function CurvedSidebar({
             <button
               type="button"
               onClick={handleSignOut}
-              className="flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium w-full text-white/85 hover:text-white hover:bg-red-500/80 transition-colors cursor-pointer"
-              title="Sign Out"
+              className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs text-text-secondary hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-colors cursor-pointer"
+              title="Sign out"
             >
               <LogOut className="w-4 h-4 shrink-0" />
-              <span className="truncate flex-1 text-left">Sign Out</span>
+              <span className="truncate flex-1 text-left">Sign out</span>
             </button>
 
-            <div className="text-[9.5px] text-white/50 text-center pt-1 font-mono tracking-wide">
+            <div className="text-[10px] text-text-tertiary text-center pt-1 font-sans">
               Press {isMac ? "⌘B" : "Ctrl+B"} to collapse
             </div>
           </>
