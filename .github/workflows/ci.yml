@@ -32,7 +32,7 @@ jobs:
           cache: "npm"
 
       - name: Install Project Dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
 
       - name: Secret Scan Verification
         run: node scripts/scan-secrets.mjs
