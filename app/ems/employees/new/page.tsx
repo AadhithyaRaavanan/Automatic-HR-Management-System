@@ -407,7 +407,6 @@ export default function NewEmployeeWizardPage() {
                       />
                     </div>
                   </div>
-
                   {shiftEnd && shiftStart && shiftEnd < shiftStart && (
                     <div className="p-3 rounded-xl bg-brand-purple/10 border border-brand-purple/20 text-brand-purple text-xs font-semibold flex items-center gap-2">
                       <Clock className="w-4 h-4 shrink-0" />

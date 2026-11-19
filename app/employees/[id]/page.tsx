@@ -19,6 +19,7 @@ import {
   FileText,
   ExternalLink,
   Eye,
+  EyeOff,
   ShieldCheck,
   Award,
   GraduationCap,
@@ -211,6 +212,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
   const [permType, setPermType] = React.useState("personal");
   const [permReason, setPermReason] = React.useState("");
   const [submittingPerm, setSubmittingPerm] = React.useState(false);
+  const [showFullAccount, setShowFullAccount] = React.useState(false);
 
   const isAdminOrHr = userRole === "admin" || userRole === "hr";
 
@@ -703,11 +705,31 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
                     {onb.bank_name || (onb.bank_ifsc?.startsWith("CNRB") ? "Canara Bank" : null) || "Not Specified"}
                   </span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-border-light/40">
+                <div className="flex justify-between items-center py-1 border-b border-border-light/40">
                   <span className="text-text-muted">Bank A/C:</span>
-                  <span className="font-mono text-text-primary">
-                    {onb.bank_account_number ? `••••${onb.bank_account_number.slice(-4)}` : "Verified"}
-                  </span>
+                  <div className="flex items-center gap-1.5 font-mono text-text-primary">
+                    <span>
+                      {onb.bank_account_number
+                        ? showFullAccount
+                          ? onb.bank_account_number
+                          : `••••${onb.bank_account_number.slice(-4)}`
+                        : "Verified"}
+                    </span>
+                    {onb.bank_account_number && (
+                      <button
+                        type="button"
+                        onClick={() => setShowFullAccount(!showFullAccount)}
+                        className="text-text-muted hover:text-brand-purple p-0.5 rounded transition-colors"
+                        title={showFullAccount ? "Hide Account Number" : "Show Full Account Number"}
+                      >
+                        {showFullAccount ? (
+                          <EyeOff className="w-3.5 h-3.5" />
+                        ) : (
+                          <Eye className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="flex justify-between py-1">
                   <span className="text-text-muted">Onboarding:</span>
