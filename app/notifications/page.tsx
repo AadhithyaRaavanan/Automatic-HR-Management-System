@@ -50,12 +50,13 @@ export default function NotificationsPage() {
     queryKey: ["notifications-all", filter],
     queryFn: async () => {
       const url = filter === "unread" ? "/api/notifications?unread_only=true&limit=50" : "/api/notifications?limit=50";
-      const res = await fetch(url);
+      const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) return [];
       const json = await res.json();
       return json.notifications || [];
     },
-    staleTime: 15000,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const markSingleRead = useMutation({
@@ -127,18 +128,18 @@ export default function NotificationsPage() {
     <AppShell>
       <div className="max-w-4xl mx-auto space-y-6 pb-12">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border-light">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E6E6E6]">
           <div>
-            <h1 className="text-2xl font-bold text-text-primary tracking-tight flex items-center gap-2.5">
-              <Bell className="w-6 h-6 text-brand-purple" />
+            <h1 className="text-2xl font-bold text-black tracking-tight flex items-center gap-2.5">
+              <Bell className="w-6 h-6 text-black" />
               <span>Notifications</span>
               {unreadCount > 0 && (
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-purple text-white">
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-black text-white">
                   {unreadCount} unread
                 </span>
               )}
             </h1>
-            <p className="text-xs text-text-secondary mt-1">
+            <p className="text-xs text-[#808080] mt-1">
               Real-time alerts, review updates, assignments, and reminders.
             </p>
           </div>
@@ -256,7 +257,7 @@ export default function NotificationsPage() {
         ) : (
           <EmptyState
             className="py-16 border-dashed"
-            icon={<Bell className="w-8 h-8 text-text-tertiary" />}
+            icon={<Bell className="w-8 h-8 text-[#808080]" />}
             title={filter === "unread" ? "No unread notifications" : "No notifications yet"}
             description={
               filter === "unread"

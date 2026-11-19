@@ -56,7 +56,7 @@ export function useNotifications() {
       }
       setUserId(user.id);
 
-      const res = await fetch("/api/notifications?limit=30");
+      const res = await fetch("/api/notifications?limit=30", { cache: "no-store" });
       if (res.ok) {
         const json = await res.json();
         return json.notifications || [];
@@ -73,7 +73,8 @@ export function useNotifications() {
       if (error) return [];
       return (data || []) as NotificationItemRecord[];
     },
-    staleTime: 15000,
+    staleTime: 0,
+    refetchOnMount: "always",
     refetchInterval: 60000, // 60s fallback poll
   });
 

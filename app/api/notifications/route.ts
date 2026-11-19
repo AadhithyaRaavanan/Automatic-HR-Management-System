@@ -43,10 +43,19 @@ export async function GET(request: NextRequest) {
       nextCursor = nextItem.created_at;
     }
 
-    return NextResponse.json({
-      notifications: items,
-      nextCursor,
-    });
+    return NextResponse.json(
+      {
+        notifications: items,
+        nextCursor,
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json(
       { error: err?.message || "Internal server error" },
