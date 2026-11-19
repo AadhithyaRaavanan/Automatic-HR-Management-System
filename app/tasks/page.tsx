@@ -43,6 +43,7 @@ import {
   ArrowRight,
   ChevronDown,
   Check,
+  Target,
 } from "lucide-react";
 
 const STATUS_COLUMNS: Array<{ key: TaskStatus; label: string; hint: string }> = [
@@ -221,6 +222,27 @@ function TasksWorkspaceContent() {
   const [repeatWeekday, setRepeatWeekday] = React.useState<number>(1);
   const [repeatDayOfMonth, setRepeatDayOfMonth] = React.useState<number>(1);
   const [repeatEndDate, setRepeatEndDate] = React.useState<string>("");
+
+  // Linked Goal State (Phase 5)
+  const [newGoalId, setNewGoalId] = React.useState<string>("");
+  const [assigneeGoals, setAssigneeGoals] = React.useState<Array<{ id: string; title: string; status: string }>>([]);
+  const [drawerGoals, setDrawerGoals] = React.useState<Array<{ id: string; title: string; status: string }>>([]);
+
+  // Fetch active goals for task dialog assignee
+  React.useEffect(() => {
+    const targetId = newAssigneeId || userId;
+    if (!targetId || !FEATURES.KPI) {
+      setAssigneeGoals([]);
+      return;
+    }
+    fetch(`/api/kpi/goals?employee_id=${encodeURIComponent(targetId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const active = (data?.goals || []).filter((g: any) => g.status !== "done");
+        setAssigneeGoals(active);
+      })
+      .catch(() => setAssigneeGoals([]));
+  }, [newAssigneeId, userId]);
 
   // Edit tracking: only fields the user hasn't edited yet are filled by Type selection
   const editedFields = React.useRef<Set<string>>(new Set());
@@ -600,6 +622,19 @@ function TasksWorkspaceContent() {
     );
   }, [detailsQuery.data?.timeLogs]);
 
+  // Fetch active goals for drawer task assignee or creator
+  React.useEffect(() => {
+    const empId = selectedTask?.assignee_id || selectedTask?.creator_id;
+    if (!selectedTask || !empId || !FEATURES.KPI) {
+      setDrawerGoals([]);
+      return;
+    }
+    fetch(`/api/kpi/goals?employee_id=${encodeURIComponent(empId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => setDrawerGoals(data?.goals || []))
+      .catch(() => setDrawerGoals([]));
+  }, [selectedTask?.id, selectedTask?.assignee_id, selectedTask?.creator_id]);
+
   const handleOpenCreateModal = () => {
     editedFields.current.clear();
     setSelectedTypeId("");
@@ -620,6 +655,7 @@ function TasksWorkspaceContent() {
     setRepeatWeekday(1);
     setRepeatDayOfMonth(1);
     setRepeatEndDate("");
+    setNewGoalId("");
     setCreateTaskOpen(true);
   };
 
@@ -642,6 +678,7 @@ function TasksWorkspaceContent() {
         isSelfAssign: isSelf,
         taskTypeId: selectedTypeId && selectedTypeId !== "other" ? selectedTypeId : null,
         autoDueSuggested: autoDueSuggested,
+        goalId: newGoalId || null,
         subtaskTitles: selectedChecklist,
         recurrence: isRepeating
           ? {
@@ -1861,6 +1898,28 @@ function TasksWorkspaceContent() {
                 </div>
               )}
 
+              {/* Linked KPI Goal (Phase 5) */}
+              {FEATURES.KPI && assigneeGoals.length > 0 && (
+                <div>
+                  <label className="block text-xs font-bold text-black mb-1">
+                    Performance goal (optional)
+                  </label>
+                  <select
+                    aria-label="Link to KPI Goal"
+                    value={newGoalId}
+                    onChange={(e) => setNewGoalId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black focus:outline-none focus:border-black"
+                  >
+                    <option value="">No Goal Linked</option>
+                    {assigneeGoals.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.title} ({g.status.replace("_", " ")})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* Modal Footer */}
               <div className="flex justify-end gap-2 pt-3 border-t border-[#E6E6E6]">
                 <button
@@ -2358,6 +2417,38 @@ function TasksWorkspaceContent() {
                   </select>
                 )}
               </div>
+
+              {/* Linked KPI Goal (Phase 5) */}
+              {FEATURES.KPI && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3.5 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6]">
+                  <div className="flex items-center gap-2 text-xs">
+                    <Target className="w-4 h-4 text-black" />
+                    <span className="font-semibold text-[#808080]">Linked goal:</span>
+                    <span className="font-bold text-black truncate max-w-[180px]">
+                      {drawerGoals.find((g) => g.id === selectedTask.goal_id)?.title || (selectedTask.goal_id ? "Active goal" : "None")}
+                    </span>
+                  </div>
+
+                  <select
+                    aria-label="Link task to KPI goal"
+                    value={selectedTask.goal_id || ""}
+                    onChange={(e) =>
+                      mutations.linkTaskGoal.mutate({
+                        taskId: selectedTask.id,
+                        goalId: e.target.value || null,
+                      })
+                    }
+                    className="px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black max-w-[220px]"
+                  >
+                    <option value="">No goal linked</option>
+                    {drawerGoals.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {canCancelTask(selectedTask) && (
                 <div className="flex items-center gap-2">

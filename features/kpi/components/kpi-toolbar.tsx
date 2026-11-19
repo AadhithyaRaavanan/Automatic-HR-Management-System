@@ -6,14 +6,13 @@ import {
   BarChart3,
   MessageSquare,
   Target,
+  Users,
   ChevronLeft,
   ChevronRight,
-  Filter,
-  UserCheck,
   Calendar,
 } from "lucide-react";
 
-export type KpiTab = "metrics" | "reviews" | "goals";
+export type KpiTab = "metrics" | "team" | "reviews" | "goals";
 export type PeriodPreset = "week" | "month" | "quarter" | "custom";
 
 interface KpiToolbarProps {
@@ -74,6 +73,8 @@ export function KpiToolbar({
   departments = [],
   className,
 }: KpiToolbarProps) {
+  const isSelfView = !selectedEmpId || selectedEmpId === currentUserId;
+
   return (
     <div
       data-tour="kpi-filters"
@@ -85,6 +86,7 @@ export function KpiToolbar({
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Left Side: Segmented Pill Tabs */}
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-card-subtle border border-border-light/80">
+          {/* Tab 1: Metrics */}
           <button
             type="button"
             onClick={() => onTabChange("metrics")}
@@ -99,6 +101,25 @@ export function KpiToolbar({
             <span>Metrics & Score</span>
           </button>
 
+          {/* Tab 2: Team (Managers, HR, Admin only) */}
+          {isManagerOrAdmin && (
+            <button
+              type="button"
+              data-tour="kpi-team-tab"
+              onClick={() => onTabChange("team")}
+              className={cn(
+                "px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5",
+                activeTab === "team"
+                  ? "bg-black text-white shadow-xs"
+                  : "text-text-secondary hover:text-text-primary hover:bg-card/60"
+              )}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Team</span>
+            </button>
+          )}
+
+          {/* Tab 3: Reviews */}
           <button
             type="button"
             data-tour="kpi-reviews-tab"
@@ -111,7 +132,7 @@ export function KpiToolbar({
             )}
           >
             <MessageSquare className="w-3.5 h-3.5" />
-            <span>Manager Reviews</span>
+            <span>Reviews</span>
             <span
               className={cn(
                 "px-1.5 py-0.2 rounded-full text-[10px] font-bold tabular-nums",
@@ -124,6 +145,7 @@ export function KpiToolbar({
             </span>
           </button>
 
+          {/* Tab 4: Goals */}
           <button
             type="button"
             data-tour="kpi-goals-tab"
@@ -153,13 +175,13 @@ export function KpiToolbar({
         {/* Right Side: Filters & Period Navigation */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Manager/HR: Employee Selector */}
-          {isManagerOrAdmin && scopedEmployees.length > 0 && (
+          {isManagerOrAdmin && scopedEmployees.length > 0 && activeTab !== "team" && (
             <div className="flex items-center gap-1.5">
               <select
                 aria-label="Select Employee"
                 value={selectedEmpId}
                 onChange={(e) => onSelectEmployee(e.target.value)}
-                className="px-3 py-1.5 rounded-xl bg-card-subtle border border-border-light text-xs font-bold text-text-primary cursor-pointer hover:border-brand-purple/40 transition-colors"
+                className="px-3 py-1.5 rounded-xl bg-card-subtle border border-border-light text-xs font-bold text-text-primary cursor-pointer hover:border-black/30 transition-colors"
               >
                 {scopedEmployees.map((emp) => (
                   <option key={emp.id} value={emp.id}>
@@ -170,8 +192,12 @@ export function KpiToolbar({
             </div>
           )}
 
-          {/* Manager/HR: Employee Type Selector */}
-          {isManagerOrAdmin && (
+          {/* Employee Type: In self-view, plain label; Managers/HR keep dropdown */}
+          {isSelfView ? (
+            <div className="px-2.5 py-1.5 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary capitalize select-none">
+              {empType.replace("_", "-")}
+            </div>
+          ) : isManagerOrAdmin ? (
             <select
               aria-label="Employee Type"
               value={empType}
@@ -183,9 +209,13 @@ export function KpiToolbar({
               <option value="intern">Intern (8h)</option>
               <option value="contract">Contract (8h)</option>
             </select>
+          ) : (
+            <div className="px-2.5 py-1.5 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary capitalize select-none">
+              {empType.replace("_", "-")}
+            </div>
           )}
 
-          {/* Period Navigator with Prev/Next and Label */}
+          {/* Period Navigator with Prev/Next and Exact Date Range */}
           <div className="flex items-center rounded-xl bg-card-subtle border border-border-light p-0.5">
             <button
               type="button"
@@ -197,9 +227,15 @@ export function KpiToolbar({
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
 
-            <span className="text-xs font-extrabold text-text-primary px-2.5 min-w-[130px] text-center select-none">
-              {periodLabel}
-            </span>
+            {/* Period Label with exact date range under it */}
+            <div className="flex flex-col items-center px-2.5 min-w-[130px] select-none leading-tight py-0.5">
+              <span className="text-xs font-bold text-text-primary">
+                {periodLabel}
+              </span>
+              <span className="text-[10px] text-text-tertiary font-medium">
+                {customRange.from} – {customRange.to}
+              </span>
+            </div>
 
             <button
               type="button"
@@ -220,9 +256,9 @@ export function KpiToolbar({
                 type="button"
                 onClick={() => onPresetChange(p)}
                 className={cn(
-                  "px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition-all cursor-pointer",
+                  "px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer",
                   preset === p
-                    ? "bg-brand-navy text-white shadow-xs"
+                    ? "bg-black text-white shadow-xs"
                     : "text-text-secondary hover:text-text-primary"
                 )}
               >
@@ -236,7 +272,7 @@ export function KpiToolbar({
       {/* Custom Date Pickers when 'Custom' is selected */}
       {preset === "custom" && (
         <div className="flex items-center gap-2 pt-2 border-t border-border-light/60 text-xs">
-          <Calendar className="w-3.5 h-3.5 text-brand-purple shrink-0" />
+          <Calendar className="w-3.5 h-3.5 text-black shrink-0" />
           <span className="font-bold text-text-secondary">Custom Range:</span>
           <input
             type="date"

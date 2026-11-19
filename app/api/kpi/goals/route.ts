@@ -38,7 +38,38 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ goals: goals || [] });
+  if (!goals || goals.length === 0) {
+    return NextResponse.json({ goals: [] });
+  }
+
+  // Count linked tasks from tasks table for each goal
+  try {
+    const goalIds = goals.map((g: any) => g.id);
+    const { data: linkedTasks } = await (supabaseAdmin as any)
+      .from("tasks")
+      .select("id, goal_id, status")
+      .in("goal_id", goalIds);
+
+    const countsByGoal: Record<string, { total: number; done: number }> = {};
+    for (const t of linkedTasks || []) {
+      if (!t.goal_id) continue;
+      if (!countsByGoal[t.goal_id]) countsByGoal[t.goal_id] = { total: 0, done: 0 };
+      countsByGoal[t.goal_id].total++;
+      if (t.status === "done") {
+        countsByGoal[t.goal_id].done++;
+      }
+    }
+
+    const enhancedGoals = goals.map((g: any) => ({
+      ...g,
+      linked_tasks_total: countsByGoal[g.id]?.total || 0,
+      linked_tasks_done: countsByGoal[g.id]?.done || 0,
+    }));
+
+    return NextResponse.json({ goals: enhancedGoals });
+  } catch {
+    return NextResponse.json({ goals });
+  }
 }
 
 export async function POST(request: NextRequest) {

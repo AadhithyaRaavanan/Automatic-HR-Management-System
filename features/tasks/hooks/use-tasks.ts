@@ -51,6 +51,7 @@ export interface TaskRecord {
   task_type_id?: string | null;
   recurrence_id?: string | null;
   auto_due_suggested?: boolean;
+  goal_id?: string | null;
 }
 
 export interface TaskCommentRecord {
@@ -436,6 +437,7 @@ export function useTaskMutations() {
       taskTypeId?: string | null;
       recurrenceId?: string | null;
       autoDueSuggested?: boolean;
+      goalId?: string | null;
       recurrence?: {
         frequency: "daily" | "weekly" | "monthly" | "every_n_working_days";
         interval_n: number;
@@ -568,6 +570,15 @@ export function useTaskMutations() {
           } catch (e) {
             console.warn("Auto-accept task in progress failed:", e);
           }
+        }
+      }
+
+      // If goal linked, associate with task
+      if (createdTaskId && input.goalId) {
+        try {
+          await (supabase as any).from("tasks").update({ goal_id: input.goalId }).eq("id", createdTaskId);
+        } catch (e) {
+          console.warn("Failed to set goal_id on task:", e);
         }
       }
 
@@ -792,6 +803,24 @@ export function useTaskMutations() {
     },
   });
 
+  const linkTaskGoal = useMutation({
+    mutationFn: async ({ taskId, goalId }: { taskId: string; goalId: string | null }) => {
+      const { error } = await (supabase as any)
+        .from("tasks")
+        .update({ goal_id: goalId })
+        .eq("id", taskId);
+      if (error) throw new Error(error.message);
+      return { taskId, goalId };
+    },
+    onSuccess: (_, vars) => {
+      toast.success(vars.goalId ? "Task linked to goal" : "Task unlinked from goal");
+      invalidateAll(vars.taskId);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to update linked goal");
+    },
+  });
+
   return {
     createProject,
     createTask,
@@ -801,5 +830,6 @@ export function useTaskMutations() {
     addComment,
     logTime,
     stopRecurrence,
+    linkTaskGoal,
   };
 }

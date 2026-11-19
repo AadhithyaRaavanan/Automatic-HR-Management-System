@@ -33,6 +33,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (caller.userId === employee_id) {
+      return NextResponse.json(
+        { error: "Forbidden: You cannot adjust your own KPI metrics." },
+        { status: 403 }
+      );
+    }
+
     const isAllowed = await verifyEmployeeAccess(caller, employee_id);
     if (!isAllowed) {
       return NextResponse.json({ error: "Forbidden: Employee is outside your adjustment scope" }, { status: 403 });

@@ -89,15 +89,17 @@ export function TopNavBar({
             )}
           </button>
 
-          {/* Quiet Export Data Button */}
-          <button
-            type="button"
-            onClick={handleExport}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-[#F5F5F5] border border-[#E6E6E6] text-xs font-medium text-black transition-colors cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5 text-[#808080]" />
-            <span className="hidden md:inline">Export data</span>
-          </button>
+          {/* Quiet Export Data Button (hidden on /kpi where Export CSV exists on page) */}
+          {!pathname?.startsWith("/kpi") && (
+            <button
+              type="button"
+              onClick={handleExport}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-[#F5F5F5] border border-[#E6E6E6] text-xs font-medium text-black transition-colors cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-[#808080]" />
+              <span className="hidden md:inline">Export data</span>
+            </button>
+          )}
 
           {/* User Profile Chip */}
           <div className="flex items-center gap-2 pl-2 ml-1 border-l border-[#E6E6E6]">

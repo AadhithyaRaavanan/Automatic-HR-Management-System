@@ -27,7 +27,10 @@ import {
 
 import { KpiToolbar, KpiTab, PeriodPreset } from "@/features/kpi/components/kpi-toolbar";
 import { KpiHeroCard } from "@/features/kpi/components/kpi-hero-card";
-import { KpiHighlightTiles } from "@/features/kpi/components/kpi-highlight-tiles";
+import { KpiLatestReviewCard } from "@/features/kpi/components/kpi-latest-review-card";
+import { KpiGoalsSummaryCard } from "@/features/kpi/components/kpi-goals-summary-card";
+import { KpiDetailDrawer } from "@/features/kpi/components/kpi-detail-drawer";
+import { KpiTeamOverview } from "@/features/kpi/components/kpi-team-overview";
 import {
   KpiCategorySection,
   MetricItemData,
@@ -114,6 +117,15 @@ function KpiContent() {
   const [adjustReason, setAdjustReason] = React.useState<string>("");
   const [createReviewOpen, setCreateReviewOpen] = React.useState(false);
   const [createGoalOpen, setCreateGoalOpen] = React.useState(false);
+
+  // Detail Drawer state (Phase 3)
+  const [detailDrawerOpen, setDetailDrawerOpen] = React.useState(false);
+  const [selectedMetricKey, setSelectedMetricKey] = React.useState<string | null>(null);
+  const [selectedMetricLabel, setSelectedMetricLabel] = React.useState<string | null>(null);
+
+  // Self-Review state (Phase 5)
+  const [selfReviewOpen, setSelfReviewOpen] = React.useState(false);
+  const [selfReviewReflection, setSelfReviewReflection] = React.useState("");
 
   // Review form state
   const [reviewPeriodType, setReviewPeriodType] = React.useState<"monthly" | "quarterly">("monthly");
@@ -228,6 +240,27 @@ function KpiContent() {
       return res.json();
     },
     enabled: Boolean(effectiveEmpId && activeTab === "goals" && FEATURES.KPI),
+  });
+
+  // 4. Fetch Self-Review Data (Phase 5)
+  const {
+    data: selfReviewData,
+    refetch: refetchSelfReview,
+  } = useQuery({
+    queryKey: ["kpi-self-review", effectiveEmpId, dateRange.from, dateRange.to],
+    queryFn: async () => {
+      if (!effectiveEmpId) return null;
+      const params = new URLSearchParams({
+        employee_id: effectiveEmpId,
+        period_start: dateRange.from,
+        period_end: dateRange.to,
+        period_type: preset === "quarter" ? "quarterly" : "monthly",
+      });
+      const res = await fetch(`/api/kpi/self-reviews?${params.toString()}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: Boolean(effectiveEmpId && activeTab === "reviews" && FEATURES.KPI),
   });
 
   // Period shifting handlers
@@ -413,6 +446,37 @@ function KpiContent() {
     },
   });
 
+  // Self-Review Mutation (Phase 5)
+  const submitSelfReview = useMutation({
+    mutationFn: async () => {
+      if (selfReviewReflection.trim().length < 20) {
+        throw new Error("Self-review reflection must be at least 20 characters");
+      }
+      const res = await fetch("/api/kpi/self-reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          period_start: dateRange.from,
+          period_end: dateRange.to,
+          period_type: preset === "quarter" ? "quarterly" : "monthly",
+          reflection: selfReviewReflection.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to submit self-review");
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Self-review submitted successfully");
+      setSelfReviewOpen(false);
+      setSelfReviewReflection("");
+      refetchSelfReview();
+    },
+    onError: (err: any) => {
+      toast.error(err.message);
+    },
+  });
+
   // Export CSV
   const handleExportCsv = () => {
     if (!effectiveEmpId) return;
@@ -451,10 +515,10 @@ function KpiContent() {
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight flex items-center gap-2.5">
             <BarChart3 className="w-7 h-7 text-black" />
-            <span>Performance &amp; KPI Analytics</span>
+            <span>Performance</span>
           </h1>
           <p className="text-xs sm:text-sm text-text-secondary mt-1">
-            Data-grounded performance metrics, manager reviews, and goal tracking.
+            Data-grounded performance indicators, reviews, and goal milestones.
           </p>
         </div>
 
@@ -503,8 +567,7 @@ function KpiContent() {
         <div className="space-y-6 pt-2">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
             <Skeleton className="lg:col-span-5 h-56 rounded-[24px]" />
-            <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-              <Skeleton className="h-56 rounded-[22px]" />
+            <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <Skeleton className="h-56 rounded-[22px]" />
               <Skeleton className="h-56 rounded-[22px]" />
             </div>
@@ -530,16 +593,24 @@ function KpiContent() {
                 trend={trend}
                 target={90}
                 currentMetrics={currentMetrics}
+                previousMetrics={previousMetrics}
                 onOpenBreakdown={() => setBreakdownOpen(true)}
+                isSelfView={effectiveEmpId === userId}
+                userRole={userRole}
+                previousPeriodLabel={preset === "month" ? "last month" : "previous period"}
                 className="h-full"
               />
             </div>
 
-            {/* Right: Three Highlight Tiles (~60%) */}
-            <div className="lg:col-span-7 flex flex-col">
-              <KpiHighlightTiles
-                currentMetrics={currentMetrics}
-                previousMetrics={previousMetrics}
+            {/* Right: Latest Review & Goals Summary Cards (~60%) */}
+            <div className="lg:col-span-7 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <KpiLatestReviewCard
+                latestReview={reviewsData?.reviews?.[0] || null}
+                className="h-full"
+              />
+              <KpiGoalsSummaryCard
+                goals={goalsList}
+                className="h-full"
               />
             </div>
           </div>
@@ -562,6 +633,12 @@ function KpiContent() {
                 ]}
                 previousMetricsMap={previousMetrics}
                 isManagerOrAdmin={isManagerOrAdmin}
+                isSelfView={effectiveEmpId === userId}
+                onSelectMetric={(key, label) => {
+                  setSelectedMetricKey(key);
+                  setSelectedMetricLabel(label);
+                  setDetailDrawerOpen(true);
+                }}
                 onAdjustMetric={(m) => {
                   setAdjustMetric(m);
                   setAdjustValue(m.value != null ? String(m.value) : "");
@@ -577,6 +654,12 @@ function KpiContent() {
                 metrics={[currentMetrics.worked_hours_vs_target]}
                 previousMetricsMap={previousMetrics}
                 isManagerOrAdmin={isManagerOrAdmin}
+                isSelfView={effectiveEmpId === userId}
+                onSelectMetric={(key, label) => {
+                  setSelectedMetricKey(key);
+                  setSelectedMetricLabel(label);
+                  setDetailDrawerOpen(true);
+                }}
                 onAdjustMetric={(m) => {
                   setAdjustMetric(m);
                   setAdjustValue(m.value != null ? String(m.value) : "");
@@ -597,6 +680,12 @@ function KpiContent() {
                 ]}
                 previousMetricsMap={previousMetrics}
                 isManagerOrAdmin={isManagerOrAdmin}
+                isSelfView={effectiveEmpId === userId}
+                onSelectMetric={(key, label) => {
+                  setSelectedMetricKey(key);
+                  setSelectedMetricLabel(label);
+                  setDetailDrawerOpen(true);
+                }}
                 onAdjustMetric={(m) => {
                   setAdjustMetric(m);
                   setAdjustValue(m.value != null ? String(m.value) : "");
@@ -607,6 +696,20 @@ function KpiContent() {
 
           {/* Collapsible Explanatory Footer */}
           <KpiCalculationFooter employeeType={empType} />
+        </div>
+      ) : activeTab === "team" && isManagerOrAdmin ? (
+        /* TAB: TEAM OVERVIEW (Phase 4) */
+        <div data-tour="kpi-team-tab" className="space-y-4">
+          <KpiTeamOverview
+            from={dateRange.from}
+            to={dateRange.to}
+            departmentFilter={deptFilter}
+            employeeTypeFilter={empType}
+            onSelectEmployee={(empId) => {
+              setSelectedEmpId(empId);
+              setActiveTab("metrics");
+            }}
+          />
         </div>
       ) : activeTab === "reviews" ? (
         /* TAB 2: MANAGER REVIEWS */
@@ -621,18 +724,72 @@ function KpiContent() {
               </p>
             </div>
 
-            {isManagerOrAdmin && effectiveEmpId !== userId && (
-              <button
-                type="button"
-                data-tour="kpi-add-review"
-                onClick={() => setCreateReviewOpen(true)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Write Review</span>
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {/* Employee Self-Review Button */}
+              {effectiveEmpId === userId && (
+                <button
+                  type="button"
+                  data-tour="kpi-self-review"
+                  onClick={() => {
+                    setSelfReviewReflection(selfReviewData?.selfReview?.reflection || "");
+                    setSelfReviewOpen(true);
+                  }}
+                  disabled={selfReviewData?.hasManagerReview}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  <span>
+                    {selfReviewData?.selfReview
+                      ? selfReviewData.canEdit
+                        ? "Edit Self-Review"
+                        : "Self-Review (Locked)"
+                      : "Write Self-Review"}
+                  </span>
+                </button>
+              )}
+
+              {/* Manager Write Review Button */}
+              {isManagerOrAdmin && effectiveEmpId !== userId && (
+                <button
+                  type="button"
+                  data-tour="kpi-add-review"
+                  onClick={() => setCreateReviewOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Write Review</span>
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Self-Review Reflection Banner / Card (Phase 5) */}
+          {selfReviewData?.selfReview && (
+            <div className="p-5 rounded-2xl bg-card border border-border-light shadow-card space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#B7FF00]" aria-hidden="true" />
+                  <h3 className="text-xs font-extrabold text-text-primary uppercase tracking-wider">
+                    {effectiveEmpId === userId ? "Your Self-Review Reflection" : "Employee Self-Review Reflection"}
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2 text-[11px] text-text-tertiary">
+                  <span>Submitted: {new Date(selfReviewData.selfReview.created_at).toLocaleDateString()}</span>
+                  <span className={cn(
+                    "px-2 py-0.5 rounded-full text-[10px] font-bold",
+                    selfReviewData.hasManagerReview
+                      ? "bg-gray-100 text-gray-700"
+                      : "bg-[#B7FF00]/20 text-black"
+                  )}>
+                    {selfReviewData.hasManagerReview ? "Locked (Evaluated)" : "Editable"}
+                  </span>
+                </div>
+              </div>
+              <p className="text-xs text-text-primary leading-relaxed bg-card-subtle p-3.5 rounded-xl border border-border-light whitespace-pre-wrap">
+                {selfReviewData.selfReview.reflection}
+              </p>
+            </div>
+          )}
 
           <div className="space-y-3.5">
             {(reviewsData?.reviews || []).length > 0 ? (
@@ -828,6 +985,36 @@ function KpiContent() {
                       {g.note}
                     </p>
                   )}
+
+                  {/* Linked tasks progress information (Phase 5) */}
+                  {g.linked_tasks_total != null && g.linked_tasks_total > 0 && (
+                    <div className="pt-1 text-[11px] font-semibold text-text-secondary flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-black" />
+                      <span>
+                        {g.linked_tasks_done} of {g.linked_tasks_total} linked tasks completed
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Gentle completion prompt when all linked tasks are done (Phase 5) */}
+                  {g.linked_tasks_total > 0 &&
+                    g.linked_tasks_done === g.linked_tasks_total &&
+                    g.status !== "done" && (
+                      <div className="p-3 rounded-xl bg-card-subtle border border-border-light flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mt-2">
+                        <span className="text-xs font-semibold text-text-primary">
+                          All linked tasks are done. Mark this goal as done?
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateGoalStatus.mutate({ id: g.id, status: "done" })
+                          }
+                          className="px-3.5 py-1.5 rounded-lg bg-black text-white text-xs font-bold hover:bg-[#1A1A1A] cursor-pointer whitespace-nowrap shadow-xs"
+                        >
+                          Mark as Done
+                        </button>
+                      </div>
+                    )}
                 </div>
               ))
             ) : (
@@ -1176,6 +1363,88 @@ function KpiContent() {
           </div>
         </div>
       )}
+
+      {/* MODAL: Write Self-Review (Phase 5) */}
+      {selfReviewOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelfReviewOpen(false);
+          }}
+        >
+          <div className="w-full max-w-lg bg-card rounded-[28px] border border-border-light shadow-shell p-6 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-border-light">
+              <h3 className="text-sm font-extrabold text-text-primary flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-brand-purple" />
+                <span>Write Self-Review Reflection</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setSelfReviewOpen(false)}
+                className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-card-subtle cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-text-secondary leading-relaxed">
+              Reflect on your achievements, operational contributions, and challenges during this period. Your reflection will be visible to your supervisor during evaluations.
+            </p>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitSelfReview.mutate();
+              }}
+              className="space-y-3"
+            >
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-text-secondary mb-1">
+                  Evaluation Reflection * (Min 20 chars)
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  minLength={20}
+                  value={selfReviewReflection}
+                  onChange={(e) => setSelfReviewReflection(e.target.value)}
+                  placeholder="Summarize your accomplishments, milestones reached, and areas you focused on during this cycle (min 20 characters)..."
+                  className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelfReviewOpen(false)}
+                  className="px-4 py-2 rounded-full bg-card-subtle text-xs font-bold text-text-secondary cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitSelfReview.isPending || selfReviewReflection.trim().length < 20}
+                  className="px-5 py-2 rounded-full bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold cursor-pointer disabled:opacity-60"
+                >
+                  {submitSelfReview.isPending ? "Saving..." : "Submit Self-Review"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Metric Calculation Drilldown Drawer (Phase 3) */}
+      <KpiDetailDrawer
+        isOpen={detailDrawerOpen}
+        onClose={() => setDetailDrawerOpen(false)}
+        employeeId={effectiveEmpId}
+        metricKey={selectedMetricKey}
+        metricLabel={selectedMetricLabel}
+        from={dateRange.from}
+        to={dateRange.to}
+        isSelfView={effectiveEmpId === userId}
+      />
     </div>
   );
 }

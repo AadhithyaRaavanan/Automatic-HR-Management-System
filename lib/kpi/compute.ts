@@ -14,6 +14,8 @@ export interface KpiMetricItem {
   unit: string;
   status: "on_track" | "at_risk" | "behind" | "no_data";
   displayValue: string; // e.g., "95%", "18/20 days", "No data"
+  breakdown?: string;
+  details?: string;
   adjusted?: boolean;
   adjustmentReason?: string;
   originalValue?: number | null;
@@ -39,6 +41,8 @@ export interface KpiComputeResult {
   };
   metricsList: KpiMetricItem[];
   dataPointsCount: number;
+  configEffectiveDate?: string | null;
+  configVersionReason?: string | null;
 }
 
 function getWeekdaysCount(fromIso: string, toIso: string): number {
@@ -60,13 +64,12 @@ export async function computeKpi(
   employeeId: string,
   from: string,
   to: string,
-  explicitEmployeeType?: string
+  explicitEmployeeType?: string,
+  organizationId?: string
 ): Promise<KpiComputeResult> {
   const normType = (explicitEmployeeType || KPI_CONFIG.defaultType).toLowerCase();
-  const targetConfig: EmployeeTypeKpiTargets =
-    KPI_CONFIG.employeeTypes[normType] || KPI_CONFIG.employeeTypes[KPI_CONFIG.defaultType];
 
-  // 1. Fetch all required tables in parallel
+  // 1. Fetch all required tables in parallel (including versioned KPI config if any)
   const [
     attendanceDaysRes,
     attendanceSessionsRes,
@@ -75,6 +78,7 @@ export async function computeKpi(
     holidaysRes,
     tasksRes,
     adjustmentsRes,
+    configVersionRes,
   ] = await Promise.all([
     ((supabaseAdmin as any).from("attendance_days"))
       .select("work_date, status, is_late, total_minutes")
@@ -110,7 +114,21 @@ export async function computeKpi(
       .eq("employee_id", employeeId)
       .lte("period_start", to)
       .gte("period_end", from),
+    ((supabaseAdmin as any).from("kpi_config_versions"))
+      .select("config, effective_from, reason")
+      .lte("effective_from", to)
+      .order("effective_from", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
+
+  // Determine active config (versioned or default)
+  const activeVersion = configVersionRes?.data;
+  const activeConfig = activeVersion?.config || {};
+  const activeWeights: Record<string, number> = activeConfig.weights || KPI_CONFIG.weights;
+  const activeEmployeeTypes = activeConfig.employeeTypes || KPI_CONFIG.employeeTypes;
+  const targetConfig: EmployeeTypeKpiTargets =
+    activeEmployeeTypes[normType] || activeEmployeeTypes[KPI_CONFIG.defaultType] || KPI_CONFIG.employeeTypes[KPI_CONFIG.defaultType];
 
   const attendanceDays = attendanceDaysRes?.data || [];
   const attendanceSessions = attendanceSessionsRes?.data || [];
@@ -174,7 +192,7 @@ export async function computeKpi(
   if (totalAttendedDays > 0) {
     const onTimeDays = attendanceDays.filter((d: any) => !d.is_late).length;
     onTimeRate = Math.round((onTimeDays / totalAttendedDays) * 100);
-    onTimeDisplay = `${onTimeRate}% (${onTimeDays}/${totalAttendedDays} days)`;
+    onTimeDisplay = `${onTimeRate}% (${onTimeDays}/${totalAttendedDays} attended days)`;
     onTimeStatus =
       onTimeRate >= targetConfig.onTimeTargetRate
         ? "on_track"
@@ -188,6 +206,12 @@ export async function computeKpi(
     (d: any) => d.status === "present" || d.status === "half_day" || (d.total_minutes || 0) > 0
   ).length;
 
+  const creditedDays = approvedLeaveWeekdays + holidayWeekdays;
+  const daysWorkedBreakdown =
+    creditedDays > 0
+      ? `${workedDaysCount} worked + ${creditedDays} leave/holiday days`
+      : `${workedDaysCount} worked days`;
+
   let daysWorkedRate: number | null = null;
   let daysWorkedDisplay = "No data";
   let daysWorkedStatus: "on_track" | "at_risk" | "behind" | "no_data" = "no_data";
@@ -198,7 +222,7 @@ export async function computeKpi(
     daysWorkedStatus = "no_data";
   } else if (expectedWorkingDays > 0) {
     daysWorkedRate = Math.min(100, Math.round((workedDaysCount / expectedWorkingDays) * 100));
-    daysWorkedDisplay = `${workedDaysCount} / ${expectedWorkingDays} days (${daysWorkedRate}%)`;
+    daysWorkedDisplay = `${workedDaysCount} of ${expectedWorkingDays} scheduled days (${daysWorkedRate}%)`;
     daysWorkedStatus =
       daysWorkedRate >= targetConfig.daysWorkedTargetRate
         ? "on_track"
@@ -382,6 +406,8 @@ export async function computeKpi(
       unit: "%",
       status: onTimeStatus,
       displayValue: onTimeDisplay,
+      breakdown: totalAttendedDays > 0 ? `${attendanceDays.filter((d: any) => !d.is_late).length} on-time / ${totalAttendedDays} attended days` : undefined,
+      details: "Percentage of shift check-ins on or before scheduled start time across all attended days in period.",
     }),
     days_worked_vs_expected: applyAdj("days_worked_vs_expected", {
       key: "days_worked_vs_expected",
@@ -392,6 +418,8 @@ export async function computeKpi(
       unit: "%",
       status: daysWorkedStatus,
       displayValue: daysWorkedDisplay,
+      breakdown: daysWorkedBreakdown,
+      details: `Elapsed weekdays up to today minus holidays and approved leaves (${expectedWorkingDays} scheduled).`,
     }),
     early_check_outs: applyAdj("early_check_outs", {
       key: "early_check_outs",
@@ -477,11 +505,11 @@ export async function computeKpi(
 
   // 6. Overall Weighted Score (returns null if insufficient data)
   const weightedMetrics = [
-    { key: "on_time_check_in_rate", val: metricsRaw.on_time_check_in_rate.value, weight: KPI_CONFIG.weights.on_time_check_in_rate },
-    { key: "days_worked_vs_expected", val: metricsRaw.days_worked_vs_expected.value, weight: KPI_CONFIG.weights.days_worked_vs_expected },
-    { key: "worked_hours_vs_target", val: metricsRaw.worked_hours_vs_target.value, weight: KPI_CONFIG.weights.worked_hours_vs_target },
-    { key: "tasks_completed_vs_assigned", val: metricsRaw.tasks_completed_vs_assigned.value, weight: KPI_CONFIG.weights.tasks_completed_vs_assigned },
-    { key: "task_on_time_rate", val: metricsRaw.task_on_time_rate.value, weight: KPI_CONFIG.weights.task_on_time_rate },
+    { key: "on_time_check_in_rate", val: metricsRaw.on_time_check_in_rate.value, weight: activeWeights.on_time_check_in_rate ?? KPI_CONFIG.weights.on_time_check_in_rate },
+    { key: "days_worked_vs_expected", val: metricsRaw.days_worked_vs_expected.value, weight: activeWeights.days_worked_vs_expected ?? KPI_CONFIG.weights.days_worked_vs_expected },
+    { key: "worked_hours_vs_target", val: metricsRaw.worked_hours_vs_target.value, weight: activeWeights.worked_hours_vs_target ?? KPI_CONFIG.weights.worked_hours_vs_target },
+    { key: "tasks_completed_vs_assigned", val: metricsRaw.tasks_completed_vs_assigned.value, weight: activeWeights.tasks_completed_vs_assigned ?? KPI_CONFIG.weights.tasks_completed_vs_assigned },
+    { key: "task_on_time_rate", val: metricsRaw.task_on_time_rate.value, weight: activeWeights.task_on_time_rate ?? KPI_CONFIG.weights.task_on_time_rate },
   ];
 
   let totalWeight = 0;
@@ -513,5 +541,7 @@ export async function computeKpi(
     metrics: metricsRaw,
     metricsList: Object.values(metricsRaw),
     dataPointsCount,
+    configEffectiveDate: activeVersion?.effective_from || null,
+    configVersionReason: activeVersion?.reason || null,
   };
 }

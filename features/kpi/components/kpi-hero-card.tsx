@@ -1,19 +1,17 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { KpiRadialGauge } from "./kpi-radial-gauge";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { KPI_CONFIG, getKpiBand, getActiveCategoryWeightNotice } from "@/lib/kpi/config";
 import { cn } from "@/lib/utils";
 import {
   TrendingUp,
   TrendingDown,
-  HelpCircle,
   CheckCircle2,
   Clock,
   Calendar,
   CheckSquare,
-  ArrowRight,
 } from "lucide-react";
 
 interface KpiHeroCardProps {
@@ -21,7 +19,11 @@ interface KpiHeroCardProps {
   trend?: number | null;
   target?: number;
   currentMetrics?: any;
-  onOpenBreakdown: () => void;
+  previousMetrics?: any;
+  onOpenBreakdown?: () => void;
+  isSelfView?: boolean;
+  userRole?: string;
+  previousPeriodLabel?: string;
   className?: string;
 }
 
@@ -30,240 +32,314 @@ export function KpiHeroCard({
   trend,
   target = 90,
   currentMetrics,
+  previousMetrics,
   onOpenBreakdown,
+  isSelfView = true,
+  userRole = "employee",
+  previousPeriodLabel = "previous period",
   className,
 }: KpiHeroCardProps) {
-  // Activity checks for the empty-state checklist
-  const hasAttendance =
-    Boolean(
-      currentMetrics?.days_worked_vs_expected?.value != null &&
-        currentMetrics.days_worked_vs_expected.value > 0
-    ) ||
-    Boolean(
-      currentMetrics?.on_time_check_in_rate?.value != null &&
-        currentMetrics.on_time_check_in_rate.value > 0
-    );
+  const isManagerOrAdmin = userRole === "manager" || userRole === "hr" || userRole === "admin";
+  const showBand = !isSelfView && isManagerOrAdmin;
+  const band = getKpiBand(overallScore);
 
-  const hasHours = Boolean(
-    currentMetrics?.worked_hours_vs_target?.value != null &&
-      currentMetrics.worked_hours_vs_target.value > 0
-  );
+  // Category values & trends for the 3 sub-items under the gauge
+  const att1 = currentMetrics?.on_time_check_in_rate?.value;
+  const att2 = currentMetrics?.days_worked_vs_expected?.value;
+  const attendanceScore =
+    att1 != null && att2 != null
+      ? Math.round((att1 + att2) / 2)
+      : att1 ?? att2 ?? null;
 
-  const hasTasks = Boolean(
-    currentMetrics?.tasks_completed_vs_assigned?.value != null &&
-      currentMetrics.tasks_completed_vs_assigned.value > 0
-  );
+  const hoursScore = currentMetrics?.worked_hours_vs_target?.value ?? null;
+
+  const t1 = currentMetrics?.tasks_completed_vs_assigned?.value;
+  const t2 = currentMetrics?.task_on_time_rate?.value;
+  const tasksScore =
+    t1 != null && t2 != null
+      ? Math.round((t1 + t2) / 2)
+      : t1 ?? t2 ?? null;
+
+  // Previous category values for trend calculation
+  const prevAtt1 = previousMetrics?.on_time_check_in_rate?.value;
+  const prevAtt2 = previousMetrics?.days_worked_vs_expected?.value;
+  const prevAttendance =
+    prevAtt1 != null && prevAtt2 != null
+      ? Math.round((prevAtt1 + prevAtt2) / 2)
+      : prevAtt1 ?? prevAtt2 ?? null;
+  const attTrend = attendanceScore != null && prevAttendance != null ? attendanceScore - prevAttendance : null;
+
+  const prevHours = previousMetrics?.worked_hours_vs_target?.value ?? null;
+  const hoursTrend = hoursScore != null && prevHours != null ? hoursScore - prevHours : null;
+
+  const prevT1 = previousMetrics?.tasks_completed_vs_assigned?.value;
+  const prevT2 = previousMetrics?.task_on_time_rate?.value;
+  const prevTasks =
+    prevT1 != null && prevT2 != null
+      ? Math.round((prevT1 + prevT2) / 2)
+      : prevT1 ?? prevT2 ?? null;
+  const tasksTrend = tasksScore != null && prevTasks != null ? tasksScore - prevTasks : null;
+
+  // Active category weight notice (when a category lacks data)
+  const weightNotice = currentMetrics
+    ? getActiveCategoryWeightNotice(currentMetrics)
+    : { notice: null, percent: 100 };
+
+  const hasAttendance = Boolean(attendanceScore != null && attendanceScore > 0);
+  const hasHours = Boolean(hoursScore != null && hoursScore > 0);
+  const hasTasks = Boolean(tasksScore != null && tasksScore > 0);
 
   return (
     <div
       data-tour="kpi-overview"
       className={cn(
-        "rounded-[24px] bg-card border border-border-light shadow-card p-5 lg:p-6 flex flex-col justify-between transition-all",
+        "rounded-[20px] bg-card border border-border-light shadow-card p-5 lg:p-6 flex flex-col justify-between transition-all",
         className
       )}
     >
-      {/* Card Header */}
+      {/* Card Header (Normal sentence case, no duplicate links) */}
       <div className="flex items-center justify-between gap-3 pb-3 border-b border-border-light/60">
-        <span className="text-[11px] font-extrabold uppercase tracking-wider text-text-tertiary">
-          Overall Performance Index
+        <span className="text-xs font-bold text-text-primary">
+          Overall performance
         </span>
-        <button
-          type="button"
-          onClick={onOpenBreakdown}
-          className="text-brand-purple hover:text-brand-purple-hover text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors focus-visible:ring-2 focus-visible:ring-brand-purple rounded-md px-1"
-        >
-          <HelpCircle className="w-3.5 h-3.5" />
-          <span>View Weight Breakdown</span>
-        </button>
+
+        {/* Band Label shown ONLY to managers/HR viewing team members */}
+        {showBand && band && (
+          <span
+            className={cn(
+              "px-2.5 py-0.5 rounded-full text-[11px] font-bold border",
+              band.badgeClass
+            )}
+          >
+            {band.label}
+          </span>
+        )}
       </div>
 
       {overallScore != null ? (
-        /* State 1: Active Performance Data */
-        <div className="space-y-5 pt-3">
-          <div className="flex items-center gap-5 sm:gap-6">
+        /* Active Performance View */
+        <div className="space-y-4 pt-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
             <KpiRadialGauge score={overallScore} target={target} size={112} />
 
-            <div className="space-y-2 min-w-0">
+            <div className="space-y-2 min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge
                   status={
                     overallScore >= target
                       ? "on_track"
-                      : overallScore >= target - 15
+                      : overallScore >= target - 10
                       ? "at_risk"
                       : "behind"
                   }
                 />
 
-                {trend != null && (
+                {/* Trend beside gauge (hidden when previous period has no data, no -0% chip) */}
+                {trend != null && trend !== 0 && (
                   <span
                     className={cn(
-                      "inline-flex items-center gap-1 text-xs font-extrabold px-2.5 py-0.5 rounded-full border",
+                      "inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full border",
                       trend > 0
-                        ? "bg-lime/20 text-black border-lime/20"
-                        : trend < 0
-                        ? "bg-rose-500/10 text-rose-600 border-rose-500/20"
-                        : "bg-card-subtle text-text-secondary border-border-light"
+                        ? "bg-[#B7FF00]/20 text-black border-[#B7FF00]/40"
+                        : "bg-rose-50 text-rose-700 border-rose-200"
                     )}
                   >
                     {trend > 0 ? (
-                      <TrendingUp className="w-3.5 h-3.5" />
-                    ) : trend < 0 ? (
-                      <TrendingDown className="w-3.5 h-3.5" />
-                    ) : null}
-                    <span>
-                      {trend > 0 ? `+${trend}%` : `${trend}%`} vs previous
+                      <TrendingUp className="w-3.5 h-3.5 text-black" />
+                    ) : (
+                      <TrendingDown className="w-3.5 h-3.5 text-rose-600" />
+                    )}
+                    <span className="tabular-nums">
+                      {trend > 0 ? `+${trend}` : `${trend}`} points vs {previousPeriodLabel}
                     </span>
                   </span>
                 )}
               </div>
 
-              <p className="text-xs text-text-secondary leading-relaxed font-medium">
-                Goal: <strong className="text-text-primary">{target}%+</strong> • Weighted across Attendance (40%), Hours (25%), and Task delivery (35%).
-              </p>
+              {/* Notice when category has no data */}
+              {weightNotice.notice ? (
+                <p className="text-xs text-amber-700 font-semibold bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 w-fit">
+                  {weightNotice.notice}
+                </p>
+              ) : (
+                <p className="text-xs text-text-secondary font-medium">
+                  Goal: <span className="font-bold text-text-primary tabular-nums">{target}%</span> across Attendance, Hours, and Task execution.
+                </p>
+              )}
             </div>
           </div>
 
-          {/* Stacked Weight Breakdown Bar */}
-          <div className="pt-2 border-t border-border-light/60 space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-bold text-text-tertiary">
-              <span>Category Weighting</span>
-              <span className="font-mono">100% Total</span>
+          {/* Three Small Category Items under the Gauge */}
+          <div className="grid grid-cols-3 gap-2.5 pt-2 border-t border-border-light/60">
+            {/* 1. Attendance */}
+            <div className="p-2.5 rounded-xl bg-card-subtle/80 border border-border-light flex flex-col justify-between">
+              <span className="text-[11px] font-semibold text-text-tertiary">Attendance</span>
+              <div className="flex items-baseline justify-between gap-1 mt-1">
+                <span
+                  className={cn(
+                    "text-sm font-bold tabular-nums",
+                    attendanceScore != null ? "text-text-primary" : "text-[#808080]"
+                  )}
+                >
+                  {attendanceScore != null ? `${attendanceScore}%` : "No data"}
+                </span>
+                {attTrend != null && attTrend !== 0 && (
+                  <span
+                    className={cn(
+                      "text-[10px] font-bold tabular-nums",
+                      attTrend > 0 ? "text-black" : "text-rose-600"
+                    )}
+                  >
+                    {attTrend > 0 ? `+${attTrend}%` : `${attTrend}%`}
+                  </span>
+                )}
+              </div>
             </div>
 
-            <div className="h-2.5 w-full rounded-full overflow-hidden flex bg-[#E6E6E6]">
+            {/* 2. Hours */}
+            <div className="p-2.5 rounded-xl bg-card-subtle/80 border border-border-light flex flex-col justify-between">
+              <span className="text-[11px] font-semibold text-text-tertiary">Hours</span>
+              <div className="flex items-baseline justify-between gap-1 mt-1">
+                <span
+                  className={cn(
+                    "text-sm font-bold tabular-nums",
+                    hoursScore != null ? "text-text-primary" : "text-[#808080]"
+                  )}
+                >
+                  {hoursScore != null ? `${hoursScore}%` : "No data"}
+                </span>
+                {hoursTrend != null && hoursTrend !== 0 && (
+                  <span
+                    className={cn(
+                      "text-[10px] font-bold tabular-nums",
+                      hoursTrend > 0 ? "text-black" : "text-rose-600"
+                    )}
+                  >
+                    {hoursTrend > 0 ? `+${hoursTrend}%` : `${hoursTrend}%`}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* 3. Tasks */}
+            <div className="p-2.5 rounded-xl bg-card-subtle/80 border border-border-light flex flex-col justify-between">
+              <span className="text-[11px] font-semibold text-text-tertiary">Tasks</span>
+              <div className="flex items-baseline justify-between gap-1 mt-1">
+                <span
+                  className={cn(
+                    "text-sm font-bold tabular-nums",
+                    tasksScore != null ? "text-text-primary" : "text-[#808080]"
+                  )}
+                >
+                  {tasksScore != null ? `${tasksScore}%` : "No data"}
+                </span>
+                {tasksTrend != null && tasksTrend !== 0 && (
+                  <span
+                    className={cn(
+                      "text-[10px] font-bold tabular-nums",
+                      tasksTrend > 0 ? "text-black" : "text-rose-600"
+                    )}
+                  >
+                    {tasksTrend > 0 ? `+${tasksTrend}%` : `${tasksTrend}%`}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Stacked Weight Bar (Retained without monospace) */}
+          <div className="pt-2 border-t border-border-light/60 space-y-1.5">
+            <div className="flex items-center justify-between text-[11px] font-semibold text-text-tertiary">
+              <span>Category Weighting</span>
+              <span className="tabular-nums">100% Total</span>
+            </div>
+
+            <div className="h-2 w-full rounded-full overflow-hidden flex bg-[#E6E6E6]">
               <div
                 style={{ width: "40%" }}
-                className="bg-[#B7FF00] h-full transition-all duration-500"
+                className="bg-[#B7FF00] h-full transition-all"
                 title="Attendance & Reliability (40%)"
               />
               <div
                 style={{ width: "25%" }}
-                className="bg-[#4D4D4D] h-full transition-all duration-500"
+                className="bg-[#4D4D4D] h-full transition-all"
                 title="Shift Hours Target (25%)"
               />
               <div
                 style={{ width: "35%" }}
-                className="bg-[#808080] h-full transition-all duration-500"
+                className="bg-[#808080] h-full transition-all"
                 title="Task Delivery & Execution (35%)"
               />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[#4D4D4D] font-medium">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[#B7FF00] shrink-0" />
-                Attendance 40%
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[#4D4D4D] shrink-0" />
-                Hours 25%
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[#808080] shrink-0" />
-                Tasks 35%
-              </span>
             </div>
           </div>
         </div>
       ) : (
-        /* State 2: Friendly Empty State without enough data */
+        /* Empty State with diagnostic checklist */
         <div className="space-y-4 pt-3">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1 min-w-0">
-              <h2 className="text-lg font-black text-text-primary tracking-tight">
+              <h2 className="text-base font-bold text-text-primary tracking-tight">
                 Not enough data yet
               </h2>
               <p className="text-xs text-text-secondary leading-relaxed font-medium">
-                Active attendance sessions and completed tasks in this period feed your performance score.
+                Active attendance punches and deliverables in this period feed your performance score.
               </p>
             </div>
-
             <KpiRadialGauge score={null} size={76} />
           </div>
 
-          {/* Checklist of what feeds the score */}
-          <div className="p-3.5 rounded-2xl bg-card-subtle/80 border border-border-light space-y-2.5">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-text-tertiary block">
-              Activities Feeding Your Score:
+          <div className="p-3 rounded-xl bg-card-subtle/80 border border-border-light space-y-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-text-tertiary block">
+              Required Score Inputs:
             </span>
 
-            <div className="space-y-2 text-xs">
-              {/* Item 1: Attendance */}
+            <div className="space-y-1.5 text-xs">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   {hasAttendance ? (
-                    <CheckCircle2 className="w-4 h-4 text-black shrink-0" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-black shrink-0" />
                   ) : (
-                    <Clock className="w-4 h-4 text-brand-purple shrink-0" />
+                    <Clock className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
                   )}
-                  <span
-                    className={cn(
-                      "font-semibold truncate",
-                      hasAttendance ? "text-text-primary line-through opacity-80" : "text-text-primary"
-                    )}
-                  >
-                    Check in on scheduled working days
+                  <span className={cn(hasAttendance ? "font-semibold text-text-primary" : "text-text-tertiary")}>
+                    Attendance punches
                   </span>
                 </div>
-                <Link
-                  href="/attendance"
-                  className="text-[11px] font-bold text-brand-purple hover:underline shrink-0 flex items-center gap-0.5"
-                >
-                  <span>Attendance</span>
-                  <ArrowRight className="w-3 h-3" />
-                </Link>
+                <span className="text-[11px] font-medium text-text-tertiary">
+                  {hasAttendance ? "Recorded" : "Missing"}
+                </span>
               </div>
 
-              {/* Item 2: Hours */}
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   {hasHours ? (
-                    <CheckCircle2 className="w-4 h-4 text-black shrink-0" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-black shrink-0" />
                   ) : (
-                    <Calendar className="w-4 h-4 text-black shrink-0" />
+                    <Calendar className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
                   )}
-                  <span
-                    className={cn(
-                      "font-semibold truncate",
-                      hasHours ? "text-text-primary line-through opacity-80" : "text-text-primary"
-                    )}
-                  >
-                    Complete shift hours target
+                  <span className={cn(hasHours ? "font-semibold text-text-primary" : "text-text-tertiary")}>
+                    Shift hours logged
                   </span>
                 </div>
-                <Link
-                  href="/attendance"
-                  className="text-[11px] font-bold text-brand-purple hover:underline shrink-0 flex items-center gap-0.5"
-                >
-                  <span>Timesheet</span>
-                  <ArrowRight className="w-3 h-3" />
-                </Link>
+                <span className="text-[11px] font-medium text-text-tertiary">
+                  {hasHours ? "Recorded" : "Missing"}
+                </span>
               </div>
 
-              {/* Item 3: Tasks */}
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   {hasTasks ? (
-                    <CheckCircle2 className="w-4 h-4 text-black shrink-0" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-black shrink-0" />
                   ) : (
-                    <CheckSquare className="w-4 h-4 text-amber-500 shrink-0" />
+                    <CheckSquare className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
                   )}
-                  <span
-                    className={cn(
-                      "font-semibold truncate",
-                      hasTasks ? "text-text-primary line-through opacity-80" : "text-text-primary"
-                    )}
-                  >
-                    Complete tasks assigned to you
+                  <span className={cn(hasTasks ? "font-semibold text-text-primary" : "text-text-tertiary")}>
+                    Sprint tasks assigned
                   </span>
                 </div>
-                <Link
-                  href="/tasks"
-                  className="text-[11px] font-bold text-brand-purple hover:underline shrink-0 flex items-center gap-0.5"
-                >
-                  <span>Tasks</span>
-                  <ArrowRight className="w-3 h-3" />
-                </Link>
+                <span className="text-[11px] font-medium text-text-tertiary">
+                  {hasTasks ? "Recorded" : "Missing"}
+                </span>
               </div>
             </div>
           </div>

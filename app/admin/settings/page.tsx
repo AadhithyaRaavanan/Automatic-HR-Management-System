@@ -16,6 +16,7 @@ import {
   Download,
   RefreshCw,
   ListTodo,
+  Target,
 } from "lucide-react";
 import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
@@ -392,6 +393,13 @@ export default function OrganizationSettingsAdminPage() {
           >
             <ListTodo className="w-3.5 h-3.5" />
             Task types & presets
+          </Link>
+          <Link
+            href="/admin/settings/kpi"
+            className="px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all inline-flex items-center gap-1.5 text-[#808080] hover:text-black hover:bg-white/60 cursor-pointer"
+          >
+            <Target className="w-3.5 h-3.5" />
+            KPI benchmarks & targets
           </Link>
         </div>
 
