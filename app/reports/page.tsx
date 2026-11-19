@@ -734,8 +734,10 @@ function ReportsPageContent() {
                       <td className="py-3.5 px-4 font-extrabold text-text-primary font-mono">
                         {row.totalMinutes > 0 ? `${(row.totalMinutes / 60).toFixed(1)}h` : "--"}
                       </td>
-                      <td className="py-3.5 px-4">
-                        {row.isLate ? (
+                      <td className="py-3.5 px-4 font-mono text-xs">
+                        {row.status === "weekend" || row.status === "holiday" || row.status === "absent" ? (
+                          <span className="text-text-tertiary">--</span>
+                        ) : row.isLate ? (
                           <span className="text-status-danger-text font-bold">Late</span>
                         ) : (
                           <span className="text-status-success-text font-bold">On Time</span>
