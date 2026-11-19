@@ -4,7 +4,6 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { FEATURES } from "@/lib/features";
 import { AppShell, useAppSession } from "@/components/shell/app-shell";
-import { BentoCard } from "@/components/bento/bento-card";
 import { StatusPill } from "@/components/shared/status-pill";
 import { EmptyState } from "@/components/shared/empty-state";
 import {
@@ -392,11 +391,11 @@ function TasksWorkspaceContent() {
       {/* Header */}
       <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1">
         <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight flex items-center gap-2.5">
-            <CheckSquare className="w-7 h-7 text-brand-purple" />
+          <h1 className="text-2xl md:text-3xl font-bold text-black tracking-tight flex items-center gap-2.5">
+            <CheckSquare className="w-7 h-7 text-black" />
             <span>Tasks &amp; Team Work</span>
           </h1>
-          <p className="text-xs sm:text-sm text-text-secondary mt-1">
+          <p className="text-xs sm:text-sm text-[#808080] mt-1">
             Organize sprint deliverables, track due dates, log effort hours, and monitor team execution.
           </p>
         </div>
@@ -406,16 +405,16 @@ function TasksWorkspaceContent() {
             <button
               type="button"
               onClick={() => setCreateProjectOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-card border border-border-light hover:bg-card-subtle text-xs font-bold text-text-primary transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white border border-[#E6E6E6] hover:bg-[#F5F5F5] text-xs font-semibold text-black transition-colors cursor-pointer shadow-xs"
             >
-              <FolderPlus className="w-3.5 h-3.5 text-brand-purple" />
+              <FolderPlus className="w-3.5 h-3.5 text-black" />
               <span>New Project</span>
             </button>
           )}
           <button
             type="button"
             onClick={() => setCreateTaskOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-medium transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold transition-colors cursor-pointer shadow-xs"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>New task</span>
@@ -425,47 +424,43 @@ function TasksWorkspaceContent() {
 
       {/* Metrics Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <BentoCard title="Open tasks" className="py-4">
-          <div className="text-2xl font-semibold text-text-primary tabular-nums">{summary.open}</div>
-          <p className="text-xs text-text-tertiary mt-1">
-            To do, in progress, or blocked
-          </p>
-        </BentoCard>
-        <BentoCard title="Overdue" className="py-4">
-          <div className="text-2xl font-semibold text-status-danger-text tabular-nums">
-            {summary.overdue}
-          </div>
-          <p className="text-xs text-text-tertiary mt-1">Past target due date</p>
-        </BentoCard>
-        <BentoCard title="Due soon" className="py-4">
-          <div className="text-2xl font-semibold text-status-warning-text tabular-nums">
-            {summary.dueSoon}
-          </div>
-          <p className="text-xs text-text-tertiary mt-1">Due today or tomorrow</p>
-        </BentoCard>
-        <BentoCard title="Completed" className="py-4">
-          <div className="text-2xl font-semibold text-status-success-text tabular-nums">
-            {summary.completed}
-          </div>
-          <p className="text-xs text-text-tertiary mt-1">Delivered tasks</p>
-        </BentoCard>
+        <div className="p-4 rounded-[14px] bg-white border border-[#E6E6E6] shadow-none">
+          <span className="text-xs font-semibold text-[#808080]">Open tasks</span>
+          <div className="text-2xl font-bold text-black tabular-nums mt-1">{summary.open}</div>
+          <p className="text-xs text-[#808080] mt-0.5">To do, in progress, or blocked</p>
+        </div>
+        <div className="p-4 rounded-[14px] bg-white border border-[#E6E6E6] shadow-none">
+          <span className="text-xs font-semibold text-[#808080]">Overdue</span>
+          <div className="text-2xl font-bold text-[#F00091] tabular-nums mt-1">{summary.overdue}</div>
+          <p className="text-xs text-[#808080] mt-0.5">Past target due date</p>
+        </div>
+        <div className="p-4 rounded-[14px] bg-white border border-[#E6E6E6] shadow-none">
+          <span className="text-xs font-semibold text-[#808080]">Due soon</span>
+          <div className="text-2xl font-bold text-amber-600 tabular-nums mt-1">{summary.dueSoon}</div>
+          <p className="text-xs text-[#808080] mt-0.5">Due today or tomorrow</p>
+        </div>
+        <div className="p-4 rounded-[14px] bg-white border border-[#E6E6E6] shadow-none">
+          <span className="text-xs font-semibold text-[#808080]">Completed</span>
+          <div className="text-2xl font-bold text-black tabular-nums mt-1">{summary.completed}</div>
+          <p className="text-xs text-[#808080] mt-0.5">Delivered tasks</p>
+        </div>
       </div>
 
       {/* Controls & Filters */}
-      <div data-tour="tasks-board" className="bg-card rounded-xl p-4 border border-border-light space-y-3">
+      <div data-tour="tasks-board" className="bg-white rounded-[14px] p-4 border border-[#E6E6E6] space-y-3 shadow-none">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             {/* Scope Toggle for Manager/HR/Admin */}
             {userRole !== "employee" && (
-              <div className="inline-flex rounded-lg bg-card p-1 border border-border-light">
+              <div className="inline-flex rounded-lg bg-white p-1 border border-[#E6E6E6]">
                 <button
                   type="button"
                   onClick={() => setScope("mine")}
                   className={cn(
-                    "px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer",
+                    "px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer",
                     scope === "mine"
-                      ? "bg-brand-purple text-white"
-                      : "text-text-secondary hover:text-text-primary"
+                      ? "bg-black text-white shadow-xs"
+                      : "text-[#808080] hover:text-black hover:bg-[#F5F5F5]"
                   )}
                 >
                   My tasks
@@ -474,10 +469,10 @@ function TasksWorkspaceContent() {
                   type="button"
                   onClick={() => setScope("team")}
                   className={cn(
-                    "px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer",
+                    "px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer",
                     scope === "team"
-                      ? "bg-brand-purple text-white"
-                      : "text-text-secondary hover:text-text-primary"
+                      ? "bg-black text-white shadow-xs"
+                      : "text-[#808080] hover:text-black hover:bg-[#F5F5F5]"
                   )}
                 >
                   {userRole === "manager" ? "Team tasks" : "All org tasks"}
@@ -486,16 +481,16 @@ function TasksWorkspaceContent() {
             )}
 
             {/* Board / List Toggle */}
-            <div className="inline-flex rounded-full bg-card-subtle p-1 border border-border-light">
+            <div className="inline-flex rounded-lg bg-[#F5F5F5] p-1 border border-[#E6E6E6]">
               <button
                 type="button"
                 onClick={() => setViewMode("board")}
                 aria-label="Board view"
                 className={cn(
-                  "inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold transition-colors cursor-pointer",
+                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer",
                   viewMode === "board"
-                    ? "bg-brand-navy text-white"
-                    : "text-text-secondary hover:text-text-primary"
+                    ? "bg-black text-white shadow-xs"
+                    : "text-[#808080] hover:text-black hover:bg-white"
                 )}
               >
                 <LayoutGrid className="w-3.5 h-3.5" />
@@ -506,10 +501,10 @@ function TasksWorkspaceContent() {
                 onClick={() => setViewMode("list")}
                 aria-label="List view"
                 className={cn(
-                  "inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold transition-colors cursor-pointer",
+                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer",
                   viewMode === "list"
-                    ? "bg-brand-navy text-white"
-                    : "text-text-secondary hover:text-text-primary"
+                    ? "bg-black text-white shadow-xs"
+                    : "text-[#808080] hover:text-black hover:bg-white"
                 )}
               >
                 <List className="w-3.5 h-3.5" />
@@ -519,13 +514,13 @@ function TasksWorkspaceContent() {
           </div>
 
           <div className="relative w-full lg:w-72">
-            <Search className="w-4 h-4 text-text-tertiary absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-[#808080] absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search task title or description..."
-              className="w-full pl-9 pr-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-brand-purple"
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black placeholder:text-[#808080] focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
             />
           </div>
         </div>
@@ -536,7 +531,7 @@ function TasksWorkspaceContent() {
             aria-label="Filter by status"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary"
+            className="px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs font-medium text-black focus:outline-none focus:border-black"
           >
             <option value="all">All Statuses</option>
             {STATUS_COLUMNS.map((c) => (
@@ -624,7 +619,7 @@ function TasksWorkspaceContent() {
             <button
               type="button"
               onClick={() => setCreateTaskOpen(true)}
-              className="px-4 py-2 rounded-full bg-brand-purple text-white text-xs font-bold cursor-pointer"
+              className="px-4 py-2 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer shadow-xs"
             >
               Create First Task
             </button>
@@ -728,7 +723,7 @@ function TasksWorkspaceContent() {
                                     });
                                   }
                                 }}
-                                className="w-full flex items-center justify-center gap-1 py-1.5 px-3 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-[11px] font-bold transition-all shadow-xs cursor-pointer"
+                                className="w-full flex items-center justify-center gap-1 py-1.5 px-3 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-[11px] font-semibold transition-all shadow-xs cursor-pointer"
                               >
                                 <span>✓ Accept Task</span>
                               </div>
@@ -771,24 +766,24 @@ function TasksWorkspaceContent() {
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span>{task.title}</span>
                       {task.assignee_id && task.creator_id === task.assignee_id && (
-                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-brand-purple/10 text-brand-purple border border-brand-purple/20">
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-[#F5F5F5] text-black border border-[#E6E6E6]">
                           Self-Assigned
                         </span>
                       )}
                     </div>
                     {task.description && (
-                      <div className="text-[11px] font-normal text-text-tertiary line-clamp-1">
+                      <div className="text-[11px] font-normal text-[#808080] line-clamp-1">
                         {task.description}
                       </div>
                     )}
                   </td>
-                  <td className="py-3 px-4 text-text-secondary">
+                  <td className="py-3 px-4 text-[#4D4D4D]">
                     {task.project_id ? projectNameMap.get(task.project_id) || "Project" : "—"}
                   </td>
-                  <td className="py-3 px-4 text-text-primary">
+                  <td className="py-3 px-4 text-black">
                     <div className="font-semibold">{formatPerson(task.assignee_id)}</div>
                     {task.estimated_minutes != null && (
-                      <div className="text-[10px] font-mono font-bold text-brand-purple">
+                      <div className="text-[10px] font-mono font-bold text-black">
                         {formatEstimatedDuration(task.estimated_minutes)} est
                       </div>
                     )}
@@ -810,7 +805,7 @@ function TasksWorkspaceContent() {
                               note: "Accepted assigned task",
                             });
                           }}
-                          className="px-2 py-0.5 rounded-lg bg-brand-purple hover:bg-brand-purple-hover text-white text-[10px] font-bold cursor-pointer"
+                          className="px-2 py-0.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-[10px] font-semibold cursor-pointer shadow-xs"
                         >
                           Accept
                         </button>
@@ -908,8 +903,8 @@ function TasksWorkspaceContent() {
 
                   {/* Assignee Guidance Badge */}
                   {newAssigneeId && newAssigneeId === userId && (
-                    <div className="mt-2 flex items-center gap-2 p-2.5 rounded-xl bg-brand-purple/10 border border-brand-purple/20 text-brand-purple text-[11px] font-bold">
-                      <UserCheck className="w-4 h-4 shrink-0" />
+                    <div className="mt-2 flex items-center gap-2 p-2.5 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] text-black text-[11px] font-semibold">
+                      <UserCheck className="w-4 h-4 shrink-0 text-black" />
                       <span>Self-Assignment: Automatically accepted and placed in <strong>In Progress</strong> immediately.</span>
                     </div>
                   )}
@@ -955,12 +950,12 @@ function TasksWorkspaceContent() {
                 {/* Duration Picker: Hours and Minutes */}
                 <div className="sm:col-span-2">
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-[11px] font-bold uppercase text-text-secondary flex items-center gap-1.5">
-                      <Timer className="w-3.5 h-3.5 text-brand-purple" />
+                    <label className="text-[11px] font-bold uppercase text-[#808080] flex items-center gap-1.5">
+                      <Timer className="w-3.5 h-3.5 text-black" />
                       Estimated Duration
                     </label>
                     {((parseInt(estHours || "0", 10) * 60) + parseInt(estMinutes || "0", 10)) > 0 && (
-                      <span className="text-[11px] font-mono font-bold text-brand-purple">
+                      <span className="text-[11px] font-mono font-bold text-black">
                         Total: {formatEstimatedDuration((parseInt(estHours || "0", 10) * 60) + parseInt(estMinutes || "0", 10))} ({(parseInt(estHours || "0", 10) * 60) + parseInt(estMinutes || "0", 10)} mins)
                       </span>
                     )}
@@ -1031,7 +1026,7 @@ function TasksWorkspaceContent() {
                           setEstHours(preset.h);
                           setEstMinutes(preset.m);
                         }}
-                        className="px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-colors border bg-card-subtle hover:bg-card-subtle/80 text-text-secondary border-border-light hover:border-brand-purple/40"
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors border bg-white hover:bg-[#F5F5F5] text-black border-[#E6E6E6] hover:border-black/40"
                       >
                         {preset.label}
                       </button>
@@ -1042,14 +1037,14 @@ function TasksWorkspaceContent() {
 
               {projects.length > 0 && (
                 <div>
-                  <label className="block text-[11px] font-bold uppercase text-text-secondary mb-1">
+                  <label className="block text-[11px] font-bold uppercase text-[#808080] mb-1">
                     Project (Optional)
                   </label>
                   <select
                     aria-label="Task Project"
                     value={newProjectId}
                     onChange={(e) => setNewProjectId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+                    className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
                   >
                     <option value="">No Project</option>
                     {projects.map((p) => (
@@ -1065,14 +1060,14 @@ function TasksWorkspaceContent() {
                 <button
                   type="button"
                   onClick={() => setCreateTaskOpen(false)}
-                  className="px-4 py-2 rounded-full bg-card-subtle text-xs font-bold text-text-secondary cursor-pointer"
+                  className="px-4 py-2 rounded-lg bg-white border border-[#E6E6E6] hover:bg-[#F5F5F5] text-xs font-semibold text-black cursor-pointer shadow-xs"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={mutations.createTask.isPending}
-                  className="px-5 py-2 rounded-full bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold cursor-pointer disabled:opacity-60"
+                  className="px-5 py-2 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer disabled:opacity-60 shadow-xs"
                 >
                   {mutations.createTask.isPending ? "Creating..." : "Create Task"}
                 </button>
@@ -1176,7 +1171,7 @@ function TasksWorkspaceContent() {
                 <button
                   type="submit"
                   disabled={mutations.createProject.isPending}
-                  className="px-5 py-2 rounded-full bg-brand-purple text-white text-xs font-bold cursor-pointer"
+                  className="px-5 py-2 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer shadow-xs"
                 >
                   {mutations.createProject.isPending ? "Saving..." : "Save Project"}
                 </button>
@@ -1215,7 +1210,7 @@ function TasksWorkspaceContent() {
                   {selectedTask.title}
                 </h2>
                 {selectedTask.project_id && (
-                  <p className="text-xs font-semibold text-brand-purple">
+                  <p className="text-xs font-semibold text-black">
                     Project: {projectNameMap.get(selectedTask.project_id) || "Assigned Project"}
                   </p>
                 )}
@@ -1251,7 +1246,7 @@ function TasksWorkspaceContent() {
                         note: selectedTask.assignee_id === userId && selectedTask.creator_id !== userId ? "Accepted assigned task" : undefined,
                       })
                     }
-                    className="px-3.5 py-1.5 rounded-full bg-brand-purple text-white text-xs font-bold cursor-pointer"
+                    className="px-3.5 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer shadow-xs"
                   >
                     {selectedTask.assignee_id === userId && selectedTask.creator_id !== userId
                       ? "✓ Accept Task & Start Progress"
@@ -1270,7 +1265,7 @@ function TasksWorkspaceContent() {
                           status: "done",
                         })
                       }
-                      className="px-3.5 py-1.5 rounded-full bg-status-success-dot text-white text-xs font-bold cursor-pointer"
+                      className="px-3.5 py-1.5 rounded-lg bg-[#A6F000] hover:bg-[#95D800] text-black text-xs font-bold cursor-pointer shadow-xs"
                     >
                       Mark Complete
                     </button>
@@ -1283,7 +1278,7 @@ function TasksWorkspaceContent() {
                           status: "blocked",
                         })
                       }
-                      className="px-3.5 py-1.5 rounded-full bg-status-warning-bg text-status-warning-text text-xs font-bold cursor-pointer"
+                      className="px-3.5 py-1.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-xs font-semibold cursor-pointer"
                     >
                       Mark Blocked
                     </button>
@@ -1300,7 +1295,7 @@ function TasksWorkspaceContent() {
                         status: "in_progress",
                       })
                     }
-                    className="px-3.5 py-1.5 rounded-full bg-brand-purple text-white text-xs font-bold cursor-pointer"
+                    className="px-3.5 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer shadow-xs"
                   >
                     Resume Progress
                   </button>
@@ -1316,7 +1311,7 @@ function TasksWorkspaceContent() {
                         status: "done",
                       })
                     }
-                    className="px-3.5 py-1.5 rounded-full bg-status-success-dot text-white text-xs font-bold cursor-pointer"
+                    className="px-3.5 py-1.5 rounded-lg bg-[#A6F000] hover:bg-[#95D800] text-black text-xs font-bold cursor-pointer shadow-xs"
                   >
                     Complete Task
                   </button>
@@ -1333,7 +1328,7 @@ function TasksWorkspaceContent() {
                         note: "Reopened from drawer",
                       })
                     }
-                    className="px-3.5 py-1.5 rounded-full bg-card-subtle border border-border-light text-xs font-bold text-text-primary cursor-pointer"
+                    className="px-3.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] hover:bg-[#F5F5F5] text-xs font-semibold text-black cursor-pointer shadow-xs"
                   >
                     Reopen
                   </button>
@@ -1341,22 +1336,22 @@ function TasksWorkspaceContent() {
               </div>
 
               {/* Assignee Control */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3.5 rounded-2xl bg-card-subtle border border-border-light">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3.5 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6]">
                 <div className="flex flex-col gap-1 text-xs">
                   <div className="flex items-center gap-2">
-                    <UserCheck className="w-4 h-4 text-brand-purple" />
-                    <span className="font-bold text-text-secondary">Assignee:</span>
-                    <span className="font-extrabold text-text-primary">
+                    <UserCheck className="w-4 h-4 text-black" />
+                    <span className="font-semibold text-[#808080]">Assignee:</span>
+                    <span className="font-bold text-black">
                       {formatPerson(selectedTask.assignee_id)}
                     </span>
                   </div>
                   {selectedTask.assignee_id && selectedTask.creator_id === selectedTask.assignee_id && (
-                    <span className="text-[10px] font-bold text-brand-purple ml-6">
+                    <span className="text-[10px] font-semibold text-black ml-6">
                       • Self-Assigned
                     </span>
                   )}
                   {selectedTask.assignee_id && selectedTask.creator_id !== selectedTask.assignee_id && (
-                    <span className="text-[10px] text-text-tertiary ml-6">
+                    <span className="text-[10px] text-[#808080] ml-6">
                       • Assigned by {formatPerson(selectedTask.creator_id)}
                     </span>
                   )}
@@ -1413,13 +1408,13 @@ function TasksWorkspaceContent() {
             </div>
 
             {/* Manual Time Logs */}
-            <section className="space-y-3 pt-2 border-t border-border-light">
+            <section className="space-y-3 pt-2 border-t border-[#E6E6E6]">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-extrabold uppercase tracking-wider text-text-primary flex items-center gap-1.5">
-                  <Timer className="w-4 h-4 text-brand-purple" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-black flex items-center gap-1.5">
+                  <Timer className="w-4 h-4 text-black" />
                   <span>Time Logs</span>
                 </h3>
-                <span className="text-[11px] font-mono text-text-secondary">
+                <span className="text-[11px] font-mono text-[#808080]">
                   {totalLoggedMinutes}m logged
                   {selectedTask.estimated_minutes != null
                     ? ` / ${formatEstimatedDuration(selectedTask.estimated_minutes)} est`
@@ -1437,7 +1432,7 @@ function TasksWorkspaceContent() {
                     aria-label="Time log work date"
                     value={timeDate}
                     onChange={(e) => setTimeDate(e.target.value)}
-                    className="sm:col-span-4 px-2.5 py-1.5 rounded-xl bg-card-subtle border border-border-light text-xs"
+                    className="sm:col-span-4 px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
                   />
                   <input
                     type="number"
@@ -1446,7 +1441,7 @@ function TasksWorkspaceContent() {
                     aria-label="Time log minutes"
                     value={timeMinutes}
                     onChange={(e) => setTimeMinutes(e.target.value)}
-                    className="sm:col-span-2 px-2.5 py-1.5 rounded-xl bg-card-subtle border border-border-light text-xs"
+                    className="sm:col-span-2 px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
                   />
                   <input
                     type="text"
@@ -1454,12 +1449,12 @@ function TasksWorkspaceContent() {
                     value={timeNote}
                     onChange={(e) => setTimeNote(e.target.value)}
                     placeholder="Work note..."
-                    className="sm:col-span-4 px-2.5 py-1.5 rounded-xl bg-card-subtle border border-border-light text-xs"
+                    className="sm:col-span-4 px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
                   />
                   <button
                     type="submit"
                     disabled={mutations.logTime.isPending}
-                    className="sm:col-span-2 px-3 py-1.5 rounded-xl bg-brand-navy text-white text-xs font-bold cursor-pointer"
+                    className="sm:col-span-2 px-3 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer shadow-xs"
                   >
                     Log
                   </button>
@@ -1471,28 +1466,28 @@ function TasksWorkspaceContent() {
                   detailsQuery.data!.timeLogs.map((log) => (
                     <div
                       key={log.id}
-                      className="flex items-center justify-between px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs"
+                      className="flex items-center justify-between px-3 py-2 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] text-xs"
                     >
                       <div>
-                        <span className="font-bold text-text-primary">
+                        <span className="font-bold text-black">
                           {formatPerson(log.employee_id)}
                         </span>
-                        <span className="text-text-tertiary ml-2 font-mono">
+                        <span className="text-[#808080] ml-2 font-mono">
                           {log.work_date}
                         </span>
                         {log.note && (
-                          <p className="text-[11px] text-text-secondary mt-0.5">
+                          <p className="text-[11px] text-[#4D4D4D] mt-0.5">
                             {log.note}
                           </p>
                         )}
                       </div>
-                      <span className="font-mono font-bold text-brand-purple">
+                      <span className="font-mono font-bold text-black">
                         {log.minutes}m
                       </span>
                     </div>
                   ))
                 ) : (
-                  <p className="text-[11px] text-text-tertiary">
+                  <p className="text-[11px] text-[#808080]">
                     No manual time entries logged for this task yet.
                   </p>
                 )}
@@ -1500,9 +1495,9 @@ function TasksWorkspaceContent() {
             </section>
 
             {/* Comments */}
-            <section className="space-y-3 pt-2 border-t border-border-light">
-              <h3 className="text-xs font-extrabold uppercase tracking-wider text-text-primary flex items-center gap-1.5">
-                <MessageSquare className="w-4 h-4 text-brand-purple" />
+            <section className="space-y-3 pt-2 border-t border-[#E6E6E6]">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-black flex items-center gap-1.5">
+                <MessageSquare className="w-4 h-4 text-black" />
                 <span>Comments ({detailsQuery.data?.comments.length || 0})</span>
               </h3>
 
@@ -1511,19 +1506,19 @@ function TasksWorkspaceContent() {
                   detailsQuery.data!.comments.map((c) => (
                     <div
                       key={c.id}
-                      className="p-3 rounded-2xl bg-card-subtle border border-border-light text-xs"
+                      className="p-3 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] text-xs"
                     >
-                      <div className="flex items-center justify-between text-[11px] text-text-tertiary mb-1">
-                        <span className="font-bold text-text-primary">
+                      <div className="flex items-center justify-between text-[11px] text-[#808080] mb-1">
+                        <span className="font-bold text-black">
                           {formatPerson(c.author_id)}
                         </span>
                         <span>{new Date(c.created_at).toLocaleString()}</span>
                       </div>
-                      <p className="text-text-secondary whitespace-pre-wrap">{c.body}</p>
+                      <p className="text-[#4D4D4D] whitespace-pre-wrap">{c.body}</p>
                     </div>
                   ))
                 ) : (
-                  <p className="text-[11px] text-text-tertiary">
+                  <p className="text-[11px] text-[#808080]">
                     No comments yet. Add an update below.
                   </p>
                 )}
@@ -1536,13 +1531,13 @@ function TasksWorkspaceContent() {
                   value={commentBody}
                   onChange={(e) => setCommentBody(e.target.value)}
                   placeholder="Write a comment or status update..."
-                  className="flex-1 px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+                  className="flex-1 px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black placeholder:text-[#808080]"
                 />
                 <button
                   type="submit"
                   aria-label="Send comment"
                   disabled={mutations.addComment.isPending || !commentBody.trim()}
-                  className="p-2 rounded-xl bg-brand-purple text-white cursor-pointer disabled:opacity-50"
+                  className="p-2 rounded-lg bg-black hover:bg-[#1A1A1A] text-white cursor-pointer disabled:opacity-50 shadow-xs"
                 >
                   <Send className="w-4 h-4" />
                 </button>
@@ -1550,19 +1545,19 @@ function TasksWorkspaceContent() {
             </section>
 
             {/* Status & Activity History */}
-            <section className="space-y-2 pt-2 border-t border-border-light">
-              <h3 className="text-xs font-extrabold uppercase tracking-wider text-text-primary flex items-center gap-1.5">
-                <History className="w-4 h-4 text-brand-purple" />
+            <section className="space-y-2 pt-2 border-t border-[#E6E6E6]">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-black flex items-center gap-1.5">
+                <History className="w-4 h-4 text-black" />
                 <span>Activity Timeline</span>
               </h3>
               <div className="space-y-1.5">
                 {(detailsQuery.data?.events || []).map((ev) => (
                   <div
                     key={ev.id}
-                    className="flex items-center justify-between text-[11px] px-3 py-1.5 rounded-xl bg-card-subtle/60 border border-border-light/60"
+                    className="flex items-center justify-between text-[11px] px-3 py-1.5 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6]"
                   >
-                    <span className="text-text-secondary">
-                      <strong className="text-text-primary">
+                    <span className="text-[#4D4D4D]">
+                      <strong className="text-black">
                         {formatPerson(ev.actor_id)}
                       </strong>{" "}
                       {ev.event_type.replace("_", " ")}
@@ -1572,7 +1567,7 @@ function TasksWorkspaceContent() {
                         ? ` (${ev.to_status})`
                         : ""}
                     </span>
-                    <span className="text-text-tertiary font-mono">
+                    <span className="text-[#808080] font-mono">
                       {new Date(ev.created_at).toLocaleDateString()}
                     </span>
                   </div>

@@ -25,7 +25,7 @@ export function formatFriendlyDueState(
 
   const [y, m, d] = cleanDueStr.split("-").map(Number);
   if (!y || !m || !d) {
-    return { label: dueDateString, state: "none", colorClass: "bg-card-subtle text-text-secondary" };
+    return { label: dueDateString, state: "none", colorClass: "bg-[#F5F5F5] text-[#808080] border border-[#E6E6E6]" };
   }
 
   // Create date object
@@ -38,7 +38,7 @@ export function formatFriendlyDueState(
     return {
       label: `Due ${formattedDayMonth}`,
       state: "completed",
-      colorClass: "bg-card-subtle text-text-tertiary border border-border-light/60",
+      colorClass: "bg-[#F5F5F5] text-[#808080] border border-[#E6E6E6]",
     };
   }
 
@@ -63,7 +63,7 @@ export function formatFriendlyDueState(
     return {
       label,
       state: "overdue",
-      colorClass: "bg-status-danger-bg text-status-danger-text border border-status-danger-dot/30 font-bold",
+      colorClass: "bg-red-50 text-[#F00091] border border-red-200 font-bold",
     };
   }
 
@@ -71,7 +71,7 @@ export function formatFriendlyDueState(
     return {
       label: "Due today",
       state: "due_today",
-      colorClass: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 font-bold",
+      colorClass: "bg-amber-50 text-amber-800 border border-amber-200 font-bold",
     };
   }
 
@@ -79,13 +79,13 @@ export function formatFriendlyDueState(
     return {
       label: "Due tomorrow",
       state: "due_tomorrow",
-      colorClass: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border border-blue-500/30 font-bold",
+      colorClass: "bg-[#F5F5F5] text-black border border-[#E6E6E6] font-semibold",
     };
   }
 
   return {
     label: `Due ${formattedDayMonth}`,
     state: "due_future",
-    colorClass: "bg-card-subtle text-text-secondary border border-border-light",
+    colorClass: "bg-[#F5F5F5] text-[#808080] border border-[#E6E6E6]",
   };
 }
