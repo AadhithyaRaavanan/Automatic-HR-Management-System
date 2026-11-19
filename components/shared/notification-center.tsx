@@ -38,8 +38,8 @@ function getNotificationIcon(type: string, title?: string) {
   if (type.startsWith("task")) return <UserCheck className="w-3.5 h-3.5 text-black shrink-0" />;
   if (type.startsWith("kpi")) return <Target className="w-3.5 h-3.5 text-black shrink-0" />;
   if (type.startsWith("security") || type.startsWith("password") || type.startsWith("mfa"))
-    return <ShieldAlert className="w-3.5 h-3.5 text-[#F00091] shrink-0" />;
-  if (type.startsWith("holiday")) return <Calendar className="w-3.5 h-3.5 text-[#A6F000] shrink-0" />;
+    return <ShieldAlert className="w-3.5 h-3.5 text-[#FF1493] shrink-0" />;
+  if (type.startsWith("holiday")) return <Calendar className="w-3.5 h-3.5 text-[#B7FF00] shrink-0" />;
   if (type.startsWith("reminder") || type.includes("overdue") || type.includes("missed"))
     return <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />;
   return <Bell className="w-3.5 h-3.5 text-black shrink-0" />;
@@ -181,7 +181,7 @@ export function NotificationCenter({
                       )}
                       {isUnread && (
                         <span
-                          className="w-2 h-2 rounded-full bg-[#F00091] shrink-0"
+                          className="w-2 h-2 rounded-full bg-[#FF1493] shrink-0"
                           aria-label="Unread"
                         />
                       )}

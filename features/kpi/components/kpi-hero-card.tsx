@@ -134,7 +134,7 @@ export function KpiHeroCard({
             <div className="h-2.5 w-full rounded-full overflow-hidden flex bg-[#E6E6E6]">
               <div
                 style={{ width: "40%" }}
-                className="bg-[#A6F000] h-full transition-all duration-500"
+                className="bg-[#B7FF00] h-full transition-all duration-500"
                 title="Attendance & Reliability (40%)"
               />
               <div
@@ -151,7 +151,7 @@ export function KpiHeroCard({
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[#4D4D4D] font-medium">
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[#A6F000] shrink-0" />
+                <span className="w-2 h-2 rounded-full bg-[#B7FF00] shrink-0" />
                 Attendance 40%
               </span>
               <span className="inline-flex items-center gap-1.5">

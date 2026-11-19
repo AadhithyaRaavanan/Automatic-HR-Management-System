@@ -458,7 +458,7 @@ export function OnboardingTour({
             height={targetRect.height + 12}
             rx={10}
             fill="none"
-            stroke="#A6F000"
+            stroke="#B7FF00"
             strokeWidth="2.5"
             strokeDasharray="6 4"
             className="animate-pulse transition-all duration-200 ease-out"
@@ -507,7 +507,7 @@ export function OnboardingTour({
         {/* Progress Bar */}
         <div className="w-full h-1 bg-[#262626] rounded-full overflow-hidden mb-4">
           <div
-            className="h-full bg-[#A6F000] transition-all duration-300"
+            className="h-full bg-[#B7FF00] transition-all duration-300"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
@@ -565,7 +565,7 @@ export function OnboardingTour({
               type="button"
               onClick={handleNext}
               disabled={submitting}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#A6F000] hover:bg-[#A6F000]/90 text-black text-xs font-semibold transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#B7FF00] hover:bg-[#B7FF00]/90 text-black text-xs font-semibold transition-colors cursor-pointer"
             >
               {isLast ? (
                 <>

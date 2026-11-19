@@ -219,7 +219,7 @@ export function CurvedSidebar({
           <div className="flex flex-col items-center gap-3">
             <Link
               href="/"
-              className="w-9 h-9 rounded-xl bg-[#A6F000] flex items-center justify-center text-[#000000] font-black text-sm shadow-sm hover:opacity-90 transition-opacity"
+              className="w-9 h-9 rounded-xl bg-[#B7FF00] flex items-center justify-center text-[#000000] font-black text-sm shadow-sm hover:opacity-90 transition-opacity"
               title="RemoteHR Home"
               aria-label="Pulse Home"
             >
@@ -243,7 +243,7 @@ export function CurvedSidebar({
                 className="flex items-center gap-2.5 group transition-opacity hover:opacity-90 min-w-0"
                 title="RemoteHR Home"
               >
-                <div className="w-8 h-8 rounded-lg bg-[#A6F000] flex items-center justify-center text-[#000000] font-black text-sm shrink-0 shadow-sm">
+                <div className="w-8 h-8 rounded-lg bg-[#B7FF00] flex items-center justify-center text-[#000000] font-black text-sm shrink-0 shadow-sm">
                   P
                 </div>
                 <div className="flex flex-col min-w-0">
@@ -314,7 +314,7 @@ export function CurvedSidebar({
                     className={cn(
                       "relative flex items-center justify-center w-9 h-9 rounded-lg transition-colors duration-150",
                       isActive
-                        ? "bg-[#A6F000] text-[#000000] font-semibold shadow-sm"
+                        ? "bg-[#B7FF00] text-[#000000] font-semibold shadow-sm"
                         : "text-[#B3B3B3] hover:text-white hover:bg-[#1A1A1A]"
                     )}
                     title={item.label}
@@ -323,7 +323,7 @@ export function CurvedSidebar({
                     <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-[#000000]" : "text-[#B3B3B3] group-hover:text-white")} />
 
                     {item.badge && (
-                      <span className="absolute -top-1 -right-1 px-1 rounded-full text-[8px] font-bold bg-[#A6F000] text-[#000000] border border-black">
+                      <span className="absolute -top-1 -right-1 px-1 rounded-full text-[8px] font-bold bg-[#B7FF00] text-[#000000] border border-black">
                         {item.badge}
                       </span>
                     )}
@@ -348,7 +348,7 @@ export function CurvedSidebar({
                 className={cn(
                   "flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-150 w-full group select-none shrink-0 text-xs",
                   isActive
-                    ? "bg-[#A6F000] text-[#000000] font-semibold shadow-sm"
+                    ? "bg-[#B7FF00] text-[#000000] font-semibold shadow-sm"
                     : "text-[#B3B3B3] hover:text-white hover:bg-[#1A1A1A] font-medium"
                 )}
                 title={item.label}
@@ -368,7 +368,7 @@ export function CurvedSidebar({
                     className={cn(
                       "px-1.5 py-0.2 rounded-full text-[9px] font-bold shrink-0",
                       isActive
-                        ? "bg-[#000000] text-[#A6F000]"
+                        ? "bg-[#000000] text-[#B7FF00]"
                         : "bg-[#262626] text-[#B3B3B3]"
                     )}
                   >
@@ -417,7 +417,7 @@ export function CurvedSidebar({
               className={cn(
                 "w-9 h-9 rounded-lg flex items-center justify-center transition-colors",
                 pathname.startsWith("/profile")
-                  ? "bg-[#A6F000] text-[#000000]"
+                  ? "bg-[#B7FF00] text-[#000000]"
                   : "text-[#B3B3B3] hover:text-white hover:bg-[#1A1A1A]"
               )}
               title={mounted && session.fullName ? `${session.fullName} (Profile)` : "My profile"}
@@ -430,7 +430,7 @@ export function CurvedSidebar({
               className={cn(
                 "w-9 h-9 rounded-lg flex items-center justify-center transition-colors",
                 pathname.startsWith("/settings")
-                  ? "bg-[#A6F000] text-[#000000]"
+                  ? "bg-[#B7FF00] text-[#000000]"
                   : "text-[#B3B3B3] hover:text-white hover:bg-[#1A1A1A]"
               )}
               title="Settings"
@@ -441,7 +441,7 @@ export function CurvedSidebar({
             <button
               type="button"
               onClick={handleSignOut}
-              className="w-9 h-9 rounded-lg text-[#808080] hover:text-[#F00091] hover:bg-[#1A1A1A] flex items-center justify-center transition-colors cursor-pointer"
+              className="w-9 h-9 rounded-lg text-[#808080] hover:text-[#FF1493] hover:bg-[#1A1A1A] flex items-center justify-center transition-colors cursor-pointer"
               title="Sign out"
               aria-label="Sign out"
             >
@@ -475,7 +475,7 @@ export function CurvedSidebar({
               <button
                 type="button"
                 onClick={handleSignOut}
-                className="p-1.5 rounded-md text-[#808080] hover:text-[#F00091] hover:bg-[#262626] transition-colors cursor-pointer shrink-0"
+                className="p-1.5 rounded-md text-[#808080] hover:text-[#FF1493] hover:bg-[#262626] transition-colors cursor-pointer shrink-0"
                 title="Sign out"
                 aria-label="Sign out"
               >

@@ -441,7 +441,7 @@ function DashboardContent({
                       {n.title}
                     </span>
                     {!n.read_at && (
-                      <span className="w-2 h-2 rounded-full bg-[#F00091] shrink-0" />
+                      <span className="w-2 h-2 rounded-full bg-[#FF1493] shrink-0" />
                     )}
                   </div>
                   <p className="text-[11px] text-[#808080] mt-1 line-clamp-2">
@@ -545,7 +545,7 @@ function DashboardContent({
               strokeWidth={8}
               title="Shift Progress"
               caption={`${todayMinutes}/${targetMinutes} mins`}
-              color="#A6F000"
+              color="#B7FF00"
             />
           </div>
         </BentoCard>
@@ -586,7 +586,7 @@ function DashboardContent({
                     </h3>
                     <div className="flex items-center justify-between text-[11px]">
                       {dueState === "overdue" ? (
-                        <span className="inline-flex items-center gap-1 font-semibold text-[#F00091]">
+                        <span className="inline-flex items-center gap-1 font-semibold text-[#FF1493]">
                           <AlertTriangle className="w-3 h-3" />
                           Overdue ({task.due_date})
                         </span>

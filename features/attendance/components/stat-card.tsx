@@ -62,7 +62,7 @@ export function StatCard({
         <div className="mt-2 pt-1">
           <div className="w-full bg-[#E6E6E6] h-1.5 rounded-full overflow-hidden">
             <div
-              className="h-full rounded-full transition-all duration-300 bg-[#A6F000]"
+              className="h-full rounded-full transition-all duration-300 bg-[#B7FF00]"
               style={{
                 width: `${Math.min(Math.max(progress, 0), 100)}%`,
               }}
@@ -76,7 +76,7 @@ export function StatCard({
           <span
             className={cn(
               "w-2 h-2 rounded-full inline-block shrink-0",
-              trend.isPositive ? "bg-[#A6F000]" : "bg-[#F00091]"
+              trend.isPositive ? "bg-[#B7FF00]" : "bg-[#FF1493]"
             )}
           />
           <span className="font-medium text-[#4D4D4D] tabular-nums">

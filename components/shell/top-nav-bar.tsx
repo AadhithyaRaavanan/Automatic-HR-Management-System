@@ -83,7 +83,7 @@ export function TopNavBar({
             <Bell className="w-4 h-4 text-black" />
             {unreadCount > 0 && (
               <span
-                className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#F00091]"
+                className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#FF1493]"
                 aria-hidden="true"
               />
             )}
@@ -101,7 +101,7 @@ export function TopNavBar({
 
           {/* User Profile Chip */}
           <div className="flex items-center gap-2 pl-2 ml-1 border-l border-[#E6E6E6]">
-            <div className="w-8 h-8 rounded-full bg-black text-[#A6F000] flex items-center justify-center font-bold text-xs select-none">
+            <div className="w-8 h-8 rounded-full bg-black text-[#B7FF00] flex items-center justify-center font-bold text-xs select-none">
               {session.fullName ? session.fullName.charAt(0).toUpperCase() : "U"}
             </div>
             <div className="hidden lg:flex flex-col text-left">

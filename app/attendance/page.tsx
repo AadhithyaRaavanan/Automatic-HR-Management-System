@@ -254,10 +254,10 @@ function AttendanceCalendarContent() {
   }, [selectedYear, selectedMonth]);
 
   const statusDotClass: Record<AttendanceDayStatus | "unrecorded", string> = {
-    present: "bg-[#A6F000]",
+    present: "bg-[#B7FF00]",
     half_day: "bg-amber-400",
-    absent: "bg-[#F00091]",
-    holiday: "bg-[#F00091]",
+    absent: "bg-[#FF1493]",
+    holiday: "bg-[#FF1493]",
     weekend: "bg-[#B3B3B3]",
     leave: "bg-[#808080]",
     unrecorded: "transparent",
@@ -351,7 +351,7 @@ function AttendanceCalendarContent() {
       {targetEmployee && selectedEmployeeId && selectedEmployeeId !== userId && (
         <div className="p-3 rounded-[14px] bg-white border border-[#E6E6E6] flex items-center justify-between text-xs">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#A6F000]" />
+            <span className="w-2 h-2 rounded-full bg-[#B7FF00]" />
             <span className="font-semibold text-black">Viewing: {targetEmployee.full_name}</span>
             <span className="text-[#808080]">({targetEmployee.department} • {targetEmployee.job_title})</span>
           </div>
@@ -404,7 +404,7 @@ function AttendanceCalendarContent() {
           className="lg:col-span-8 p-6"
         >
           <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-[#808080] uppercase pb-3 border-b border-[#E6E6E6]">
-            <span className="text-[#F00091]">Sun</span>
+            <span className="text-[#FF1493]">Sun</span>
             <span>Mon</span>
             <span>Tue</span>
             <span>Wed</span>
@@ -438,7 +438,7 @@ function AttendanceCalendarContent() {
                       <span
                         className={cn(
                           "w-6 h-6 rounded-md flex items-center justify-center text-xs font-medium tabular-nums",
-                          isSelected ? "bg-[#A6F000] text-black font-bold" : "text-black"
+                          isSelected ? "bg-[#B7FF00] text-black font-bold" : "text-black"
                         )}
                       >
                         {day.dayNumber}
@@ -453,12 +453,12 @@ function AttendanceCalendarContent() {
                     <div className="w-full">
                       {day.holidayName ? (
                         <>
-                          <span className="text-[9px] font-bold text-[#F00091] line-clamp-1 block leading-tight">
+                          <span className="text-[9px] font-bold text-[#FF1493] line-clamp-1 block leading-tight">
                             {day.holidayName}
                           </span>
                           <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[#F00091]" />
-                            <span className="text-[10px] font-medium text-[#F00091] capitalize truncate">
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[#FF1493]" />
+                            <span className="text-[10px] font-medium text-[#FF1493] capitalize truncate">
                               Holiday
                             </span>
                           </div>
@@ -492,7 +492,7 @@ function AttendanceCalendarContent() {
                       ) : null}
 
                       {day.birthdays && day.birthdays.length > 0 && (
-                        <div className="flex items-center gap-1 mt-1 text-[10px] text-black font-semibold truncate bg-[#A6F000]/25 px-1 py-0.5 rounded border border-[#A6F000]/60">
+                        <div className="flex items-center gap-1 mt-1 text-[10px] text-black font-semibold truncate bg-[#B7FF00]/25 px-1 py-0.5 rounded border border-[#B7FF00]/60">
                           <span>🎂</span>
                           <span className="truncate">{day.birthdays.map((b) => b.name.split(" ")[0]).join(", ")}</span>
                         </div>
@@ -507,7 +507,7 @@ function AttendanceCalendarContent() {
           {/* Legend Footer */}
           <div className="flex flex-wrap items-center gap-4 pt-5 mt-4 border-t border-[#E6E6E6] text-xs text-[#808080]">
             <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#A6F000]" />
+              <span className="w-2.5 h-2.5 rounded-full bg-[#B7FF00]" />
               Present
             </span>
             <span className="flex items-center gap-1.5">
@@ -515,7 +515,7 @@ function AttendanceCalendarContent() {
               Half Day
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#F00091]" />
+              <span className="w-2.5 h-2.5 rounded-full bg-[#FF1493]" />
               Holiday
             </span>
             <span className="flex items-center gap-1.5">
@@ -538,7 +538,7 @@ function AttendanceCalendarContent() {
           {selectedDay ? (
             <div>
               {selectedDay.birthdays && selectedDay.birthdays.length > 0 && (
-                <div className="p-3.5 rounded-xl bg-[#A6F000]/20 border border-[#A6F000] mb-4 space-y-1">
+                <div className="p-3.5 rounded-xl bg-[#B7FF00]/20 border border-[#B7FF00] mb-4 space-y-1">
                   {selectedDay.birthdays.map((b, bIdx) => (
                     <div key={bIdx} className="flex items-center gap-2">
                       <span className="text-base">🎂</span>
@@ -558,7 +558,7 @@ function AttendanceCalendarContent() {
               {selectedDay.holidayName && (
                 <div className="p-4 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] mb-4">
                   <div className="flex items-center gap-2 text-black font-bold text-sm">
-                    <Calendar className="w-4 h-4 text-[#F00091]" />
+                    <Calendar className="w-4 h-4 text-[#FF1493]" />
                     <span>{selectedDay.holidayName}</span>
                   </div>
                   {selectedDay.holidayLocalName && (

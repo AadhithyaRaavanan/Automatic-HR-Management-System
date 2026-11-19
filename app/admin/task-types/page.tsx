@@ -258,7 +258,7 @@ export default function AdminTaskTypesPage() {
           </p>
           <Link
             href="/tasks"
-            className="inline-flex items-center px-4 py-2 text-sm font-semibold text-black bg-[#A6F000] rounded hover:opacity-90"
+            className="inline-flex items-center px-4 py-2 text-sm font-semibold text-black bg-[#B7FF00] rounded hover:opacity-90"
           >
             Back to Tasks
           </Link>
@@ -299,7 +299,7 @@ export default function AdminTaskTypesPage() {
             </Link>
             <button
               onClick={openCreateModal}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-black bg-[#A6F000] rounded hover:opacity-90 transition-opacity"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-black bg-[#B7FF00] rounded hover:opacity-90 transition-opacity"
             >
               <Plus className="w-4 h-4" />
               Add Task Type
@@ -319,7 +319,7 @@ export default function AdminTaskTypesPage() {
             </p>
             <button
               onClick={openCreateModal}
-              className="px-4 py-2 text-xs font-bold text-black bg-[#A6F000] rounded hover:opacity-90"
+              className="px-4 py-2 text-xs font-bold text-black bg-[#B7FF00] rounded hover:opacity-90"
             >
               Add Task Type
             </button>
@@ -403,7 +403,7 @@ export default function AdminTaskTypesPage() {
                         <span
                           className={`inline-block px-2 py-0.5 text-[10px] font-bold uppercase rounded border ${
                             t.default_priority === "urgent"
-                              ? "bg-red-50 text-[#F00091] border-red-200"
+                              ? "bg-red-50 text-[#FF1493] border-red-200"
                               : t.default_priority === "high"
                               ? "bg-amber-50 text-amber-900 border-amber-200"
                               : "bg-[#F5F5F5] text-black border-[#E6E6E6]"
@@ -449,7 +449,7 @@ export default function AdminTaskTypesPage() {
                       <td className="py-2.5 px-3 text-center">
                         <span
                           className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded ${
-                            t.is_active ? "bg-[#A6F000] text-black" : "bg-[#E6E6E6] text-[#808080]"
+                            t.is_active ? "bg-[#B7FF00] text-black" : "bg-[#E6E6E6] text-[#808080]"
                           }`}
                         >
                           {t.is_active ? "Active" : "Inactive"}
@@ -472,7 +472,7 @@ export default function AdminTaskTypesPage() {
                             onClick={() => handleToggleActive(t)}
                             className={`p-1 rounded transition-colors ${
                               t.is_active
-                                ? "text-[#808080] hover:text-[#F00091] hover:bg-red-50"
+                                ? "text-[#808080] hover:text-[#FF1493] hover:bg-red-50"
                                 : "text-[#808080] hover:text-black hover:bg-[#E6E6E6]"
                             }`}
                             title={t.is_active ? "Deactivate" : "Activate"}
@@ -637,7 +637,7 @@ export default function AdminTaskTypesPage() {
                     <button
                       type="button"
                       onClick={handleAddChecklistItem}
-                      className="px-3 py-1.5 text-xs font-bold text-black bg-[#A6F000] rounded hover:opacity-90"
+                      className="px-3 py-1.5 text-xs font-bold text-black bg-[#B7FF00] rounded hover:opacity-90"
                     >
                       Add
                     </button>
@@ -654,7 +654,7 @@ export default function AdminTaskTypesPage() {
                           <button
                             type="button"
                             onClick={() => handleRemoveChecklistItem(i)}
-                            className="text-[#808080] hover:text-[#F00091]"
+                            className="text-[#808080] hover:text-[#FF1493]"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -709,7 +709,7 @@ export default function AdminTaskTypesPage() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="px-5 py-2 text-xs font-bold text-black bg-[#A6F000] rounded hover:opacity-90 disabled:opacity-50"
+                    className="px-5 py-2 text-xs font-bold text-black bg-[#B7FF00] rounded hover:opacity-90 disabled:opacity-50"
                   >
                     {submitting ? "Saving..." : editingType ? "Update Type" : "Create Type"}
                   </button>

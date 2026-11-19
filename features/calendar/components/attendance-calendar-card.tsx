@@ -265,10 +265,10 @@ export function AttendanceCalendarCard({
   };
 
   const statusDotClass = {
-    present: "bg-[#A6F000]",
+    present: "bg-[#B7FF00]",
     half_day: "bg-amber-400",
-    absent: "bg-[#F00091]",
-    holiday: "bg-[#F00091]",
+    absent: "bg-[#FF1493]",
+    holiday: "bg-[#FF1493]",
     weekend: "bg-[#B3B3B3]",
     leave: "bg-[#808080]",
   };
@@ -333,7 +333,7 @@ export function AttendanceCalendarCard({
                 className={cn(
                   "w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold transition-all",
                   isSelected
-                    ? "bg-[#A6F000] text-black font-bold shadow-sm"
+                    ? "bg-[#B7FF00] text-black font-bold shadow-sm"
                     : isToday
                       ? "border-2 border-black text-black font-bold"
                       : "text-black hover:bg-[#F5F5F5]"

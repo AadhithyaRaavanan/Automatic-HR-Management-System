@@ -63,7 +63,7 @@ export function formatFriendlyDueState(
     return {
       label,
       state: "overdue",
-      colorClass: "bg-red-50 text-[#F00091] border border-red-200 font-bold",
+      colorClass: "bg-red-50 text-[#FF1493] border border-red-200 font-bold",
     };
   }
 
