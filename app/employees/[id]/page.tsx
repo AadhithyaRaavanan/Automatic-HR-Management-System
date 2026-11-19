@@ -688,7 +688,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
                 </div>
                 <div className="flex justify-between py-1">
                   <span className="text-text-muted">Account Status:</span>
-                  <span className="font-semibold text-emerald-500 uppercase">{emp.status || "Active"}</span>
+                  <span className="font-semibold text-black uppercase">{emp.status || "Active"}</span>
                 </div>
               </div>
             </BentoCard>
@@ -733,7 +733,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
                 </div>
                 <div className="flex justify-between py-1">
                   <span className="text-text-muted">Onboarding:</span>
-                  <span className="font-semibold text-emerald-500">COMPLETED & VERIFIED</span>
+                  <span className="font-semibold text-black">COMPLETED & VERIFIED</span>
                 </div>
               </div>
             </BentoCard>
@@ -987,7 +987,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
                     className={cn(
                       "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
                       p.status === "approved"
-                        ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+                        ? "bg-lime/20 text-black border border-lime/40"
                         : p.status === "rejected"
                           ? "bg-rose-500/10 text-rose-500 border border-rose-500/20"
                           : "bg-amber-500/10 text-amber-500 border border-amber-500/20"
@@ -1043,7 +1043,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
                             className={cn(
                               "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase",
                               a.status === "present"
-                                ? "bg-emerald-500/10 text-emerald-500"
+                                ? "bg-lime/20 text-black"
                                 : a.status === "absent"
                                   ? "bg-rose-500/10 text-rose-500"
                                   : a.status === "holiday"
@@ -1056,7 +1056,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
                         </td>
                         <td className="py-2.5 px-3 font-bold text-text-primary">{hours}</td>
                         <td className="py-2.5 px-3 font-medium">
-                          <span className={punctuality === "On Time" ? "text-emerald-500 font-bold" : ""}>
+                          <span className={punctuality === "On Time" ? "text-black font-bold" : ""}>
                             {punctuality}
                           </span>
                         </td>

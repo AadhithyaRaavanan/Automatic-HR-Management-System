@@ -68,7 +68,7 @@ const rolesList = [
   {
     role: "Employee",
     code: "employee",
-    badgeColor: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
+    badgeColor: "bg-lime/20 text-black border-lime/40",
     description: "Self-service workforce baseline role (includes all full-time, contract, and intern staff).",
     permissions: [
       "Access own profile and update personal info",
@@ -115,7 +115,7 @@ export default function EmsRolesPage() {
                   <ul className="space-y-1.5 text-xs text-text-secondary">
                     {r.permissions.map((p, i) => (
                       <li key={i} className="flex items-start gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-black shrink-0 mt-0.5" />
                         <span>{p}</span>
                       </li>
                     ))}

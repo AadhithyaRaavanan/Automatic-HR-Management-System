@@ -515,7 +515,7 @@ function RequestsPageContent() {
                       <span
                         className={cn(
                           "px-2 py-0.5 rounded-md text-[11px] font-medium uppercase",
-                          leave.status === "approved" && "bg-emerald-50 text-emerald-600 border border-emerald-200",
+                          leave.status === "approved" && "bg-lime/20 text-black border border-lime/40",
                           leave.status === "pending" && "bg-amber-50 text-amber-600 border border-amber-200",
                           leave.status === "rejected" && "bg-rose-50 text-rose-600 border border-rose-200",
                           leave.status === "cancelled" && "bg-slate-100 text-slate-500 border border-slate-200"
@@ -577,7 +577,7 @@ function RequestsPageContent() {
                               empName: leave.employees?.full_name || "Team Member",
                             })
                           }
-                          className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all cursor-pointer flex items-center gap-1"
+                          className="px-3.5 py-1.5 rounded-xl bg-lime hover:bg-lime-hover text-black text-xs font-bold shadow-sm transition-all cursor-pointer flex items-center gap-1"
                         >
                           <Check className="w-3.5 h-3.5" />
                           <span>Approve Leave</span>
@@ -654,7 +654,7 @@ function RequestsPageContent() {
                           !del.is_active
                             ? "bg-slate-100 text-slate-600"
                             : isActiveNow
-                            ? "bg-emerald-100 text-emerald-700"
+                            ? "bg-lime/25 text-black font-semibold"
                             : isExpired
                             ? "bg-amber-100 text-amber-800"
                             : "bg-brand-purple-light text-brand-purple"

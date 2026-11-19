@@ -766,8 +766,8 @@ function HrOnboardingContent() {
                                 className={cn(
                                   "px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm",
                                   isApproved
-                                    ? "bg-emerald-600 text-white cursor-default"
-                                    : "bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white cursor-pointer border border-emerald-200"
+                                    ? "bg-lime text-black cursor-default"
+                                    : "bg-lime/20 text-black hover:bg-lime hover:text-black cursor-pointer border border-lime/40"
                                 )}
                               >
                                 <Check className="w-3.5 h-3.5" />
@@ -883,7 +883,7 @@ function HrOnboardingContent() {
                   <div>
                     {selectedCandidate.status === "approved" ? (
                       <div className="space-y-1">
-                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-black">
                           <Check className="w-3.5 h-3.5" />
                           <span>Onboarding Approved & Profile Active</span>
                         </span>
@@ -943,7 +943,7 @@ function HrOnboardingContent() {
                       <button
                         type="button"
                         disabled
-                        className="px-6 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-extrabold uppercase tracking-wider shadow-md flex items-center gap-1.5 cursor-default opacity-95"
+                        className="px-6 py-2.5 rounded-xl bg-lime text-black text-xs font-extrabold uppercase tracking-wider shadow-md flex items-center gap-1.5 cursor-default opacity-95"
                       >
                         <CheckCircle2 className="w-4 h-4 text-white" />
                         <span>Approved</span>

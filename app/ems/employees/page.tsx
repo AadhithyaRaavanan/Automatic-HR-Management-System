@@ -163,7 +163,7 @@ export default function EmsEmployeesPage() {
                               ? "bg-amber-500/10 text-amber-500 border-amber-500/20"
                               : emp.employment_category === "contract"
                               ? "bg-purple-500/10 text-purple-500 border-purple-500/20"
-                              : "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                              : "bg-lime/20 text-black border-lime/40"
                           )}
                         >
                           {emp.employment_category?.replace("_", " ") || "Full-Time"}
@@ -198,7 +198,7 @@ export default function EmsEmployeesPage() {
                       </td>
 
                       <td className="p-4">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 uppercase">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-lime/20 text-black border border-lime/40 uppercase">
                           {emp.status || "Active"}
                         </span>
                       </td>

@@ -107,7 +107,7 @@ export function LeaveHistoryTable({ requests, isLoading }: LeaveHistoryTableProp
                         className={cn(
                           "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
                           isPending && "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800",
-                          isApproved && "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800",
+                          isApproved && "bg-lime/20 text-black border border-lime/40",
                           isRejected && "bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-800",
                           isCancelled && "bg-slate-100 text-slate-500 dark:bg-slate-800/40 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
                         )}

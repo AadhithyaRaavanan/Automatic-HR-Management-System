@@ -512,7 +512,7 @@ function ReportsPageContent() {
           subtitle="Verify open punches and pending approvals before locking payroll records"
           action={
             checklist?.is_month_locked ? (
-              <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-bold flex items-center gap-1">
+              <span className="px-2.5 py-1 rounded-full bg-lime/25 text-black font-semibold text-[11px] font-bold flex items-center gap-1">
                 <Lock className="w-3 h-3" />
                 Locked
               </span>
@@ -590,7 +590,7 @@ function ReportsPageContent() {
                   </p>
                 </div>
                 {checklist.ready_to_lock ? (
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <CheckCircle2 className="w-5 h-5 text-black shrink-0" />
                 ) : (
                   <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
                 )}

@@ -768,7 +768,7 @@ function KpiContent() {
               </div>
               <div className="p-3 rounded-xl bg-card border border-border-light shadow-xs flex items-center justify-between">
                 <span className="text-xs font-bold text-text-secondary">On Track</span>
-                <span className="text-base font-black text-emerald-600 tabular-nums">
+                <span className="text-base font-black text-black tabular-nums">
                   {onTrackGoals}
                 </span>
               </div>

@@ -236,7 +236,7 @@ export default function EmployeeDirectoryPage() {
                           ? "bg-amber-500/10 text-amber-500 border-amber-500/20"
                           : emp.employment_category === "contract"
                           ? "bg-purple-500/10 text-purple-500 border-purple-500/20"
-                          : "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                          : "bg-lime/20 text-black border-lime/40"
                       )}
                     >
                       {emp.employment_category ? emp.employment_category.replace("_", " ") : "full time"}
@@ -261,7 +261,7 @@ export default function EmployeeDirectoryPage() {
 
                 <div className="mt-5 pt-3 border-t border-border-light/60 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="inline-block w-2 h-2 rounded-full bg-lime" />
                     <span className="text-[11px] text-text-muted capitalize">{emp.work_mode || "Remote"}</span>
                   </div>
 

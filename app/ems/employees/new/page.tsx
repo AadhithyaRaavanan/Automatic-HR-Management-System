@@ -205,7 +205,7 @@ export default function NewEmployeeWizardPage() {
                     currentStep === step
                       ? "bg-brand-purple w-6"
                       : currentStep > step
-                      ? "bg-emerald-500"
+                      ? "bg-lime"
                       : "bg-card-subtle border border-border-light"
                   )}
                 />
@@ -216,7 +216,7 @@ export default function NewEmployeeWizardPage() {
           {/* Form Content */}
           {createdResult ? (
             <div className="text-center py-8 space-y-4">
-              <div className="w-14 h-14 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center mx-auto border border-emerald-500/20">
+              <div className="w-14 h-14 rounded-full bg-lime/20 text-black flex items-center justify-center mx-auto border border-lime/20">
                 <CheckCircle2 className="w-8 h-8" />
               </div>
               <h3 className="text-xl font-bold text-text-primary">Employee Provisioned!</h3>
@@ -246,7 +246,7 @@ export default function NewEmployeeWizardPage() {
                   onClick={handleCopy}
                   className="px-4 py-2 rounded-xl text-xs font-semibold bg-card-subtle hover:bg-card-subtle/80 border border-border-light text-text-primary flex items-center gap-1.5"
                 >
-                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? <Check className="w-3.5 h-3.5 text-black" /> : <Copy className="w-3.5 h-3.5" />}
                   Copy Details
                 </button>
                 <Link
@@ -546,7 +546,7 @@ export default function NewEmployeeWizardPage() {
                     type="button"
                     onClick={handleCreateEmployee}
                     disabled={isSubmitting}
-                    className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-md transition-all"
+                    className="px-6 py-2.5 rounded-xl bg-lime hover:bg-lime-hover text-black text-xs font-bold flex items-center gap-1.5 shadow-md transition-all"
                   >
                     {isSubmitting ? "Provisioning..." : "Confirm & Provision Account"}
                     <CheckCircle2 className="w-3.5 h-3.5" />
