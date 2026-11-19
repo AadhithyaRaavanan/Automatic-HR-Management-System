@@ -40,6 +40,7 @@ export interface InviteEmployeeInput {
   shiftStartTime?: string;
   shiftEndTime?: string;
   jobTitleId?: string | null;
+  salary?: number | string | null;
 }
 
 export type InviteEmployeeResult =
@@ -79,6 +80,7 @@ export async function inviteSingleEmployee(
     shiftStartTime = "09:00:00",
     shiftEndTime = "17:00:00",
     jobTitleId = null,
+    salary = null,
   } = input;
 
   if (!email || !fullName) {
@@ -451,6 +453,7 @@ export async function inviteSingleEmployee(
       email_dispatched: emailResult.success,
       department_id: departmentId || null,
       job_title_id: jobTitleId || null,
+      salary_inr: salary ? Number(salary) : null,
       invited_at: new Date().toISOString(),
     },
   });

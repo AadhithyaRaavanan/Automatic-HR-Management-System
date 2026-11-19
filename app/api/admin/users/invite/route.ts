@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
       shiftStartTime: body.shiftStartTime,
       shiftEndTime: body.shiftEndTime,
       jobTitleId: body.jobTitleId,
+      salary: body.salary,
     });
 
     if (!result.ok) {

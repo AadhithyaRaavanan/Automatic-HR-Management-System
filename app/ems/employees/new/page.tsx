@@ -45,6 +45,7 @@ export default function NewEmployeeWizardPage() {
   const [timezone, setTimezone] = React.useState("Asia/Kolkata");
   const [shiftStart, setShiftStart] = React.useState("09:00");
   const [shiftEnd, setShiftEnd] = React.useState("17:00");
+  const [salary, setSalary] = React.useState("");
 
   // Step 4: Category Specific (Intern)
   const [internshipDuration, setInternshipDuration] = React.useState(3);
@@ -146,6 +147,7 @@ export default function NewEmployeeWizardPage() {
           jobTitleId,
           shiftStartTime: shiftStart.length === 5 ? `${shiftStart}:00` : shiftStart,
           shiftEndTime: shiftEnd.length === 5 ? `${shiftEnd}:00` : shiftEnd,
+          salary: salary ? Number(salary) : undefined,
         }),
       });
 
@@ -412,6 +414,29 @@ export default function NewEmployeeWizardPage() {
                       <span>Overnight Shift: Check-in scheduled for {shiftStart}, check-out scheduled for {shiftEnd} the following day.</span>
                     </div>
                   )}
+
+                  <div>
+                    <label className="block font-semibold text-text-secondary mb-1">
+                      Monthly Salary / Stipend (₹ INR)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted font-bold text-xs">
+                        ₹
+                      </span>
+                      <input
+                        type="number"
+                        placeholder="e.g. 25000"
+                        min="0"
+                        step="500"
+                        value={salary}
+                        onChange={(e) => setSalary(e.target.value)}
+                        className="w-full pl-8 pr-3.5 py-2.5 rounded-xl bg-card-subtle border border-border-light text-text-primary text-xs focus:ring-2 focus:ring-brand-purple/20 focus:border-brand-purple"
+                      />
+                    </div>
+                    <span className="text-[11px] text-text-muted mt-0.5 block">
+                      Base monthly compensation in Indian Rupees (₹ INR).
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -484,6 +509,11 @@ export default function NewEmployeeWizardPage() {
                     <p>
                       <span className="text-text-muted">Shift:</span> {shiftStart} - {shiftEnd}
                     </p>
+                    {salary && (
+                      <p>
+                        <span className="text-text-muted">Monthly Salary:</span> ₹{Number(salary).toLocaleString("en-IN")} INR
+                      </p>
+                    )}
                   </div>
                   <p className="text-[11px] text-text-muted pt-2 border-t border-border-light">
                     Clicking &quot;Confirm &amp; Provision Account&quot; creates the Supabase Auth user, generates a unique business ID
