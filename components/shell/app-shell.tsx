@@ -436,7 +436,7 @@ export function AppShell({
 
           {/* Mobile Access Gate: Restrict access on mobile screens */}
           <div className="fixed inset-0 z-[10000] bg-white flex flex-col items-center justify-center p-6 text-center md:hidden">
-            <div className="w-16 h-16 rounded-2xl bg-[#A6F000] border border-black/10 flex items-center justify-center text-black mb-4 shadow-sm font-black text-xl">
+            <div className="w-16 h-16 rounded-2xl bg-[#B7FF00] border border-black/10 flex items-center justify-center text-black mb-4 shadow-sm font-black text-xl">
               <Laptop className="w-8 h-8 text-black" />
             </div>
             <h1 className="text-xl font-bold text-black tracking-tight mb-2">Desktop Workstation Required</h1>

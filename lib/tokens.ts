@@ -24,8 +24,8 @@ export const DESIGN_TOKENS = {
   colors: {
     black: "#000000",
     white: "#FFFFFF",
-    lime: "#A6F000",
-    magenta: "#F00091",
+    lime: "#B7FF00",
+    magenta: "#FF1493",
     grey900: "#1A1A1A",
     grey700: "#4D4D4D",
     grey500: "#808080",

@@ -567,7 +567,7 @@ export default function OrganizationSettingsAdminPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-black">Manual Web Check-In</span>
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#A6F000]/20 text-black border border-[#A6F000]/40">Active</span>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#B7FF00]/20 text-black border border-[#B7FF00]/40">Active</span>
                     </div>
                     <p className="text-[11px] text-[#4D4D4D] mt-1">
                       Authenticated self-service web punches with pre-shift 5-min gate and persistent timer.

@@ -36,7 +36,7 @@ export function KpiRadialGauge({
   const strokeColor =
     validScore == null
       ? "#E6E6E6"
-      : "#A6F000"; // Neon Lime brand accent
+      : "#B7FF00"; // Neon Lime brand accent
 
   return (
     <div

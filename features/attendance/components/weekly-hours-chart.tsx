@@ -81,13 +81,13 @@ export function WeeklyHoursChart({
                 {d.workedMinutes > 0 ? (
                   /* Solid bar connected directly with the baseline line (rounded top, flat bottom) */
                   <div
-                    className="w-7 sm:w-8 md:w-9 max-w-[38px] bg-[#A6F000] rounded-t-full rounded-b-none transition-all duration-300 ease-out hover:brightness-95 relative cursor-pointer"
+                    className="w-7 sm:w-8 md:w-9 max-w-[38px] bg-[#B7FF00] rounded-t-full rounded-b-none transition-all duration-300 ease-out hover:brightness-95 relative cursor-pointer"
                     style={{ height: `${heightPercent}%` }}
                   >
                     {/* Tooltip pinned directly above the top of this bar */}
                     <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white text-[10px] font-semibold px-2 py-0.5 rounded shadow-md pointer-events-none whitespace-nowrap z-30 flex items-center gap-1">
                       <span>{d.dayLabel}: {hours}h</span>
-                      {isTargetMet && <span className="text-[#A6F000] text-[10px] font-bold">✓</span>}
+                      {isTargetMet && <span className="text-[#B7FF00] text-[10px] font-bold">✓</span>}
                       {/* Downward triangle arrow */}
                       <div className="absolute left-1/2 -bottom-1 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-[4px] border-t-black" />
                     </div>

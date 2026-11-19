@@ -803,12 +803,12 @@ function TasksWorkspaceContent() {
           <span
             className={cn(
               "font-bold font-mono",
-              summaryCounts.overdue > 0 ? "text-[#F00091]" : "text-[#808080]"
+              summaryCounts.overdue > 0 ? "text-[#FF1493]" : "text-[#808080]"
             )}
           >
             {summaryCounts.overdue}
           </span>
-          <span className={summaryCounts.overdue > 0 ? "text-[#F00091] font-semibold" : ""}>
+          <span className={summaryCounts.overdue > 0 ? "text-[#FF1493] font-semibold" : ""}>
             Overdue
           </span>
         </button>
@@ -1017,7 +1017,7 @@ function TasksWorkspaceContent() {
               <button
                 type="button"
                 onClick={() => setStatusFilter("all")}
-                className="hover:text-[#F00091] cursor-pointer"
+                className="hover:text-[#FF1493] cursor-pointer"
                 aria-label="Remove status filter"
               >
                 <X className="w-3 h-3" />
@@ -1030,7 +1030,7 @@ function TasksWorkspaceContent() {
               <button
                 type="button"
                 onClick={() => setPriorityFilter("all")}
-                className="hover:text-[#F00091] cursor-pointer"
+                className="hover:text-[#FF1493] cursor-pointer"
                 aria-label="Remove priority filter"
               >
                 <X className="w-3 h-3" />
@@ -1043,7 +1043,7 @@ function TasksWorkspaceContent() {
               <button
                 type="button"
                 onClick={() => setTypeFilter("all")}
-                className="hover:text-[#F00091] cursor-pointer"
+                className="hover:text-[#FF1493] cursor-pointer"
                 aria-label="Remove type filter"
               >
                 <X className="w-3 h-3" />
@@ -1056,7 +1056,7 @@ function TasksWorkspaceContent() {
               <button
                 type="button"
                 onClick={() => setRecurringFilter("all")}
-                className="hover:text-[#F00091] cursor-pointer"
+                className="hover:text-[#FF1493] cursor-pointer"
                 aria-label="Remove schedule filter"
               >
                 <X className="w-3 h-3" />
@@ -1069,7 +1069,7 @@ function TasksWorkspaceContent() {
               <button
                 type="button"
                 onClick={() => setDueFilter("all")}
-                className="hover:text-[#F00091] cursor-pointer"
+                className="hover:text-[#FF1493] cursor-pointer"
                 aria-label="Remove due filter"
               >
                 <X className="w-3 h-3" />
@@ -1082,7 +1082,7 @@ function TasksWorkspaceContent() {
               <button
                 type="button"
                 onClick={() => setAssigneeFilter("all")}
-                className="hover:text-[#F00091] cursor-pointer"
+                className="hover:text-[#FF1493] cursor-pointer"
                 aria-label="Remove assignee filter"
               >
                 <X className="w-3 h-3" />
@@ -1095,7 +1095,7 @@ function TasksWorkspaceContent() {
               <button
                 type="button"
                 onClick={() => setProjectFilter("all")}
-                className="hover:text-[#F00091] cursor-pointer"
+                className="hover:text-[#FF1493] cursor-pointer"
                 aria-label="Remove project filter"
               >
                 <X className="w-3 h-3" />
@@ -1108,7 +1108,7 @@ function TasksWorkspaceContent() {
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
-                className="hover:text-[#F00091] cursor-pointer"
+                className="hover:text-[#FF1493] cursor-pointer"
                 aria-label="Remove search query"
               >
                 <X className="w-3 h-3" />
@@ -2379,7 +2379,7 @@ function TasksWorkspaceContent() {
                       });
                       setCancelReason("");
                     }}
-                    className="px-3 py-1.5 rounded-lg bg-red-50 text-[#F00091] border border-red-200 text-xs font-bold cursor-pointer"
+                    className="px-3 py-1.5 rounded-lg bg-red-50 text-[#FF1493] border border-red-200 text-xs font-bold cursor-pointer"
                   >
                     Cancel Task
                   </button>
@@ -2409,7 +2409,7 @@ function TasksWorkspaceContent() {
                           }}
                           className={cn(
                             "w-4 h-4 rounded border flex items-center justify-center shrink-0 cursor-pointer",
-                            st.status === "done" ? "bg-[#A6F000] border-black text-black" : "border-[#808080] bg-white"
+                            st.status === "done" ? "bg-[#B7FF00] border-black text-black" : "border-[#808080] bg-white"
                           )}
                         >
                           {st.status === "done" && "✓"}

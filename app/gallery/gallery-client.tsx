@@ -80,13 +80,13 @@ export default function GalleryPage() {
               <span className="text-xs font-bold">Black</span>
               <span className="text-[11px] font-mono opacity-90">#000000</span>
             </div>
-            <div className="p-4 rounded-xl bg-[#A6F000] text-black shadow-sm flex flex-col justify-between h-24">
+            <div className="p-4 rounded-xl bg-[#B7FF00] text-black shadow-sm flex flex-col justify-between h-24">
               <span className="text-xs font-bold">Neon Lime</span>
-              <span className="text-[11px] font-mono font-bold">#A6F000</span>
+              <span className="text-[11px] font-mono font-bold">#B7FF00</span>
             </div>
-            <div className="p-4 rounded-xl bg-[#F00091] text-white shadow-sm flex flex-col justify-between h-24">
+            <div className="p-4 rounded-xl bg-[#FF1493] text-white shadow-sm flex flex-col justify-between h-24">
               <span className="text-xs font-bold">Neon Magenta</span>
-              <span className="text-[11px] font-mono opacity-90">#F00091</span>
+              <span className="text-[11px] font-mono opacity-90">#FF1493</span>
             </div>
             <div className="p-4 rounded-xl bg-[#1A1A1A] text-white shadow-sm flex flex-col justify-between h-24">
               <span className="text-xs font-bold">Grey 900</span>

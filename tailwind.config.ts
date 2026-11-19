@@ -17,13 +17,13 @@ const config: Config = {
         black: "#000000",
         white: "#FFFFFF",
         magenta: {
-          DEFAULT: "#F00091",
-          hover: "#D0007E",
+          DEFAULT: "#FF1493",
+          hover: "#E01283",
         },
         lime: {
-          DEFAULT: "#A6F000",
-          hover: "#95D800",
-          light: "#F4FDE5",
+          DEFAULT: "#B7FF00",
+          hover: "#A3E600",
+          light: "#F7FFE5",
         },
         grey: {
           900: "#1A1A1A",

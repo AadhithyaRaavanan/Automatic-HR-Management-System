@@ -345,7 +345,7 @@ function LoginForm() {
 
         {/* Lockout Warning Banner */}
         {lockoutMessage && (
-          <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-[#F00091] text-xs font-medium flex items-start gap-2">
+          <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-[#FF1493] text-xs font-medium flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
             <span>{lockoutMessage}</span>
           </div>

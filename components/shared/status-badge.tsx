@@ -42,8 +42,8 @@ export function StatusBadge({
     case "done":
     case "approved":
     case "completed":
-      dotColor = "bg-[#A6F000]";
-      colorClass = "bg-[#A6F000]/15 text-black border-[#A6F000]/30";
+      dotColor = "bg-[#B7FF00]";
+      colorClass = "bg-[#B7FF00]/15 text-black border-[#B7FF00]/30";
       defaultLabel = norm === "on_track" ? "On track" : norm === "done" ? "Done" : "Approved";
       break;
 
@@ -59,8 +59,8 @@ export function StatusBadge({
     case "blocked":
     case "rejected":
     case "overdue":
-      dotColor = "bg-[#F00091]";
-      colorClass = "bg-[#F00091]/10 text-[#F00091] border-[#F00091]/20";
+      dotColor = "bg-[#FF1493]";
+      colorClass = "bg-[#FF1493]/10 text-[#FF1493] border-[#FF1493]/20";
       defaultLabel = norm === "behind" ? "Behind" : norm === "blocked" ? "Blocked" : "Rejected";
       break;
 

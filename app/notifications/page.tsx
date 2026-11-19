@@ -34,8 +34,8 @@ function getNotificationIcon(type: string, title?: string) {
   if (type.startsWith("task")) return <UserCheck className="w-4 h-4 text-black shrink-0" />;
   if (type.startsWith("kpi")) return <Target className="w-4 h-4 text-black shrink-0" />;
   if (type.startsWith("security") || type.startsWith("password") || type.startsWith("mfa"))
-    return <ShieldAlert className="w-4 h-4 text-[#F00091] shrink-0" />;
-  if (type.startsWith("holiday")) return <Calendar className="w-4 h-4 text-[#A6F000] shrink-0" />;
+    return <ShieldAlert className="w-4 h-4 text-[#FF1493] shrink-0" />;
+  if (type.startsWith("holiday")) return <Calendar className="w-4 h-4 text-[#B7FF00] shrink-0" />;
   if (type.startsWith("reminder") || type.includes("overdue") || type.includes("missed"))
     return <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />;
   return <Bell className="w-4 h-4 text-black shrink-0" />;
@@ -235,7 +235,7 @@ export default function NotificationsPage() {
                                 {n.title}
                               </h4>
                               {isUnread && (
-                                <span className="w-2 h-2 rounded-full bg-[#F00091] shrink-0" />
+                                <span className="w-2 h-2 rounded-full bg-[#FF1493] shrink-0" />
                               )}
                             </div>
                             <p className="text-xs text-[#4D4D4D] mt-1 leading-relaxed">

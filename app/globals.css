@@ -7,8 +7,8 @@
     /* Zen Xea Brand Colour Palette */
     --color-black: #000000;
     --color-white: #FFFFFF;
-    --color-magenta: #F00091;
-    --color-lime: #A6F000;
+    --color-magenta: #FF1493;
+    --color-lime: #B7FF00;
     --color-grey-900: #1A1A1A;
     --color-grey-700: #4D4D4D;
     --color-grey-500: #808080;
@@ -25,15 +25,15 @@
     --border-focus: #000000;           /* 2px black focus ring */
 
     /* Primary Brand Accents (Zen Xea) */
-    --brand-lime: #A6F000;             /* Lime accent (fills only) */
-    --brand-lime-hover: #95D800;
-    --brand-magenta: #F00091;          /* Sparing magenta for critical / error */
+    --brand-lime: #B7FF00;             /* Lime accent (fills only) */
+    --brand-lime-hover: #A3E600;
+    --brand-magenta: #FF1493;          /* Sparing magenta for critical / error */
     --brand-black: #000000;            /* Primary brand black */
 
     /* Aliases for backwards compatibility with existing component classes */
     --brand-purple: #000000;           /* Primary button fill is black */
     --brand-purple-hover: #1A1A1A;     /* Primary button hover is grey 900 */
-    --brand-purple-light: #A6F000;     /* Active nav fill is lime */
+    --brand-purple-light: #B7FF00;     /* Active nav fill is lime */
     --brand-navy: #000000;             /* Navy actions map to black */
     --brand-navy-hover: #1A1A1A;
     
@@ -49,7 +49,7 @@
     /* Functional Status Colors */
     --status-success-bg: #F5F5F5;
     --status-success-text: #000000;
-    --status-success-dot: #A6F000;     /* Lime dot for positive status */
+    --status-success-dot: #B7FF00;     /* Lime dot for positive status */
 
     --status-warning-bg: #F5F5F5;
     --status-warning-text: #000000;
@@ -57,7 +57,7 @@
 
     --status-danger-bg: #F5F5F5;
     --status-danger-text: #000000;
-    --status-danger-dot: #F00091;      /* Magenta dot for overdue / rejected / absent */
+    --status-danger-dot: #FF1493;      /* Magenta dot for overdue / rejected / absent */
 
     --status-info-bg: #F5F5F5;
     --status-info-text: #000000;

@@ -58,8 +58,8 @@ export default function EmsOverviewPage() {
             className="p-4 rounded-[14px] bg-black text-white hover:bg-[#1A1A1A] border border-black shadow-none transition-colors flex flex-col justify-between group cursor-pointer min-w-0"
           >
             <div className="flex items-center justify-between text-[#808080] mb-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-[#A6F000]">Quick Action</span>
-              <div className="w-5 h-5 rounded bg-[#A6F000] text-black font-bold flex items-center justify-center text-xs">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-[#B7FF00]">Quick Action</span>
+              <div className="w-5 h-5 rounded bg-[#B7FF00] text-black font-bold flex items-center justify-center text-xs">
                 +
               </div>
             </div>
@@ -82,7 +82,7 @@ export default function EmsOverviewPage() {
               {loading ? "..." : stats.totalEmployees || 0}
             </p>
             <p className="text-[11px] text-[#4D4D4D] font-medium mt-1 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#A6F000]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-[#B7FF00]" />
               {stats.activeEmployees || 0} Active staff
             </p>
           </div>
