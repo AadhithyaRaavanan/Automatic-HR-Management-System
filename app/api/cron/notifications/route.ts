@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notifications/notify";
 import { getManagersOf, getHrUsers } from "@/lib/notifications/recipients";
+import { dispatchBirthdayNotifications } from "@/lib/notifications/birthdays";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,7 @@ export async function GET(request: NextRequest) {
       shiftLateCheckOut: 0,
       autoClosedSessions: 0,
       onboardingIncomplete: 0,
+      birthdaysCelebrated: 0,
     };
 
     // ------------------------------------------------------------------------
@@ -327,6 +329,16 @@ export async function GET(request: NextRequest) {
       }
     } catch (err) {
       console.error("[Cron: Incomplete Onboarding Error]:", err);
+    }
+
+    // ------------------------------------------------------------------------
+    // Rule 7: Daily Birthday Celebration & Announcements
+    // ------------------------------------------------------------------------
+    try {
+      const bdayResult = await dispatchBirthdayNotifications(kolkataDate);
+      stats.birthdaysCelebrated = bdayResult.birthdaysCount;
+    } catch (err) {
+      console.error("[Cron: Birthday Dispatch Error]:", err);
     }
 
     return NextResponse.json({

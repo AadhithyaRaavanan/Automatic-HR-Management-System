@@ -5,6 +5,7 @@ import { notify } from "@/lib/notifications/notify";
 import { QUALIFICATION_DOC_MAP, HighestQualification } from "@/lib/onboarding-types";
 import { sendOnboardingApprovalEmail, sendAdminOnboardingDossierEmail } from "@/lib/email/resend";
 import { getSignedUrl } from "@/lib/onboarding-storage";
+import { dispatchBirthdayNotifications, getKolkataDateString } from "@/lib/notifications/birthdays";
 
 export const dynamic = "force-dynamic";
 
@@ -401,6 +402,22 @@ export async function POST(request: NextRequest) {
         }
       } catch (dossierErr) {
         console.error("[Admin Dossier Background Error]:", dossierErr);
+      }
+    })().catch(() => {});
+
+    // 9. Candidate Birthday Registration & Celebration Check
+    (async () => {
+      try {
+        if (profile.dob) {
+          const todayKolkata = getKolkataDateString();
+          const todayMonthDay = todayKolkata.slice(5); // "MM-DD"
+          const candidateDobMonthDay = profile.dob.slice(5); // "MM-DD"
+          if (todayMonthDay === candidateDobMonthDay) {
+            await dispatchBirthdayNotifications(todayKolkata);
+          }
+        }
+      } catch (bdayErr) {
+        console.warn("[Onboarding Approval Birthday Check Error]:", bdayErr);
       }
     })().catch(() => {});
 

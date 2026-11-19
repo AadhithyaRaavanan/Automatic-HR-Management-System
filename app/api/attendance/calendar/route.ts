@@ -3,6 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { Database } from "@/types/database.types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import { getVerifiedEmployeeBirthdays } from "@/lib/notifications/birthdays";
 import {
   getStoredAttendanceSessions,
   getStoredAttendanceDays,
@@ -261,6 +262,10 @@ export async function GET(request: NextRequest) {
       timezone: "Asia/Kolkata",
     };
 
+    // 10. Fetch birthdays of verified employees for this month
+    const allBirthdays = await getVerifiedEmployeeBirthdays();
+    const birthdays = allBirthdays.filter((b) => b.birthMonth === month);
+
     return NextResponse.json({
       targetEmployee: {
         id: targetEmpData.id,
@@ -273,6 +278,7 @@ export async function GET(request: NextRequest) {
       days,
       sessions,
       holidays,
+      birthdays,
       accessibleEmployees,
       callerRole,
     });

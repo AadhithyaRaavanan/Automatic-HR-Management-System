@@ -41,6 +41,7 @@ interface CalendarDayRow {
   holidayName?: string;
   holidayLocalName?: string | null;
   holidayRegion?: string;
+  birthdays?: Array<{ id: string; name: string }>;
   sessions: Array<{
     id: string;
     checkIn: string;
@@ -97,6 +98,7 @@ function AttendanceCalendarContent() {
     let daysMap = new Map<string, any>();
     let sessByDate = new Map<string, any[]>();
     let holidayByDate = new Map<string, any>();
+    let birthdayByDay = new Map<number, Array<{ id: string; name: string }>>();
 
     try {
       // Fetch from multi-employee calendar API with RBAC support
@@ -123,6 +125,11 @@ function AttendanceCalendarContent() {
             ...h,
             local_name: resolveTamilHolidayName(h.name, h.local_name),
           });
+        }
+        for (const b of calData.birthdays || []) {
+          const list = birthdayByDay.get(b.birthDay) || [];
+          list.push({ id: b.employeeId, name: b.fullName });
+          birthdayByDay.set(b.birthDay, list);
         }
         for (const d of calData.days || []) {
           daysMap.set(d.work_date, d);
@@ -197,6 +204,8 @@ function AttendanceCalendarContent() {
         dayStatus = "unrecorded";
       }
 
+      const dayBirthdays = birthdayByDay.get(i) || [];
+
       built.push({
         dateKey,
         dayNumber: i,
@@ -207,6 +216,7 @@ function AttendanceCalendarContent() {
         holidayName: dbHoliday?.name,
         holidayLocalName: dbHoliday?.local_name,
         holidayRegion: dbHoliday?.region,
+        birthdays: dayBirthdays,
         sessions: daySessions,
       });
     }
@@ -480,6 +490,13 @@ function AttendanceCalendarContent() {
                           </div>
                         </>
                       ) : null}
+
+                      {day.birthdays && day.birthdays.length > 0 && (
+                        <div className="flex items-center gap-1 mt-1 text-[10px] text-black font-semibold truncate bg-[#A6F000]/25 px-1 py-0.5 rounded border border-[#A6F000]/60">
+                          <span>🎂</span>
+                          <span className="truncate">{day.birthdays.map((b) => b.name.split(" ")[0]).join(", ")}</span>
+                        </div>
+                      )}
                     </div>
                   </button>
                 );
@@ -505,6 +522,10 @@ function AttendanceCalendarContent() {
               <span className="w-2.5 h-2.5 rounded-full bg-[#808080]" />
               Approved Leave
             </span>
+            <span className="flex items-center gap-1.5">
+              <span>🎂</span>
+              Birthday
+            </span>
           </div>
         </BentoCard>
 
@@ -516,6 +537,24 @@ function AttendanceCalendarContent() {
         >
           {selectedDay ? (
             <div>
+              {selectedDay.birthdays && selectedDay.birthdays.length > 0 && (
+                <div className="p-3.5 rounded-xl bg-[#A6F000]/20 border border-[#A6F000] mb-4 space-y-1">
+                  {selectedDay.birthdays.map((b, bIdx) => (
+                    <div key={bIdx} className="flex items-center gap-2">
+                      <span className="text-base">🎂</span>
+                      <div>
+                        <span className="text-xs font-bold text-black block leading-tight">
+                          Today is {b.name}&apos;s Birthday!
+                        </span>
+                        <span className="text-[10px] text-[#4D4D4D]">
+                          Team celebration & birthday wishes active
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {selectedDay.holidayName && (
                 <div className="p-4 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] mb-4">
                   <div className="flex items-center gap-2 text-black font-bold text-sm">

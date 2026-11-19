@@ -180,6 +180,27 @@ export function AttendanceCalendarCard({
   className,
 }: AttendanceCalendarCardProps) {
   const [weekOffset, setWeekOffset] = React.useState<number>(0);
+  const [teamBirthdays, setTeamBirthdays] = React.useState<Array<{ id: string; name: string; dateKey: string }>>([]);
+
+  React.useEffect(() => {
+    let active = true;
+    fetch("/api/attendance/calendar")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!active || !data?.birthdays) return;
+        const currentYear = new Date().getFullYear();
+        const bdays = (data.birthdays || []).map((b: any) => ({
+          id: b.employeeId,
+          name: b.fullName,
+          dateKey: `${currentYear}-${String(b.birthMonth).padStart(2, "0")}-${String(b.birthDay).padStart(2, "0")}`,
+        }));
+        setTeamBirthdays(bdays);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Live reference date (Asia/Kolkata or client local)
   const todayKey = React.useMemo(() => {
@@ -204,9 +225,23 @@ export function AttendanceCalendarCard({
   }, [currentMonth, days, todayKey]);
 
   const agenda = React.useMemo(() => {
-    if (propAgenda && propAgenda.length > 0) return propAgenda;
-    return generateLiveAgenda(selectedKey, shiftStartTime, shiftEndTime);
-  }, [propAgenda, selectedKey, shiftStartTime, shiftEndTime]);
+    const base = propAgenda && propAgenda.length > 0
+      ? propAgenda
+      : generateLiveAgenda(selectedKey, shiftStartTime, shiftEndTime);
+
+    const matchingBdays = teamBirthdays.filter((b) => b.dateKey === selectedKey);
+    if (matchingBdays.length > 0) {
+      const bdayItems: AgendaItem[] = matchingBdays.map((b) => ({
+        id: `birthday-${b.id}`,
+        timeSlot: "🎂 Birthday Celebration",
+        title: `Happy Birthday, ${b.name}!`,
+        category: "Team Birthday & Celebration",
+      }));
+      return [...bdayItems, ...base];
+    }
+
+    return base;
+  }, [propAgenda, selectedKey, shiftStartTime, shiftEndTime, teamBirthdays]);
 
   const handleSelect = (d: DayStripItem) => {
     setSelectedKey(d.dateKey);

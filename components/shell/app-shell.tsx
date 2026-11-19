@@ -409,27 +409,27 @@ export function AppShell({
                 sessionState.requireMfaForPrivileged === false &&
                 typeof window !== "undefined" &&
                 !window.location.pathname.startsWith("/settings") && (
-                <div
-                  className="mb-4 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 flex items-center justify-between gap-3 text-xs font-semibold shadow-sm"
-                  role="alert"
-                  data-testid="mfa-disabled-warning-banner"
-                >
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                    <span>
-                      <strong>Security Warning:</strong> Mandatory Two-Factor Authentication (MFA) for privileged accounts is currently disabled for this organization.
-                    </span>
+                  <div
+                    className="mb-4 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 flex items-center justify-between gap-3 text-xs font-semibold shadow-sm"
+                    role="alert"
+                    data-testid="mfa-disabled-warning-banner"
+                  >
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                      <span>
+                        <strong>Security Warning:</strong> Mandatory Two-Factor Authentication (MFA) for privileged accounts is currently disabled for this organization.
+                      </span>
+                    </div>
+                    {userRole === "admin" && (
+                      <Link
+                        href="/settings"
+                        className="underline text-amber-900 dark:text-amber-100 font-bold hover:opacity-80 shrink-0 text-[11px]"
+                      >
+                        Configure in Settings →
+                      </Link>
+                    )}
                   </div>
-                  {userRole === "admin" && (
-                    <Link
-                      href="/settings"
-                      className="underline text-amber-900 dark:text-amber-100 font-bold hover:opacity-80 shrink-0 text-[11px]"
-                    >
-                      Configure in Settings →
-                    </Link>
-                  )}
-                </div>
-              )}
+                )}
               {children}
             </main>
           </div>

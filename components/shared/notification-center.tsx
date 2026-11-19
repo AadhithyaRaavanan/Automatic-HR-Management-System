@@ -29,17 +29,20 @@ interface NotificationCenterProps {
   onOpenChange: (open: boolean) => void;
 }
 
-function getNotificationIcon(type: string) {
-  if (type.startsWith("leave")) return <Calendar className="w-3.5 h-3.5 text-brand-purple shrink-0" />;
-  if (type.startsWith("request") || type.startsWith("regularization")) return <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />;
-  if (type.startsWith("task")) return <UserCheck className="w-3.5 h-3.5 text-blue-500 shrink-0" />;
-  if (type.startsWith("kpi")) return <Target className="w-3.5 h-3.5 text-indigo-500 shrink-0" />;
+function getNotificationIcon(type: string, title?: string) {
+  if (type.includes("birthday") || title?.includes("Birthday") || title?.includes("🎂") || title?.includes("🎉")) {
+    return <span className="text-sm shrink-0">🎂</span>;
+  }
+  if (type.startsWith("leave")) return <Calendar className="w-3.5 h-3.5 text-black shrink-0" />;
+  if (type.startsWith("request") || type.startsWith("regularization")) return <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />;
+  if (type.startsWith("task")) return <UserCheck className="w-3.5 h-3.5 text-black shrink-0" />;
+  if (type.startsWith("kpi")) return <Target className="w-3.5 h-3.5 text-black shrink-0" />;
   if (type.startsWith("security") || type.startsWith("password") || type.startsWith("mfa"))
-    return <ShieldAlert className="w-3.5 h-3.5 text-red-500 shrink-0" />;
-  if (type.startsWith("holiday")) return <Calendar className="w-3.5 h-3.5 text-emerald-500 shrink-0" />;
+    return <ShieldAlert className="w-3.5 h-3.5 text-[#F00091] shrink-0" />;
+  if (type.startsWith("holiday")) return <Calendar className="w-3.5 h-3.5 text-[#A6F000] shrink-0" />;
   if (type.startsWith("reminder") || type.includes("overdue") || type.includes("missed"))
-    return <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />;
-  return <Bell className="w-3.5 h-3.5 text-brand-purple shrink-0" />;
+    return <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />;
+  return <Bell className="w-3.5 h-3.5 text-black shrink-0" />;
 }
 
 export function NotificationCenter({
@@ -89,18 +92,18 @@ export function NotificationCenter({
       }}
     >
       <div
-        className="w-full max-w-sm bg-card rounded-[24px] shadow-shell border border-border-light p-4 sm:p-5 relative overflow-hidden mt-12 animate-in slide-in-from-top-2 duration-200"
+        className="w-full max-w-sm bg-white rounded-[16px] shadow-2xl border border-[#E6E6E6] p-4 sm:p-5 relative overflow-hidden mt-12 animate-in slide-in-from-top-2 duration-200"
         role="dialog"
         aria-modal="true"
         aria-labelledby="notifications-dialog-title"
       >
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-border-light/60 mb-3">
+        <div className="flex items-center justify-between pb-3 border-b border-[#E6E6E6] mb-3">
           <div className="flex items-center gap-2">
-            <Bell className="w-4 h-4 text-brand-purple" />
+            <Bell className="w-4 h-4 text-black" />
             <h2
               id="notifications-dialog-title"
-              className="text-sm font-extrabold text-text-primary"
+              className="text-sm font-bold text-black"
             >
               Notifications
             </h2>
@@ -108,7 +111,7 @@ export function NotificationCenter({
               {unreadCount} unread notifications
             </span>
             {unreadCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-purple text-white">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black text-white">
                 {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             )}
@@ -122,7 +125,7 @@ export function NotificationCenter({
                 onClick={() => markAllRead().catch(() => {})}
                 title="Mark all as read"
                 aria-label="Mark all notifications as read"
-                className="px-2 py-1 rounded-lg text-text-secondary hover:text-brand-purple hover:bg-card-subtle text-[11px] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50 transition-colors"
+                className="px-2 py-1 rounded-lg text-[#808080] hover:text-black hover:bg-[#F5F5F5] text-[11px] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50 transition-colors"
               >
                 <CheckCheck className="w-3.5 h-3.5" />
                 <span>Mark all read</span>
@@ -132,7 +135,7 @@ export function NotificationCenter({
               type="button"
               onClick={() => onOpenChange(false)}
               aria-label="Close notifications"
-              className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-card-subtle cursor-pointer transition-colors"
+              className="p-1.5 rounded-lg text-[#808080] hover:text-black hover:bg-[#F5F5F5] cursor-pointer transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -146,7 +149,7 @@ export function NotificationCenter({
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className="h-16 rounded-xl bg-card-subtle animate-pulse border border-border-light/50"
+                  className="h-16 rounded-xl bg-[#F5F5F5] animate-pulse border border-[#E6E6E6]"
                 />
               ))}
             </div>
@@ -163,31 +166,31 @@ export function NotificationCenter({
                   className={cn(
                     "w-full text-left p-3 rounded-xl border transition-all cursor-pointer relative block",
                     isUnread
-                      ? "bg-brand-purple-light/20 border-brand-purple/30 hover:bg-brand-purple-light/30"
-                      : "bg-card-subtle/60 border-border-light/60 opacity-85 hover:opacity-100 hover:bg-card-subtle"
+                      ? "bg-[#F5F5F5] border-[#E6E6E6] hover:border-[#B3B3B3]"
+                      : "bg-white border-[#E6E6E6] opacity-80 hover:opacity-100 hover:bg-[#F5F5F5]"
                   )}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <span className="text-xs font-bold text-text-primary flex items-center gap-1.5 line-clamp-1">
-                      {getNotificationIcon(n.type)}
+                    <span className="text-xs font-bold text-black flex items-center gap-1.5 line-clamp-1">
+                      {getNotificationIcon(n.type, n.title)}
                       <span>{n.title}</span>
                     </span>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {n.link && (
-                        <ExternalLink className="w-3 h-3 text-text-tertiary" />
+                        <ExternalLink className="w-3 h-3 text-[#808080]" />
                       )}
                       {isUnread && (
                         <span
-                          className="w-2 h-2 rounded-full bg-brand-purple shrink-0"
+                          className="w-2 h-2 rounded-full bg-[#F00091] shrink-0"
                           aria-label="Unread"
                         />
                       )}
                     </div>
                   </div>
-                  <p className="text-[11px] text-text-secondary mt-1 leading-snug line-clamp-2">
+                  <p className="text-[11px] text-[#4D4D4D] mt-1 leading-snug line-clamp-2">
                     {n.body}
                   </p>
-                  <span className="text-[10px] text-text-tertiary mt-1.5 block font-mono">
+                  <span className="text-[10px] text-[#808080] mt-1.5 block font-mono">
                     {relDate}
                   </span>
                 </button>
@@ -195,8 +198,8 @@ export function NotificationCenter({
             })
           ) : (
             <EmptyState
-              className="py-8 border-dashed shadow-none bg-card-subtle/40"
-              icon={<Bell className="w-5 h-5 text-text-tertiary" />}
+              className="py-8 border-dashed shadow-none bg-[#F5F5F5]"
+              icon={<Bell className="w-5 h-5 text-[#808080]" />}
               title="You're all caught up"
               description="New alerts, task updates, and requests will appear here."
             />
@@ -204,11 +207,11 @@ export function NotificationCenter({
         </div>
 
         {/* Footer: View all link */}
-        <div className="pt-3 mt-2 border-t border-border-light/60 text-center">
+        <div className="pt-3 mt-2 border-t border-[#E6E6E6] text-center">
           <Link
             href="/notifications"
             onClick={() => onOpenChange(false)}
-            className="text-xs font-bold text-brand-purple hover:underline inline-flex items-center gap-1"
+            className="text-xs font-bold text-black hover:underline inline-flex items-center gap-1"
           >
             <span>View all notifications</span>
             <ArrowRight className="w-3.5 h-3.5" />

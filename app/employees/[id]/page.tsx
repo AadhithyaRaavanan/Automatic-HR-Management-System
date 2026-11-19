@@ -78,6 +78,84 @@ const ALL_DOCUMENT_TYPES = [
   { key: "medical_cert", label: "Medical Fitness Certificate", category: "Identity & Compliance" },
 ];
 
+// Identity, Academic & Professional Master Document Labels
+const DOCUMENT_LABEL_MAP: Record<string, string> = {
+  // Identity & Core Onboarding
+  photo: "Passport Size Photograph",
+  resume: "Candidate Resume / CV",
+  pan_card: "PAN Card (Permanent Account Number)",
+  aadhaar_card: "Aadhaar Card Copy",
+  bank_proof: "Bank Account Proof (Passbook / Cheque)",
+  passport: "Passport Copy",
+  driving_license: "Driving License",
+  voter_id: "Voter ID Card",
+  address_proof: "Address Proof",
+  medical_cert: "Medical Fitness Certificate",
+
+  // Academic Qualifications
+  cert_10th: "Secondary School (10th Standard) Certificate",
+  cert_12th: "Higher Secondary (12th Standard) Certificate",
+  cert_undergraduate: "Undergraduate Degree Certificate",
+  cert_postgraduate: "Postgraduate Degree Certificate",
+  cert_doctorate: "Doctorate / Ph.D. Degree Certificate",
+  cert_diploma: "Diploma / Polytechnic Certificate",
+  additional_cert: "Additional Certification / Course Certificate",
+
+  // Career & Work Documents
+  experience_cert: "Experience Certificate",
+  relieving_letter: "Relieving Letter",
+  salary_slip: "Previous Salary Slip",
+
+  // Cloud & DevOps Certifications
+  aws_cloud_practitioner: "AWS Certified Cloud Practitioner",
+  aws_solutions_architect: "AWS Certified Solutions Architect",
+  aws_developer: "AWS Certified Developer / SysOps Administrator",
+  gcp_cloud_engineer: "Google Cloud Certified - Associate Cloud Engineer",
+  gcp_cloud_architect: "Google Cloud Certified - Professional Cloud Architect",
+  gcp_data_engineer: "Google Cloud Certified - Data Engineer / ML",
+  azure_fundamentals: "Microsoft Certified: Azure Fundamentals (AZ-900)",
+  azure_administrator: "Microsoft Certified: Azure Administrator (AZ-104)",
+  azure_solutions_architect: "Microsoft Certified: Azure Solutions Architect",
+  kubernetes_cert: "Kubernetes Certified (CKA / CKAD / CKS)",
+  docker_devops_cert: "Docker & DevOps Professional Certification",
+
+  // Technical & Professional
+  cisco_cert: "Cisco Certified (CCNA / CCNP)",
+  cybersecurity_cert: "CompTIA Security+ / CEH / CISSP Cybersecurity",
+  salesforce_cert: "Salesforce Certified Administrator / Developer",
+  pmp_agile_cert: "PMP / Certified ScrumMaster (CSM) / PMI-ACP",
+  oracle_java_cert: "Oracle Certified Professional / Java Developer",
+  data_science_ai_cert: "Data Science & AI / ML Professional Certificate",
+  fullstack_cert: "Full Stack Web Development Professional Certificate",
+  other_certification: "Professional Certification / Course",
+};
+
+function formatDocLabel(doc: any): string {
+  if (!doc) return "Document";
+
+  // Check if doc_label is a known key in DOCUMENT_LABEL_MAP
+  if (doc.doc_label && typeof doc.doc_label === "string") {
+    const trimmed = doc.doc_label.trim();
+    if (DOCUMENT_LABEL_MAP[trimmed]) return DOCUMENT_LABEL_MAP[trimmed];
+    // If it's a custom human title entered by user (not a raw database slug with underscores)
+    if (!trimmed.includes("_") && trimmed.length > 2) return trimmed;
+  }
+
+  // Check doc_type in DOCUMENT_LABEL_MAP
+  const docType = (doc.doc_type || "").trim();
+  if (DOCUMENT_LABEL_MAP[docType]) return DOCUMENT_LABEL_MAP[docType];
+
+  // Check ALL_DOCUMENT_TYPES
+  const matched = ALL_DOCUMENT_TYPES.find((t) => t.key === docType || t.key === doc.doc_label);
+  if (matched?.label) return matched.label;
+
+  // Fallback: convert slug to Title Case
+  const raw = doc.doc_label || doc.doc_type || doc.file_name || "Document";
+  return String(raw)
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 export default function Employee360ProfilePage() {
   const params = useParams();
   const rawId = (params?.id as string) || "";
@@ -361,6 +439,106 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
   const allQuals: string[] = Array.isArray(onb.education_details?.all_qualifications) && onb.education_details.all_qualifications.length > 0
     ? onb.education_details.all_qualifications
     : [onb.highest_qualification || onb.education_details?.highest_qualification || "12th Standard"];
+
+  const renderDocumentCard = (d: any) => {
+    const label = formatDocLabel(d);
+    const isPending =
+      d.document_status === "PENDING REVIEW" ||
+      d.status === "pending" ||
+      d.document_status === "pending";
+    const isRejected =
+      d.document_status === "REJECTED" ||
+      d.status === "rejected" ||
+      d.document_status === "rejected";
+    const isVerified = !isPending && !isRejected;
+
+    return (
+      <div
+        key={d.id}
+        className="p-3.5 rounded-[14px] bg-[#F5F5F5] border border-[#E6E6E6] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs hover:border-[#B3B3B3] transition-colors"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <FileText className="w-4 h-4 text-black shrink-0" />
+          <div className="min-w-0">
+            <p className="font-semibold text-black truncate">{label}</p>
+            <p className="text-[11px] text-[#808080] font-mono truncate">
+              {d.file_name || "document.pdf"}
+            </p>
+            {d.rejection_reason && (
+              <p className="text-[10px] text-[#F00091] mt-0.5 font-medium truncate">
+                Reason: {d.rejection_reason}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <span
+            className={cn(
+              "px-2.5 py-0.5 rounded-full text-[10px] font-semibold border flex items-center gap-1",
+              isVerified
+                ? "bg-[#A6F000]/20 text-black border-[#A6F000]"
+                : isRejected
+                ? "bg-[#F00091]/10 text-[#F00091] border-[#F00091]/30"
+                : "bg-amber-500/10 text-amber-800 border-amber-500/30"
+            )}
+          >
+            <span
+              className={cn(
+                "w-1.5 h-1.5 rounded-full",
+                isVerified
+                  ? "bg-[#A6F000]"
+                  : isRejected
+                  ? "bg-[#F00091]"
+                  : "bg-amber-500"
+              )}
+            />
+            {isVerified ? "VERIFIED" : isRejected ? "REJECTED" : "PENDING REVIEW"}
+          </span>
+
+          {d.signedUrl && (
+            <a
+              href={d.signedUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="px-2.5 py-1 rounded-md bg-white border border-[#E6E6E6] text-black hover:bg-[#E6E6E6] text-[11px] font-semibold inline-flex items-center gap-1.5 transition-colors shadow-2xs"
+              title="View document"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>View</span>
+            </a>
+          )}
+
+          {isAdminOrHr && isPending && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => handleReviewDocument(d.id, "approve")}
+                className="px-2.5 py-1 rounded-md bg-black text-white hover:bg-[#1A1A1A] text-[11px] font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer"
+                title="Approve document"
+              >
+                <Check className="w-3 h-3 text-[#A6F000]" />
+                <span className="hidden sm:inline">Approve</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRejectingDocId(d.id);
+                  setRejectionReason("");
+                  setRejectModalOpen(true);
+                }}
+                className="px-2.5 py-1 rounded-md bg-white border border-[#E6E6E6] text-[#F00091] hover:bg-[#F00091]/10 text-[11px] font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer"
+                title="Reject document"
+              >
+                <X className="w-3 h-3" />
+                <span className="hidden sm:inline">Reject</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -674,104 +852,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
 
               return (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {certDocs.map((c: any) => {
-                    const label =
-                      c.doc_label ||
-                      ALL_DOCUMENT_TYPES.find((t) => t.key === c.doc_type)?.label ||
-                      c.doc_type;
-                    const isPending =
-                      c.document_status === "PENDING REVIEW" || c.status === "pending";
-
-                    return (
-                      <div
-                        key={c.id}
-                        className="p-3.5 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] flex flex-col justify-between gap-3 text-xs"
-                      >
-                        <div className="flex items-start gap-2.5 min-w-0">
-                          <div className="w-8 h-8 rounded-lg bg-white border border-[#E6E6E6] flex items-center justify-center shrink-0 text-black">
-                            <Award className="w-4 h-4 text-black" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-black truncate">{label}</p>
-                            <p className="text-[10px] text-[#808080] truncate mt-0.5 font-mono">
-                              {c.file_name || "certificate.pdf"}
-                            </p>
-                            {c.rejection_reason && (
-                              <p className="text-[10px] text-[#F00091] mt-1 font-medium">
-                                Reason: {c.rejection_reason}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-2 border-t border-[#E6E6E6] gap-2">
-                          <span
-                            className={cn(
-                              "px-2 py-0.5 rounded-full text-[10px] font-semibold border flex items-center gap-1",
-                              c.document_status === "VERIFIED"
-                                ? "bg-[#A6F000]/20 text-black border-[#A6F000]"
-                                : c.document_status === "REJECTED"
-                                ? "bg-[#F00091]/10 text-[#F00091] border-[#F00091]/30"
-                                : "bg-amber-500/10 text-amber-800 border-amber-500/30"
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                "w-1.5 h-1.5 rounded-full",
-                                c.document_status === "VERIFIED"
-                                  ? "bg-[#A6F000]"
-                                  : c.document_status === "REJECTED"
-                                  ? "bg-[#F00091]"
-                                  : "bg-amber-500"
-                              )}
-                            />
-                            {c.document_status || "VERIFIED"}
-                          </span>
-
-                          <div className="flex items-center gap-1.5">
-                            {c.signedUrl && (
-                              <a
-                                href={c.signedUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="px-2 py-1 rounded-md bg-white border border-[#E6E6E6] text-black hover:bg-[#E6E6E6] text-[11px] font-semibold inline-flex items-center gap-1 transition-colors"
-                              >
-                                <Eye className="w-3 h-3" />
-                                <span>View</span>
-                              </a>
-                            )}
-
-                            {isAdminOrHr && isPending && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleReviewDocument(c.id, "approve")}
-                                  className="px-2 py-1 rounded-md bg-black text-white hover:bg-[#1A1A1A] text-[11px] font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer"
-                                  title="Approve certificate"
-                                >
-                                  <Check className="w-3 h-3 text-[#A6F000]" />
-                                  <span>Approve</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setRejectingDocId(c.id);
-                                    setRejectionReason("");
-                                    setRejectModalOpen(true);
-                                  }}
-                                  className="px-2 py-1 rounded-md bg-white border border-[#E6E6E6] text-[#F00091] hover:bg-[#F00091]/10 text-[11px] font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer"
-                                  title="Reject certificate"
-                                >
-                                  <X className="w-3 h-3" />
-                                  <span>Reject</span>
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {certDocs.map(renderDocumentCard)}
                 </div>
               );
             })()}
@@ -792,78 +873,10 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
           </div>
 
           {docs.length === 0 ? (
-            <p className="text-xs text-text-muted">No documents uploaded or all archived in Google Drive.</p>
+            <p className="text-xs text-[#808080]">No documents uploaded or all archived in Google Drive.</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {docs.map((d: any) => (
-                <div
-                  key={d.id}
-                  className="p-3.5 rounded-2xl bg-card-subtle border border-border-light flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <FileText className="w-4 h-4 text-brand-purple shrink-0" />
-                    <div className="min-w-0">
-                      <p className="font-semibold text-text-primary truncate">
-                        {ALL_DOCUMENT_TYPES.find((t) => t.key === d.doc_type)?.label || d.doc_type}
-                      </p>
-                      <p className="text-[10px] text-text-muted font-mono truncate">{d.file_name || "drive_asset.pdf"}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span
-                      className={cn(
-                        "px-2 py-0.5 rounded-full text-[10px] font-bold border",
-                        d.document_status === "VERIFIED"
-                          ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
-                          : d.document_status === "REJECTED"
-                            ? "bg-rose-500/10 text-rose-500 border-rose-500/20"
-                            : "bg-amber-500/10 text-amber-500 border-amber-500/20"
-                      )}
-                    >
-                      {d.document_status || "VERIFIED"}
-                    </span>
-
-                    {d.signedUrl && (
-                      <a
-                        href={d.signedUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-2.5 py-1 rounded-lg bg-card hover:bg-card-subtle text-brand-purple hover:text-brand-purple-hover border border-border-light text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors"
-                        title="View document"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>View</span>
-                      </a>
-                    )}
-
-                    {/* Admin/HR Approval Actions for Pending Documents */}
-                    {isAdminOrHr && d.document_status === "PENDING REVIEW" && (
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleReviewDocument(d.id, "approve")}
-                          className="p-1 rounded-lg bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border border-emerald-500/30"
-                          title="Approve Document"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRejectingDocId(d.id);
-                            setRejectModalOpen(true);
-                          }}
-                          className="p-1 rounded-lg bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 border border-rose-500/30"
-                          title="Reject Document"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
+              {docs.map(renderDocumentCard)}
             </div>
           )}
         </div>

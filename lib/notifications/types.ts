@@ -52,7 +52,7 @@ export function resolveTypeGroup(type: string): NotificationTypeGroup {
   if (type.startsWith("task")) return "tasks";
   if (type.startsWith("onboarding") || type.startsWith("doc_")) return "onboarding";
   if (type.startsWith("kpi")) return "kpi";
-  if (type.startsWith("holiday") || type.startsWith("announcement")) return "announcements";
+  if (type.startsWith("birthday") || type.startsWith("holiday") || type.startsWith("announcement")) return "announcements";
   if (
     type.startsWith("security") ||
     type.startsWith("password") ||

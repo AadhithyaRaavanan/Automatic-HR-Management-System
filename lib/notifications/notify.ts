@@ -144,20 +144,34 @@ export async function notify(params: NotifyParams): Promise<NotifyResult> {
           dedupe_key: dedupeKey || null,
         }));
 
-        const { data, error } = await (supabaseAdmin.from("notifications") as any)
-          .upsert(rows, {
-            onConflict: "user_id,dedupe_key",
-            ignoreDuplicates: true,
-          })
-          .select("id");
+        let insertSuccess = false;
+        try {
+          const { data, error } = await (supabaseAdmin.from("notifications") as any)
+            .upsert(rows, {
+              onConflict: "user_id,dedupe_key",
+              ignoreDuplicates: true,
+            })
+            .select("id");
 
-        if (error) {
-          // If upsert with onConflict on partial index has schema variation, fallback to safe insert
-          console.warn("[notify] Upsert notifications error, falling back to insert:", error.message);
-          const { error: insErr } = await (supabaseAdmin.from("notifications") as any).insert(rows);
-          if (!insErr) inAppCount = rows.length;
-        } else {
-          inAppCount = (data || []).length;
+          if (!error && data) {
+            inAppCount = data.length;
+            insertSuccess = true;
+          }
+        } catch {}
+
+        if (!insertSuccess) {
+          // Fallback to minimal compatible row structure supported by all schemas
+          const safeRows = allowedInAppUserIds.map((uid) => ({
+            user_id: uid,
+            type: ["missed_checkout", "request_status", "policy_update", "reminder"].includes(type)
+              ? type
+              : "reminder",
+            title,
+            body,
+            link: link || null,
+          }));
+          const { error: insErr } = await (supabaseAdmin.from("notifications") as any).insert(safeRows);
+          if (!insErr) inAppCount = safeRows.length;
         }
       } catch (insertErr) {
         console.error("[notify] Failed to insert notifications:", insertErr);
