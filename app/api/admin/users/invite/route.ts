@@ -5,7 +5,7 @@ import { inviteSingleEmployee } from "@/lib/admin/invite-employee";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
-  const authResult = await verifyAdminRouteCaller(request, ["admin"]);
+  const authResult = await verifyAdminRouteCaller(request, ["admin", "hr"]);
   if ("response" in authResult) {
     return authResult.response;
   }

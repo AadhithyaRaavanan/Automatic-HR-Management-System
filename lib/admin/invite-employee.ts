@@ -118,6 +118,16 @@ export async function inviteSingleEmployee(
     };
   }
 
+  // Security Privilege Check: Only administrators can create or invite admin users.
+  // HR Admins are permitted to provision HR Admins ('hr'), Managers, Team Leads, and Employees.
+  if (context.role !== "admin" && role === "admin") {
+    return {
+      ok: false,
+      status: 403,
+      error: "Forbidden: Only administrators can invite admin users.",
+    };
+  }
+
   let resolvedDepartmentName: string | undefined;
   let resolvedJobTitleName: string | undefined;
 

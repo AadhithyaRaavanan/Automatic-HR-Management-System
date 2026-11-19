@@ -18,6 +18,7 @@ import {
   AlertCircle,
   FileText,
   ExternalLink,
+  Eye,
   ShieldCheck,
   Award,
   GraduationCap,
@@ -380,10 +381,11 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
                           href={d.signedUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="p-1 rounded-lg bg-card hover:bg-card-subtle text-brand-purple border border-border-light text-[10px] font-semibold flex items-center gap-1 shadow-sm"
-                          title="Preview document"
+                          className="px-2.5 py-1 rounded-lg bg-card hover:bg-card-subtle text-brand-purple hover:text-brand-purple-hover border border-border-light text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors"
+                          title="View document"
                         >
-                          <ExternalLink className="w-3 h-3" />
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View</span>
                         </a>
                       )}
                     </div>
