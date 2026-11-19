@@ -20,6 +20,7 @@ import { TaskType, TaskRecurrence } from "@/lib/tasks/types";
 import { calculateWorkingDaysAhead } from "@/lib/date/working-days";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   CheckSquare,
   Plus,
@@ -40,6 +41,8 @@ import {
   Sparkles,
   Layers,
   ArrowRight,
+  ChevronDown,
+  Check,
 } from "lucide-react";
 
 const STATUS_COLUMNS: Array<{ key: TaskStatus; label: string; hint: string }> = [
@@ -89,6 +92,77 @@ function getInitials(name: string): string {
   if (parts.length === 0 || !parts[0]) return "??";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function FilterDropdownMenu({
+  label,
+  value,
+  options,
+  onSelect,
+  ariaLabel,
+}: {
+  label: string;
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  onSelect: (val: string) => void;
+  ariaLabel: string;
+}) {
+  const isFiltered = value !== "all";
+  const selectedOption = options.find((o) => o.value === value);
+  const displayLabel = isFiltered
+    ? selectedOption?.label || value
+    : label;
+
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          aria-label={ariaLabel}
+          className={cn(
+            "inline-flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer select-none",
+            isFiltered
+              ? "bg-black text-white border-black"
+              : "bg-white text-black border-[#E6E6E6] hover:bg-[#F5F5F5]"
+          )}
+        >
+          <span className="truncate max-w-[125px]">{displayLabel}</span>
+          <ChevronDown
+            className={cn(
+              "w-3 h-3 shrink-0",
+              isFiltered ? "text-white" : "text-[#808080]"
+            )}
+          />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="start"
+          sideOffset={4}
+          className="z-50 min-w-[170px] max-w-[280px] max-h-60 overflow-y-auto rounded-xl bg-white border border-[#E6E6E6] p-1 shadow-lg text-xs animate-in fade-in-0 zoom-in-95"
+        >
+          {options.map((opt) => {
+            const isSelected = value === opt.value;
+            return (
+              <DropdownMenu.Item
+                key={opt.value}
+                onSelect={() => onSelect(opt.value)}
+                className={cn(
+                  "flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer select-none outline-none transition-colors",
+                  isSelected
+                    ? "bg-[#F5F5F5] font-bold text-black"
+                    : "text-black hover:bg-[#F5F5F5]"
+                )}
+              >
+                <span className="truncate mr-2">{opt.label}</span>
+                {isSelected && <Check className="w-3.5 h-3.5 text-black shrink-0" />}
+              </DropdownMenu.Item>
+            );
+          })}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
 }
 
 function TasksWorkspaceContent() {
@@ -450,6 +524,58 @@ function TasksWorkspaceContent() {
     searchQuery,
   ]);
 
+  const scopedTasks = React.useMemo(() => {
+    return tasks.filter((t) => {
+      if (scope === "mine" && userId) {
+        if (t.assignee_id !== userId && t.creator_id !== userId) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [tasks, scope, userId]);
+
+  const summaryCounts = React.useMemo(() => {
+    let open = 0;
+    let overdue = 0;
+    let dueSoon = 0;
+    let completed = 0;
+
+    for (const t of scopedTasks) {
+      if (t.status === "done") {
+        completed++;
+      } else if (t.status !== "cancelled") {
+        open++;
+        const state = getTaskDueState(t.due_date, t.status);
+        if (state === "overdue") overdue++;
+        else if (state === "due_soon") dueSoon++;
+      }
+    }
+
+    return { open, overdue, dueSoon, completed };
+  }, [scopedTasks]);
+
+  const handleClearAllFilters = () => {
+    setStatusFilter("all");
+    setPriorityFilter("all");
+    setTypeFilter("all");
+    setRecurringFilter("all");
+    setDueFilter("all");
+    setAssigneeFilter("all");
+    setProjectFilter("all");
+    setSearchQuery("");
+  };
+
+  const hasActiveFilters =
+    statusFilter !== "all" ||
+    priorityFilter !== "all" ||
+    typeFilter !== "all" ||
+    recurringFilter !== "all" ||
+    dueFilter !== "all" ||
+    assigneeFilter !== "all" ||
+    projectFilter !== "all" ||
+    searchQuery.trim().length > 0;
+
   const selectedTask = React.useMemo(() => {
     if (!selectedTaskId) return null;
     return tasks.find((t) => t.id === selectedTaskId) || null;
@@ -623,17 +749,14 @@ function TasksWorkspaceContent() {
   return (
     <div className="space-y-4 pb-12">
       {/* Header & Controls */}
-      <div data-tour="tasks-header" className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-2">
+      <div data-tour="tasks-header" className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-1">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-black tracking-tight flex items-center gap-2">
-            <span>Tasks & Deliverables</span>
+            <span>Tasks</span>
             <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black">
               {filteredTasks.length} {filteredTasks.length === 1 ? "task" : "tasks"}
             </span>
           </h1>
-          <p className="text-xs sm:text-sm text-[#808080] mt-0.5">
-            Auto-templates, suggested working-day schedules, and recurring team workflows.
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
@@ -644,7 +767,7 @@ function TasksWorkspaceContent() {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E6E6E6] bg-white hover:bg-[#F5F5F5] text-xs font-semibold text-black cursor-pointer shadow-xs transition-colors"
             >
               <FolderPlus className="w-3.5 h-3.5 text-black" />
-              <span>New Project</span>
+              <span>New project</span>
             </button>
           )}
 
@@ -652,11 +775,70 @@ function TasksWorkspaceContent() {
             type="button"
             data-tour="create-task-btn"
             onClick={handleOpenCreateModal}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#A6F000] hover:opacity-90 text-xs font-bold text-black cursor-pointer shadow-xs transition-opacity"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-xs font-semibold text-white cursor-pointer shadow-xs transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Create Task</span>
+            <span>Create task</span>
           </button>
+        </div>
+      </div>
+
+      {/* Slim Summary Strip */}
+      <div className="flex items-center gap-3 py-1 text-xs text-[#808080] border-b border-[#E6E6E6]">
+        <div className="flex items-center gap-1.5">
+          <span className={cn("font-bold font-mono", summaryCounts.open > 0 ? "text-black" : "text-[#808080]")}>
+            {summaryCounts.open}
+          </span>
+          <span>Open</span>
+        </div>
+        <span className="h-3 w-px bg-[#E6E6E6]" aria-hidden="true" />
+        <button
+          type="button"
+          onClick={() => setDueFilter(dueFilter === "overdue" ? "all" : "overdue")}
+          className={cn(
+            "flex items-center gap-1.5 cursor-pointer transition-colors",
+            dueFilter === "overdue" && "underline underline-offset-2"
+          )}
+        >
+          <span
+            className={cn(
+              "font-bold font-mono",
+              summaryCounts.overdue > 0 ? "text-[#F00091]" : "text-[#808080]"
+            )}
+          >
+            {summaryCounts.overdue}
+          </span>
+          <span className={summaryCounts.overdue > 0 ? "text-[#F00091] font-semibold" : ""}>
+            Overdue
+          </span>
+        </button>
+        <span className="h-3 w-px bg-[#E6E6E6]" aria-hidden="true" />
+        <button
+          type="button"
+          onClick={() => setDueFilter(dueFilter === "due_soon" ? "all" : "due_soon")}
+          className={cn(
+            "flex items-center gap-1.5 cursor-pointer transition-colors",
+            dueFilter === "due_soon" && "underline underline-offset-2"
+          )}
+        >
+          <span
+            className={cn(
+              "font-bold font-mono",
+              summaryCounts.dueSoon > 0 ? "text-[#D97706]" : "text-[#808080]"
+            )}
+          >
+            {summaryCounts.dueSoon}
+          </span>
+          <span className={summaryCounts.dueSoon > 0 ? "text-[#D97706] font-semibold" : ""}>
+            Due soon
+          </span>
+        </button>
+        <span className="h-3 w-px bg-[#E6E6E6]" aria-hidden="true" />
+        <div className="flex items-center gap-1.5">
+          <span className={cn("font-bold font-mono", summaryCounts.completed > 0 ? "text-black" : "text-[#808080]")}>
+            {summaryCounts.completed}
+          </span>
+          <span>Completed</span>
         </div>
       </div>
 
@@ -736,128 +918,246 @@ function TasksWorkspaceContent() {
         </div>
       </div>
 
-      {/* Filter Dropdowns Toolbar */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 pt-0.5 text-xs">
-        {/* Status */}
-        <select
-          aria-label="Filter by status"
+      {/* Filter Menus Toolbar */}
+      <div className="flex flex-wrap items-center gap-2 pt-0.5 text-xs">
+        <FilterDropdownMenu
+          label="All Statuses"
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black focus:outline-none"
-        >
-          <option value="all">All Statuses</option>
-          {STATUS_COLUMNS.map((c) => (
-            <option key={c.key} value={c.key}>
-              {c.label}
-            </option>
-          ))}
-        </select>
-
-        {/* Priority */}
-        <select
-          aria-label="Filter by priority"
+          ariaLabel="Filter by status"
+          options={[
+            { value: "all", label: "All Statuses" },
+            ...STATUS_COLUMNS.map((c) => ({ value: c.key, label: c.label })),
+          ]}
+          onSelect={setStatusFilter}
+        />
+        <FilterDropdownMenu
+          label="All Priorities"
           value={priorityFilter}
-          onChange={(e) => setPriorityFilter(e.target.value)}
-          className="px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black focus:outline-none"
-        >
-          <option value="all">All Priorities</option>
-          {PRIORITY_OPTIONS.map((p) => (
-            <option key={p} value={p}>
-              Priority: {p.charAt(0).toUpperCase() + p.slice(1)}
-            </option>
-          ))}
-        </select>
-
-        {/* Type Filter */}
-        <select
-          aria-label="Filter by type"
+          ariaLabel="Filter by priority"
+          options={[
+            { value: "all", label: "All Priorities" },
+            ...PRIORITY_OPTIONS.map((p) => ({
+              value: p,
+              label: `Priority: ${p.charAt(0).toUpperCase() + p.slice(1)}`,
+            })),
+          ]}
+          onSelect={setPriorityFilter}
+        />
+        <FilterDropdownMenu
+          label="All Types"
           value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black focus:outline-none"
-        >
-          <option value="all">All Types</option>
-          {taskTypes.map((t) => (
-            <option key={t.id} value={t.id}>
-              Type: {t.name}
-            </option>
-          ))}
-        </select>
-
-        {/* Recurring Filter */}
-        <select
-          aria-label="Filter by recurring"
+          ariaLabel="Filter by type"
+          options={[
+            { value: "all", label: "All Types" },
+            ...taskTypes.map((t) => ({ value: t.id, label: `Type: ${t.name}` })),
+          ]}
+          onSelect={setTypeFilter}
+        />
+        <FilterDropdownMenu
+          label="All Schedules"
           value={recurringFilter}
-          onChange={(e) => setRecurringFilter(e.target.value)}
-          className="px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black focus:outline-none"
-        >
-          <option value="all">All Schedules</option>
-          <option value="recurring">🔁 Recurring Only</option>
-          <option value="one_time">One-Time Only</option>
-        </select>
-
-        {/* Due Date */}
-        <select
-          aria-label="Filter by due state"
+          ariaLabel="Filter by recurring"
+          options={[
+            { value: "all", label: "All Schedules" },
+            { value: "recurring", label: "🔁 Recurring Only" },
+            { value: "one_time", label: "One-Time Only" },
+          ]}
+          onSelect={setRecurringFilter}
+        />
+        <FilterDropdownMenu
+          label="All Due Dates"
           value={dueFilter}
-          onChange={(e) => setDueFilter(e.target.value)}
-          className="px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black focus:outline-none"
-        >
-          <option value="all">All Due Dates</option>
-          <option value="overdue">Overdue Only</option>
-          <option value="due_soon">Due Soon</option>
-          <option value="upcoming">Upcoming</option>
-          <option value="none">No Due Date</option>
-        </select>
-
-        {/* Assignee */}
-        <select
-          aria-label="Filter by assignee"
+          ariaLabel="Filter by due state"
+          options={[
+            { value: "all", label: "All Due Dates" },
+            { value: "overdue", label: "Overdue Only" },
+            { value: "due_soon", label: "Due Soon" },
+            { value: "upcoming", label: "Upcoming" },
+            { value: "none", label: "No Due Date" },
+          ]}
+          onSelect={setDueFilter}
+        />
+        <FilterDropdownMenu
+          label="All Assignees"
           value={assigneeFilter}
-          onChange={(e) => setAssigneeFilter(e.target.value)}
-          className="px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black focus:outline-none"
-        >
-          <option value="all">All Assignees</option>
-          <option value="unassigned">Unassigned</option>
-          {employees.map((emp) => (
-            <option key={emp.id} value={emp.id}>
-              {emp.full_name || emp.email}
-            </option>
-          ))}
-        </select>
-
-        {/* Project */}
-        <select
-          aria-label="Filter by project"
+          ariaLabel="Filter by assignee"
+          options={[
+            { value: "all", label: "All Assignees" },
+            { value: "unassigned", label: "Unassigned" },
+            ...employees.map((emp) => ({
+              value: emp.id,
+              label: emp.full_name || emp.email,
+            })),
+          ]}
+          onSelect={setAssigneeFilter}
+        />
+        <FilterDropdownMenu
+          label="All Projects"
           value={projectFilter}
-          onChange={(e) => setProjectFilter(e.target.value)}
-          className="px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black focus:outline-none"
-        >
-          <option value="all">All Projects</option>
-          <option value="none">No Project</option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.code ? `${p.code} · ${p.name}` : p.name}
-            </option>
-          ))}
-        </select>
+          ariaLabel="Filter by project"
+          options={[
+            { value: "all", label: "All Projects" },
+            { value: "none", label: "No Project" },
+            ...projects.map((p) => ({
+              value: p.id,
+              label: p.code ? `${p.code} · ${p.name}` : p.name,
+            })),
+          ]}
+          onSelect={setProjectFilter}
+        />
       </div>
+
+      {/* Active Filter Chips & Clear Filters */}
+      {hasActiveFilters && (
+        <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs">
+          <span className="text-[11px] text-[#808080] font-medium mr-1">Active filters:</span>
+          {statusFilter !== "all" && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
+              Status: {STATUS_COLUMNS.find((c) => c.key === statusFilter)?.label}
+              <button
+                type="button"
+                onClick={() => setStatusFilter("all")}
+                className="hover:text-[#F00091] cursor-pointer"
+                aria-label="Remove status filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {priorityFilter !== "all" && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
+              Priority: {priorityFilter.charAt(0).toUpperCase() + priorityFilter.slice(1)}
+              <button
+                type="button"
+                onClick={() => setPriorityFilter("all")}
+                className="hover:text-[#F00091] cursor-pointer"
+                aria-label="Remove priority filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {typeFilter !== "all" && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
+              Type: {taskTypes.find((t) => t.id === typeFilter)?.name || "Selected"}
+              <button
+                type="button"
+                onClick={() => setTypeFilter("all")}
+                className="hover:text-[#F00091] cursor-pointer"
+                aria-label="Remove type filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {recurringFilter !== "all" && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
+              Schedule: {recurringFilter === "recurring" ? "Recurring" : "One-time"}
+              <button
+                type="button"
+                onClick={() => setRecurringFilter("all")}
+                className="hover:text-[#F00091] cursor-pointer"
+                aria-label="Remove schedule filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {dueFilter !== "all" && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
+              Due: {dueFilter.replace("_", " ")}
+              <button
+                type="button"
+                onClick={() => setDueFilter("all")}
+                className="hover:text-[#F00091] cursor-pointer"
+                aria-label="Remove due filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {assigneeFilter !== "all" && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
+              Assignee: {assigneeFilter === "unassigned" ? "Unassigned" : (employees.find((e) => e.id === assigneeFilter)?.full_name || "Assigned")}
+              <button
+                type="button"
+                onClick={() => setAssigneeFilter("all")}
+                className="hover:text-[#F00091] cursor-pointer"
+                aria-label="Remove assignee filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {projectFilter !== "all" && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
+              Project: {projectFilter === "none" ? "No project" : (projects.find((p) => p.id === projectFilter)?.name || "Project")}
+              <button
+                type="button"
+                onClick={() => setProjectFilter("all")}
+                className="hover:text-[#F00091] cursor-pointer"
+                aria-label="Remove project filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {searchQuery.trim() && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
+              Search: "{searchQuery}"
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="hover:text-[#F00091] cursor-pointer"
+                aria-label="Remove search query"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={handleClearAllFilters}
+            className="text-[11px] font-semibold text-[#808080] hover:text-black underline ml-1 cursor-pointer"
+          >
+            Clear filters
+          </button>
+        </div>
+      )}
 
       {/* Main Board or List Area */}
       {isLoading ? (
         <div className="p-16 text-center text-xs text-[#808080]">Loading workplace tasks...</div>
       ) : filteredTasks.length === 0 ? (
-        <EmptyState
-          title="No tasks match criteria"
-          description="Try broadening filters or create a new automated task deliverable."
-          action={
-            <button
-              onClick={handleOpenCreateModal}
-              className="px-4 py-2 text-xs font-bold bg-[#A6F000] text-black rounded hover:opacity-90 cursor-pointer"
-            >
-              Create New Task
-            </button>
-          }
-        />
+        tasks.length === 0 ? (
+          <EmptyState
+            title="No tasks yet"
+            description="Create your first task to track work and deliverables."
+            action={
+              <button
+                type="button"
+                onClick={handleOpenCreateModal}
+                className="px-4 py-2 text-xs font-semibold bg-black hover:bg-[#1A1A1A] text-white rounded-lg cursor-pointer"
+              >
+                New task
+              </button>
+            }
+          />
+        ) : (
+          <EmptyState
+            title="No tasks match these filters"
+            description="Try clearing or adjusting filters to view existing tasks."
+            action={
+              <button
+                type="button"
+                onClick={handleClearAllFilters}
+                className="px-4 py-2 text-xs font-semibold bg-white border border-[#E6E6E6] hover:bg-[#F5F5F5] text-black rounded-lg cursor-pointer"
+              >
+                Clear filters
+              </button>
+            }
+          />
+        )
       ) : viewMode === "board" ? (
         <div data-tour="tasks-board" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 items-start">
           {STATUS_COLUMNS.map((col) => {
@@ -1098,8 +1398,8 @@ function TasksWorkspaceContent() {
             className="w-full max-w-xl bg-white rounded-2xl border border-[#E6E6E6] shadow-xl p-6 space-y-4 max-h-[92vh] overflow-y-auto animate-in fade-in duration-150"
           >
             <div className="flex items-center justify-between pb-2 border-b border-[#E6E6E6]">
-              <h2 id="create-task-title" className="text-base font-bold text-black">
-                Create New Task
+              <h2 id="create-task-title" className="text-base font-bold text-black text-left">
+                Create new task
               </h2>
               <button
                 type="button"
@@ -1111,11 +1411,11 @@ function TasksWorkspaceContent() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateTask} className="space-y-3.5">
+            <form onSubmit={handleCreateTask} className="space-y-3.5 text-left">
               {/* Type Dropdown (First Field, Grouped by Department) */}
               <div>
                 <label className="block text-xs font-bold text-black mb-1">
-                  Task Type & Preset
+                  Task type & preset
                 </label>
                 <select
                   value={selectedTypeId}
@@ -1160,7 +1460,7 @@ function TasksWorkspaceContent() {
               {/* Title */}
               <div>
                 <label className="block text-xs font-bold text-black mb-1">
-                  Title *
+                  Task title *
                 </label>
                 <input
                   required
@@ -1178,7 +1478,7 @@ function TasksWorkspaceContent() {
               {/* Description Template */}
               <div>
                 <label className="block text-xs font-bold text-black mb-1">
-                  Description / Template
+                  Description / template
                 </label>
                 <textarea
                   rows={3}
@@ -1197,7 +1497,7 @@ function TasksWorkspaceContent() {
                 <div className="p-3 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] space-y-2">
                   <span className="text-[11px] font-bold text-black flex items-center gap-1.5">
                     <CheckSquare className="w-3.5 h-3.5 text-black" />
-                    Sub-Task Checklist (Create these as sub-tasks)
+                    Sub-tasks from checklist (optional)
                   </span>
                   <div className="space-y-1.5">
                     {taskTypes.find((t) => t.id === selectedTypeId)?.checklist?.map((item) => (
@@ -1290,7 +1590,7 @@ function TasksWorkspaceContent() {
 
                 <div>
                   <label className="block text-xs font-bold text-black mb-1">
-                    Due Date
+                    Due date
                   </label>
                   <input
                     type="date"
@@ -1326,12 +1626,12 @@ function TasksWorkspaceContent() {
                 </div>
               </div>
 
-              {/* Duration Picker & Historical Estimate Suggestion */}
+              {/* Duration Picker & Duration Presets */}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs font-bold text-black flex items-center gap-1.5">
                     <Timer className="w-3.5 h-3.5 text-black" />
-                    Estimated Duration
+                    Estimated duration
                   </label>
                   {((parseInt(estHours || "0", 10) * 60) + parseInt(estMinutes || "0", 10)) > 0 && (
                     <span className="text-[11px] font-mono font-bold text-black">
@@ -1391,9 +1691,34 @@ function TasksWorkspaceContent() {
                   )}
                 </div>
 
+                {/* Duration Presets (30m, 1h, 2h, 4h, 8h) */}
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  <span className="text-[10px] font-bold uppercase text-[#808080] mr-1">Presets:</span>
+                  {[
+                    { label: "30m", h: "", m: "30" },
+                    { label: "1h", h: "1", m: "" },
+                    { label: "2h", h: "2", m: "" },
+                    { label: "4h", h: "4", m: "" },
+                    { label: "8h", h: "8", m: "" },
+                  ].map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => {
+                        setEstHours(preset.h);
+                        setEstMinutes(preset.m);
+                        editedFields.current.add("estimate");
+                      }}
+                      className="px-2 py-0.5 rounded text-[11px] font-medium bg-white hover:bg-[#F5F5F5] border border-[#E6E6E6] text-black transition-colors cursor-pointer"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+
                 {/* Historical Estimate Suggestion */}
                 {historicalMedianEstimate && (
-                  <div className="mt-1 flex items-center justify-between text-[11px] text-[#4D4D4D] bg-[#F5F5F5] border border-[#E6E6E6] rounded px-2.5 py-1">
+                  <div className="mt-2 flex items-center justify-between text-[11px] text-[#4D4D4D] bg-[#F5F5F5] border border-[#E6E6E6] rounded px-2.5 py-1">
                     <span>Similar tasks usually take about {historicalMedianEstimate.label}</span>
                     <button
                       type="button"
@@ -1402,7 +1727,7 @@ function TasksWorkspaceContent() {
                         setEstMinutes(historicalMedianEstimate.m);
                         editedFields.current.add("estimate");
                       }}
-                      className="px-2 py-0.5 text-[10px] font-bold bg-[#A6F000] text-black rounded hover:opacity-90 cursor-pointer ml-2"
+                      className="px-2 py-0.5 text-[10px] font-bold bg-white border border-[#E6E6E6] hover:bg-[#F5F5F5] text-black rounded cursor-pointer ml-2"
                     >
                       Use this
                     </button>
@@ -1415,7 +1740,7 @@ function TasksWorkspaceContent() {
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-black flex items-center gap-1.5">
                     <Repeat className="w-3.5 h-3.5 text-black" />
-                    Repeat Schedule (Optional)
+                    Repeat schedule (optional)
                   </label>
                   <label className="flex items-center gap-1.5 text-xs text-[#4D4D4D] cursor-pointer">
                     <input
@@ -1424,7 +1749,7 @@ function TasksWorkspaceContent() {
                       onChange={(e) => setIsRepeating(e.target.checked)}
                       className="rounded text-black"
                     />
-                    <span>Repeating Task</span>
+                    <span>Repeating task</span>
                   </label>
                 </div>
 
@@ -1450,7 +1775,7 @@ function TasksWorkspaceContent() {
                       {repeatFrequency === "weekly" && (
                         <div>
                           <label className="block text-[10px] font-bold uppercase text-[#808080] mb-1">
-                            Day of Week
+                            Day of week
                           </label>
                           <select
                             value={repeatWeekday}
@@ -1469,7 +1794,7 @@ function TasksWorkspaceContent() {
                       {repeatFrequency === "monthly" && (
                         <div>
                           <label className="block text-[10px] font-bold uppercase text-[#808080] mb-1">
-                            Day of Month (Clamped)
+                            Day of month (clamped)
                           </label>
                           <input
                             type="number"
@@ -1485,7 +1810,7 @@ function TasksWorkspaceContent() {
                       {repeatFrequency === "every_n_working_days" && (
                         <div>
                           <label className="block text-[10px] font-bold uppercase text-[#808080] mb-1">
-                            Interval (N Working Days)
+                            Interval (N working days)
                           </label>
                           <input
                             type="number"
@@ -1500,7 +1825,7 @@ function TasksWorkspaceContent() {
 
                       <div className="sm:col-span-2">
                         <label className="block text-[10px] font-bold uppercase text-[#808080] mb-1">
-                          End Date (Optional)
+                          End date (optional)
                         </label>
                         <input
                           type="date"
@@ -1518,7 +1843,7 @@ function TasksWorkspaceContent() {
               {projects.length > 0 && (
                 <div>
                   <label className="block text-xs font-bold text-black mb-1">
-                    Project (Optional)
+                    Project (optional)
                   </label>
                   <select
                     aria-label="Task Project"
@@ -1550,7 +1875,7 @@ function TasksWorkspaceContent() {
                   disabled={mutations.createTask.isPending}
                   className="px-5 py-2 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer disabled:opacity-60 shadow-xs"
                 >
-                  {mutations.createTask.isPending ? "Creating..." : "Create Task"}
+                  {mutations.createTask.isPending ? "Creating..." : "Create task"}
                 </button>
               </div>
             </form>
@@ -1611,9 +1936,9 @@ function TasksWorkspaceContent() {
                   }
                   setLogTimePromptTask(null);
                 }}
-                className="px-4 py-1.5 text-xs font-bold bg-[#A6F000] text-black rounded hover:opacity-90 cursor-pointer"
+                className="px-4 py-1.5 text-xs font-semibold bg-black hover:bg-[#1A1A1A] text-white rounded-lg cursor-pointer"
               >
-                Log Time
+                Log time
               </button>
             </div>
           </div>
@@ -1794,9 +2119,9 @@ function TasksWorkspaceContent() {
                     setLogTimePromptTask(selectedTask);
                     setLogTimeMinutes(String(selectedTask.estimated_minutes || 60));
                   }}
-                  className="px-3 py-1 text-xs font-bold bg-[#A6F000] text-black rounded hover:opacity-90 whitespace-nowrap cursor-pointer"
+                  className="px-3 py-1 text-xs font-semibold bg-black hover:bg-[#1A1A1A] text-white rounded-lg whitespace-nowrap cursor-pointer"
                 >
-                  Mark Done
+                  Mark done
                 </button>
               </div>
             )}
@@ -1874,9 +2199,9 @@ function TasksWorkspaceContent() {
                         setLogTimePromptTask(selectedTask);
                         setLogTimeMinutes(String(selectedTask.estimated_minutes || 60));
                       }}
-                      className="px-3.5 py-1.5 rounded-lg bg-[#A6F000] hover:bg-[#95D800] text-black text-xs font-bold cursor-pointer shadow-xs"
+                      className="px-3.5 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer shadow-xs"
                     >
-                      Mark Complete
+                      Mark complete
                     </button>
 
                     {/* Blocked Reason Prompt (Phase 4) */}
@@ -1966,9 +2291,9 @@ function TasksWorkspaceContent() {
                       setLogTimePromptTask(selectedTask);
                       setLogTimeMinutes(String(selectedTask.estimated_minutes || 60));
                     }}
-                    className="px-3.5 py-1.5 rounded-lg bg-[#A6F000] hover:bg-[#95D800] text-black text-xs font-bold cursor-pointer shadow-xs"
+                    className="px-3.5 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer shadow-xs"
                   >
-                    Complete Task
+                    Complete task
                   </button>
                 )}
 

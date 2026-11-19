@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 import { Bell, Download } from "lucide-react";
 import { CommandPalette } from "@/components/shared/command-palette";
 import { NotificationCenter } from "@/components/shared/notification-center";
@@ -23,6 +24,8 @@ export function TopNavBar({
   const [notificationsOpen, setNotificationsOpen] = React.useState(false);
   const { unreadCount } = useNotifications();
   const session = useAppSession();
+  const pathname = usePathname();
+  const isDashboard = pathname === "/" || pathname === "/dashboard";
 
   React.useEffect(() => {
     const handleCustom = () => setCommandOpen(true);
@@ -47,15 +50,19 @@ export function TopNavBar({
           className
         )}
       >
-        {/* Left: Greeting & Factual Subline */}
-        <div className="flex-1 flex flex-col min-w-0">
-          <h1 className="text-xl md:text-2xl font-bold tracking-tight text-black truncate">
-            Hello, {displayName}!
-          </h1>
-          <p className="text-xs text-[#808080] font-normal truncate mt-0.5">
-            Here's your workplace overview.
-          </p>
-        </div>
+        {/* Left: Greeting only on /dashboard, clean spacer on all other pages so page title leads */}
+        {isDashboard ? (
+          <div className="flex-1 flex flex-col min-w-0">
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-black truncate">
+              Hello, {displayName}!
+            </h1>
+            <p className="text-xs text-[#808080] font-normal truncate mt-0.5">
+              Here's your workplace overview.
+            </p>
+          </div>
+        ) : (
+          <div className="flex-1 min-w-0" />
+        )}
 
         {/* Right: Actions (Notification bell with magenta dot, quiet Export, user chip) */}
         <div className="flex items-center gap-2.5 shrink-0">

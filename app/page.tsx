@@ -237,13 +237,10 @@ function DashboardContent({
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Header Greeting Row */}
+      {/* Header Info Row */}
       <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-3">
         <div>
-          <h1 className="text-3xl md:text-4xl font-extrabold text-text-primary tracking-tight">
-            Hi, {firstName}!
-          </h1>
-          <p className="text-xs sm:text-sm text-text-secondary mt-1 font-medium">
+          <p className="text-xs sm:text-sm text-text-secondary font-medium">
             Today is{" "}
             <span className="font-bold text-text-primary">
               {data?.workDate || new Date().toISOString().slice(0, 10)}
