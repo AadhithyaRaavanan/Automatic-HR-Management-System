@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { TaskPriority, TaskStatus } from "@/types/database.types";
 import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import { TaskType, TaskRecurrence } from "@/lib/tasks/types";
 import {
   getStoredDepartments,
   getStoredProjects,
@@ -47,6 +48,9 @@ export interface TaskRecord {
   cancelled_at: string | null;
   created_at: string;
   updated_at: string;
+  task_type_id?: string | null;
+  recurrence_id?: string | null;
+  auto_due_suggested?: boolean;
 }
 
 export interface TaskCommentRecord {
@@ -149,6 +153,8 @@ export function useTasksData(enabled = true) {
     projects: ProjectRecord[];
     employees: VisibleEmployeeOption[];
     departments: DepartmentOption[];
+    taskTypes: TaskType[];
+    recurrences: TaskRecurrence[];
   }>({
     queryKey: ["tasks-workspace"],
     enabled,
@@ -157,33 +163,50 @@ export function useTasksData(enabled = true) {
       let projectsData: any[] = [];
       let employeesData: any[] = [];
       let departmentsData: any[] = [];
+      let taskTypesData: TaskType[] = [];
+      let recurrencesData: TaskRecurrence[] = [];
 
       try {
-        const [tasksRes, projectsRes, employeesRes, departmentsRes, membersRes] = await Promise.all([
-          supabase
+        let tasksResPromise = supabase
+          .from("tasks")
+          .select(
+            "id, organization_id, project_id, parent_task_id, title, description, creator_id, assignee_id, status, priority, due_date, estimated_minutes, started_at, completed_at, cancelled_at, created_at, updated_at, task_type_id, recurrence_id, auto_due_suggested"
+          )
+          .order("created_at", { ascending: false });
+
+        const [tasksResAttempt, projectsRes, employeesRes, departmentsRes, membersRes, typesRes, recurrencesRes] =
+          await Promise.all([
+            tasksResPromise,
+            supabase
+              .from("projects")
+              .select("id, organization_id, department_id, name, code, description, status, created_by, created_at")
+              .order("name", { ascending: true }),
+            supabase
+              .from("employees")
+              .select("id, full_name, email, manager_id, status")
+              .eq("status", "active")
+              .order("full_name", { ascending: true }),
+            supabase
+              .from("departments")
+              .select("id, name, code")
+              .order("name", { ascending: true }),
+            supabase
+              .from("organization_members")
+              .select("user_id, role")
+              .eq("status", "active"),
+            fetch("/api/tasks/types").then((r) => (r.ok ? r.json() : { types: [] })).catch(() => ({ types: [] })),
+            fetch("/api/tasks/recurrences").then((r) => (r.ok ? r.json() : { recurrences: [] })).catch(() => ({ recurrences: [] })),
+          ]);
+
+        let finalTasksRes = tasksResAttempt;
+        if (tasksResAttempt?.error) {
+          finalTasksRes = await supabase
             .from("tasks")
             .select(
               "id, organization_id, project_id, parent_task_id, title, description, creator_id, assignee_id, status, priority, due_date, estimated_minutes, started_at, completed_at, cancelled_at, created_at, updated_at"
             )
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("projects")
-            .select("id, organization_id, department_id, name, code, description, status, created_by, created_at")
-            .order("name", { ascending: true }),
-          supabase
-            .from("employees")
-            .select("id, full_name, email, manager_id, status")
-            .eq("status", "active")
-            .order("full_name", { ascending: true }),
-          supabase
-            .from("departments")
-            .select("id, name, code")
-            .order("name", { ascending: true }),
-          supabase
-            .from("organization_members")
-            .select("user_id, role")
-            .eq("status", "active"),
-        ]);
+            .order("created_at", { ascending: false });
+        }
 
         const roleMap = new Map<string, string>();
         if (membersRes?.data) {
@@ -194,7 +217,7 @@ export function useTasksData(enabled = true) {
           }
         }
 
-        if (tasksRes?.data) tasksData = tasksRes.data;
+        if (finalTasksRes?.data) tasksData = finalTasksRes.data;
         if (projectsRes?.data) projectsData = projectsRes.data;
         if (employeesRes?.data) {
           employeesData = employeesRes.data.map((emp: any) => ({
@@ -203,6 +226,8 @@ export function useTasksData(enabled = true) {
           }));
         }
         if (departmentsRes?.data) departmentsData = departmentsRes.data;
+        if (typesRes?.types) taskTypesData = typesRes.types;
+        if (recurrencesRes?.recurrences) recurrencesData = recurrencesRes.recurrences;
       } catch {
         // Fallback gracefully
       }
@@ -284,6 +309,8 @@ export function useTasksData(enabled = true) {
         projects: mergedProjects,
         employees: mergedEmployees,
         departments: mergedDepts,
+        taskTypes: taskTypesData,
+        recurrences: recurrencesData,
       };
     },
   });
@@ -406,9 +433,52 @@ export function useTaskMutations() {
       projectId?: string | null;
       parentTaskId?: string | null;
       isSelfAssign?: boolean;
+      taskTypeId?: string | null;
+      recurrenceId?: string | null;
+      autoDueSuggested?: boolean;
+      recurrence?: {
+        frequency: "daily" | "weekly" | "monthly" | "every_n_working_days";
+        interval_n: number;
+        weekday?: number | null;
+        day_of_month?: number | null;
+        next_run_date?: string;
+        end_date?: string | null;
+      } | null;
+      subtaskTitles?: string[];
     }) => {
       const isSelf = Boolean(input.isSelfAssign);
       const initialStatus: TaskStatus = isSelf ? "in_progress" : "todo";
+
+      // 1. If recurring task requested, create recurrence record first
+      let activeRecurrenceId = input.recurrenceId || null;
+      if (input.recurrence && !activeRecurrenceId) {
+        try {
+          const recRes = await fetch("/api/tasks/recurrences", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              task_type_id: input.taskTypeId || null,
+              title: input.title,
+              description: input.description || null,
+              priority: input.priority || "medium",
+              estimate_minutes: input.estimatedMinutes || null,
+              assignee_id: input.assigneeId || null,
+              frequency: input.recurrence.frequency,
+              interval_n: input.recurrence.interval_n || 1,
+              weekday: input.recurrence.weekday ?? null,
+              day_of_month: input.recurrence.day_of_month ?? null,
+              next_run_date: input.recurrence.next_run_date || input.dueDate || new Date().toISOString().slice(0, 10),
+              end_date: input.recurrence.end_date || null,
+            }),
+          });
+          if (recRes.ok) {
+            const recJson = await recRes.json();
+            activeRecurrenceId = recJson.recurrence?.id || null;
+          }
+        } catch (recErr) {
+          console.warn("Failed to create recurrence record:", recErr);
+        }
+      }
 
       addStoredTask({
         title: input.title,
@@ -423,21 +493,71 @@ export function useTaskMutations() {
         status: initialStatus,
       });
 
-      const res = (await rpcCall("create_task", {
-        p_title: input.title,
-        p_description: input.description || null,
-        p_assignee_id: input.assigneeId || null,
-        p_priority: input.priority || "medium",
-        p_due_date: input.dueDate || null,
-        p_estimated_minutes:
-          typeof input.estimatedMinutes === "number" ? input.estimatedMinutes : null,
-        p_project_id: input.projectId || null,
-        p_parent_task_id: input.parentTaskId || null,
-      })) as { success?: boolean; task?: { id?: string }; id?: string } | null;
+      let res: any = null;
+      try {
+        res = (await rpcCall("create_task", {
+          p_title: input.title,
+          p_description: input.description || null,
+          p_assignee_id: input.assigneeId || null,
+          p_priority: input.priority || "medium",
+          p_due_date: input.dueDate || null,
+          p_estimated_minutes:
+            typeof input.estimatedMinutes === "number" ? input.estimatedMinutes : null,
+          p_project_id: input.projectId || null,
+          p_parent_task_id: input.parentTaskId || null,
+          p_task_type_id: input.taskTypeId || null,
+          p_recurrence_id: activeRecurrenceId,
+          p_auto_due_suggested: Boolean(input.autoDueSuggested),
+        })) as { success?: boolean; task?: { id?: string }; id?: string } | null;
+      } catch (err: any) {
+        // Fallback to 8-param RPC signature if extended function not active yet
+        res = (await rpcCall("create_task", {
+          p_title: input.title,
+          p_description: input.description || null,
+          p_assignee_id: input.assigneeId || null,
+          p_priority: input.priority || "medium",
+          p_due_date: input.dueDate || null,
+          p_estimated_minutes:
+            typeof input.estimatedMinutes === "number" ? input.estimatedMinutes : null,
+          p_project_id: input.projectId || null,
+          p_parent_task_id: input.parentTaskId || null,
+        })) as { success?: boolean; task?: { id?: string }; id?: string } | null;
+      }
+
+      const createdTaskId = res?.task?.id || res?.id;
+
+      // 2. Link last_created_task_id on recurrence
+      if (activeRecurrenceId && createdTaskId) {
+        fetch(`/api/tasks/recurrences/${activeRecurrenceId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ last_created_task_id: createdTaskId }),
+        }).catch(() => {});
+      }
+
+      // 3. Create subtasks from checklist if selected
+      if (createdTaskId && Array.isArray(input.subtaskTitles) && input.subtaskTitles.length > 0) {
+        for (const subTitle of input.subtaskTitles) {
+          if (!subTitle || !subTitle.trim()) continue;
+          try {
+            await rpcCall("create_task", {
+              p_title: subTitle.trim(),
+              p_description: null,
+              p_assignee_id: input.assigneeId || null,
+              p_priority: input.priority || "medium",
+              p_due_date: input.dueDate || null,
+              p_estimated_minutes: null,
+              p_project_id: input.projectId || null,
+              p_parent_task_id: createdTaskId,
+            });
+          } catch (subErr) {
+            console.warn("Failed to create checklist subtask:", subTitle, subErr);
+          }
+        }
+      }
 
       // If self-assigned, automatically advance status to in_progress!
       if (isSelf) {
-        const createdTaskId = res?.task?.id || res?.id;
         if (createdTaskId) {
           try {
             await rpcCall("update_task_status", {
@@ -652,6 +772,26 @@ export function useTaskMutations() {
     },
   });
 
+  const stopRecurrence = useMutation({
+    mutationFn: async (recurrenceId: string) => {
+      const res = await fetch(`/api/tasks/recurrences/${recurrenceId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const json = await res.json();
+        throw new Error(json.error || "Failed to stop recurring schedule");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success("Recurring schedule stopped");
+      invalidateAll();
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to stop recurrence");
+    },
+  });
+
   return {
     createProject,
     createTask,
@@ -660,5 +800,6 @@ export function useTaskMutations() {
     deleteTask,
     addComment,
     logTime,
+    stopRecurrence,
   };
 }

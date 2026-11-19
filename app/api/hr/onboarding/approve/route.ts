@@ -6,6 +6,7 @@ import { QUALIFICATION_DOC_MAP, HighestQualification } from "@/lib/onboarding-ty
 import { sendOnboardingApprovalEmail, sendAdminOnboardingDossierEmail } from "@/lib/email/resend";
 import { getSignedUrl } from "@/lib/onboarding-storage";
 import { dispatchBirthdayNotifications, getKolkataDateString } from "@/lib/notifications/birthdays";
+import { calculateWorkingDaysAhead } from "@/lib/date/working-days";
 
 export const dynamic = "force-dynamic";
 
@@ -233,6 +234,7 @@ export async function POST(request: NextRequest) {
     const { data: candEmp } = await (supabaseAdmin.from("employees") as any)
       .select(`
         id,
+        organization_id,
         full_name,
         email,
         departments:department_id(name),
@@ -418,6 +420,70 @@ export async function POST(request: NextRequest) {
         }
       } catch (bdayErr) {
         console.warn("[Onboarding Approval Birthday Check Error]:", bdayErr);
+      }
+    })().catch(() => {});
+
+    // 10. Phase 5 Event-Triggered Task: Create account setup task for HR reviewer (Deduplicated, Non-sensitive)
+    (async () => {
+      try {
+        const orgId = candEmp?.organization_id || authResult.context.organizationId;
+        if (!orgId) return;
+        const candidateName = candEmp?.full_name || profile.full_name || "New Employee";
+        const taskTitle = `Set up accounts for ${candidateName}`;
+
+        // Deduplication check: verify no task already created for this candidate setup
+        const { data: existingTasks } = await (supabaseAdmin as any)
+          .from("tasks")
+          .select("id")
+          .eq("organization_id", orgId)
+          .eq("title", taskTitle)
+          .limit(1);
+
+        if (!existingTasks || existingTasks.length === 0) {
+          // Fetch holidays for working days calculation (2 working days)
+          const { data: holidays } = await (supabaseAdmin as any)
+            .from("holidays")
+            .select("date")
+            .eq("is_active", true);
+          const holidaysList = holidays || [];
+          const dueInfo = calculateWorkingDaysAhead(2, holidaysList);
+
+          // Find "Onboarding review" task type if configured
+          const { data: matchingType } = await (supabaseAdmin as any)
+            .from("task_types")
+            .select("id")
+            .eq("organization_id", orgId)
+            .ilike("name", "%onboarding review%")
+            .limit(1);
+
+          const taskTypeId = matchingType?.[0]?.id || null;
+
+          const nonSensitiveDesc = [
+            `Provision official email, workplace credentials, and internal workspace access for ${candidateName}.`,
+            "",
+            `Department: ${candEmp?.departments?.name || "General"}`,
+            `Role: ${candEmp?.job_titles?.title_name || "Employee"}`,
+            "Status: Onboarding verification completed by HR.",
+          ].join("\n");
+
+          await (supabaseAdmin as any)
+            .from("tasks")
+            .insert({
+            organization_id: orgId,
+            title: taskTitle,
+            description: nonSensitiveDesc,
+            creator_id: reviewerId,
+            assignee_id: reviewerId,
+            status: "todo",
+            priority: "high",
+            due_date: dueInfo.dateStr,
+            estimated_minutes: 60,
+            task_type_id: taskTypeId,
+            auto_due_suggested: true,
+          });
+        }
+      } catch (taskErr) {
+        console.warn("[Onboarding Approval Auto-Task Error (non-blocking)]:", taskErr);
       }
     })().catch(() => {});
 

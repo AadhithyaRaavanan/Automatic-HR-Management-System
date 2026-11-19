@@ -87,6 +87,14 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
       tip: "Click Accept to move an assigned task into your active queue.",
     },
     {
+      id: "emp-tasks-automated",
+      title: "Task Types & Suggestions",
+      route: "/tasks",
+      selector: '[data-tour="tasks-header"]',
+      body: "Choose a Type when creating tasks to pre-fill description templates, suggested working-day due dates, and estimates. All suggestions can be freely changed or cleared. You can also set recurring schedules.",
+      tip: "Select a task type first to instantly structure your task.",
+    },
+    {
       id: "emp-leave",
       title: "Leave requests",
       route: "/leave",
@@ -234,6 +242,14 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
       selector: '[data-tour="tasks-board"]',
       body: "Create and assign deliverables to direct reports or yourself.",
       tip: "Filter by assignee to see individual workloads.",
+    },
+    {
+      id: "mgr-tasks-automated",
+      title: "Automated Presets & Recurring Tasks",
+      route: "/tasks",
+      selector: '[data-tour="tasks-header"]',
+      body: "Pick team-specific task types to auto-apply sensible estimates, templates, and working-day due dates. Schedule repeating tasks daily, weekly, monthly, or every N working days.",
+      tip: "Workload hints show each team member's active tasks and due dates.",
     },
     {
       id: "mgr-leave",
@@ -424,6 +440,22 @@ const RAW_ROLE_TUTORIAL_STEPS: Record<string, TutorialStep[]> = {
       selector: '[data-tour="tasks-board"]',
       body: "Manage HR initiatives, onboarding tasks, and compliance deadlines.",
       tip: "Set priorities and due dates on deliverables.",
+    },
+    {
+      id: "hr-tasks-automated",
+      title: "Task Presets & Recurring Schedules",
+      route: "/tasks",
+      selector: '[data-tour="tasks-header"]',
+      body: "Streamline workflows with task types for screening, onboarding, and reviews. Auto-calculated working-day due dates excuse weekends and company holidays. Setup repeating tasks with optional end dates.",
+      tip: "Suggested estimates and due dates remain completely editable.",
+    },
+    {
+      id: "hr-task-types-settings",
+      title: "Task Types & Templates Settings",
+      route: "/admin/task-types",
+      selector: '[data-tour="nav-sidebar"]',
+      body: "Configure custom task types, default priorities, working day rules, sub-task checklists, and description templates for each department under Admin Settings > Task types & presets.",
+      tip: "HR and Admins can create and reorder templates anytime.",
     },
     {
       id: "hr-holidays",

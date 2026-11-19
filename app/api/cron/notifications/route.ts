@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notifications/notify";
 import { getManagersOf, getHrUsers } from "@/lib/notifications/recipients";
 import { dispatchBirthdayNotifications } from "@/lib/notifications/birthdays";
+import { calculateWorkingDaysAhead, countWorkingDaysBetween } from "@/lib/date/working-days";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,8 @@ export async function GET(request: NextRequest) {
       autoClosedSessions: 0,
       onboardingIncomplete: 0,
       birthdaysCelebrated: 0,
+      recurringTasksCreated: 0,
+      staleTasksNotified: 0,
     };
 
     // ------------------------------------------------------------------------
@@ -339,6 +342,241 @@ export async function GET(request: NextRequest) {
       stats.birthdaysCelebrated = bdayResult.birthdaysCount;
     } catch (err) {
       console.error("[Cron: Birthday Dispatch Error]:", err);
+    }
+
+    // ------------------------------------------------------------------------
+    // Rule 8: Recurring Tasks Dispatch (Asia/Kolkata Aware & Idempotent)
+    // ------------------------------------------------------------------------
+    try {
+      // 1. First attempt database RPC if available
+      const { data: rpcRes, error: rpcErr } = await (supabaseAdmin.rpc as any)(
+        "dispatch_recurring_tasks",
+        { p_today: kolkataDate }
+      );
+
+      if (!rpcErr && rpcRes) {
+        stats.recurringTasksCreated += rpcRes.created_tasks || 0;
+      } else {
+        // Fallback application-level recurrence dispatcher
+        const { data: recurrences } = await (supabaseAdmin as any)
+          .from("task_recurrences")
+          .select("*, task_types(due_rule_working_days)")
+          .eq("is_active", true)
+          .lte("next_run_date", kolkataDate);
+
+        if (recurrences && recurrences.length > 0) {
+          // Fetch holidays for working-day calculations
+          const { data: holidays } = await (supabaseAdmin as any)
+            .from("holidays")
+            .select("date")
+            .eq("is_active", true);
+          const holidaysList = holidays || [];
+
+          for (const rec of recurrences) {
+            if (rec.end_date && rec.next_run_date > rec.end_date) {
+              await (supabaseAdmin as any)
+                .from("task_recurrences")
+                .update({ is_active: false })
+                .eq("id", rec.id);
+              continue;
+            }
+
+            // Check if assignee is inactive
+            if (rec.assignee_id) {
+              const { data: emp } = await (supabaseAdmin as any)
+                .from("employees")
+                .select("status")
+                .eq("id", rec.assignee_id)
+                .single();
+
+              if (!emp || emp.status !== "active") {
+                await (supabaseAdmin as any)
+                  .from("task_recurrences")
+                  .update({ is_active: false, updated_at: new Date().toISOString() })
+                  .eq("id", rec.id);
+
+                await notify({
+                  userIds: [rec.created_by],
+                  type: "task_recurrence_paused",
+                  typeGroup: "reminders",
+                  title: "Recurring Task Paused",
+                  body: `Recurring task "${rec.title}" was paused because the assignee is no longer active.`,
+                  link: "/tasks",
+                  entityType: "tasks",
+                  dedupeKey: `recurrence-paused:${rec.id}`,
+                });
+                continue;
+              }
+            }
+
+            // Idempotency check: don't create two tasks for same recurrence today
+            const { data: existingToday } = await (supabaseAdmin as any)
+              .from("tasks")
+              .select("id")
+              .eq("recurrence_id", rec.id)
+              .gte("created_at", `${kolkataDate}T00:00:00+05:30`)
+              .lte("created_at", `${kolkataDate}T23:59:59+05:30`)
+              .limit(1);
+
+            if (existingToday && existingToday.length > 0) {
+              continue;
+            }
+
+            // Calculate suggested due date if due_rule_working_days is set
+            let calculatedDueDate: string | null = null;
+            const dueDays = rec.task_types?.due_rule_working_days;
+            if (typeof dueDays === "number" && dueDays > 0) {
+              const dueInfo = calculateWorkingDaysAhead(dueDays, holidaysList, kolkataDate);
+              calculatedDueDate = dueInfo.dateStr;
+            }
+
+            // Create next task
+            const { data: createdTask, error: createErr } = await (supabaseAdmin as any)
+              .from("tasks")
+              .insert({
+                organization_id: rec.organization_id,
+                title: rec.title,
+                description: rec.description || null,
+                creator_id: rec.created_by,
+                assignee_id: rec.assignee_id || null,
+                status: "todo",
+                priority: rec.priority || "medium",
+                due_date: calculatedDueDate,
+                estimated_minutes: rec.estimate_minutes || null,
+                task_type_id: rec.task_type_id || null,
+                recurrence_id: rec.id,
+                auto_due_suggested: Boolean(calculatedDueDate),
+              })
+              .select("id")
+              .single();
+
+            if (!createErr && createdTask) {
+              stats.recurringTasksCreated++;
+
+              // Notify assignee if not creator
+              if (rec.assignee_id && rec.assignee_id !== rec.created_by) {
+                await notify({
+                  userIds: [rec.assignee_id],
+                  type: "task_assigned",
+                  typeGroup: "tasks",
+                  title: "New Recurring Task Assigned",
+                  body: `You have been assigned "${rec.title}"${calculatedDueDate ? ` (Due ${calculatedDueDate})` : ""}.`,
+                  link: `/tasks?task=${createdTask.id}`,
+                  entityType: "tasks",
+                  entityId: createdTask.id,
+                  dedupeKey: `recurring-task-assign:${createdTask.id}`,
+                });
+              }
+
+              // Compute next run date
+              let nextRunStr = kolkataDate;
+              if (rec.frequency === "daily") {
+                nextRunStr = calculateWorkingDaysAhead(1, holidaysList, kolkataDate).dateStr;
+              } else if (rec.frequency === "weekly") {
+                const [y, m, d] = kolkataDate.split("-").map(Number);
+                const nextDate = new Date(Date.UTC(y, m - 1, d + (rec.interval_n || 1) * 7));
+                nextRunStr = nextDate.toISOString().slice(0, 10);
+              } else if (rec.frequency === "monthly") {
+                const [y, m, d] = kolkataDate.split("-").map(Number);
+                const targetDay = rec.day_of_month || d;
+                const nextMonth = new Date(Date.UTC(y, m - 1 + (rec.interval_n || 1), 1));
+                const daysInMonth = new Date(Date.UTC(nextMonth.getUTCFullYear(), nextMonth.getUTCMonth() + 1, 0)).getUTCDate();
+                nextMonth.setUTCDate(Math.min(targetDay, daysInMonth));
+                nextRunStr = nextMonth.toISOString().slice(0, 10);
+              } else if (rec.frequency === "every_n_working_days") {
+                nextRunStr = calculateWorkingDaysAhead(rec.interval_n || 1, holidaysList, kolkataDate).dateStr;
+              }
+
+              const isStillActive = !rec.end_date || nextRunStr <= rec.end_date;
+
+              await (supabaseAdmin as any)
+                .from("task_recurrences")
+                .update({
+                  last_created_task_id: createdTask.id,
+                  next_run_date: nextRunStr,
+                  is_active: isStillActive,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", rec.id);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[Cron: Recurring Tasks Error]:", err);
+    }
+
+    // ------------------------------------------------------------------------
+    // Rule 9: Stale In-Progress Task Gentle Prompt (5 Working Days No Activity)
+    // ------------------------------------------------------------------------
+    try {
+      const { data: inProgressTasks } = await (supabaseAdmin.from("tasks") as any)
+        .select("id, title, assignee_id, started_at, updated_at")
+        .eq("status", "in_progress")
+        .not("assignee_id", "is", null);
+
+      if (inProgressTasks && inProgressTasks.length > 0) {
+        const { data: holidays } = await (supabaseAdmin.from("holidays") as any)
+          .select("date")
+          .eq("is_active", true);
+        const holidaysList = holidays || [];
+
+        for (const t of inProgressTasks) {
+          // Fetch latest activity timestamp (task_events, task_comments, task_time_logs)
+          const [eventsRes, commentsRes, logsRes] = await Promise.all([
+            (supabaseAdmin.from("task_events") as any)
+              .select("created_at")
+              .eq("task_id", t.id)
+              .order("created_at", { ascending: false })
+              .limit(1),
+            (supabaseAdmin.from("task_comments") as any)
+              .select("created_at")
+              .eq("task_id", t.id)
+              .order("created_at", { ascending: false })
+              .limit(1),
+            (supabaseAdmin.from("task_time_logs") as any)
+              .select("created_at, work_date")
+              .eq("task_id", t.id)
+              .order("created_at", { ascending: false })
+              .limit(1),
+          ]);
+
+          const dates: string[] = [t.started_at, t.updated_at].filter(Boolean);
+          if (eventsRes?.data?.[0]?.created_at) dates.push(eventsRes.data[0].created_at);
+          if (commentsRes?.data?.[0]?.created_at) dates.push(commentsRes.data[0].created_at);
+          if (logsRes?.data?.[0]?.created_at) dates.push(logsRes.data[0].created_at);
+          if (logsRes?.data?.[0]?.work_date) dates.push(logsRes.data[0].work_date);
+
+          const latestActivityIso = dates.sort().reverse()[0] || t.updated_at || kolkataDate;
+          const latestActivityDateStr = latestActivityIso.slice(0, 10);
+
+          const workingDaysInactive = countWorkingDaysBetween(
+            latestActivityDateStr,
+            kolkataDate,
+            holidaysList
+          );
+
+          // If no activity for 5 or more working days, send ONE gentle prompt to assignee
+          if (workingDaysInactive >= 5 && t.assignee_id) {
+            // Dedupe interval: every 5 calendar days window
+            const fiveDayBucket = Math.floor(Date.now() / (5 * 86400 * 1000));
+            await notify({
+              userIds: [t.assignee_id],
+              type: "reminder_stale_task",
+              typeGroup: "reminders",
+              title: "Task Still In Progress",
+              body: `Still working on "${t.title}"? Update its status or leave a comment.`,
+              link: `/tasks?task=${t.id}`,
+              entityType: "tasks",
+              entityId: t.id,
+              dedupeKey: `stale-task:${t.id}:${fiveDayBucket}`,
+            });
+            stats.staleTasksNotified++;
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[Cron: Stale In-Progress Tasks Error]:", err);
     }
 
     return NextResponse.json({

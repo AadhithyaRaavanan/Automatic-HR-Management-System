@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { AppShell } from "@/components/shell/app-shell";
 import { EmptyState } from "@/components/shared/empty-state";
 import { createClient } from "@/lib/supabase/client";
@@ -14,6 +15,7 @@ import {
   Play,
   Download,
   RefreshCw,
+  ListTodo,
 } from "lucide-react";
 import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
@@ -384,6 +386,13 @@ export default function OrganizationSettingsAdminPage() {
             <HardDrive className="w-3.5 h-3.5" />
             System health & retention
           </button>
+          <Link
+            href="/admin/task-types"
+            className="px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all inline-flex items-center gap-1.5 text-[#808080] hover:text-black hover:bg-white/60 cursor-pointer"
+          >
+            <ListTodo className="w-3.5 h-3.5" />
+            Task types & presets
+          </Link>
         </div>
 
         {/* Tab 1: Org Profile */}
