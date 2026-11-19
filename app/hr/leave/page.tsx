@@ -160,7 +160,7 @@ export default function HRLeavePage() {
               className="px-3 py-1.5 rounded-xl bg-card border border-border-light text-text-primary hover:bg-card-subtle text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
               title="Sanitized Excel Export"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+              <FileSpreadsheet className="w-3.5 h-3.5 text-black" />
               <span>Export Excel</span>
             </button>
 
@@ -242,7 +242,7 @@ export default function HRLeavePage() {
           <div className="space-y-3">
             {pendingRequests.length === 0 ? (
               <EmptyState
-                icon={<CheckCircle2 className="w-6 h-6 text-emerald-500" />}
+                icon={<CheckCircle2 className="w-6 h-6 text-black" />}
                 title="Approval queue is clear"
                 description="There are no pending leave requests awaiting HR or administrative review."
               />
@@ -317,7 +317,7 @@ export default function HRLeavePage() {
                               empName: req.employees?.full_name || "Employee",
                             })
                           }
-                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold flex items-center gap-1 shadow-sm transition-all cursor-pointer"
+                          className="px-3 py-1.5 rounded-xl bg-lime hover:bg-lime-hover disabled:opacity-40 disabled:cursor-not-allowed text-black text-xs font-bold flex items-center gap-1 shadow-sm transition-all cursor-pointer"
                         >
                           <Check className="w-3.5 h-3.5" />
                           <span>Approve</span>
@@ -478,7 +478,7 @@ export default function HRLeavePage() {
                           <span
                             className={cn(
                               "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase",
-                              r.status === "approved" && "bg-emerald-50 text-emerald-600 border border-emerald-200",
+                              r.status === "approved" && "bg-lime/20 text-black border border-lime/40",
                               r.status === "pending" && "bg-amber-50 text-amber-600 border border-amber-200",
                               r.status === "rejected" && "bg-rose-50 text-rose-600 border border-rose-200",
                               r.status === "cancelled" && "bg-slate-100 text-slate-500 border border-slate-200"

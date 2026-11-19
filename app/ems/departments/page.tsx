@@ -128,7 +128,7 @@ export default function EmsDepartmentsPage() {
                       Child Subdept
                     </span>
                   ) : (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-lime/20 text-black border border-lime/40">
                       Main Dept
                     </span>
                   )}

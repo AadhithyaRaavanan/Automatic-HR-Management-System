@@ -326,7 +326,7 @@ export default function OnboardingPendingPage() {
                         className={cn(
                           "w-8 h-8 rounded-xl flex items-center justify-center shrink-0",
                           isApproved
-                            ? "bg-emerald-500/10 text-emerald-600"
+                            ? "bg-lime/20 text-black"
                             : isRejected
                             ? "bg-rose-500/10 text-rose-600"
                             : "bg-brand-purple/10 text-brand-purple"
@@ -347,7 +347,7 @@ export default function OnboardingPendingPage() {
 
                     <div className="shrink-0 flex items-center gap-2">
                       {isApproved ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-lime/20 text-black border border-lime/40">
                           <CheckCircle2 className="w-3 h-3" />
                           <span>Approved</span>
                         </span>

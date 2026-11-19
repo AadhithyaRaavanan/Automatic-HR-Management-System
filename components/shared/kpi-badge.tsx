@@ -78,7 +78,7 @@ export function KpiBadge({
   let icon = <AlertCircle className="w-2.5 h-2.5" />;
 
   if (overallScore >= 85) {
-    colorClasses = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800";
+    colorClasses = "bg-lime/20 text-black border border-lime/40";
     icon = <Award className="w-2.5 h-2.5" />;
   } else if (overallScore >= 65) {
     colorClasses = "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800";

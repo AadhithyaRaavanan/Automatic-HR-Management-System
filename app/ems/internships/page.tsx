@@ -103,7 +103,7 @@ export default function EmsInternshipsPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-text-muted">Certificate:</span>
-                    <span className="font-bold text-emerald-500">
+                    <span className="font-bold text-black">
                       {intern.certificate_issued ? "Issued" : "Pending Completion"}
                     </span>
                   </div>

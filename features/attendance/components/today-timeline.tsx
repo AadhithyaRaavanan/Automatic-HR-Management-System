@@ -52,12 +52,12 @@ export function TodayTimeline({
                 className={cn(
                   "absolute -left-6 top-1 w-5 h-5 rounded-full border-2 bg-card flex items-center justify-center transition-all",
                   isActive
-                    ? "border-emerald-500 text-emerald-500 shadow-sm"
+                    ? "border-lime text-black shadow-sm"
                     : "border-brand-purple text-brand-purple"
                 )}
               >
                 {isActive ? (
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                  <span className="w-2 h-2 rounded-full bg-lime animate-ping" />
                 ) : (
                   <span className="w-1.5 h-1.5 rounded-full bg-brand-purple" />
                 )}
@@ -71,7 +71,7 @@ export function TodayTimeline({
                       Session #{sessions.length - idx}
                     </span>
                     {isActive ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[10px] font-extrabold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[10px] font-extrabold bg-lime/25 text-black font-semibold">
                         Active Now
                       </span>
                     ) : (
@@ -92,7 +92,7 @@ export function TodayTimeline({
                       {Math.floor(sess.duration_minutes / 60)}h {sess.duration_minutes % 60}m
                     </span>
                   ) : isActive ? (
-                    <span className="text-[11px] font-bold text-emerald-600">Running</span>
+                    <span className="text-[11px] font-bold text-black">Running</span>
                   ) : null}
                   {sess.early_checkout && (
                     <p className="text-[10px] text-rose-500 font-bold">Early punch</p>

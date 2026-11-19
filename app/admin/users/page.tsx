@@ -1766,7 +1766,7 @@ function UsersDirectoryContent() {
                     <td className="py-2 px-3 uppercase">{r.role}</td>
                     <td className="py-2 px-3">
                       {r.valid ? (
-                        <span className="inline-flex items-center gap-1 text-emerald-600 font-bold">
+                        <span className="inline-flex items-center gap-1 text-black font-bold">
                           <CheckCircle2 className="w-3 h-3" />
                           Ready
                         </span>

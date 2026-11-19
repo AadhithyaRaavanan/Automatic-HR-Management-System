@@ -300,7 +300,7 @@ export function KpiCategorySection({
                             className={cn(
                               "inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-md",
                               trendDiff > 0
-                                ? "bg-emerald-500/10 text-emerald-600"
+                                ? "bg-lime/20 text-black"
                                 : trendDiff < 0
                                 ? "bg-rose-500/10 text-rose-600"
                                 : "bg-card-subtle text-text-tertiary"

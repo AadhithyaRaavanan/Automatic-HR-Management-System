@@ -100,7 +100,7 @@ export function KpiHeroCard({
                     className={cn(
                       "inline-flex items-center gap-1 text-xs font-extrabold px-2.5 py-0.5 rounded-full border",
                       trend > 0
-                        ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                        ? "bg-lime/20 text-black border-lime/20"
                         : trend < 0
                         ? "bg-rose-500/10 text-rose-600 border-rose-500/20"
                         : "bg-card-subtle text-text-secondary border-border-light"
@@ -192,7 +192,7 @@ export function KpiHeroCard({
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   {hasAttendance ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <CheckCircle2 className="w-4 h-4 text-black shrink-0" />
                   ) : (
                     <Clock className="w-4 h-4 text-brand-purple shrink-0" />
                   )}
@@ -218,9 +218,9 @@ export function KpiHeroCard({
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   {hasHours ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <CheckCircle2 className="w-4 h-4 text-black shrink-0" />
                   ) : (
-                    <Calendar className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <Calendar className="w-4 h-4 text-black shrink-0" />
                   )}
                   <span
                     className={cn(
@@ -244,7 +244,7 @@ export function KpiHeroCard({
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   {hasTasks ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <CheckCircle2 className="w-4 h-4 text-black shrink-0" />
                   ) : (
                     <CheckSquare className="w-4 h-4 text-amber-500 shrink-0" />
                   )}
