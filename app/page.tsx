@@ -249,7 +249,7 @@ function DashboardContent({
               {data?.workDate || new Date().toISOString().slice(0, 10)}
             </span>{" "}
             ({userTimezone}). Target:{" "}
-            <span className="font-bold text-brand-purple">
+            <span className="font-bold text-black">
               {Math.floor(targetMinutes / 60)} hours
             </span>
             .
@@ -344,7 +344,7 @@ function DashboardContent({
           <SectionCard
             title="This Week's Worked Hours"
             subtitle="Daily performance vs 8h shift target"
-            icon={<BarChart3 className="w-4 h-4 text-brand-purple" />}
+            icon={<BarChart3 className="w-4 h-4 text-black" />}
           >
             <WeeklyHoursChart
               days={weeklyBars}
@@ -356,7 +356,7 @@ function DashboardContent({
           <SectionCard
             title="Today's Timeline"
             subtitle={`${data?.sessions?.length || 0} recorded session(s)`}
-            icon={<Clock className="w-4 h-4 text-brand-purple" />}
+            icon={<Clock className="w-4 h-4 text-black" />}
           >
             <TodayTimeline
               sessions={data?.sessions || []}
@@ -414,7 +414,7 @@ function DashboardContent({
               <button
                 type="button"
                 onClick={() => markAllRead().catch(() => { })}
-                className="text-brand-purple hover:underline font-bold text-xs cursor-pointer"
+                className="text-black hover:underline font-semibold text-xs cursor-pointer"
               >
                 Mark all read
               </button>
@@ -433,21 +433,21 @@ function DashboardContent({
                     if (n.link) router.push(n.link);
                   }}
                   className={cn(
-                    "w-full text-left p-3.5 rounded-2xl border transition-all cursor-pointer",
+                    "w-full text-left p-3.5 rounded-xl border transition-all cursor-pointer",
                     !n.read_at
-                      ? "bg-brand-purple-light/20 border-brand-purple/30"
-                      : "bg-card-subtle border-border-light opacity-80"
+                      ? "bg-[#F5F5F5] border-[#E6E6E6]"
+                      : "bg-[#F5F5F5]/50 border-[#E6E6E6] opacity-80"
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-text-primary truncate">
+                    <span className="text-xs font-semibold text-black truncate">
                       {n.title}
                     </span>
                     {!n.read_at && (
-                      <span className="w-2 h-2 rounded-full bg-brand-purple shrink-0" />
+                      <span className="w-2 h-2 rounded-full bg-[#F00091] shrink-0" />
                     )}
                   </div>
-                  <p className="text-[11px] text-text-secondary mt-1 line-clamp-2">
+                  <p className="text-[11px] text-[#808080] mt-1 line-clamp-2">
                     {n.body}
                   </p>
                 </button>
@@ -469,7 +469,7 @@ function DashboardContent({
           action={
             <Link
               href="/requests"
-              className="text-brand-purple hover:underline text-xs font-bold flex items-center gap-1"
+              className="text-black hover:underline text-xs font-semibold flex items-center gap-1"
             >
               <span>Inbox</span>
               <ArrowRight className="w-3 h-3" />
@@ -548,7 +548,7 @@ function DashboardContent({
               strokeWidth={8}
               title="Shift Progress"
               caption={`${todayMinutes}/${targetMinutes} mins`}
-              color="var(--brand-purple)"
+              color="#A6F000"
             />
           </div>
         </BentoCard>
@@ -562,7 +562,7 @@ function DashboardContent({
           action={
             <Link
               href="/tasks"
-              className="text-brand-purple hover:underline text-xs font-bold flex items-center gap-1"
+              className="text-black hover:underline text-xs font-semibold flex items-center gap-1"
             >
               <span>Open Tasks Board</span>
               <ArrowRight className="w-3 h-3" />
@@ -578,27 +578,27 @@ function DashboardContent({
                   <Link
                     key={task.id}
                     href={`/tasks?task=${task.id}`}
-                    className="p-3.5 rounded-2xl bg-card-subtle hover:bg-card border border-border-light hover:border-brand-purple/40 transition-all space-y-2 block"
+                    className="p-3.5 rounded-xl bg-[#F5F5F5] hover:bg-white border border-[#E6E6E6] transition-all space-y-2 block"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <StatusPill status={task.status} />
                       <StatusPill status={task.priority} showIcon={false} />
                     </div>
-                    <h3 className="text-xs font-bold text-text-primary line-clamp-1">
+                    <h3 className="text-xs font-semibold text-black line-clamp-1">
                       {task.title}
                     </h3>
                     <div className="flex items-center justify-between text-[11px]">
                       {dueState === "overdue" ? (
-                        <span className="inline-flex items-center gap-1 font-extrabold text-status-danger-text">
+                        <span className="inline-flex items-center gap-1 font-semibold text-[#F00091]">
                           <AlertTriangle className="w-3 h-3" />
                           Overdue ({task.due_date})
                         </span>
                       ) : task.due_date ? (
-                        <span className="text-text-secondary font-mono">
+                        <span className="text-[#808080] font-mono">
                           Due {task.due_date}
                         </span>
                       ) : (
-                        <span className="text-text-tertiary">No due date</span>
+                        <span className="text-[#808080]">No due date</span>
                       )}
                     </div>
                   </Link>
@@ -614,7 +614,7 @@ function DashboardContent({
               action={
                 <Link
                   href="/tasks"
-                  className="px-4 py-1.5 rounded-full bg-brand-purple text-white text-xs font-bold"
+                  className="px-4 py-1.5 rounded-lg bg-black text-white text-xs font-semibold"
                 >
                   Go to Tasks
                 </Link>

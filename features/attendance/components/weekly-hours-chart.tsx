@@ -63,13 +63,13 @@ export function WeeklyHoursChart({
         </div>
 
         {/* Bars Container: spans h-full of the plot area */}
-        <div className="relative z-10 h-full flex items-end justify-between gap-3 px-2">
+        <div className="relative z-10 h-full flex items-end justify-between gap-3 px-3">
           {days.map((d) => {
             const hours = (d.workedMinutes / 60).toFixed(1);
             // Height calculation strictly matches the plot coordinate space
             const heightPercent = Math.min(
               100,
-              Math.max(d.workedMinutes > 0 ? 4 : 0, Math.round((d.workedMinutes / maxDisplayMinutes) * 100))
+              Math.max(d.workedMinutes > 0 ? 6 : 0, Math.round((d.workedMinutes / maxDisplayMinutes) * 100))
             );
             const isTargetMet = d.workedMinutes >= targetMinutes;
 
@@ -78,31 +78,29 @@ export function WeeklyHoursChart({
                 key={d.dateStr}
                 className="flex-1 flex flex-col items-center h-full justify-end group relative"
               >
-                {/* Tooltip on Hover */}
-                <div className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white text-[10px] font-medium px-2 py-0.5 rounded shadow pointer-events-none whitespace-nowrap z-20 flex items-center gap-1">
-                  <span
-                    className={cn(
-                      "w-1.5 h-1.5 rounded-full",
-                      isTargetMet ? "bg-[#A6F000]" : "bg-[#808080]"
-                    )}
-                  />
-                  <span>
-                    {d.dayLabel}: {hours} hrs {isTargetMet ? "• Target met" : ""}
-                  </span>
-                </div>
-
-                {/* Track and Pill Bar Fill */}
-                <div className="w-6 sm:w-7 bg-[#E6E6E6] rounded-t-full h-full flex items-end overflow-hidden">
+                {d.workedMinutes > 0 ? (
+                  /* Solid freestanding pill bar with NO empty grey track */
                   <div
-                    className={cn(
-                      "w-full rounded-t-full transition-all duration-300 ease-out",
-                      d.workedMinutes === 0
-                        ? "bg-transparent"
-                        : "bg-[#A6F000] hover:brightness-95"
-                    )}
+                    className="w-7 sm:w-8 md:w-9 max-w-[38px] bg-[#A6F000] rounded-full transition-all duration-300 ease-out hover:brightness-95 relative cursor-pointer"
                     style={{ height: `${heightPercent}%` }}
-                  />
-                </div>
+                  >
+                    {/* Tooltip pinned directly above the top of this bar */}
+                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white text-[10px] font-semibold px-2 py-0.5 rounded shadow-md pointer-events-none whitespace-nowrap z-30 flex items-center gap-1">
+                      <span>{d.dayLabel}: {hours}h</span>
+                      {isTargetMet && <span className="text-[#A6F000] text-[10px] font-bold">✓</span>}
+                      {/* Downward triangle arrow */}
+                      <div className="absolute left-1/2 -bottom-1 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-[4px] border-t-black" />
+                    </div>
+                  </div>
+                ) : (
+                  /* Zero hours logged: tiny subtle baseline marker, no tall grey field */
+                  <div className="w-7 sm:w-8 md:w-9 max-w-[38px] h-1.5 bg-[#E6E6E6] rounded-full relative cursor-pointer">
+                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white text-[10px] font-semibold px-2 py-0.5 rounded shadow-md pointer-events-none whitespace-nowrap z-30 flex items-center gap-1">
+                      <span>{d.dayLabel}: 0.0h</span>
+                      <div className="absolute left-1/2 -bottom-1 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-[4px] border-t-black" />
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -110,7 +108,7 @@ export function WeeklyHoursChart({
       </div>
 
       {/* X-Axis Day & Hours Labels: Separate row below the plot area */}
-      <div className="flex items-center justify-between gap-3 px-2 pt-2 border-t border-[#E6E6E6]">
+      <div className="flex items-center justify-between gap-3 px-3 pt-2.5 border-t border-[#E6E6E6]">
         {days.map((d) => {
           const hours = (d.workedMinutes / 60).toFixed(1);
           return (
