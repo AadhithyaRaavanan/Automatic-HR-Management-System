@@ -23,6 +23,7 @@ import {
   X,
   AlertTriangle,
   Eye,
+  EyeOff,
   ShieldCheck,
   Building2,
   RotateCcw,
@@ -132,6 +133,7 @@ function HrOnboardingContent() {
   const [requestChangesNote, setRequestChangesNote] = React.useState("");
   const [requestingChanges, setRequestingChanges] = React.useState(false);
   const [resendingEmail, setResendingEmail] = React.useState(false);
+  const [showFullAccount, setShowFullAccount] = React.useState(false);
 
   React.useEffect(() => {
     setMounted(true);
@@ -586,6 +588,7 @@ function HrOnboardingContent() {
                             type="button"
                             onClick={() => {
                               setSelectedCandidate(c);
+                              setShowFullAccount(false);
                               setRejectionReasons({});
                               setShowRejectInput({});
                             }}
@@ -652,7 +655,30 @@ function HrOnboardingContent() {
                 <div className="p-3 rounded-xl bg-card-subtle border border-border-light text-xs space-y-1">
                   <span className="font-extrabold text-[10px] uppercase text-brand-purple">Bank & Payroll</span>
                   <p><strong>Bank:</strong> {selectedCandidate.bank_details.bank_name}</p>
-                  <p><strong>A/C:</strong> {selectedCandidate.bank_details.bank_account_number ? `•••• ${selectedCandidate.bank_details.bank_account_number.slice(-4)}` : "—"}</p>
+                  <div className="flex items-center justify-between">
+                    <p>
+                      <strong>A/C:</strong>{" "}
+                      {selectedCandidate.bank_details.bank_account_number
+                        ? showFullAccount
+                          ? selectedCandidate.bank_details.bank_account_number
+                          : `•••• ${selectedCandidate.bank_details.bank_account_number.slice(-4)}`
+                        : "—"}
+                    </p>
+                    {selectedCandidate.bank_details.bank_account_number && (
+                      <button
+                        type="button"
+                        onClick={() => setShowFullAccount(!showFullAccount)}
+                        className="text-text-muted hover:text-brand-purple p-0.5 rounded transition-colors"
+                        title={showFullAccount ? "Hide Account Number" : "Show Full Account Number"}
+                      >
+                        {showFullAccount ? (
+                          <EyeOff className="w-3.5 h-3.5" />
+                        ) : (
+                          <Eye className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    )}
+                  </div>
                   <p><strong>IFSC:</strong> {selectedCandidate.bank_details.bank_ifsc}</p>
                   <p><strong>PAN:</strong> {selectedCandidate.bank_details.pan_number}</p>
                   {selectedCandidate.bank_details.aadhaar_number && (
