@@ -413,7 +413,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
 
   if (loading) {
     return (
-      <div className="p-8 max-w-7xl mx-auto space-y-4">
+      <div className="space-y-4 max-w-7xl mx-auto">
         <div className="h-6 w-32 bg-card-subtle rounded-lg animate-pulse" />
         <div className="h-44 bg-card-subtle rounded-3xl animate-pulse" />
       </div>

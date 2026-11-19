@@ -62,7 +62,7 @@ export default function EmsOrganizationTreePage() {
 
   return (
     <AppShell>
-      <div className="p-6 max-w-7xl mx-auto space-y-6">
+      <div className="space-y-6 max-w-7xl mx-auto">
         <EmsNavigationHeader />
 
         <div>

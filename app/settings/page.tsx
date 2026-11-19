@@ -6,9 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AppShell, useAppSession } from "@/components/shell/app-shell";
 import { BentoGrid } from "@/components/bento/bento-grid";
 import { BentoCard } from "@/components/bento/bento-card";
-import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { TotpMfaManager } from "@/components/shared/totp-mfa-manager";
-import { NotificationPreferencesCard } from "@/components/settings/notification-preferences-card";
 import { createClient } from "@/lib/supabase/client";
 import {
   ShieldCheck,
@@ -17,7 +15,6 @@ import {
   MapPin,
   Clock,
   Globe,
-  Bell,
   Lock,
   KeyRound,
   AlertCircle,
@@ -33,8 +30,6 @@ function SettingsPageContent() {
   const supabase = React.useMemo(() => createClient(), []);
   const [timezone, setTimezone] = React.useState("Asia/Kolkata");
   const [workTargetMinutes, setWorkTargetMinutes] = React.useState(480);
-  const [emailAlerts, setEmailAlerts] = React.useState(true);
-  const [slackAlerts, setSlackAlerts] = React.useState(true);
 
   // Password Update State
   const [newPassword, setNewPassword] = React.useState("");
@@ -222,7 +217,7 @@ function SettingsPageContent() {
             Settings & Privacy Principles
           </h1>
           <p className="text-xs sm:text-sm text-text-secondary mt-1">
-            Review security protection, view your governed schedule timezone, and adjust alert channels.
+            Review security protection and view your governed schedule timezone.
           </p>
         </div>
 
@@ -423,7 +418,7 @@ function SettingsPageContent() {
             </div>
           }
           subtitle="Assigned shift timezone and daily work target"
-          className="lg:col-span-7 p-6 flex flex-col justify-between"
+          className="lg:col-span-12 p-6 flex flex-col justify-between"
         >
           <div className="space-y-4">
             <div className="p-3 rounded-2xl bg-brand-purple-light/20 border border-brand-purple/25 text-xs text-text-primary flex items-center justify-between gap-2">
@@ -487,40 +482,6 @@ function SettingsPageContent() {
             </div>
           </div>
         </BentoCard>
-
-        {/* Theme Mode Control */}
-        <BentoCard
-          title={
-            <div className="flex items-center gap-2">
-              <Globe className="w-4 h-4 text-brand-purple" />
-              <span>Appearance & Display</span>
-            </div>
-          }
-          subtitle="Display theme and workspace contrast"
-          className="lg:col-span-5 p-6 flex flex-col justify-between"
-        >
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-3.5 rounded-2xl bg-card-subtle border border-border-light">
-              <div>
-                <span className="text-xs font-bold text-text-primary block">
-                  Color Theme Mode
-                </span>
-                <span className="text-[11px] text-text-tertiary">
-                  Segmented Light / Dark theme selector
-                </span>
-              </div>
-              <ThemeToggle />
-            </div>
-          </div>
-
-          <div className="pt-4 mt-4 border-t border-border-light text-[11px] text-text-tertiary flex items-center gap-1.5">
-            <Lock className="w-3.5 h-3.5 text-status-success-dot" />
-            <span>Theme preference stored locally in browser session</span>
-          </div>
-        </BentoCard>
-
-        {/* Central Notification System Preferences */}
-        <NotificationPreferencesCard />
 
         {/* Security & Change Password Section */}
         <BentoCard

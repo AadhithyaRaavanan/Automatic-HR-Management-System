@@ -86,7 +86,7 @@ export default function EmsTeamsPage() {
 
   return (
     <AppShell>
-      <div className="p-6 max-w-7xl mx-auto space-y-6">
+      <div className="space-y-6 max-w-7xl mx-auto">
         <EmsNavigationHeader />
 
         {/* Toolbar */}
