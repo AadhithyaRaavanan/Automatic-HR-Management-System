@@ -379,7 +379,7 @@ export function addStoredJobTitle(
     department_name: departmentName || null,
     created_at: new Date().toISOString(),
   };
-  saveStoredJobTitles([created, ...current.filter((t) => t.id !== created.id && t.title_name !== created.title_name)]);
+  saveStoredJobTitles([created, ...current.filter((t) => t.id !== created.id && !(t.title_name === created.title_name && t.department_id === created.department_id))]);
   addStoredAudit("CREATE_JOB_TITLE", "job_titles", created.id, null, created);
   return created;
 }

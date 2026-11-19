@@ -34,6 +34,7 @@ import { formatDurationMinutes, formatTimeInTimezone, evaluatePreCheckInLock } f
 import { getTamilMonthInfo } from "@/lib/date/holidays-tn";
 import { getTaskDueState, TaskRecord } from "@/features/tasks/hooks/use-tasks";
 import { EarlyCheckOutDialog } from "@/components/attendance/early-checkout-dialog";
+import { LivePresenceWidget } from "@/components/attendance/live-presence-widget";
 import {
   Clock,
   Calendar,
@@ -69,7 +70,8 @@ function DashboardContent({
   isCheckingOut?: boolean;
 }) {
   const router = useRouter();
-  const { userId, fullName, timezone } = useAppSession();
+  const { userId, fullName, timezone, userRole } = useAppSession();
+  const isPrivileged = userRole === "admin" || userRole === "hr" || userRole === "manager";
   const { data, isLoading, refetch } = useAttendanceToday();
   const checkInMutation = useCheckIn();
   const checkOutMutation = useCheckOut();
@@ -400,6 +402,13 @@ function DashboardContent({
           </div>
         </div>
       </div>
+
+      {/* Privileged Live Presence & Workforce Logging for Admin / HR / Manager */}
+      {isPrivileged && (
+        <section>
+          <LivePresenceWidget userTimezone={userTimezone} />
+        </section>
+      )}
 
       {/* Row 2: Live Notifications, Regularizations & Monthly Calendar */}
       <BentoGrid>

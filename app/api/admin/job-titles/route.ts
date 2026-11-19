@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const authResult = await verifyAdminRouteCaller(request, ["admin"]);
+  const authResult = await verifyAdminRouteCaller(request, ["admin", "hr"]);
   if ("response" in authResult) {
     return authResult.response;
   }
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
     if (insertErr) {
       if (insertErr.code === "23505" || insertErr.message.includes("unique")) {
         return NextResponse.json(
-          { error: `Job title '${trimmedName}' already exists in your company.` },
+          { error: `Job title '${trimmedName}' already exists under this department.` },
           { status: 409 }
         );
       }
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const authResult = await verifyAdminRouteCaller(request, ["admin"]);
+  const authResult = await verifyAdminRouteCaller(request, ["admin", "hr"]);
   if ("response" in authResult) {
     return authResult.response;
   }
@@ -204,7 +204,7 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const authResult = await verifyAdminRouteCaller(request, ["admin"]);
+  const authResult = await verifyAdminRouteCaller(request, ["admin", "hr"]);
   if ("response" in authResult) {
     return authResult.response;
   }
