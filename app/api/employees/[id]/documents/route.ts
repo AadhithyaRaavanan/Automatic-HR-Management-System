@@ -254,6 +254,33 @@ export async function PATCH(
         created_at: nowIso,
       });
       edu.career_timeline = timeline;
+    } else if (action === "approve") {
+      // If an industry certification is approved (AWS, Google Cloud, Azure, etc.)
+      const verifiedDocMeta = verifiedDocs[documentId];
+      const certLabel = verifiedDocMeta?.doc_label || doc.doc_type;
+      const isCertType =
+        doc.doc_type.startsWith("aws_") ||
+        doc.doc_type.startsWith("gcp_") ||
+        doc.doc_type.startsWith("azure_") ||
+        doc.doc_type.includes("cert") ||
+        doc.doc_type.includes("cisco") ||
+        doc.doc_type.includes("security") ||
+        doc.doc_type.includes("salesforce") ||
+        doc.doc_type.includes("pmp") ||
+        doc.doc_type.includes("kubernetes") ||
+        doc.doc_type.includes("docker");
+
+      if (isCertType) {
+        const timeline = Array.isArray(edu.career_timeline) ? [...edu.career_timeline] : [];
+        timeline.unshift({
+          id: `car-cert-${Date.now()}`,
+          effective_date: nowIso.slice(0, 10),
+          event_type: "Professional Certification Verified",
+          notes: `Verified industry certification: ${certLabel}. Verified by ${reviewerEmail || "HR Admin"}.`,
+          created_at: nowIso,
+        });
+        edu.career_timeline = timeline;
+      }
     }
 
     // Save changes to onboarding_profiles

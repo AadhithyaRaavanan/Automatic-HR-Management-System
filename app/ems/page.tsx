@@ -48,84 +48,95 @@ export default function EmsOverviewPage() {
 
   return (
     <AppShell>
-      <div className="p-6 max-w-7xl mx-auto space-y-6">
+      <div className="space-y-6 max-w-7xl mx-auto">
         <EmsNavigationHeader />
 
         {/* Metric Cards Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3.5">
           <Link
             href="/ems/employees/new"
-            className="p-4 rounded-2xl bg-gradient-to-br from-brand-purple/20 via-card/60 to-brand-cyan/10 backdrop-blur-md border border-brand-purple/40 hover:border-brand-purple shadow-sm hover:shadow-md transition-all flex flex-col justify-between group cursor-pointer"
+            className="p-4 rounded-[14px] bg-black text-white hover:bg-[#1A1A1A] border border-black shadow-none transition-colors flex flex-col justify-between group cursor-pointer min-w-0"
           >
-            <div className="flex items-center justify-between text-brand-purple mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider">Quick Action</span>
-              <div className="w-6 h-6 rounded-lg bg-brand-purple text-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+            <div className="flex items-center justify-between text-[#808080] mb-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-[#A6F000]">Quick Action</span>
+              <div className="w-5 h-5 rounded bg-[#A6F000] text-black font-bold flex items-center justify-center text-xs">
                 +
               </div>
             </div>
             <div>
-              <p className="text-base font-extrabold text-text-primary tracking-tight group-hover:text-brand-purple transition-colors">
-                Add Employee
+              <p className="text-base font-bold text-white tracking-tight">
+                Add employee
               </p>
-              <p className="text-[11px] text-text-muted mt-0.5">5-Step Wizard</p>
+              <p className="text-[11px] text-[#808080] mt-0.5">5-step wizard</p>
             </div>
           </Link>
 
-          <div className="p-4 rounded-2xl bg-card/60 backdrop-blur-md border border-border-light shadow-sm">
-            <div className="flex items-center justify-between text-text-muted mb-2">
-              <span className="text-xs font-semibold">Total Workforce</span>
-              <Users className="w-4 h-4 text-brand-purple" />
+          <div className="p-4 rounded-[14px] bg-white border border-[#E6E6E6] shadow-none flex flex-col justify-between min-w-0">
+            <div className="flex items-center justify-between text-[#808080] mb-2">
+              <span className="text-xs font-semibold">Total workforce</span>
+              <div className="w-7 h-7 rounded-lg bg-[#F5F5F5] flex items-center justify-center text-black">
+                <Users className="w-3.5 h-3.5" />
+              </div>
             </div>
-            <p className="text-2xl font-extrabold text-text-primary tracking-tight">
+            <p className="text-2xl font-bold text-black tabular-nums tracking-tight">
               {loading ? "..." : stats.totalEmployees || 0}
             </p>
-            <p className="text-[11px] text-emerald-500 font-medium mt-1">
-              {stats.activeEmployees || 0} Active Staff
+            <p className="text-[11px] text-[#4D4D4D] font-medium mt-1 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#A6F000]" />
+              {stats.activeEmployees || 0} Active staff
             </p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-card/60 backdrop-blur-md border border-border-light shadow-sm">
-            <div className="flex items-center justify-between text-text-muted mb-2">
-              <span className="text-xs font-semibold">Full-Time</span>
-              <UserCheck className="w-4 h-4 text-emerald-500" />
+          <div className="p-4 rounded-[14px] bg-white border border-[#E6E6E6] shadow-none flex flex-col justify-between min-w-0">
+            <div className="flex items-center justify-between text-[#808080] mb-2">
+              <span className="text-xs font-semibold">Full-time</span>
+              <div className="w-7 h-7 rounded-lg bg-[#F5F5F5] flex items-center justify-center text-black">
+                <UserCheck className="w-3.5 h-3.5" />
+              </div>
             </div>
-            <p className="text-2xl font-extrabold text-text-primary tracking-tight">
+            <p className="text-2xl font-bold text-black tabular-nums tracking-tight">
               {loading ? "..." : stats.fullTimeEmployees || 0}
             </p>
-            <p className="text-[11px] text-text-muted mt-1">Permanent Core Staff</p>
+            <p className="text-[11px] text-[#808080] mt-1">Permanent core staff</p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-card/60 backdrop-blur-md border border-border-light shadow-sm">
-            <div className="flex items-center justify-between text-text-muted mb-2">
-              <span className="text-xs font-semibold">Active Interns</span>
-              <GraduationCap className="w-4 h-4 text-amber-500" />
+          <div className="p-4 rounded-[14px] bg-white border border-[#E6E6E6] shadow-none flex flex-col justify-between min-w-0">
+            <div className="flex items-center justify-between text-[#808080] mb-2">
+              <span className="text-xs font-semibold">Active interns</span>
+              <div className="w-7 h-7 rounded-lg bg-[#F5F5F5] flex items-center justify-center text-black">
+                <GraduationCap className="w-3.5 h-3.5" />
+              </div>
             </div>
-            <p className="text-2xl font-extrabold text-text-primary tracking-tight">
+            <p className="text-2xl font-bold text-black tabular-nums tracking-tight">
               {loading ? "..." : stats.activeInterns || 0}
             </p>
-            <p className="text-[11px] text-amber-500 font-medium mt-1">Under Mentorship</p>
+            <p className="text-[11px] text-[#808080] mt-1">Under mentorship</p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-card/60 backdrop-blur-md border border-border-light shadow-sm">
-            <div className="flex items-center justify-between text-text-muted mb-2">
-              <span className="text-xs font-semibold">Departments & Teams</span>
-              <Building2 className="w-4 h-4 text-brand-cyan" />
+          <div className="p-4 rounded-[14px] bg-white border border-[#E6E6E6] shadow-none flex flex-col justify-between min-w-0">
+            <div className="flex items-center justify-between text-[#808080] mb-2">
+              <span className="text-xs font-semibold">Departments</span>
+              <div className="w-7 h-7 rounded-lg bg-[#F5F5F5] flex items-center justify-center text-black">
+                <Building2 className="w-3.5 h-3.5" />
+              </div>
             </div>
-            <p className="text-2xl font-extrabold text-text-primary tracking-tight">
-              {loading ? "..." : `${stats.totalDepartments || 0} / ${stats.totalTeams || 0}`}
+            <p className="text-2xl font-bold text-black tabular-nums tracking-tight">
+              {loading ? "..." : `${stats.totalDepartments || 0}/${stats.totalTeams || 0}`}
             </p>
-            <p className="text-[11px] text-text-muted mt-1">Org Tree Nodes</p>
+            <p className="text-[11px] text-[#808080] mt-1">Departments & teams</p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-card/60 backdrop-blur-md border border-border-light shadow-sm">
-            <div className="flex items-center justify-between text-text-muted mb-2">
-              <span className="text-xs font-semibold">Pending Onboarding</span>
-              <UserCheck className="w-4 h-4 text-rose-500" />
+          <div className="p-4 rounded-[14px] bg-white border border-[#E6E6E6] shadow-none flex flex-col justify-between min-w-0">
+            <div className="flex items-center justify-between text-[#808080] mb-2">
+              <span className="text-xs font-semibold">Onboarding</span>
+              <div className="w-7 h-7 rounded-lg bg-[#F5F5F5] flex items-center justify-center text-black">
+                <UserCheck className="w-3.5 h-3.5" />
+              </div>
             </div>
-            <p className="text-2xl font-extrabold text-text-primary tracking-tight">
+            <p className="text-2xl font-bold text-black tabular-nums tracking-tight">
               {loading ? "..." : stats.pendingOnboarding || 0}
             </p>
-            <p className="text-[11px] text-rose-500 font-medium mt-1">Awaiting HR Review</p>
+            <p className="text-[11px] text-[#808080] mt-1">Awaiting HR review</p>
           </div>
         </div>
 
@@ -135,8 +146,8 @@ export default function EmsOverviewPage() {
           <BentoCard
             title={
               <span className="flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-brand-purple" />
-                Department Workforce Distribution
+                <Building2 className="w-4 h-4 text-black" />
+                Department workforce distribution
               </span>
             }
             className="lg:col-span-2"
@@ -145,12 +156,12 @@ export default function EmsOverviewPage() {
               {depts.map((d: any) => (
                 <div key={d.id} className="space-y-1 text-xs">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-text-primary">{d.name}</span>
-                    <span className="font-mono text-text-secondary">{d.count} Employees</span>
+                    <span className="font-semibold text-black">{d.name}</span>
+                    <span className="font-mono text-[#808080]">{d.count} Employees</span>
                   </div>
-                  <div className="w-full h-2 rounded-full bg-card-subtle overflow-hidden">
+                  <div className="w-full h-2 rounded-full bg-[#E6E6E6] overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-brand-purple to-brand-cyan rounded-full transition-all duration-500"
+                      className="h-full bg-black rounded-full transition-all duration-500"
                       style={{
                         width: `${stats.totalEmployees ? (d.count / stats.totalEmployees) * 100 : 15}%`,
                       }}
@@ -165,20 +176,20 @@ export default function EmsOverviewPage() {
           <BentoCard
             title={
               <span className="flex items-center gap-2">
-                <Network className="w-4 h-4 text-brand-cyan" />
-                Workforce Health & Vacancies
+                <Network className="w-4 h-4 text-black" />
+                Workforce health & vacancies
               </span>
             }
           >
             <div className="space-y-4 pt-1 text-xs">
-              <div className="p-3.5 rounded-2xl bg-card-subtle border border-border-light/60 space-y-1">
+              <div className="p-3.5 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-text-primary">Vacant Leadership</span>
-                  <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 font-bold font-mono">
+                  <span className="font-semibold text-black">Vacant leadership</span>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-800 font-bold font-mono text-[11px]">
                     {stats.vacantLeadership || 0} Positions
                   </span>
                 </div>
-                <p className="text-[11px] text-text-muted">
+                <p className="text-[11px] text-[#808080]">
                   Departments or teams without an appointed head or lead.
                 </p>
               </div>
@@ -186,26 +197,26 @@ export default function EmsOverviewPage() {
               <div className="space-y-2">
                 <Link
                   href="/ems/employees/new"
-                  className="w-full p-2.5 rounded-xl bg-card-subtle hover:bg-brand-purple/10 border border-border-light text-text-primary font-semibold flex items-center justify-between transition-all"
+                  className="w-full p-2.5 rounded-lg bg-[#F5F5F5] hover:bg-white border border-[#E6E6E6] text-black font-semibold flex items-center justify-between transition-colors"
                 >
-                  <span>Launch New Employee Wizard</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-brand-purple" />
+                  <span>Launch new employee wizard</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-black" />
                 </Link>
 
                 <Link
                   href="/ems/organization"
-                  className="w-full p-2.5 rounded-xl bg-card-subtle hover:bg-brand-cyan/10 border border-border-light text-text-primary font-semibold flex items-center justify-between transition-all"
+                  className="w-full p-2.5 rounded-lg bg-[#F5F5F5] hover:bg-white border border-[#E6E6E6] text-black font-semibold flex items-center justify-between transition-colors"
                 >
-                  <span>Inspect Organization Hierarchy</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-brand-cyan" />
+                  <span>Inspect organization hierarchy</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-black" />
                 </Link>
 
                 <Link
                   href="/ems/internships"
-                  className="w-full p-2.5 rounded-xl bg-card-subtle hover:bg-amber-500/10 border border-border-light text-text-primary font-semibold flex items-center justify-between transition-all"
+                  className="w-full p-2.5 rounded-lg bg-[#F5F5F5] hover:bg-white border border-[#E6E6E6] text-black font-semibold flex items-center justify-between transition-colors"
                 >
-                  <span>Manage Intern Evaluations</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Manage intern evaluations</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-black" />
                 </Link>
               </div>
             </div>

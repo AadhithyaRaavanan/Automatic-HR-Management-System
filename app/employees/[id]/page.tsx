@@ -36,21 +36,46 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const ALL_DOCUMENT_TYPES = [
-  { key: "cert_undergraduate", label: "Undergraduate Degree (Bachelor's) Certificate", category: "Education" },
-  { key: "cert_postgraduate", label: "Postgraduate Degree (Master's) Certificate", category: "Education" },
-  { key: "cert_doctorate", label: "Doctorate / PhD Certificate", category: "Education" },
-  { key: "cert_diploma", label: "Diploma Certificate", category: "Education" },
-  { key: "cert_10th", label: "10th Standard Certificate", category: "Education" },
-  { key: "cert_12th", label: "12th Standard Certificate", category: "Education" },
-  { key: "experience_cert", label: "Experience Certificate", category: "Work History" },
-  { key: "relieving_letter", label: "Relieving Letter", category: "Work History" },
-  { key: "additional_cert", label: "Professional Certification / Course", category: "Certifications" },
-  { key: "passport", label: "Passport Copy", category: "Identity" },
-  { key: "driving_license", label: "Driving License", category: "Identity" },
-  { key: "voter_id", label: "Voter ID", category: "Identity" },
-  { key: "address_proof", label: "Address Proof", category: "Identity" },
-  { key: "medical_cert", label: "Medical Fitness Certificate", category: "Compliance" },
-  { key: "salary_slip", label: "Previous Salary Slip", category: "Payroll" },
+  // Cloud & DevOps Certifications
+  { key: "aws_cloud_practitioner", label: "AWS Certified Cloud Practitioner", category: "Cloud & DevOps Certifications" },
+  { key: "aws_solutions_architect", label: "AWS Certified Solutions Architect (Associate / Professional)", category: "Cloud & DevOps Certifications" },
+  { key: "aws_developer", label: "AWS Certified Developer / SysOps Administrator", category: "Cloud & DevOps Certifications" },
+  { key: "gcp_cloud_engineer", label: "Google Cloud Certified - Associate Cloud Engineer", category: "Cloud & DevOps Certifications" },
+  { key: "gcp_cloud_architect", label: "Google Cloud Certified - Professional Cloud Architect", category: "Cloud & DevOps Certifications" },
+  { key: "gcp_data_engineer", label: "Google Cloud Certified - Data Engineer / Machine Learning", category: "Cloud & DevOps Certifications" },
+  { key: "azure_fundamentals", label: "Microsoft Certified: Azure Fundamentals (AZ-900)", category: "Cloud & DevOps Certifications" },
+  { key: "azure_administrator", label: "Microsoft Certified: Azure Administrator (AZ-104)", category: "Cloud & DevOps Certifications" },
+  { key: "azure_solutions_architect", label: "Microsoft Certified: Azure Solutions Architect", category: "Cloud & DevOps Certifications" },
+  { key: "kubernetes_cert", label: "Kubernetes Certified (CKA / CKAD / CKS)", category: "Cloud & DevOps Certifications" },
+  { key: "docker_devops_cert", label: "Docker & DevOps Professional Certification", category: "Cloud & DevOps Certifications" },
+
+  // Technical, Security & Industry Certifications
+  { key: "cisco_cert", label: "Cisco Certified (CCNA / CCNP)", category: "Technical & Professional Certifications" },
+  { key: "cybersecurity_cert", label: "CompTIA Security+ / CEH / CISSP Cybersecurity", category: "Technical & Professional Certifications" },
+  { key: "salesforce_cert", label: "Salesforce Certified Administrator / Developer", category: "Technical & Professional Certifications" },
+  { key: "pmp_agile_cert", label: "PMP / Certified ScrumMaster (CSM) / PMI-ACP", category: "Technical & Professional Certifications" },
+  { key: "oracle_java_cert", label: "Oracle Certified Professional / Java Developer", category: "Technical & Professional Certifications" },
+  { key: "data_science_ai_cert", label: "Data Science & AI / ML Professional Certificate", category: "Technical & Professional Certifications" },
+  { key: "fullstack_cert", label: "Full Stack Web Development Professional Certificate", category: "Technical & Professional Certifications" },
+  { key: "other_certification", label: "Other Professional Certification / Course", category: "Technical & Professional Certifications" },
+
+  // Higher Education & Academic Degrees
+  { key: "cert_undergraduate", label: "Undergraduate Degree (Bachelor's: B.Tech / B.E. / B.Sc / B.Com / BCA / BBA / BA)", category: "Higher Education & Degrees" },
+  { key: "cert_postgraduate", label: "Postgraduate Degree (Master's: M.Tech / M.E. / M.Sc / M.Com / MCA / MBA / MA)", category: "Higher Education & Degrees" },
+  { key: "cert_doctorate", label: "Doctorate / Ph.D. Degree Certificate", category: "Higher Education & Degrees" },
+  { key: "cert_diploma", label: "Diploma / Polytechnic Certificate", category: "Higher Education & Degrees" },
+  { key: "cert_12th", label: "Higher Secondary (12th Standard) Certificate", category: "Higher Education & Degrees" },
+  { key: "cert_10th", label: "Secondary School (10th Standard) Certificate", category: "Higher Education & Degrees" },
+
+  // Work History & Compliance
+  { key: "experience_cert", label: "Experience Certificate", category: "Work History & Documents" },
+  { key: "relieving_letter", label: "Relieving Letter", category: "Work History & Documents" },
+  { key: "salary_slip", label: "Previous Salary Slip", category: "Work History & Documents" },
+  { key: "passport", label: "Passport Copy", category: "Identity & Compliance" },
+  { key: "driving_license", label: "Driving License", category: "Identity & Compliance" },
+  { key: "voter_id", label: "Voter ID", category: "Identity & Compliance" },
+  { key: "address_proof", label: "Address Proof", category: "Identity & Compliance" },
+  { key: "medical_cert", label: "Medical Fitness Certificate", category: "Identity & Compliance" },
 ];
 
 export default function Employee360ProfilePage() {
@@ -84,6 +109,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
   const [docModalOpen, setDocModalOpen] = React.useState(false);
   const [uploadingDoc, setUploadingDoc] = React.useState(false);
   const [selectedDocType, setSelectedDocType] = React.useState("");
+  const [customDocTitle, setCustomDocTitle] = React.useState("");
   const [docFile, setDocFile] = React.useState<File | null>(null);
 
   // Reject Document Modal State
@@ -224,10 +250,11 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
     setUploadingDoc(true);
     try {
       const selectedMeta = ALL_DOCUMENT_TYPES.find((t) => t.key === selectedDocType);
+      const computedLabel = customDocTitle.trim() || selectedMeta?.label || selectedDocType;
       const fd = new FormData();
       fd.append("file", docFile);
       fd.append("docType", selectedDocType);
-      fd.append("docLabel", selectedMeta?.label || selectedDocType);
+      fd.append("docLabel", computedLabel);
 
       const res = await fetch(`/api/employees/${employeeId}/documents`, {
         method: "POST",
@@ -240,6 +267,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
       setDocModalOpen(false);
       setDocFile(null);
       setSelectedDocType("");
+      setCustomDocTitle("");
       await loadProfile();
     } catch (err: any) {
       toast.error(err.message || "Failed to upload document");
@@ -325,9 +353,9 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
   const jobTitles = profileData?.jobTitles || [];
   const managers = profileData?.managers || [];
 
-  // Available document types excluding those already uploaded
+  // Available document types excluding those already uploaded (keeps generic certification available)
   const existingDocTypes = new Set(docs.map((d: any) => d.doc_type));
-  const availableDocTypes = ALL_DOCUMENT_TYPES.filter((t) => !existingDocTypes.has(t.key));
+  const availableDocTypes = ALL_DOCUMENT_TYPES.filter((t) => t.key === "other_certification" || !existingDocTypes.has(t.key));
 
   // Qualifications list (including multiple verified levels)
   const allQuals: string[] = Array.isArray(onb.education_details?.all_qualifications) && onb.education_details.all_qualifications.length > 0
@@ -335,52 +363,41 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
     : [onb.highest_qualification || onb.education_details?.highest_qualification || "12th Standard"];
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Back Link & Action Header */}
+    <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Back Link */}
       <div className="flex items-center justify-between">
         <Link
           href="/employees"
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-muted hover:text-text-primary transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#808080] hover:text-black transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           Back to Employee Directory
         </Link>
-
-        {isAdminOrHr && (
-          <button
-            type="button"
-            onClick={openEditModal}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card hover:bg-card-subtle border border-border-light text-xs font-bold text-text-primary shadow-sm transition-all"
-          >
-            <Pencil className="w-3.5 h-3.5 text-brand-purple" />
-            <span>Edit Parameters</span>
-          </button>
-        )}
       </div>
 
       {/* Hero Card */}
-      <div className="p-6 rounded-xl bg-card border border-border-light flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+      <div className="p-6 rounded-[14px] bg-white border border-[#E6E6E6] shadow-none flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-lg bg-card-subtle border border-border-light flex items-center justify-center text-base font-semibold text-text-primary">
+          <div className="w-14 h-14 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] flex items-center justify-center text-base font-semibold text-black">
             {emp.full_name?.slice(0, 2).toUpperCase() || "ZX"}
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-semibold text-text-primary">{emp.full_name}</h1>
-              <span className="text-xs font-mono font-medium px-2 py-0.5 rounded bg-card-subtle text-text-secondary border border-border-light">
+              <h1 className="text-xl font-bold text-black tracking-tight">{emp.full_name}</h1>
+              <span className="text-xs font-mono font-medium px-2 py-0.5 rounded bg-[#F5F5F5] text-[#808080] border border-[#E6E6E6]">
                 {emp.employee_number || emp.id?.slice(0, 8)}
               </span>
             </div>
-            <p className="text-xs text-text-secondary mt-1">
+            <p className="text-xs text-[#808080] mt-1">
               {emp.job_titles?.title_name || "Specialist"} • {emp.departments?.name || "Zenxea"}
             </p>
-            <div className="flex items-center gap-3 mt-2 text-xs text-text-muted">
+            <div className="flex items-center gap-3 mt-2 text-xs text-[#808080]">
               <span className="flex items-center gap-1">
-                <Mail className="w-3 h-3 text-brand-purple" />
+                <Mail className="w-3 h-3 text-black" />
                 {emp.email}
               </span>
               <span className="flex items-center gap-1">
-                <Phone className="w-3 h-3 text-brand-cyan" />
+                <Phone className="w-3 h-3 text-black" />
                 {emp.phone || onb.phone || onb.education_details?.emergency_contact_phone || "Not set"}
               </span>
             </div>
@@ -391,7 +408,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
           {isLoaded && userRole !== "admin" && userId === emp.id && (
             <button
               onClick={() => setPermissionModalOpen(true)}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-brand-purple text-white hover:bg-brand-purple/90 shadow-sm transition-all flex items-center gap-1.5"
+              className="px-4 py-2 rounded-lg text-xs font-semibold bg-white hover:bg-[#F5F5F5] border border-[#E6E6E6] text-black shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <Clock className="w-3.5 h-3.5" />
               Request Hourly Permission
@@ -401,7 +418,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
           {isAdminOrHr && (
             <button
               onClick={openEditModal}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-brand-navy hover:bg-brand-navy-hover text-white shadow-sm transition-all flex items-center gap-1.5"
+              className="px-4 py-2 rounded-lg text-xs font-semibold bg-black hover:bg-[#1A1A1A] text-white shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <Pencil className="w-3.5 h-3.5" />
               Edit Parameters
@@ -428,10 +445,10 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
             className={cn(
-              "px-3.5 py-1.5 rounded-xl transition-all whitespace-nowrap",
+              "px-3.5 py-1.5 rounded-lg transition-colors whitespace-nowrap",
               activeTab === tab.id
-                ? "bg-brand-purple text-white shadow-sm"
-                : "text-text-secondary hover:text-text-primary hover:bg-card-subtle"
+                ? "bg-black text-white font-semibold shadow-xs"
+                : "text-[#808080] hover:text-black hover:bg-[#F5F5F5]"
             )}
           >
             {tab.label}
@@ -443,15 +460,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
       {activeTab === "overview" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-text-primary">Comprehensive 360° Employee Dossier</h3>
-            {isAdminOrHr && (
-              <button
-                onClick={openEditModal}
-                className="text-xs font-bold text-brand-purple hover:underline flex items-center gap-1"
-              >
-                <Pencil className="w-3 h-3" /> Edit Overview Details
-              </button>
-            )}
+            <h3 className="text-sm font-bold text-black">Comprehensive 360° Employee Dossier</h3>
           </div>
           <BentoGrid className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <BentoCard title={<span className="flex items-center gap-2"><Briefcase className="w-4 h-4 text-brand-purple" /> Employment Overview</span>}>
@@ -534,116 +543,252 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
 
       {/* Tab 2: Employment & Governance */}
       {activeTab === "employment" && (
-        <div className="p-6 rounded-xl bg-card border border-border-light space-y-4">
+        <div className="p-6 rounded-[14px] bg-white border border-[#E6E6E6] shadow-none space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-bold text-text-primary">Employment Governance Parameters</h3>
-              <p className="text-xs text-text-muted mt-0.5">Shift policies, organizational hierarchy, and working parameters.</p>
+              <h3 className="text-sm font-bold text-black">Employment Governance Parameters</h3>
+              <p className="text-xs text-[#808080] mt-0.5">Shift policies, organizational hierarchy, and working parameters.</p>
             </div>
-            {isAdminOrHr && (
-              <button
-                onClick={openEditModal}
-                className="text-xs font-bold text-brand-purple hover:underline flex items-center gap-1"
-              >
-                <Pencil className="w-3 h-3" /> Edit Shift & Governance
-              </button>
-            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-            <div className="p-4 rounded-2xl bg-card-subtle border border-border-light/60 space-y-2">
-              <p className="text-text-muted">Authoritative Shift Timings:</p>
-              <p className="font-bold text-text-primary text-sm">
+            <div className="p-4 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] space-y-2">
+              <p className="text-[#808080]">Authoritative Shift Timings:</p>
+              <p className="font-bold text-black text-sm">
                 {emp.shift_start_time ? emp.shift_start_time.slice(0, 5) : "09:00"} - {emp.shift_end_time ? emp.shift_end_time.slice(0, 5) : "18:00"}
               </p>
-              <p className="text-[11px] text-text-muted">Standard daily shift with grace period and meal breaks.</p>
+              <p className="text-[11px] text-[#808080]">Standard daily shift with grace period and meal breaks.</p>
             </div>
-            <div className="p-4 rounded-2xl bg-card-subtle border border-border-light/60 space-y-2">
-              <p className="text-text-muted">Department Tree & Hierarchy:</p>
-              <p className="font-bold text-text-primary text-sm">
+            <div className="p-4 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] space-y-2">
+              <p className="text-[#808080]">Department Tree & Hierarchy:</p>
+              <p className="font-bold text-black text-sm">
                 {emp.departments?.parent_department_id ? "Subdepartment Division" : "Main Organizational Department"}
               </p>
-              <p className="text-[11px] text-text-muted">Governed by ZEN XEA Organizational Hierarchy.</p>
+              <p className="text-[11px] text-[#808080]">Governed by ZEN XEA Organizational Hierarchy.</p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Tab 3: Education */}
+      {/* Tab 3: Education & Onboarding */}
       {activeTab === "education" && (
-        <div className="p-6 rounded-xl bg-card border border-border-light space-y-4">
-          <div className="flex items-center justify-between">
+        <div className="space-y-6">
+          {/* Section 1: Academic Foundation */}
+          <div className="p-6 rounded-[14px] bg-white border border-[#E6E6E6] shadow-none space-y-4">
             <div>
-              <h3 className="text-sm font-bold text-text-primary">Verified Educational Qualifications</h3>
-              <p className="text-xs text-text-muted mt-0.5">
+              <h3 className="text-sm font-bold text-black">Verified Educational Qualifications</h3>
+              <p className="text-xs text-[#808080] mt-0.5">
                 All approved academic credentials verified during employee intake and additional submissions.
               </p>
             </div>
-            {isAdminOrHr && (
-              <button
-                onClick={openEditModal}
-                className="text-xs font-bold text-brand-purple hover:underline flex items-center gap-1"
-              >
-                <Pencil className="w-3 h-3" /> Update Qualifications
-              </button>
-            )}
+
+            <div className="space-y-3">
+              {allQuals.map((qual, idx) => (
+                <div
+                  key={idx}
+                  className="p-4 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] text-xs flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-white border border-[#E6E6E6] text-black flex items-center justify-center">
+                      <GraduationCap className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-black text-sm block">{qual}</span>
+                      <span className="text-[11px] text-[#808080]">
+                        {idx === 0 && allQuals.length === 1
+                          ? "Verified during mandatory employee onboarding intake."
+                          : idx === 0
+                            ? "Secondary Academic Foundation (Verified)"
+                            : "Higher Professional Academic Qualification (Verified & Approved)"}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#A6F000]/20 text-black border border-[#A6F000] flex items-center gap-1">
+                    <Check className="w-3 h-3 text-black" /> Verified
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div className="space-y-3">
-            {allQuals.map((qual, idx) => (
-              <div
-                key={idx}
-                className="p-4 rounded-2xl bg-card-subtle border border-border-light/60 text-xs flex items-center justify-between"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-brand-purple/10 text-brand-purple flex items-center justify-center">
-                    <GraduationCap className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="font-bold text-text-primary text-sm block">{qual}</span>
-                    <span className="text-[11px] text-text-muted">
-                      {idx === 0 && allQuals.length === 1
-                        ? "Verified during mandatory employee onboarding intake."
-                        : idx === 0
-                          ? "Secondary Academic Foundation (Verified)"
-                          : "Higher Professional Academic Qualification (Verified & Approved)"}
-                    </span>
-                  </div>
-                </div>
-                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex items-center gap-1">
-                  <Check className="w-3 h-3" /> Verified
-                </span>
+          {/* Section 2: Educational Certifications & Additional Certifications (AWS, Google Cloud, Azure, etc.) */}
+          <div className="p-6 rounded-[14px] bg-white border border-[#E6E6E6] shadow-none space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-black">
+                  Educational Certifications & Additional Certifications
+                </h3>
+                <p className="text-xs text-[#808080] mt-0.5">
+                  Industry credentials (AWS, Google Cloud, Microsoft, Cisco), specialized diplomas, and additional certifications.
+                </p>
               </div>
-            ))}
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (availableDocTypes.length === 0) {
+                    toast.info("All certification and documentation options have already been submitted!");
+                    return;
+                  }
+                  setSelectedDocType(availableDocTypes[0]?.key || "");
+                  setCustomDocTitle("");
+                  setDocModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold shadow-xs transition-colors shrink-0 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5 text-[#A6F000]" />
+                <span>Add Certification / Credential</span>
+              </button>
+            </div>
+
+            {(() => {
+              const certDocs = docs.filter((d: any) => {
+                const type = d.doc_type || "";
+                return (
+                  type.startsWith("aws_") ||
+                  type.startsWith("gcp_") ||
+                  type.startsWith("azure_") ||
+                  type.startsWith("cert_") ||
+                  type.includes("cert") ||
+                  type.includes("cisco") ||
+                  type.includes("security") ||
+                  type.includes("salesforce") ||
+                  type.includes("pmp") ||
+                  type.includes("kubernetes") ||
+                  type.includes("docker") ||
+                  type.includes("diploma")
+                );
+              });
+
+              if (certDocs.length === 0) {
+                return (
+                  <div className="py-8 px-4 text-center rounded-lg bg-[#F5F5F5] border border-dashed border-[#E6E6E6] space-y-1">
+                    <Award className="w-6 h-6 text-[#808080] mx-auto mb-1" />
+                    <p className="text-xs font-semibold text-black">No additional certifications submitted yet</p>
+                    <p className="text-[11px] text-[#808080] max-w-md mx-auto">
+                      Click &ldquo;Add Certification / Credential&rdquo; to submit AWS, Google Cloud, Azure, or professional qualifications for verification.
+                    </p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {certDocs.map((c: any) => {
+                    const label =
+                      c.doc_label ||
+                      ALL_DOCUMENT_TYPES.find((t) => t.key === c.doc_type)?.label ||
+                      c.doc_type;
+                    const isPending =
+                      c.document_status === "PENDING REVIEW" || c.status === "pending";
+
+                    return (
+                      <div
+                        key={c.id}
+                        className="p-3.5 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] flex flex-col justify-between gap-3 text-xs"
+                      >
+                        <div className="flex items-start gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-white border border-[#E6E6E6] flex items-center justify-center shrink-0 text-black">
+                            <Award className="w-4 h-4 text-black" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-black truncate">{label}</p>
+                            <p className="text-[10px] text-[#808080] truncate mt-0.5 font-mono">
+                              {c.file_name || "certificate.pdf"}
+                            </p>
+                            {c.rejection_reason && (
+                              <p className="text-[10px] text-[#F00091] mt-1 font-medium">
+                                Reason: {c.rejection_reason}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-[#E6E6E6] gap-2">
+                          <span
+                            className={cn(
+                              "px-2 py-0.5 rounded-full text-[10px] font-semibold border flex items-center gap-1",
+                              c.document_status === "VERIFIED"
+                                ? "bg-[#A6F000]/20 text-black border-[#A6F000]"
+                                : c.document_status === "REJECTED"
+                                ? "bg-[#F00091]/10 text-[#F00091] border-[#F00091]/30"
+                                : "bg-amber-500/10 text-amber-800 border-amber-500/30"
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "w-1.5 h-1.5 rounded-full",
+                                c.document_status === "VERIFIED"
+                                  ? "bg-[#A6F000]"
+                                  : c.document_status === "REJECTED"
+                                  ? "bg-[#F00091]"
+                                  : "bg-amber-500"
+                              )}
+                            />
+                            {c.document_status || "VERIFIED"}
+                          </span>
+
+                          <div className="flex items-center gap-1.5">
+                            {c.signedUrl && (
+                              <a
+                                href={c.signedUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-2 py-1 rounded-md bg-white border border-[#E6E6E6] text-black hover:bg-[#E6E6E6] text-[11px] font-semibold inline-flex items-center gap-1 transition-colors"
+                              >
+                                <Eye className="w-3 h-3" />
+                                <span>View</span>
+                              </a>
+                            )}
+
+                            {isAdminOrHr && isPending && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleReviewDocument(c.id, "approve")}
+                                  className="px-2 py-1 rounded-md bg-black text-white hover:bg-[#1A1A1A] text-[11px] font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer"
+                                  title="Approve certificate"
+                                >
+                                  <Check className="w-3 h-3 text-[#A6F000]" />
+                                  <span>Approve</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setRejectingDocId(c.id);
+                                    setRejectionReason("");
+                                    setRejectModalOpen(true);
+                                  }}
+                                  className="px-2 py-1 rounded-md bg-white border border-[#E6E6E6] text-[#F00091] hover:bg-[#F00091]/10 text-[11px] font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer"
+                                  title="Reject certificate"
+                                >
+                                  <X className="w-3 h-3" />
+                                  <span>Reject</span>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
 
       {/* Tab 4: Documents */}
       {activeTab === "documents" && (
-        <div className="p-6 rounded-xl bg-card border border-border-light space-y-4">
+        <div className="p-6 rounded-[14px] bg-white border border-[#E6E6E6] shadow-none space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h3 className="text-sm font-bold text-text-primary">Verified Employee Documents</h3>
-              <p className="text-xs text-text-muted mt-0.5">
+              <h3 className="text-sm font-bold text-black">Verified Employee Documents</h3>
+              <p className="text-xs text-[#808080] mt-0.5">
                 Onboarding records, additional verified credentials, and compliance documents.
               </p>
             </div>
-
-            <button
-              onClick={() => {
-                if (availableDocTypes.length === 0) {
-                  toast.info("All documentation types have already been submitted!");
-                  return;
-                }
-                setSelectedDocType(availableDocTypes[0]?.key || "");
-                setDocModalOpen(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all shadow-sm shrink-0"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Submit Additional Document</span>
-            </button>
           </div>
 
           {docs.length === 0 ? (
@@ -1185,41 +1330,72 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
         </div>
       )}
 
-      {/* SUBMIT ADDITIONAL DOCUMENT MODAL */}
+      {/* SUBMIT ADDITIONAL DOCUMENT / CERTIFICATION MODAL */}
       {docModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-xl bg-card border border-border-light p-6 shadow-float space-y-4">
-            <div className="flex items-center justify-between border-b border-border-light pb-3">
-              <h3 className="text-base font-bold text-text-primary">Submit Additional Document</h3>
-              <button onClick={() => setDocModalOpen(false)} className="text-text-muted hover:text-text-primary">
+          <div className="w-full max-w-lg rounded-[14px] bg-white border border-[#E6E6E6] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[#E6E6E6] pb-3">
+              <div>
+                <h3 className="text-base font-bold text-black tracking-tight">Submit Certification or Credential</h3>
+                <p className="text-xs text-[#808080] mt-0.5">
+                  Upload industry certificates (AWS, Google Cloud, Azure, etc.) or educational documents.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDocModalOpen(false)}
+                className="text-[#808080] hover:text-black p-1 rounded-md"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleUploadAdditionalDoc} className="space-y-4 text-xs">
               <div>
-                <label className="block font-semibold text-text-secondary mb-1">
-                  Document Type (excluding already submitted)
+                <label className="block font-semibold text-black mb-1">
+                  Certification / Document Type
                 </label>
                 <select
                   value={selectedDocType}
                   onChange={(e) => setSelectedDocType(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                  className="w-full px-3 py-2 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] text-black focus:outline-none focus:ring-2 focus:ring-black"
                   required
                 >
-                  {availableDocTypes.map((t) => (
-                    <option key={t.key} value={t.key}>
-                      [{t.category}] {t.label}
-                    </option>
+                  {Array.from(new Set(availableDocTypes.map((t) => t.category))).map((category) => (
+                    <optgroup key={category} label={category}>
+                      {availableDocTypes
+                        .filter((t) => t.category === category)
+                        .map((t) => (
+                          <option key={t.key} value={t.key}>
+                            {t.label}
+                          </option>
+                        ))}
+                    </optgroup>
                   ))}
                 </select>
-                <p className="text-[11px] text-text-muted mt-1">
-                  Only documents you haven&apos;t submitted yet are listed.
+                <p className="text-[11px] text-[#808080] mt-1">
+                  Excludes documents you have already submitted.
                 </p>
               </div>
 
               <div>
-                <label className="block font-semibold text-text-secondary mb-1">Select File (PDF, JPG, PNG)</label>
+                <label className="block font-semibold text-black mb-1">
+                  Specific Credential / Course Title (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={customDocTitle}
+                  onChange={(e) => setCustomDocTitle(e.target.value)}
+                  placeholder="e.g., AWS Certified Solutions Architect - Associate SAA-C03"
+                  className="w-full px-3 py-2 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] text-black placeholder:text-[#808080] focus:outline-none focus:ring-2 focus:ring-black"
+                />
+                <p className="text-[11px] text-[#808080] mt-0.5">
+                  Leave blank to use the standard title from the dropdown above.
+                </p>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-black mb-1">Select File (PDF, JPG, PNG)</label>
                 <input
                   type="file"
                   accept="application/pdf,image/jpeg,image/png,image/webp"
@@ -1227,25 +1403,25 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
                     const f = e.target.files?.[0];
                     if (f) setDocFile(f);
                   }}
-                  className="w-full text-xs text-text-muted file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-brand-purple/10 file:text-brand-purple hover:file:bg-brand-purple/20"
+                  className="w-full text-xs text-[#808080] file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-black file:text-white hover:file:bg-[#1A1A1A] cursor-pointer"
                   required
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-border-light">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#E6E6E6]">
                 <button
                   type="button"
                   onClick={() => setDocModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-card-subtle hover:bg-card border border-border-light font-semibold text-text-secondary"
+                  className="px-4 py-2 rounded-lg bg-white hover:bg-[#F5F5F5] border border-[#E6E6E6] font-semibold text-black text-xs cursor-pointer transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={uploadingDoc}
-                  className="px-5 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white font-bold transition-all shadow-sm flex items-center gap-2"
+                  className="px-4 py-2 rounded-lg bg-black hover:bg-[#1A1A1A] text-white font-semibold text-xs transition-colors shadow-xs flex items-center gap-2 cursor-pointer"
                 >
-                  {uploadingDoc ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  {uploadingDoc ? <Loader2 className="w-4 h-4 animate-spin text-[#A6F000]" /> : <Upload className="w-4 h-4 text-[#A6F000]" />}
                   <span>{uploadingDoc ? "Uploading..." : "Submit for Approval"}</span>
                 </button>
               </div>

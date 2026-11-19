@@ -98,6 +98,7 @@ export async function GET(
         }
         return {
           ...d,
+          doc_label: review?.doc_label || d.doc_label || d.doc_type,
           document_status: status,
           rejection_reason: review?.rejection_reason || null,
           signedUrl,

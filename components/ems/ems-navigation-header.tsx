@@ -59,10 +59,10 @@ export function EmsNavigationHeader({ currentTab }: EmsNavProps) {
               key={item.href}
               href={item.href}
               className={cn(
-                "px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all",
+                "px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-colors",
                 isActive
-                  ? "bg-brand-purple text-white shadow-sm"
-                  : "bg-card-subtle/80 hover:bg-card-subtle text-text-secondary hover:text-text-primary border border-border-light/60"
+                  ? "bg-black text-white shadow-xs"
+                  : "bg-white hover:bg-[#F5F5F5] text-[#808080] hover:text-black border border-[#E6E6E6]"
               )}
             >
               <Icon className="w-3.5 h-3.5 shrink-0" />

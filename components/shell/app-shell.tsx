@@ -390,7 +390,7 @@ export function AppShell({
           suppressHydrationWarning
         >
           {/* Left Docked Curved Sidebar */}
-          <div data-tour="nav-sidebar">
+          <div data-tour="nav-sidebar" className="shrink-0">
             <CurvedSidebar userRole={userRole} />
           </div>
 
