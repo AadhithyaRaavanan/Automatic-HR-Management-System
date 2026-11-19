@@ -59,7 +59,12 @@ export function useNotifications() {
       const res = await fetch("/api/notifications?limit=30", { cache: "no-store" });
       if (res.ok) {
         const json = await res.json();
-        return json.notifications || [];
+        const list: NotificationItemRecord[] = json.notifications || [];
+        return list.filter(
+          (n) =>
+            !n.body?.toLowerCase().includes("example notification") &&
+            !(n as any).metadata?.isExample
+        );
       }
 
       // Supabase fallback query if API route is unreachable
@@ -67,11 +72,17 @@ export function useNotifications() {
         .from("notifications")
         .select("*")
         .eq("user_id", user.id)
+        .not("body", "ilike", "%Example Notification%")
         .order("created_at", { ascending: false })
         .limit(30);
 
       if (error) return [];
-      return (data || []) as NotificationItemRecord[];
+      const fallbackList = (data || []) as NotificationItemRecord[];
+      return fallbackList.filter(
+        (n) =>
+          !n.body?.toLowerCase().includes("example notification") &&
+          !(n as any).metadata?.isExample
+      );
     },
     staleTime: 0,
     refetchOnMount: "always",

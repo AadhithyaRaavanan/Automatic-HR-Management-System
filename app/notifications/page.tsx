@@ -53,7 +53,12 @@ export default function NotificationsPage() {
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) return [];
       const json = await res.json();
-      return json.notifications || [];
+      const list: NotificationItemRecord[] = json.notifications || [];
+      return list.filter(
+        (n) =>
+          !n.body?.toLowerCase().includes("example notification") &&
+          !(n as any).metadata?.isExample
+      );
     },
     staleTime: 0,
     refetchOnMount: "always",

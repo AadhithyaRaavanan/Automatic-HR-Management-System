@@ -3,6 +3,8 @@ import { getNotificationCaller } from "@/lib/notifications/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,9 +18,17 @@ export async function GET(request: NextRequest) {
     const cursor = searchParams.get("cursor"); // created_at ISO timestamp
     const limit = Math.min(parseInt(searchParams.get("limit") || "20", 10), 50);
 
+    // Clean up any lingering example notifications asynchronously
+    (supabaseAdmin.from("notifications") as any)
+      .delete()
+      .ilike("body", "%Example Notification%")
+      .then(() => {})
+      .catch(() => {});
+
     let query = (supabaseAdmin.from("notifications") as any)
       .select("*")
       .eq("user_id", user.id)
+      .not("body", "ilike", "%Example Notification%")
       .order("created_at", { ascending: false })
       .limit(limit + 1);
 
@@ -35,7 +45,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const items = data || [];
+    const items = (data || []).filter(
+      (n: any) =>
+        !n.body?.toLowerCase().includes("example notification") &&
+        !n.metadata?.isExample
+    );
     let nextCursor: string | null = null;
 
     if (items.length > limit) {
