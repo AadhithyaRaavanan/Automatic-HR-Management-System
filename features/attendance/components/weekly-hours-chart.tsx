@@ -51,7 +51,7 @@ export function WeeklyHoursChart({
       </div>
 
       {/* Plot Area: Shared coordinate container for target guideline and bar tracks */}
-      <div className="relative h-36 w-full mt-2">
+      <div className="relative h-36 w-full mt-2 border-b border-[#E6E6E6]">
         {/* Target Dashed Guideline: exactly at targetLinePercent from bottom */}
         <div
           className="absolute left-0 right-0 border-b border-dashed border-[#B3B3B3] pointer-events-none flex items-center justify-end z-0"
@@ -62,7 +62,7 @@ export function WeeklyHoursChart({
           </span>
         </div>
 
-        {/* Bars Container: spans h-full of the plot area */}
+        {/* Bars Container: spans h-full of the plot area, grounded directly on border-b */}
         <div className="relative z-10 h-full flex items-end justify-between gap-3 px-3">
           {days.map((d) => {
             const hours = (d.workedMinutes / 60).toFixed(1);
@@ -79,9 +79,9 @@ export function WeeklyHoursChart({
                 className="flex-1 flex flex-col items-center h-full justify-end group relative"
               >
                 {d.workedMinutes > 0 ? (
-                  /* Solid freestanding pill bar with NO empty grey track */
+                  /* Solid bar connected directly with the baseline line (rounded top, flat bottom) */
                   <div
-                    className="w-7 sm:w-8 md:w-9 max-w-[38px] bg-[#A6F000] rounded-full transition-all duration-300 ease-out hover:brightness-95 relative cursor-pointer"
+                    className="w-7 sm:w-8 md:w-9 max-w-[38px] bg-[#A6F000] rounded-t-full rounded-b-none transition-all duration-300 ease-out hover:brightness-95 relative cursor-pointer"
                     style={{ height: `${heightPercent}%` }}
                   >
                     {/* Tooltip pinned directly above the top of this bar */}
@@ -93,9 +93,9 @@ export function WeeklyHoursChart({
                     </div>
                   </div>
                 ) : (
-                  /* Zero hours logged: tiny subtle baseline marker, no tall grey field */
-                  <div className="w-7 sm:w-8 md:w-9 max-w-[38px] h-1.5 bg-[#E6E6E6] rounded-full relative cursor-pointer">
-                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white text-[10px] font-semibold px-2 py-0.5 rounded shadow-md pointer-events-none whitespace-nowrap z-30 flex items-center gap-1">
+                  /* Zero hours logged: clean baseline space with hover indicator */
+                  <div className="w-7 sm:w-8 md:w-9 max-w-[38px] h-full relative cursor-pointer flex flex-col justify-end items-center">
+                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white text-[10px] font-semibold px-2 py-0.5 rounded shadow-md pointer-events-none whitespace-nowrap z-30 flex items-center gap-1">
                       <span>{d.dayLabel}: 0.0h</span>
                       <div className="absolute left-1/2 -bottom-1 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-[4px] border-t-black" />
                     </div>
@@ -107,8 +107,8 @@ export function WeeklyHoursChart({
         </div>
       </div>
 
-      {/* X-Axis Day & Hours Labels: Separate row below the plot area */}
-      <div className="flex items-center justify-between gap-3 px-3 pt-2.5 border-t border-[#E6E6E6]">
+      {/* X-Axis Day & Hours Labels: directly under the baseline line */}
+      <div className="flex items-center justify-between gap-3 px-3 pt-2 !mt-0">
         {days.map((d) => {
           const hours = (d.workedMinutes / 60).toFixed(1);
           return (
