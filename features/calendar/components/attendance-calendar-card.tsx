@@ -335,8 +335,8 @@ export function AttendanceCalendarCard({
                   isSelected
                     ? "bg-[#A6F000] text-black font-bold shadow-sm"
                     : isToday
-                    ? "border-2 border-black text-black font-bold"
-                    : "text-black hover:bg-[#F5F5F5]"
+                      ? "border-2 border-black text-black font-bold"
+                      : "text-black hover:bg-[#F5F5F5]"
                 )}
               >
                 {item.dateNumber}

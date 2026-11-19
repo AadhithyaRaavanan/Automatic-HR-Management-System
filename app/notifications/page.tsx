@@ -24,18 +24,21 @@ import {
 } from "@/features/notifications/hooks/use-notifications";
 import { toast } from "sonner";
 
-function getNotificationIcon(type: string) {
-  if (type.startsWith("leave")) return <Calendar className="w-4 h-4 text-brand-purple shrink-0" />;
+function getNotificationIcon(type: string, title?: string) {
+  if (type.includes("birthday") || title?.includes("Birthday") || title?.includes("🎂") || title?.includes("🎉")) {
+    return <span className="text-base shrink-0">🎂</span>;
+  }
+  if (type.startsWith("leave")) return <Calendar className="w-4 h-4 text-black shrink-0" />;
   if (type.startsWith("request") || type.startsWith("regularization"))
-    return <Clock className="w-4 h-4 text-amber-500 shrink-0" />;
-  if (type.startsWith("task")) return <UserCheck className="w-4 h-4 text-blue-500 shrink-0" />;
-  if (type.startsWith("kpi")) return <Target className="w-4 h-4 text-indigo-500 shrink-0" />;
+    return <Clock className="w-4 h-4 text-amber-600 shrink-0" />;
+  if (type.startsWith("task")) return <UserCheck className="w-4 h-4 text-black shrink-0" />;
+  if (type.startsWith("kpi")) return <Target className="w-4 h-4 text-black shrink-0" />;
   if (type.startsWith("security") || type.startsWith("password") || type.startsWith("mfa"))
-    return <ShieldAlert className="w-4 h-4 text-red-500 shrink-0" />;
-  if (type.startsWith("holiday")) return <Calendar className="w-4 h-4 text-emerald-500 shrink-0" />;
+    return <ShieldAlert className="w-4 h-4 text-[#F00091] shrink-0" />;
+  if (type.startsWith("holiday")) return <Calendar className="w-4 h-4 text-[#A6F000] shrink-0" />;
   if (type.startsWith("reminder") || type.includes("overdue") || type.includes("missed"))
-    return <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />;
-  return <Bell className="w-4 h-4 text-brand-purple shrink-0" />;
+    return <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />;
+  return <Bell className="w-4 h-4 text-black shrink-0" />;
 }
 
 export default function NotificationsPage() {
@@ -142,15 +145,15 @@ export default function NotificationsPage() {
 
           <div className="flex items-center gap-2">
             {/* Filter buttons */}
-            <div className="inline-flex items-center p-1 rounded-xl bg-card border border-border-light shadow-sm">
+            <div className="inline-flex items-center p-1 rounded-xl bg-white border border-[#E6E6E6] shadow-xs">
               <button
                 type="button"
                 onClick={() => setFilter("all")}
                 className={cn(
                   "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer",
                   filter === "all"
-                    ? "bg-brand-purple text-white shadow-xs"
-                    : "text-text-secondary hover:text-text-primary"
+                    ? "bg-black text-white shadow-xs"
+                    : "text-[#808080] hover:text-black hover:bg-[#F5F5F5]"
                 )}
               >
                 All
@@ -161,8 +164,8 @@ export default function NotificationsPage() {
                 className={cn(
                   "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer",
                   filter === "unread"
-                    ? "bg-brand-purple text-white shadow-xs"
-                    : "text-text-secondary hover:text-text-primary"
+                    ? "bg-black text-white shadow-xs"
+                    : "text-[#808080] hover:text-black hover:bg-[#F5F5F5]"
                 )}
               >
                 Unread
@@ -174,9 +177,9 @@ export default function NotificationsPage() {
                 type="button"
                 disabled={markAllRead.isPending}
                 onClick={() => markAllRead.mutate()}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-card hover:bg-card-subtle border border-border-light text-xs font-semibold text-text-primary transition-colors cursor-pointer shadow-sm disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-[#F5F5F5] border border-[#E6E6E6] text-xs font-semibold text-black transition-colors cursor-pointer shadow-xs disabled:opacity-50"
               >
-                <CheckCheck className="w-4 h-4 text-brand-purple" />
+                <CheckCheck className="w-4 h-4 text-black" />
                 <span>Mark all read</span>
               </button>
             )}
@@ -189,7 +192,7 @@ export default function NotificationsPage() {
             {[1, 2, 3, 4, 5].map((i) => (
               <div
                 key={i}
-                className="h-20 rounded-2xl bg-card border border-border-light/60 animate-pulse"
+                className="h-20 rounded-[14px] bg-white border border-[#E6E6E6] animate-pulse"
               />
             ))}
           </div>
@@ -197,7 +200,7 @@ export default function NotificationsPage() {
           <div className="space-y-6">
             {grouped.map(([groupTitle, items]) => (
               <div key={groupTitle} className="space-y-2.5">
-                <h3 className="text-xs font-bold text-text-tertiary uppercase tracking-wider px-1">
+                <h3 className="text-xs font-bold text-[#808080] uppercase tracking-wider px-1">
                   {groupTitle}
                 </h3>
                 <div className="space-y-2">
@@ -210,36 +213,36 @@ export default function NotificationsPage() {
                         key={n.id}
                         onClick={() => handleItemClick(n)}
                         className={cn(
-                          "p-4 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-4 group",
+                          "p-4 rounded-[14px] border transition-all cursor-pointer flex items-start justify-between gap-4 group",
                           isUnread
-                            ? "bg-brand-purple-light/15 border-brand-purple/30 hover:bg-brand-purple-light/25 shadow-xs"
-                            : "bg-card border-border-light hover:bg-card-subtle"
+                            ? "bg-[#F5F5F5] border-[#E6E6E6] hover:border-[#B3B3B3] shadow-xs"
+                            : "bg-white border-[#E6E6E6] hover:bg-[#FAFAFA]"
                         )}
                       >
                         <div className="flex items-start gap-3 min-w-0">
-                          <div className="p-2 rounded-xl bg-card border border-border-light/80 shadow-xs mt-0.5">
-                            {getNotificationIcon(n.type)}
+                          <div className="p-2 rounded-xl bg-white border border-[#E6E6E6] shadow-xs mt-0.5">
+                            {getNotificationIcon(n.type, n.title)}
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <h4 className="text-sm font-bold text-text-primary">
+                              <h4 className="text-sm font-bold text-black">
                                 {n.title}
                               </h4>
                               {isUnread && (
-                                <span className="w-2 h-2 rounded-full bg-brand-purple shrink-0" />
+                                <span className="w-2 h-2 rounded-full bg-[#F00091] shrink-0" />
                               )}
                             </div>
-                            <p className="text-xs text-text-secondary mt-1 leading-relaxed">
+                            <p className="text-xs text-[#4D4D4D] mt-1 leading-relaxed">
                               {n.body}
                             </p>
-                            <span className="text-[10px] text-text-tertiary font-mono mt-2 block">
+                            <span className="text-[10px] text-[#808080] font-mono mt-2 block">
                               {relTime}
                             </span>
                           </div>
                         </div>
 
                         {n.link && (
-                          <div className="shrink-0 pt-1 text-text-tertiary group-hover:text-brand-purple transition-colors">
+                          <div className="shrink-0 pt-1 text-[#808080] group-hover:text-black transition-colors">
                             <ExternalLink className="w-4 h-4" />
                           </div>
                         )}

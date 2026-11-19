@@ -1,8 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { BentoCard } from "@/components/bento/bento-card";
-import { Award, ArrowRight } from "lucide-react";
+import { ShieldCheck, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface HighlightCardProps {
@@ -21,38 +20,37 @@ export function HighlightCard({
   className,
 }: HighlightCardProps) {
   return (
-    <BentoCard
-      variant="purple"
-      className={cn("p-6 justify-between relative overflow-hidden", className)}
+    <div
+      className={cn(
+        "p-6 rounded-[14px] bg-white border border-[#E6E6E6] flex flex-col justify-between shadow-none relative overflow-hidden",
+        className
+      )}
     >
-      <div className="relative z-10">
-        <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center text-white mb-4 shadow-inner">
-          <Award className="w-6 h-6 text-white" />
+      <div>
+        <div className="w-10 h-10 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] flex items-center justify-center text-black mb-3">
+          <ShieldCheck className="w-5 h-5 text-black" />
         </div>
 
-        <h3 className="text-xl font-extrabold text-white tracking-tight mb-2">
+        <h3 className="text-base font-bold text-black tracking-tight mb-1.5">
           {title}
         </h3>
 
-        <p className="text-xs text-white/85 leading-relaxed max-w-[260px]">
+        <p className="text-xs text-[#4D4D4D] leading-relaxed max-w-md">
           {description}
         </p>
       </div>
 
-      <div className="mt-6 relative z-10">
+      <div className="mt-6">
         <button
           type="button"
           onClick={onAction}
-          className="w-full py-3 px-4 rounded-xl bg-brand-navy text-white text-xs font-bold hover:bg-brand-navy-hover transition-colors flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
+          className="w-full py-2.5 px-4 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
         >
           <span>{buttonText}</span>
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
       </div>
-
-      {/* Decorative background curve */}
-      <div className="absolute -bottom-8 -right-8 w-32 h-32 rounded-full bg-white/10 blur-xl pointer-events-none" />
-    </BentoCard>
+    </div>
   );
 }
 
