@@ -78,10 +78,12 @@ export function CurvedSidebar({
   const [mounted, setMounted] = React.useState(false);
   const [mountedRole, setMountedRole] = React.useState<string | null>(null);
   const [teamMemberCount, setTeamMemberCount] = React.useState<number | null>(null);
+  const [isMac, setIsMac] = React.useState(false);
 
   React.useEffect(() => {
     setMounted(true);
     if (typeof window !== "undefined") {
+      setIsMac(/(Mac|iPhone|iPod|iPad)/i.test(navigator.platform || navigator.userAgent));
       const match = document.cookie.match(/(?:^|;\s*)remotehr_role=([^;]*)/);
       const cookieRole = match ? decodeURIComponent(match[1]) : null;
       const stored = localStorage.getItem("remotehr_cached_role") || cookieRole;
@@ -449,7 +451,7 @@ export function CurvedSidebar({
             </button>
 
             <div className="text-[9.5px] text-white/50 text-center pt-1 font-mono tracking-wide">
-              Press ⌘B to collapse
+              Press {isMac ? "⌘B" : "Ctrl+B"} to collapse
             </div>
           </>
         )}

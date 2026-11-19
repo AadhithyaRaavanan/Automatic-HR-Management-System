@@ -83,3 +83,7 @@ export function useAttendanceContext(): AttendanceContextValue {
   return context;
 }
 
+export function useOptionalAttendanceContext(): AttendanceContextValue | null {
+  return React.useContext(AttendanceContext);
+}
+

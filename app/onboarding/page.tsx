@@ -26,6 +26,7 @@ import {
   Calendar,
   AlertTriangle,
   RotateCcw,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -1133,11 +1134,22 @@ export default function OnboardingPage() {
 
                 <div>
                   <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all cursor-pointer shadow-sm">
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>{getDoc("photo") ? "Replace Photo" : "Upload Passport Photo"}</span>
+                    {uploadingDocKey === "photo" ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="w-3.5 h-3.5" />
+                    )}
+                    <span>
+                      {uploadingDocKey === "photo"
+                        ? "Uploading..."
+                        : getDoc("photo")
+                          ? "Replace"
+                          : "Upload Passport Photo"}
+                    </span>
                     <input
                       type="file"
                       accept="application/pdf,image/jpeg,image/png,image/webp"
+                      disabled={uploadingDocKey !== null}
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) handleUploadFile("photo", file);
@@ -1193,11 +1205,22 @@ export default function OnboardingPage() {
 
                 <div>
                   <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all cursor-pointer shadow-sm">
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>{getDoc("resume") ? "Replace Resume" : "Upload Resume"}</span>
+                    {uploadingDocKey === "resume" ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="w-3.5 h-3.5" />
+                    )}
+                    <span>
+                      {uploadingDocKey === "resume"
+                        ? "Uploading..."
+                        : getDoc("resume")
+                          ? "Replace"
+                          : "Upload Resume"}
+                    </span>
                     <input
                       type="file"
                       accept="application/pdf,image/jpeg,image/png"
+                      disabled={uploadingDocKey !== null}
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) handleUploadFile("resume", file);
@@ -1295,12 +1318,16 @@ export default function OnboardingPage() {
                   {/* File input button */}
                   <div>
                     <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all cursor-pointer shadow-sm">
-                      <Upload className="w-3.5 h-3.5" />
+                      {uploadingDocKey === QUALIFICATION_DOC_MAP[highestQualification]?.docType ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="w-3.5 h-3.5" />
+                      )}
                       <span>
                         {uploadingDocKey === QUALIFICATION_DOC_MAP[highestQualification]?.docType
                           ? "Uploading..."
                           : getDoc(QUALIFICATION_DOC_MAP[highestQualification]?.docType)
-                            ? "Replace Certificate"
+                            ? "Replace"
                             : "Upload Certificate"}
                       </span>
                       <input
@@ -1332,12 +1359,23 @@ export default function OnboardingPage() {
                       AWS, Google Cloud, PMP, Scrum, or other specialized training proofs.
                     </p>
                   </div>
-                  <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-card hover:bg-card-subtle border border-border-light text-xs font-bold text-text-primary transition-all cursor-pointer shadow-sm shrink-0">
-                    <Upload className="w-3.5 h-3.5 text-brand-purple" />
-                    <span>Upload Optional Proof</span>
+                  <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all cursor-pointer shadow-sm shrink-0">
+                    {uploadingDocKey === "additional_cert" ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="w-3.5 h-3.5 text-white" />
+                    )}
+                    <span>
+                      {uploadingDocKey === "additional_cert"
+                        ? "Uploading..."
+                        : getDoc("additional_cert")
+                          ? "Replace"
+                          : "Upload Optional Proof"}
+                    </span>
                     <input
                       type="file"
                       accept="application/pdf,image/jpeg,image/png,image/webp"
+                      disabled={uploadingDocKey !== null}
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) handleUploadFile("additional_cert", file);
@@ -1539,11 +1577,22 @@ export default function OnboardingPage() {
                   )}
 
                   <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all cursor-pointer shadow-sm">
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>Upload Experience Certificate (PDF / JPG / PNG)</span>
+                    {uploadingDocKey === "experience_cert" ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="w-3.5 h-3.5" />
+                    )}
+                    <span>
+                      {uploadingDocKey === "experience_cert"
+                        ? "Uploading..."
+                        : getDoc("experience_cert")
+                          ? "Replace"
+                          : "Upload Experience Certificate (PDF / JPG / PNG)"}
+                    </span>
                     <input
                       type="file"
                       accept="application/pdf,image/jpeg,image/png,image/webp"
+                      disabled={uploadingDocKey !== null}
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) handleUploadFile("experience_cert", file);
@@ -1590,12 +1639,27 @@ export default function OnboardingPage() {
                       ))}
                     </select>
 
-                    <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-brand-purple hover:bg-brand-purple-hover text-white text-xs font-bold transition-all cursor-pointer shadow-sm">
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>Upload Slip ({selectedSlipMonth} {selectedSlipYear})</span>
+                    <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all cursor-pointer shadow-sm">
+                      {uploadingDocKey === `salary_slip_${selectedSlipMonth}_${selectedSlipYear}` ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="w-3.5 h-3.5" />
+                      )}
+                      <span>
+                        {uploadingDocKey === `salary_slip_${selectedSlipMonth}_${selectedSlipYear}`
+                          ? "Uploading..."
+                          : getSalarySlips().some(
+                              (s) =>
+                                s.salary_month === selectedSlipMonth &&
+                                s.salary_year === selectedSlipYear
+                            )
+                            ? "Replace"
+                            : `Upload Slip (${selectedSlipMonth} ${selectedSlipYear})`}
+                      </span>
                       <input
                         type="file"
                         accept="application/pdf,image/jpeg,image/png,image/webp"
+                        disabled={uploadingDocKey !== null}
                         onChange={(e) => {
                           const file = e.target.files?.[0];
                           if (file) handleUploadFile("salary_slip", file, selectedSlipMonth, selectedSlipYear);
@@ -1711,11 +1775,22 @@ export default function OnboardingPage() {
                       Upload PAN Card (PDF / JPG / PNG) <span className="text-status-danger">*</span>
                     </label>
                     <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all cursor-pointer shadow-sm w-full justify-center">
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>{getDoc("pan_card") ? "Replace PAN Card" : "Upload PAN Card"}</span>
+                      {uploadingDocKey === "pan_card" ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="w-3.5 h-3.5" />
+                      )}
+                      <span>
+                        {uploadingDocKey === "pan_card"
+                          ? "Uploading..."
+                          : getDoc("pan_card")
+                            ? "Replace"
+                            : "Upload PAN Card"}
+                      </span>
                       <input
                         type="file"
                         accept="application/pdf,image/jpeg,image/png,image/webp"
+                        disabled={uploadingDocKey !== null}
                         onChange={(e) => {
                           const file = e.target.files?.[0];
                           if (file) handleUploadFile("pan_card", file);
@@ -1800,11 +1875,22 @@ export default function OnboardingPage() {
                       Upload Aadhaar (PDF / JPG / PNG) <span className="text-status-danger">*</span>
                     </label>
                     <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all cursor-pointer shadow-sm w-full justify-center">
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>{getDoc("aadhaar_card") ? "Replace Aadhaar" : "Upload Aadhaar"}</span>
+                      {uploadingDocKey === "aadhaar_card" ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="w-3.5 h-3.5" />
+                      )}
+                      <span>
+                        {uploadingDocKey === "aadhaar_card"
+                          ? "Uploading..."
+                          : getDoc("aadhaar_card")
+                            ? "Replace"
+                            : "Upload Aadhaar"}
+                      </span>
                       <input
                         type="file"
                         accept="application/pdf,image/jpeg,image/png,image/webp"
+                        disabled={uploadingDocKey !== null}
                         onChange={(e) => {
                           const file = e.target.files?.[0];
                           if (file) handleUploadFile("aadhaar_card", file);
@@ -1995,11 +2081,22 @@ export default function OnboardingPage() {
               )}
 
               <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all cursor-pointer shadow-sm">
-                <Upload className="w-3.5 h-3.5" />
-                <span>{getDoc("bank_proof") ? "Replace Bank Proof" : "Upload Bank Proof (PDF / JPG / PNG)"}</span>
+                {uploadingDocKey === "bank_proof" ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Upload className="w-3.5 h-3.5" />
+                )}
+                <span>
+                  {uploadingDocKey === "bank_proof"
+                    ? "Uploading..."
+                    : getDoc("bank_proof")
+                      ? "Replace"
+                      : "Upload Bank Proof (PDF / JPG / PNG)"}
+                </span>
                 <input
                   type="file"
                   accept="application/pdf,image/jpeg,image/png,image/webp"
+                  disabled={uploadingDocKey !== null}
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) handleUploadFile("bank_proof", file);

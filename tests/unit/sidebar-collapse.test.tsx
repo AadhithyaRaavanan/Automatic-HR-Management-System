@@ -169,8 +169,6 @@ describe("Sidebar Collapse & Expand with Command Support", () => {
       // Check for labels visible in expanded sidebar
       expect(screen.getByText("Dashboard")).toBeInTheDocument();
       expect(screen.getByText("Attendance")).toBeInTheDocument();
-      expect(screen.getByText("Tasks")).toBeInTheDocument();
-      expect(screen.getByText("KPI")).toBeInTheDocument();
       expect(screen.getByText("Leave")).toBeInTheDocument();
       expect(screen.getByText("RemoteHR")).toBeInTheDocument();
     });

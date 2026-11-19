@@ -77,7 +77,7 @@ export function TopNavBar({
           )}
         </button>
 
-        {/* 4. Export Data Button (.xlsx) */}
+        {/* 4. Export Data Button */}
         <button
           type="button"
           onClick={handleExport}
@@ -85,9 +85,6 @@ export function TopNavBar({
         >
           <Download className="w-3.5 h-3.5 text-text-secondary" />
           <span className="hidden md:inline">Export data</span>
-          <span className="px-1.5 py-0.2 rounded-md bg-brand-purple-light text-brand-purple text-[10px] font-mono font-extrabold uppercase">
-            .xlsx
-          </span>
         </button>
       </header>
 

@@ -26,13 +26,37 @@ import {
   Check,
   X,
   Send,
+  Pencil,
+  Plus,
+  Loader2,
+  Upload,
+  UserCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
+const ALL_DOCUMENT_TYPES = [
+  { key: "cert_undergraduate", label: "Undergraduate Degree (Bachelor's) Certificate", category: "Education" },
+  { key: "cert_postgraduate", label: "Postgraduate Degree (Master's) Certificate", category: "Education" },
+  { key: "cert_doctorate", label: "Doctorate / PhD Certificate", category: "Education" },
+  { key: "cert_diploma", label: "Diploma Certificate", category: "Education" },
+  { key: "cert_10th", label: "10th Standard Certificate", category: "Education" },
+  { key: "cert_12th", label: "12th Standard Certificate", category: "Education" },
+  { key: "experience_cert", label: "Experience Certificate", category: "Work History" },
+  { key: "relieving_letter", label: "Relieving Letter", category: "Work History" },
+  { key: "additional_cert", label: "Professional Certification / Course", category: "Certifications" },
+  { key: "passport", label: "Passport Copy", category: "Identity" },
+  { key: "driving_license", label: "Driving License", category: "Identity" },
+  { key: "voter_id", label: "Voter ID", category: "Identity" },
+  { key: "address_proof", label: "Address Proof", category: "Identity" },
+  { key: "medical_cert", label: "Medical Fitness Certificate", category: "Compliance" },
+  { key: "salary_slip", label: "Previous Salary Slip", category: "Payroll" },
+];
+
 export default function Employee360ProfilePage() {
   const params = useParams();
-  const employeeId = params?.id as string;
+  const rawId = (params?.id as string) || "";
+  const employeeId = decodeURIComponent(rawId).trim().replace(/\s+/g, "-");
 
   return (
     <AppShell>
@@ -51,6 +75,29 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
     "overview" | "employment" | "education" | "documents" | "internship" | "attendance" | "permissions" | "history"
   >("overview");
 
+  // Edit Parameters Modal State
+  const [editModalOpen, setEditModalOpen] = React.useState(false);
+  const [savingParams, setSavingParams] = React.useState(false);
+  const [formData, setFormData] = React.useState<any>({});
+
+  // Additional Document Modal State
+  const [docModalOpen, setDocModalOpen] = React.useState(false);
+  const [uploadingDoc, setUploadingDoc] = React.useState(false);
+  const [selectedDocType, setSelectedDocType] = React.useState("");
+  const [docFile, setDocFile] = React.useState<File | null>(null);
+
+  // Reject Document Modal State
+  const [rejectModalOpen, setRejectModalOpen] = React.useState(false);
+  const [rejectingDocId, setRejectingDocId] = React.useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = React.useState("");
+
+  // Add Career Milestone Modal State
+  const [careerModalOpen, setCareerModalOpen] = React.useState(false);
+  const [careerEventType, setCareerEventType] = React.useState("Promotion");
+  const [careerEffectiveDate, setCareerEffectiveDate] = React.useState(new Date().toISOString().slice(0, 10));
+  const [careerNotes, setCareerNotes] = React.useState("");
+  const [savingCareer, setSavingCareer] = React.useState(false);
+
   // Permission Request Modal State
   const [permissionModalOpen, setPermissionModalOpen] = React.useState(false);
   const [permDate, setPermDate] = React.useState(new Date().toISOString().slice(0, 10));
@@ -60,6 +107,8 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
   const [permType, setPermType] = React.useState("personal");
   const [permReason, setPermReason] = React.useState("");
   const [submittingPerm, setSubmittingPerm] = React.useState(false);
+
+  const isAdminOrHr = userRole === "admin" || userRole === "hr";
 
   const loadProfile = React.useCallback(async () => {
     if (!employeeId) return;
@@ -82,6 +131,146 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
   React.useEffect(() => {
     loadProfile();
   }, [loadProfile]);
+
+  const openEditModal = () => {
+    const emp = profileData?.employee || {};
+    const onb = profileData?.onboarding || {};
+    setFormData({
+      full_name: emp.full_name || "",
+      employment_category: emp.employment_category || "full_time",
+      department_id: emp.department_id || "",
+      job_title_id: emp.job_title_id || "",
+      work_mode: emp.work_mode || "remote",
+      manager_id: emp.manager_id || "",
+      timezone: emp.timezone || "Asia/Kolkata",
+      work_target_minutes: emp.work_target_minutes || 480,
+      status: emp.status || "active",
+      phone: emp.phone || onb.phone || "",
+      emergency_contact: emp.emergency_contact || (onb.education_details?.emergency_contact_name ? `${onb.education_details.emergency_contact_name} (${onb.education_details.emergency_contact_phone || ""})` : ""),
+      shift_start_time: emp.shift_start_time ? emp.shift_start_time.slice(0, 5) : "09:00",
+      shift_end_time: emp.shift_end_time ? emp.shift_end_time.slice(0, 5) : "18:00",
+      highest_qualification: onb.highest_qualification || onb.education_details?.highest_qualification || "12th Standard",
+      bank_name: onb.bank_name || "",
+      bank_account_number: onb.bank_account_number || "",
+      bank_ifsc: onb.bank_ifsc || "",
+      pan_number: onb.pan_number || "",
+    });
+    setEditModalOpen(true);
+  };
+
+  const handleSaveParams = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingParams(true);
+    try {
+      const res = await fetch(`/api/employees/${employeeId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update parameters.");
+      toast.success("Profile parameters updated successfully!");
+      setEditModalOpen(false);
+      await loadProfile();
+    } catch (err: any) {
+      toast.error(err.message || "Error saving parameters");
+    } finally {
+      setSavingParams(false);
+    }
+  };
+
+  const handleAddCareerEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!careerNotes.trim()) {
+      toast.error("Please provide brief notes or description.");
+      return;
+    }
+    setSavingCareer(true);
+    try {
+      const res = await fetch(`/api/employees/${employeeId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "add_career_event",
+          event_type: careerEventType,
+          effective_date: careerEffectiveDate,
+          notes: careerNotes.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to add career event");
+      toast.success("Career event added to timeline!");
+      setCareerModalOpen(false);
+      setCareerNotes("");
+      await loadProfile();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add career event");
+    } finally {
+      setSavingCareer(false);
+    }
+  };
+
+  const handleUploadAdditionalDoc = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDocType) {
+      toast.error("Please select a document type");
+      return;
+    }
+    if (!docFile) {
+      toast.error("Please choose a file to upload");
+      return;
+    }
+
+    setUploadingDoc(true);
+    try {
+      const selectedMeta = ALL_DOCUMENT_TYPES.find((t) => t.key === selectedDocType);
+      const fd = new FormData();
+      fd.append("file", docFile);
+      fd.append("docType", selectedDocType);
+      fd.append("docLabel", selectedMeta?.label || selectedDocType);
+
+      const res = await fetch(`/api/employees/${employeeId}/documents`, {
+        method: "POST",
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+
+      toast.success("Document uploaded successfully! Pending HR/Admin verification.");
+      setDocModalOpen(false);
+      setDocFile(null);
+      setSelectedDocType("");
+      await loadProfile();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload document");
+    } finally {
+      setUploadingDoc(false);
+    }
+  };
+
+  const handleReviewDocument = async (documentId: string, action: "approve" | "reject", reason?: string) => {
+    try {
+      const res = await fetch(`/api/employees/${employeeId}/documents`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documentId,
+          action,
+          rejectionReason: reason,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Action failed");
+
+      toast.success(`Document ${action === "approve" ? "verified & approved" : "rejected"}!`);
+      setRejectModalOpen(false);
+      setRejectionReason("");
+      setRejectingDocId(null);
+      await loadProfile();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to action document review");
+    }
+  };
 
   const handleRequestPermission = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,22 +305,6 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
     }
   };
 
-  const handleReviewPermission = async (requestId: string, action: "approve" | "reject") => {
-    try {
-      const res = await fetch("/api/permissions/review", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId, action, reviewNote: `Actioned by ${userRole}` }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Review failed");
-      toast.success(`Permission request ${action}d!`);
-      await loadProfile();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to review permission");
-    }
-  };
-
   if (loading) {
     return (
       <div className="p-8 max-w-7xl mx-auto space-y-4">
@@ -148,93 +321,138 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
   const history = profileData?.careerHistory || [];
   const attendance = profileData?.recentAttendance || [];
   const permissions = profileData?.permissions || [];
+  const departments = profileData?.departments || [];
+  const jobTitles = profileData?.jobTitles || [];
+  const managers = profileData?.managers || [];
+
+  // Available document types excluding those already uploaded
+  const existingDocTypes = new Set(docs.map((d: any) => d.doc_type));
+  const availableDocTypes = ALL_DOCUMENT_TYPES.filter((t) => !existingDocTypes.has(t.key));
+
+  // Qualifications list (including multiple verified levels)
+  const allQuals: string[] = Array.isArray(onb.education_details?.all_qualifications) && onb.education_details.all_qualifications.length > 0
+    ? onb.education_details.all_qualifications
+    : [onb.highest_qualification || onb.education_details?.highest_qualification || "12th Standard"];
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-        {/* Back Link */}
-        <div>
-          <Link
-            href="/employees"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-muted hover:text-text-primary transition-colors mb-3"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Back to Employee Directory
-          </Link>
-        </div>
+      {/* Back Link & Action Header */}
+      <div className="flex items-center justify-between">
+        <Link
+          href="/employees"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-muted hover:text-text-primary transition-colors"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Back to Employee Directory
+        </Link>
 
-        {/* Hero Card */}
-        <div className="p-6 rounded-3xl bg-gradient-to-r from-card/80 to-card-subtle/80 backdrop-blur-md border border-border-light shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div className="flex items-center gap-5">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-purple to-brand-cyan flex items-center justify-center text-xl font-bold text-white shadow-lg">
-              {emp.full_name?.slice(0, 2).toUpperCase() || "ZX"}
+        {isAdminOrHr && (
+          <button
+            type="button"
+            onClick={openEditModal}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card hover:bg-card-subtle border border-border-light text-xs font-bold text-text-primary shadow-sm transition-all"
+          >
+            <Pencil className="w-3.5 h-3.5 text-brand-purple" />
+            <span>Edit Parameters</span>
+          </button>
+        )}
+      </div>
+
+      {/* Hero Card */}
+      <div className="p-6 rounded-3xl bg-gradient-to-r from-card/80 to-card-subtle/80 backdrop-blur-md border border-border-light shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div className="flex items-center gap-5">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-purple to-brand-cyan flex items-center justify-center text-xl font-bold text-white shadow-lg">
+            {emp.full_name?.slice(0, 2).toUpperCase() || "ZX"}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-text-primary">{emp.full_name}</h1>
+              <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-brand-purple/10 text-brand-purple border border-brand-purple/20">
+                {emp.employee_number || emp.id?.slice(0, 8)}
+              </span>
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-text-primary">{emp.full_name}</h1>
-                <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-brand-purple/10 text-brand-purple border border-brand-purple/20">
-                  {emp.employee_number || emp.id?.slice(0, 8)}
-                </span>
-              </div>
-              <p className="text-xs text-text-secondary mt-1">
-                {emp.job_titles?.title_name || "Specialist"} • {emp.departments?.name || "ZEN XEA"}
-              </p>
-              <div className="flex items-center gap-3 mt-2 text-xs text-text-muted">
-                <span className="flex items-center gap-1">
-                  <Mail className="w-3 h-3 text-brand-purple" />
-                  {emp.email}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Phone className="w-3 h-3 text-brand-cyan" />
-                  {emp.phone || onb.phone || onb.emergency_contact_phone || "Not set"}
-                </span>
-              </div>
+            <p className="text-xs text-text-secondary mt-1">
+              {emp.job_titles?.title_name || "Specialist"} • {emp.departments?.name || "ZEN XEA"}
+            </p>
+            <div className="flex items-center gap-3 mt-2 text-xs text-text-muted">
+              <span className="flex items-center gap-1">
+                <Mail className="w-3 h-3 text-brand-purple" />
+                {emp.email}
+              </span>
+              <span className="flex items-center gap-1">
+                <Phone className="w-3 h-3 text-brand-cyan" />
+                {emp.phone || onb.phone || onb.education_details?.emergency_contact_phone || "Not set"}
+              </span>
             </div>
           </div>
+        </div>
 
+        <div className="flex items-center gap-2.5">
           {isLoaded && userRole !== "admin" && userId === emp.id && (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setPermissionModalOpen(true)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-brand-purple text-white hover:bg-brand-purple/90 shadow-sm transition-all flex items-center gap-1.5"
-              >
-                <Clock className="w-3.5 h-3.5" />
-                Request Hourly Permission
-              </button>
-            </div>
+            <button
+              onClick={() => setPermissionModalOpen(true)}
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-brand-purple text-white hover:bg-brand-purple/90 shadow-sm transition-all flex items-center gap-1.5"
+            >
+              <Clock className="w-3.5 h-3.5" />
+              Request Hourly Permission
+            </button>
+          )}
+
+          {isAdminOrHr && (
+            <button
+              onClick={openEditModal}
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-brand-navy hover:bg-brand-navy-hover text-white shadow-sm transition-all flex items-center gap-1.5"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              Edit Parameters
+            </button>
           )}
         </div>
+      </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-1.5 border-b border-border-light pb-2 overflow-x-auto text-xs font-semibold">
-          {[
-            { id: "overview", label: "360° Overview" },
-            { id: "employment", label: "Employment & Governance" },
-            { id: "education", label: "Education & Onboarding" },
-            { id: "documents", label: `Documents (${docs.length})` },
-            ...(emp.employment_category === "intern" || internship
-              ? [{ id: "internship", label: "Internship Details" }]
-              : []),
-            { id: "attendance", label: "Attendance Summary" },
-            { id: "permissions", label: `Hourly Permissions (${permissions.length})` },
-            { id: "history", label: "Career Timeline" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={cn(
-                "px-3.5 py-1.5 rounded-xl transition-all whitespace-nowrap",
-                activeTab === tab.id
-                  ? "bg-brand-purple text-white shadow-sm"
-                  : "text-text-secondary hover:text-text-primary hover:bg-card-subtle"
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-1.5 border-b border-border-light pb-2 overflow-x-auto text-xs font-semibold">
+        {[
+          { id: "overview", label: "360° Overview" },
+          { id: "employment", label: "Employment & Governance" },
+          { id: "education", label: `Education & Onboarding (${allQuals.length})` },
+          { id: "documents", label: `Documents (${docs.length})` },
+          ...(emp.employment_category === "intern" || internship
+            ? [{ id: "internship", label: "Internship Details" }]
+            : []),
+          { id: "attendance", label: `Attendance Summary (${attendance.length})` },
+          { id: "permissions", label: `Hourly Permissions (${permissions.length})` },
+          { id: "history", label: `Career Timeline (${history.length})` },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={cn(
+              "px-3.5 py-1.5 rounded-xl transition-all whitespace-nowrap",
+              activeTab === tab.id
+                ? "bg-brand-purple text-white shadow-sm"
+                : "text-text-secondary hover:text-text-primary hover:bg-card-subtle"
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-        {/* Tab 1: Overview */}
-        {activeTab === "overview" && (
+      {/* Tab 1: Overview */}
+      {activeTab === "overview" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-text-primary">Comprehensive 360° Employee Dossier</h3>
+            {isAdminOrHr && (
+              <button
+                onClick={openEditModal}
+                className="text-xs font-bold text-brand-purple hover:underline flex items-center gap-1"
+              >
+                <Pencil className="w-3 h-3" /> Edit Overview Details
+              </button>
+            )}
+          </div>
           <BentoGrid className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <BentoCard title={<span className="flex items-center gap-2"><Briefcase className="w-4 h-4 text-brand-purple" /> Employment Overview</span>}>
               <div className="space-y-2.5 text-xs">
@@ -286,7 +504,7 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
               </div>
             </BentoCard>
 
-            <BentoCard title={<span className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-brand-purple" /> Identity & Contact</span>}>
+            <BentoCard title={<span className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-brand-purple" /> Identity & Banking</span>}>
               <div className="space-y-2.5 text-xs">
                 <div className="flex justify-between py-1 border-b border-border-light/40">
                   <span className="text-text-muted">PAN Card:</span>
@@ -311,382 +529,940 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
               </div>
             </BentoCard>
           </BentoGrid>
-        )}
+        </div>
+      )}
 
-        {/* Tab 2: Employment & Governance */}
-        {activeTab === "employment" && (
-          <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-4">
-            <h3 className="text-sm font-bold text-text-primary">Employment Governance Parameters</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-              <div className="p-4 rounded-2xl bg-card-subtle border border-border-light/60 space-y-2">
-                <p className="text-text-muted">Shift Timings:</p>
-                <p className="font-bold text-text-primary">
-                  {emp.shift_start_time ? emp.shift_start_time.slice(0, 5) : "09:00"} - {emp.shift_end_time ? emp.shift_end_time.slice(0, 5) : "17:00"}
-                </p>
-                <p className="text-[11px] text-text-muted">Standard 8-hour workday with 60-min lunch allowance.</p>
-              </div>
-              <div className="p-4 rounded-2xl bg-card-subtle border border-border-light/60 space-y-2">
-                <p className="text-text-muted">Department Tree:</p>
-                <p className="font-bold text-text-primary">
-                  {emp.departments?.parent_department_id ? "Subdepartment under Digital Marketing" : "Main Department"}
-                </p>
-                <p className="text-[11px] text-text-muted">Governed by ZEN XEA Organizational Hierarchy.</p>
-              </div>
+      {/* Tab 2: Employment & Governance */}
+      {activeTab === "employment" && (
+        <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-text-primary">Employment Governance Parameters</h3>
+              <p className="text-xs text-text-muted mt-0.5">Shift policies, organizational hierarchy, and working parameters.</p>
+            </div>
+            {isAdminOrHr && (
+              <button
+                onClick={openEditModal}
+                className="text-xs font-bold text-brand-purple hover:underline flex items-center gap-1"
+              >
+                <Pencil className="w-3 h-3" /> Edit Shift & Governance
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div className="p-4 rounded-2xl bg-card-subtle border border-border-light/60 space-y-2">
+              <p className="text-text-muted">Authoritative Shift Timings:</p>
+              <p className="font-bold text-text-primary text-sm">
+                {emp.shift_start_time ? emp.shift_start_time.slice(0, 5) : "09:00"} - {emp.shift_end_time ? emp.shift_end_time.slice(0, 5) : "18:00"}
+              </p>
+              <p className="text-[11px] text-text-muted">Standard daily shift with grace period and meal breaks.</p>
+            </div>
+            <div className="p-4 rounded-2xl bg-card-subtle border border-border-light/60 space-y-2">
+              <p className="text-text-muted">Department Tree & Hierarchy:</p>
+              <p className="font-bold text-text-primary text-sm">
+                {emp.departments?.parent_department_id ? "Subdepartment Division" : "Main Organizational Department"}
+              </p>
+              <p className="text-[11px] text-text-muted">Governed by ZEN XEA Organizational Hierarchy.</p>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Tab 3: Education */}
-        {activeTab === "education" && (
-          <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-4">
-            <h3 className="text-sm font-bold text-text-primary">Verified Educational Qualification</h3>
-            <div className="p-4 rounded-2xl bg-card-subtle border border-border-light/60 text-xs space-y-2">
-              <div className="flex items-center gap-2">
-                <GraduationCap className="w-4 h-4 text-brand-purple" />
-                <span className="font-bold text-text-primary">
-                  {onb.highest_qualification || onb.education_details?.highest_qualification || "12th Standard"}
+      {/* Tab 3: Education */}
+      {activeTab === "education" && (
+        <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-text-primary">Verified Educational Qualifications</h3>
+              <p className="text-xs text-text-muted mt-0.5">
+                All approved academic credentials verified during employee intake and additional submissions.
+              </p>
+            </div>
+            {isAdminOrHr && (
+              <button
+                onClick={openEditModal}
+                className="text-xs font-bold text-brand-purple hover:underline flex items-center gap-1"
+              >
+                <Pencil className="w-3 h-3" /> Update Qualifications
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            {allQuals.map((qual, idx) => (
+              <div
+                key={idx}
+                className="p-4 rounded-2xl bg-card-subtle border border-border-light/60 text-xs flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-brand-purple/10 text-brand-purple flex items-center justify-center">
+                    <GraduationCap className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-text-primary text-sm block">{qual}</span>
+                    <span className="text-[11px] text-text-muted">
+                      {idx === 0 && allQuals.length === 1
+                        ? "Verified during mandatory employee onboarding intake."
+                        : idx === 0
+                        ? "Secondary Academic Foundation (Verified)"
+                        : "Higher Professional Academic Qualification (Verified & Approved)"}
+                    </span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex items-center gap-1">
+                  <Check className="w-3 h-3" /> Verified
                 </span>
               </div>
-              <p className="text-text-muted">Verified during mandatory employee onboarding intake.</p>
-            </div>
+            ))}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Tab 4: Documents */}
-        {activeTab === "documents" && (
-          <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-4">
-            <h3 className="text-sm font-bold text-text-primary">Verified Employee Documents</h3>
-            {docs.length === 0 ? (
-              <p className="text-xs text-text-muted">No documents uploaded or all archived in Google Drive.</p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {docs.map((d: any) => (
-                  <div
-                    key={d.id}
-                    className="p-3.5 rounded-2xl bg-card-subtle border border-border-light flex items-center justify-between text-xs"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <FileText className="w-4 h-4 text-brand-purple" />
-                      <div>
-                        <p className="font-semibold text-text-primary">{d.document_name || d.doc_type}</p>
-                        <p className="text-[10px] text-text-muted font-mono">{d.file_name || "drive_asset.pdf"}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                        {d.document_status || "VERIFIED"}
-                      </span>
-                      {d.signedUrl && (
-                        <a
-                          href={d.signedUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-2.5 py-1 rounded-lg bg-card hover:bg-card-subtle text-brand-purple hover:text-brand-purple-hover border border-border-light text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors"
-                          title="View document"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>View</span>
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Tab 5: Internship Details */}
-        {activeTab === "internship" && (
-          <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-text-primary">Internship Management Dossier</h3>
-                <p className="text-xs text-text-secondary mt-0.5">
-                  Dynamic internship lifecycle tracking, mentor evaluations, and certificate status.
-                </p>
-              </div>
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                Status: {internship?.status || "Active"}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-              <div className="p-4 rounded-2xl bg-card-subtle border border-border-light space-y-1.5">
-                <p className="text-text-muted">Assigned Mentor:</p>
-                <p className="font-bold text-text-primary">{internship?.mentor?.full_name || "Not Assigned"}</p>
-                <p className="text-[11px] text-text-muted">{internship?.mentor ? "Assigned Mentor" : "Mentor Not Assigned"}</p>
-              </div>
-              <div className="p-4 rounded-2xl bg-card-subtle border border-border-light space-y-1.5">
-                <p className="text-text-muted">Internship Period:</p>
-                <p className="font-bold text-text-primary">
-                  {internship?.start_date || "2026-01-15"} to {internship?.end_date || "2026-04-15"}
-                </p>
-                <p className="text-[11px] text-text-muted">Duration: {internship?.duration_months || 3} Months</p>
-              </div>
-              <div className="p-4 rounded-2xl bg-card-subtle border border-border-light space-y-1.5">
-                <p className="text-text-muted">Certificate Status:</p>
-                <p className="font-bold text-text-primary">
-                  {internship?.certificate_issued ? "Issued & Certified" : "Pending Evaluation"}
-                </p>
-                <p className="text-[11px] text-text-muted">Tracked upon final completion</p>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-card-subtle border border-border-light space-y-2 text-xs">
-              <p className="font-bold text-text-primary">Training Plan & Target Learning Goals:</p>
-              <p className="text-text-secondary leading-relaxed">
-                {internship?.training_plan ||
-                  "Master Next.js App Router, Supabase PostgreSQL RLS security barriers, Tailwind CSS design system tokens, and HRMS enterprise workflows."}
+      {/* Tab 4: Documents */}
+      {activeTab === "documents" && (
+        <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-text-primary">Verified Employee Documents</h3>
+              <p className="text-xs text-text-muted mt-0.5">
+                Onboarding records, additional verified credentials, and compliance documents.
               </p>
             </div>
-          </div>
-        )}
 
-        {/* Tab 6: Hourly Permissions */}
-        {activeTab === "permissions" && (
-          <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-text-primary">Hourly Permission Requests</h3>
-                <p className="text-xs text-text-secondary mt-0.5">
-                  Short-duration permissions (personal, medical, emergency) seamlessly integrated with attendance.
-                </p>
-              </div>
-              {isLoaded && userRole !== "admin" && userId === emp.id && (
-                <button
-                  onClick={() => setPermissionModalOpen(true)}
-                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-brand-purple text-white hover:bg-brand-purple/90"
+            <button
+              onClick={() => {
+                if (availableDocTypes.length === 0) {
+                  toast.info("All documentation types have already been submitted!");
+                  return;
+                }
+                setSelectedDocType(availableDocTypes[0]?.key || "");
+                setDocModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all shadow-sm shrink-0"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Submit Additional Document</span>
+            </button>
+          </div>
+
+          {docs.length === 0 ? (
+            <p className="text-xs text-text-muted">No documents uploaded or all archived in Google Drive.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {docs.map((d: any) => (
+                <div
+                  key={d.id}
+                  className="p-3.5 rounded-2xl bg-card-subtle border border-border-light flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
                 >
-                  New Request
-                </button>
-              )}
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <FileText className="w-4 h-4 text-brand-purple shrink-0" />
+                    <div className="min-w-0">
+                      <p className="font-semibold text-text-primary truncate">
+                        {ALL_DOCUMENT_TYPES.find((t) => t.key === d.doc_type)?.label || d.doc_type}
+                      </p>
+                      <p className="text-[10px] text-text-muted font-mono truncate">{d.file_name || "drive_asset.pdf"}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span
+                      className={cn(
+                        "px-2 py-0.5 rounded-full text-[10px] font-bold border",
+                        d.document_status === "VERIFIED"
+                          ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                          : d.document_status === "REJECTED"
+                          ? "bg-rose-500/10 text-rose-500 border-rose-500/20"
+                          : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                      )}
+                    >
+                      {d.document_status || "VERIFIED"}
+                    </span>
+
+                    {d.signedUrl && (
+                      <a
+                        href={d.signedUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-2.5 py-1 rounded-lg bg-card hover:bg-card-subtle text-brand-purple hover:text-brand-purple-hover border border-border-light text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors"
+                        title="View document"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>View</span>
+                      </a>
+                    )}
+
+                    {/* Admin/HR Approval Actions for Pending Documents */}
+                    {isAdminOrHr && d.document_status === "PENDING REVIEW" && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleReviewDocument(d.id, "approve")}
+                          className="p-1 rounded-lg bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border border-emerald-500/30"
+                          title="Approve Document"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRejectingDocId(d.id);
+                            setRejectModalOpen(true);
+                          }}
+                          className="p-1 rounded-lg bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 border border-rose-500/30"
+                          title="Reject Document"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab 5: Internship Details */}
+      {activeTab === "internship" && (
+        <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-bold text-text-primary">Internship Management Dossier</h3>
+              <p className="text-xs text-text-secondary mt-0.5">
+                Dynamic internship lifecycle tracking, mentor evaluations, and certificate status.
+              </p>
+            </div>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+              Status: {internship?.status || "Active"}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div className="p-4 rounded-2xl bg-card-subtle border border-border-light space-y-1.5">
+              <p className="text-text-muted">Assigned Mentor:</p>
+              <p className="font-bold text-text-primary">{internship?.mentor?.full_name || "Not Assigned"}</p>
+              <p className="text-[11px] text-text-muted">{internship?.mentor ? "Assigned Mentor" : "Mentor Not Assigned"}</p>
+            </div>
+            <div className="p-4 rounded-2xl bg-card-subtle border border-border-light space-y-1.5">
+              <p className="text-text-muted">Internship Period:</p>
+              <p className="font-bold text-text-primary">
+                {internship?.start_date || "2026-01-15"} to {internship?.end_date || "2026-04-15"}
+              </p>
+              <p className="text-[11px] text-text-muted">Duration: {internship?.duration_months || 3} Months</p>
+            </div>
+            <div className="p-4 rounded-2xl bg-card-subtle border border-border-light space-y-1.5">
+              <p className="text-text-muted">Certificate Status:</p>
+              <p className="font-bold text-text-primary">
+                {internship?.certificate_issued ? "Issued & Certified" : "Pending Evaluation"}
+              </p>
+              <p className="text-[11px] text-text-muted">Tracked upon final completion</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 6: Hourly Permissions */}
+      {activeTab === "permissions" && (
+        <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-bold text-text-primary">Hourly Permission Requests</h3>
+              <p className="text-xs text-text-secondary mt-0.5">
+                Short-duration permissions (personal, medical, emergency, examination) seamlessly integrated with attendance.
+              </p>
+            </div>
+            {isLoaded && (
+              <button
+                onClick={() => setPermissionModalOpen(true)}
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-brand-purple text-white hover:bg-brand-purple/90"
+              >
+                New Request
+              </button>
+            )}
+          </div>
+
+          {permissions.length === 0 ? (
+            <p className="text-xs text-text-muted">No permission requests submitted yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {permissions.map((p: any) => (
+                <div
+                  key={p.id}
+                  className="p-4 rounded-2xl bg-card-subtle border border-border-light flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-text-primary">{p.permission_date}</span>
+                      <span className="font-mono text-text-muted">
+                        ({p.start_time?.slice(0, 5)} - {p.end_time?.slice(0, 5)})
+                      </span>
+                      <span className="font-semibold text-brand-purple">• {p.duration_minutes} mins</span>
+                    </div>
+                    <p className="text-text-secondary mt-1">Reason: {p.reason}</p>
+                  </div>
+
+                  <span
+                    className={cn(
+                      "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                      p.status === "approved"
+                        ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+                        : p.status === "rejected"
+                        ? "bg-rose-500/10 text-rose-500 border border-rose-500/20"
+                        : "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                    )}
+                  >
+                    {p.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab 7: Attendance Summary */}
+      {activeTab === "attendance" && (
+        <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-bold text-text-primary">Attendance Logs & Summary</h3>
+              <p className="text-xs text-text-muted mt-0.5">Authoritative daily punch records and punctuality audits.</p>
+            </div>
+            <div className="text-xs font-mono text-text-muted">
+              Total Workdays: {attendance.filter((a: any) => a.status === "present").length} Days Present
+            </div>
+          </div>
+
+          {attendance.length === 0 ? (
+            <p className="text-xs text-text-muted">No attendance days logged for this employee.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead>
+                  <tr className="border-b border-border-light text-text-muted">
+                    <th className="py-2.5 px-3">Date</th>
+                    <th className="py-2.5 px-3">Status</th>
+                    <th className="py-2.5 px-3">Logged Hours</th>
+                    <th className="py-2.5 px-3">Punctuality</th>
+                    <th className="py-2.5 px-3">Lock State</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-light/40">
+                  {attendance.map((a: any) => {
+                    const isNonWork = a.status === "weekend" || a.status === "holiday" || a.status === "absent";
+                    const hours = !isNonWork && a.total_minutes ? `${(a.total_minutes / 60).toFixed(1)}h` : "--";
+                    const punctuality = isNonWork ? "--" : a.is_late ? "Late" : "On Time";
+
+                    return (
+                      <tr key={a.id || a.work_date} className="text-text-secondary hover:bg-card-subtle/50 transition-colors">
+                        <td className="py-2.5 px-3 font-mono font-bold text-text-primary">{a.work_date}</td>
+                        <td className="py-2.5 px-3">
+                          <span
+                            className={cn(
+                              "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase",
+                              a.status === "present"
+                                ? "bg-emerald-500/10 text-emerald-500"
+                                : a.status === "absent"
+                                ? "bg-rose-500/10 text-rose-500"
+                                : a.status === "holiday"
+                                ? "bg-purple-500/10 text-purple-500"
+                                : "bg-neutral-500/10 text-neutral-400"
+                            )}
+                          >
+                            • {a.status}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 font-bold text-text-primary">{hours}</td>
+                        <td className="py-2.5 px-3 font-medium">
+                          <span className={punctuality === "On Time" ? "text-emerald-500 font-bold" : ""}>
+                            {punctuality}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-text-muted">{a.locked ? "Locked" : "Open"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab 8: Career Timeline */}
+      {activeTab === "history" && (
+        <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-bold text-text-primary">Effective-Dated Career Timeline</h3>
+              <p className="text-xs text-text-muted mt-0.5">Chronological record of promotions, role adjustments, and organizational milestones.</p>
+            </div>
+            {isAdminOrHr && (
+              <button
+                onClick={() => setCareerModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold transition-all shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Career Milestone</span>
+              </button>
+            )}
+          </div>
+
+          {history.length === 0 ? (
+            <div className="p-4 rounded-2xl bg-card-subtle text-xs text-text-muted">
+              Initial employment event recorded upon provisioning.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {history.map((h: any) => (
+                <div key={h.id} className="p-4 rounded-2xl bg-card-subtle border border-border-light text-xs space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-brand-purple">{h.event_type}</span>
+                    <span className="font-mono text-text-muted">{h.effective_date}</span>
+                  </div>
+                  <p className="text-text-secondary">{h.notes || "Employment lifecycle state updated."}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* EDIT PARAMETERS MODAL */}
+      {editModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="w-full max-w-2xl rounded-3xl bg-card border border-border-light p-6 shadow-2xl space-y-4 my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-border-light pb-3">
+              <h3 className="text-base font-bold text-text-primary">Edit Employee Parameters</h3>
+              <button onClick={() => setEditModalOpen(false)} className="text-text-muted hover:text-text-primary">
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            {permissions.length === 0 ? (
-              <p className="text-xs text-text-muted">No permission requests submitted yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {permissions.map((p: any) => (
-                  <div
-                    key={p.id}
-                    className="p-4 rounded-2xl bg-card-subtle border border-border-light flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-text-primary">{p.permission_date}</span>
-                        <span className="font-mono text-text-muted">
-                          ({p.start_time?.slice(0, 5)} - {p.end_time?.slice(0, 5)})
-                        </span>
-                        <span className="font-semibold text-brand-purple">• {p.duration_minutes} mins</span>
-                      </div>
-                      <p className="text-text-secondary mt-1">Reason: {p.reason}</p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                          p.status === "approved"
-                            ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
-                            : p.status === "rejected"
-                            ? "bg-rose-500/10 text-rose-500 border border-rose-500/20"
-                            : "bg-amber-500/10 text-amber-500 border border-amber-500/20"
-                        )}
-                      >
-                        {p.status}
-                      </span>
-
-                      {p.status === "pending" && (userRole === "admin" || userRole === "hr" || userRole === "manager") && (
-                        <div className="flex items-center gap-1.5 ml-2">
-                          <button
-                            onClick={() => handleReviewPermission(p.id, "approve")}
-                            className="p-1 rounded-lg bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
-                            title="Approve"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleReviewPermission(p.id, "reject")}
-                            className="p-1 rounded-lg bg-rose-500/10 text-rose-500 hover:bg-rose-500/20"
-                            title="Reject"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Tab 7: Attendance Summary */}
-        {activeTab === "attendance" && (
-          <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-4">
-            <h3 className="text-base font-bold text-text-primary">Recent Attendance Logs</h3>
-            {attendance.length === 0 ? (
-              <p className="text-xs text-text-muted">No attendance days logged for this employee.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
-                  <thead>
-                    <tr className="border-b border-border-light text-text-muted">
-                      <th className="py-2">Date</th>
-                      <th className="py-2">Status</th>
-                      <th className="py-2">Total Minutes</th>
-                      <th className="py-2">Late Arrival</th>
-                      <th className="py-2">Early Exit</th>
-                      <th className="py-2">Work Location</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border-light/40">
-                    {attendance.map((a: any) => (
-                      <tr key={a.id} className="text-text-secondary">
-                        <td className="py-2 font-mono">{a.work_date}</td>
-                        <td className="py-2 uppercase font-bold text-text-primary">{a.status}</td>
-                        <td className="py-2">{a.total_minutes}m ({(a.total_minutes / 60).toFixed(1)}h)</td>
-                        <td className="py-2">{a.is_late ? "Yes" : "No"}</td>
-                        <td className="py-2">{a.is_early_exit ? "Yes" : "No"}</td>
-                        <td className="py-2 capitalize">{a.work_location || "Office"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Tab 8: Career Timeline */}
-        {activeTab === "history" && (
-          <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light space-y-4">
-            <h3 className="text-base font-bold text-text-primary">Effective-Dated Career Timeline</h3>
-            {history.length === 0 ? (
-              <div className="p-4 rounded-2xl bg-card-subtle text-xs text-text-muted">
-                Initial employment event recorded upon provisioning.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {history.map((h: any) => (
-                  <div key={h.id} className="p-4 rounded-2xl bg-card-subtle border border-border-light text-xs space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-brand-purple">{h.event_type}</span>
-                      <span className="font-mono text-text-muted">{h.effective_date}</span>
-                    </div>
-                    <p className="text-text-secondary">{h.notes || "Employment lifecycle state updated."}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Hourly Permission Modal */}
-        {permissionModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="w-full max-w-md rounded-3xl bg-card border border-border-light p-6 shadow-2xl space-y-4">
-              <h3 className="text-base font-bold text-text-primary">Submit Hourly Permission Request</h3>
-              <p className="text-xs text-text-secondary">
-                Apply for up to 4 hours of short permission without affecting full-day leave balance.
-              </p>
-
-              <form onSubmit={handleRequestPermission} className="space-y-3 text-xs">
+            <form onSubmit={handleSaveParams} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-text-secondary mb-1">Permission Date</label>
+                  <label className="block font-semibold text-text-secondary mb-1">Full Name</label>
                   <input
-                    type="date"
-                    value={permDate}
-                    onChange={(e) => setPermDate(e.target.value)}
+                    type="text"
+                    value={formData.full_name || ""}
+                    onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                     className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
                     required
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-text-secondary mb-1">Start Time</label>
-                    <input
-                      type="time"
-                      value={permStart}
-                      onChange={(e) => setPermStart(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-text-secondary mb-1">End Time</label>
-                    <input
-                      type="time"
-                      value={permEnd}
-                      onChange={(e) => setPermEnd(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-text-secondary mb-1">Duration (Mins)</label>
-                    <input
-                      type="number"
-                      value={permDuration}
-                      onChange={(e) => setPermDuration(Number(e.target.value))}
-                      className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
-                      min={15}
-                      max={480}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-text-secondary mb-1">Permission Type</label>
-                    <select
-                      value={permType}
-                      onChange={(e) => setPermType(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
-                    >
-                      <option value="personal">Personal Requirement</option>
-                      <option value="medical">Medical Appointment</option>
-                      <option value="official">Official Outside Work</option>
-                      <option value="emergency">Family Emergency</option>
-                    </select>
-                  </div>
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Employment Category</label>
+                  <select
+                    value={formData.employment_category || "full_time"}
+                    onChange={(e) => setFormData({ ...formData, employment_category: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                  >
+                    <option value="full_time">Full Time</option>
+                    <option value="intern">Intern</option>
+                    <option value="contractor">Contractor</option>
+                    <option value="part_time">Part Time</option>
+                  </select>
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-text-secondary mb-1">Detailed Reason</label>
-                  <textarea
-                    value={permReason}
-                    onChange={(e) => setPermReason(e.target.value)}
-                    placeholder="Describe reason for permission..."
-                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary h-20"
-                    required
+                  <label className="block font-semibold text-text-secondary mb-1">Department</label>
+                  <select
+                    value={formData.department_id || ""}
+                    onChange={(e) => setFormData({ ...formData, department_id: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                  >
+                    <option value="">-- Select Department --</option>
+                    {departments.map((d: any) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name} ({d.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Designation / Job Title</label>
+                  <select
+                    value={formData.job_title_id || ""}
+                    onChange={(e) => setFormData({ ...formData, job_title_id: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                  >
+                    <option value="">-- Select Designation --</option>
+                    {jobTitles.map((jt: any) => (
+                      <option key={jt.id} value={jt.id}>
+                        {jt.title_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Work Mode</label>
+                  <select
+                    value={formData.work_mode || "remote"}
+                    onChange={(e) => setFormData({ ...formData, work_mode: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                  >
+                    <option value="remote">Remote</option>
+                    <option value="hybrid">Hybrid</option>
+                    <option value="office">Office</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Reporting Manager</label>
+                  <select
+                    value={formData.manager_id || ""}
+                    onChange={(e) => setFormData({ ...formData, manager_id: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                  >
+                    <option value="">-- None / Direct Report --</option>
+                    {managers.map((m: any) => (
+                      <option key={m.id} value={m.id}>
+                        {m.full_name} ({m.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Shift Start Time</label>
+                  <input
+                    type="time"
+                    value={formData.shift_start_time || "09:00"}
+                    onChange={(e) => setFormData({ ...formData, shift_start_time: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
                   />
                 </div>
 
-                <div className="flex items-center justify-end gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setPermissionModalOpen(false)}
-                    className="px-4 py-2 rounded-xl bg-card-subtle text-text-secondary hover:text-text-primary"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submittingPerm}
-                    className="px-4 py-2 rounded-xl bg-brand-purple text-white font-semibold hover:bg-brand-purple/90"
-                  >
-                    {submittingPerm ? "Submitting..." : "Submit Permission"}
-                  </button>
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Shift End Time</label>
+                  <input
+                    type="time"
+                    value={formData.shift_end_time || "18:00"}
+                    onChange={(e) => setFormData({ ...formData, shift_end_time: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                  />
                 </div>
-              </form>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Timezone</label>
+                  <input
+                    type="text"
+                    value={formData.timezone || "Asia/Kolkata"}
+                    onChange={(e) => setFormData({ ...formData, timezone: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Daily Target Hours</label>
+                  <input
+                    type="number"
+                    value={(formData.work_target_minutes || 480) / 60}
+                    onChange={(e) => setFormData({ ...formData, work_target_minutes: Number(e.target.value) * 60 })}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                    step="0.5"
+                    min="1"
+                    max="16"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Highest Qualification</label>
+                  <select
+                    value={formData.highest_qualification || "12th Standard"}
+                    onChange={(e) => setFormData({ ...formData, highest_qualification: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                  >
+                    <option value="10th Standard">10th Standard</option>
+                    <option value="12th Standard">12th Standard</option>
+                    <option value="Diploma">Diploma</option>
+                    <option value="Undergraduate Degree">Undergraduate Degree (Bachelor&apos;s)</option>
+                    <option value="Postgraduate Degree">Postgraduate Degree (Master&apos;s)</option>
+                    <option value="Doctorate / PhD">Doctorate / PhD</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Account Status</label>
+                  <select
+                    value={formData.status || "active"}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                  >
+                    <option value="active">Active</option>
+                    <option value="suspended">Suspended</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Phone Number</label>
+                  <input
+                    type="text"
+                    value={formData.phone || ""}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Emergency Contact</label>
+                  <input
+                    type="text"
+                    value={formData.emergency_contact || ""}
+                    onChange={(e) => setFormData({ ...formData, emergency_contact: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                    placeholder="Name - Phone"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Bank Name</label>
+                  <input
+                    type="text"
+                    value={formData.bank_name || ""}
+                    onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Bank Account Number</label>
+                  <input
+                    type="text"
+                    value={formData.bank_account_number || ""}
+                    onChange={(e) => setFormData({ ...formData, bank_account_number: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Bank IFSC</label>
+                  <input
+                    type="text"
+                    value={formData.bank_ifsc || ""}
+                    onChange={(e) => setFormData({ ...formData, bank_ifsc: e.target.value.toUpperCase() })}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">PAN Card Number</label>
+                  <input
+                    type="text"
+                    value={formData.pan_number || ""}
+                    onChange={(e) => setFormData({ ...formData, pan_number: e.target.value.toUpperCase() })}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-border-light">
+                <button
+                  type="button"
+                  onClick={() => setEditModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-card-subtle hover:bg-card border border-border-light font-semibold text-text-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingParams}
+                  className="px-5 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white font-bold transition-all shadow-sm flex items-center gap-2"
+                >
+                  {savingParams ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  <span>{savingParams ? "Saving Changes..." : "Save Parameters"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* SUBMIT ADDITIONAL DOCUMENT MODAL */}
+      {docModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-3xl bg-card border border-border-light p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-border-light pb-3">
+              <h3 className="text-base font-bold text-text-primary">Submit Additional Document</h3>
+              <button onClick={() => setDocModalOpen(false)} className="text-text-muted hover:text-text-primary">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUploadAdditionalDoc} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-text-secondary mb-1">
+                  Document Type (excluding already submitted)
+                </label>
+                <select
+                  value={selectedDocType}
+                  onChange={(e) => setSelectedDocType(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                  required
+                >
+                  {availableDocTypes.map((t) => (
+                    <option key={t.key} value={t.key}>
+                      [{t.category}] {t.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-text-muted mt-1">
+                  Only documents you haven&apos;t submitted yet are listed.
+                </p>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-text-secondary mb-1">Select File (PDF, JPG, PNG)</label>
+                <input
+                  type="file"
+                  accept="application/pdf,image/jpeg,image/png,image/webp"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) setDocFile(f);
+                  }}
+                  className="w-full text-xs text-text-muted file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-brand-purple/10 file:text-brand-purple hover:file:bg-brand-purple/20"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-border-light">
+                <button
+                  type="button"
+                  onClick={() => setDocModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-card-subtle hover:bg-card border border-border-light font-semibold text-text-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={uploadingDoc}
+                  className="px-5 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white font-bold transition-all shadow-sm flex items-center gap-2"
+                >
+                  {uploadingDoc ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  <span>{uploadingDoc ? "Uploading..." : "Submit for Approval"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* REJECT DOCUMENT MODAL */}
+      {rejectModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-3xl bg-card border border-border-light p-6 shadow-2xl space-y-4">
+            <h3 className="text-base font-bold text-text-primary">Reject Document</h3>
+            <p className="text-xs text-text-secondary">Please enter the reason for rejecting this document:</p>
+            <textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="e.g., Illegible scan, name mismatch, or expired certificate."
+              className="w-full h-24 p-3 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+              required
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRejectModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => rejectingDocId && handleReviewDocument(rejectingDocId, "reject", rejectionReason)}
+                className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold"
+              >
+                Confirm Rejection
+              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* ADD CAREER MILESTONE MODAL */}
+      {careerModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-3xl bg-card border border-border-light p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-border-light pb-3">
+              <h3 className="text-base font-bold text-text-primary">Add Career Milestone</h3>
+              <button onClick={() => setCareerModalOpen(false)} className="text-text-muted hover:text-text-primary">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddCareerEvent} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-text-secondary mb-1">Event Type</label>
+                <select
+                  value={careerEventType}
+                  onChange={(e) => setCareerEventType(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                >
+                  <option value="Promotion">Promotion</option>
+                  <option value="Role Transfer">Role / Job Title Change</option>
+                  <option value="Department Transfer">Department Transfer</option>
+                  <option value="Merit Increase">Appraisal / Merit Increase</option>
+                  <option value="Milestone Achievement">Key Milestone Achievement</option>
+                  <option value="Special Commendation">Special Commendation / Award</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-text-secondary mb-1">Effective Date</label>
+                <input
+                  type="date"
+                  value={careerEffectiveDate}
+                  onChange={(e) => setCareerEffectiveDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-text-secondary mb-1">Notes / Description</label>
+                <textarea
+                  value={careerNotes}
+                  onChange={(e) => setCareerNotes(e.target.value)}
+                  placeholder="e.g., Promoted to Lead Architect following exceptional H2 performance."
+                  className="w-full h-20 p-3 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-border-light">
+                <button
+                  type="button"
+                  onClick={() => setCareerModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-card-subtle hover:bg-card border border-border-light font-semibold text-text-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingCareer}
+                  className="px-5 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white font-bold transition-all shadow-sm flex items-center gap-2"
+                >
+                  {savingCareer ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  <span>{savingCareer ? "Saving..." : "Add to Timeline"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* HOURLY PERMISSION REQUEST MODAL */}
+      {permissionModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-3xl bg-card border border-border-light p-6 shadow-2xl space-y-4">
+            <h3 className="text-base font-bold text-text-primary">Submit Hourly Permission Request</h3>
+            <p className="text-xs text-text-secondary">
+              Apply for up to 4 hours of short permission without affecting full-day leave balance.
+            </p>
+
+            <form onSubmit={handleRequestPermission} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-text-secondary mb-1">Permission Date</label>
+                <input
+                  type="date"
+                  value={permDate}
+                  onChange={(e) => setPermDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Start Time</label>
+                  <input
+                    type="time"
+                    value={permStart}
+                    onChange={(e) => setPermStart(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">End Time</label>
+                  <input
+                    type="time"
+                    value={permEnd}
+                    onChange={(e) => setPermEnd(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Duration (Mins)</label>
+                  <input
+                    type="number"
+                    value={permDuration}
+                    onChange={(e) => setPermDuration(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                    min={15}
+                    max={480}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-text-secondary mb-1">Permission Type</label>
+                  <select
+                    value={permType}
+                    onChange={(e) => setPermType(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                  >
+                    <option value="personal">Personal / Family</option>
+                    <option value="examination">Examination</option>
+                    <option value="medical">Medical / Hospital</option>
+                    <option value="emergency">Emergency</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-text-secondary mb-1">Reason</label>
+                <textarea
+                  value={permReason}
+                  onChange={(e) => setPermReason(e.target.value)}
+                  placeholder="State the reason clearly..."
+                  className="w-full h-20 p-2.5 rounded-xl bg-card-subtle border border-border-light text-text-primary"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setPermissionModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-card-subtle border border-border-light font-semibold text-text-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingPerm}
+                  className="px-5 py-2 rounded-xl bg-brand-purple text-white font-bold transition-all shadow-sm flex items-center gap-2"
+                >
+                  {submittingPerm ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  <span>{submittingPerm ? "Submitting..." : "Submit Request"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
