@@ -83,8 +83,8 @@ export async function GET(request: NextRequest) {
           full_name: emp.full_name,
           personal_email: emp.email,
           phone: emp.phone,
-          status: "draft",
-          onboarding_status: "DRAFT",
+          status: "pending",
+          onboarding_status: "PENDING",
           highest_qualification: "12th Standard",
           has_experience: false,
           created_at: new Date().toISOString(),
@@ -164,7 +164,10 @@ export async function GET(request: NextRequest) {
         const uploadedCount = docsWithUrls.length;
         const completionPercentage = Math.min(100, Math.round((uploadedCount / totalRequired) * 100));
 
-        const rawStatus = (c.onboarding_status || c.status || "NOT_STARTED").toUpperCase();
+        let rawStatus = (c.onboarding_status || c.status || "NOT_STARTED").toUpperCase();
+        if (rawStatus === "DRAFT" || rawStatus === "NOT_STARTED") {
+          rawStatus = "PENDING";
+        }
 
         const edu = c.education_details || {};
         const empEmergency = emp?.emergency_contact || "";
@@ -288,16 +291,33 @@ export async function GET(request: NextRequest) {
       return true;
     });
 
-    // Summary Metrics: pending reflects 'submitted' items only
+    // Summary Metrics:
     const summary = {
       total: candidateList.length,
       pending: candidateList.filter(
-        (c) => c.status === "submitted" || c.onboarding_status === "SUBMITTED"
+        (c) =>
+          ["draft", "pending", "submitted"].includes(c.status) ||
+          ["DRAFT", "PENDING", "NOT_STARTED", "SUBMITTED"].includes(c.onboarding_status)
       ).length,
-      under_review: candidateList.filter((c) => c.onboarding_status === "UNDER_REVIEW").length,
-      correction_required: candidateList.filter((c) => c.status === "changes_requested" || c.onboarding_status === "CORRECTION_REQUIRED").length,
-      approved: candidateList.filter((c) => c.status === "approved" || ["VERIFIED", "COMPLETED"].includes(c.onboarding_status)).length,
-      completed: candidateList.filter((c) => c.status === "approved" || c.onboarding_status === "COMPLETED").length,
+      under_review: candidateList.filter(
+        (c) =>
+          c.status === "submitted" ||
+          c.onboarding_status === "UNDER_REVIEW" ||
+          c.onboarding_status === "SUBMITTED" ||
+          (c.documents && c.documents.some((d: any) => d.document_status === "pending"))
+      ).length,
+      correction_required: candidateList.filter(
+        (c) =>
+          c.status === "changes_requested" ||
+          c.onboarding_status === "CORRECTION_REQUIRED" ||
+          (c.documents && c.documents.some((d: any) => d.document_status === "rejected"))
+      ).length,
+      approved: candidateList.filter(
+        (c) => c.status === "approved" || ["VERIFIED", "COMPLETED"].includes(c.onboarding_status)
+      ).length,
+      completed: candidateList.filter(
+        (c) => c.status === "approved" || ["VERIFIED", "COMPLETED"].includes(c.onboarding_status)
+      ).length,
     };
 
     return NextResponse.json(

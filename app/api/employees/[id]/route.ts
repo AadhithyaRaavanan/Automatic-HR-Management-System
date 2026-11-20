@@ -71,6 +71,22 @@ export async function GET(
       onb = onbByEmail;
     }
 
+    if (onb) {
+      const edu = onb.education_details || {};
+      if (!onb.pan_number && (edu.pan_number || edu.pan)) {
+        onb.pan_number = edu.pan_number || edu.pan;
+      }
+      if (!onb.bank_account_number && (edu.bank_account_number || edu.accountNumber || edu.account_number)) {
+        onb.bank_account_number = edu.bank_account_number || edu.accountNumber || edu.account_number;
+      }
+      if (!onb.bank_name && (edu.bank_name || edu.bankName)) {
+        onb.bank_name = edu.bank_name || edu.bankName;
+      }
+      if (!onb.bank_ifsc && (edu.bank_ifsc || edu.ifsc)) {
+        onb.bank_ifsc = edu.bank_ifsc || edu.ifsc;
+      }
+    }
+
     const actualUserId = onb?.user_id || targetUserId;
 
     const { data: rawDocs } = await (supabaseAdmin as any)

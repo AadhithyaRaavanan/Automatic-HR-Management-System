@@ -381,10 +381,33 @@ function HrOnboardingContent() {
       if (!matchesSearch) return false;
 
       if (statusFilter === "all") return true;
-      if (statusFilter === "pending") return c.status === "submitted" || c.onboarding_status === "SUBMITTED";
-      if (statusFilter === "under_review") return c.onboarding_status === "UNDER_REVIEW";
-      if (statusFilter === "correction_required") return c.status === "changes_requested" || c.onboarding_status === "CORRECTION_REQUIRED";
-      if (statusFilter === "completed") return c.status === "approved" || ["VERIFIED", "COMPLETED"].includes(c.onboarding_status);
+      if (statusFilter === "pending") {
+        return (
+          ["draft", "pending", "submitted"].includes(c.status || "") ||
+          ["DRAFT", "PENDING", "NOT_STARTED", "SUBMITTED"].includes(c.onboarding_status)
+        );
+      }
+      if (statusFilter === "under_review") {
+        return (
+          c.status === "submitted" ||
+          c.onboarding_status === "UNDER_REVIEW" ||
+          c.onboarding_status === "SUBMITTED" ||
+          (c.documents && c.documents.some((d: any) => d.document_status === "pending"))
+        );
+      }
+      if (statusFilter === "correction_required") {
+        return (
+          c.status === "changes_requested" ||
+          c.onboarding_status === "CORRECTION_REQUIRED" ||
+          (c.documents && c.documents.some((d: any) => d.document_status === "rejected"))
+        );
+      }
+      if (statusFilter === "completed") {
+        return (
+          c.status === "approved" ||
+          ["VERIFIED", "COMPLETED"].includes(c.onboarding_status)
+        );
+      }
 
       return true;
     });
