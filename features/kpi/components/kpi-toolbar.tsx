@@ -79,11 +79,11 @@ export function KpiToolbar({
     <div
       data-tour="kpi-filters"
       className={cn(
-        "sticky top-0 z-20 p-2.5 sm:p-3 rounded-2xl bg-card/95 backdrop-blur-md border border-border-light shadow-card space-y-2.5",
+        "sticky top-0 z-20 p-2 sm:p-2.5 rounded-2xl bg-card/95 backdrop-blur-md border border-border-light shadow-card space-y-2",
         className
       )}
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2.5">
         {/* Left Side: Segmented Pill Tabs */}
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-card-subtle border border-border-light/80">
           {/* Tab 1: Metrics */}
