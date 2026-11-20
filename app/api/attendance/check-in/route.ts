@@ -140,6 +140,12 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertErr) {
+      if (insertErr.code === "23505" || insertErr.message?.includes("idx_single_open_session")) {
+        return NextResponse.json(
+          { error: "You are already checked in with an active session. Please check out first.", code: "ACTIVE_SESSION_EXISTS" },
+          { status: 400 }
+        );
+      }
       return NextResponse.json(
         { error: insertErr.message || "Failed to create attendance session" },
         { status: 500 }
