@@ -119,57 +119,68 @@ export function useNotifications() {
     if (!userId) return;
     let active = true;
 
-    const channel = supabase
-      .channel(`public:notifications:user_id=eq.${userId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          if (!active) return;
-          queryClient.invalidateQueries({ queryKey: ["notifications"] });
-          queryClient.invalidateQueries({ queryKey: ["notifications-all"] });
+    // Use a unique channel name per hook instance to prevent 'cannot add callbacks after subscribe' collision
+    const channelName = `notifs_${userId}_${Math.random().toString(36).slice(2, 9)}`;
+    let channel: any = null;
 
-          const newNotif = payload.new as NotificationItemRecord;
-          // Play notification message chime safely
-          const nType = (newNotif?.type || "").toLowerCase();
-          playNotificationTone(nType.includes("warning") || nType.includes("overdue") ? "warning" : "default");
+    try {
+      channel = supabase
+        .channel(channelName)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            if (!active) return;
+            queryClient.invalidateQueries({ queryKey: ["notifications"] });
+            queryClient.invalidateQueries({ queryKey: ["notifications-all"] });
 
-          // Trigger subtle toast only if tab is currently focused / visible
-          if (typeof document !== "undefined" && !document.hidden && newNotif?.title) {
-            toast.info(newNotif.title, {
-              description: newNotif.body,
-              id: `notif-${newNotif.id}`,
-              duration: 5000,
-            });
+            const newNotif = payload.new as NotificationItemRecord;
+            // Play notification message chime safely
+            const nType = (newNotif?.type || "").toLowerCase();
+            playNotificationTone(nType.includes("warning") || nType.includes("overdue") ? "warning" : "default");
+
+            // Trigger subtle toast only if tab is currently focused / visible
+            if (typeof document !== "undefined" && !document.hidden && newNotif?.title) {
+              toast.info(newNotif.title, {
+                description: newNotif.body,
+                id: `notif-${newNotif.id}`,
+                duration: 5000,
+              });
+            }
           }
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${userId}`,
-        },
-        () => {
-          if (!active) return;
-          queryClient.invalidateQueries({ queryKey: ["notifications"] });
-          queryClient.invalidateQueries({ queryKey: ["notifications-all"] });
-        }
-      )
-      .subscribe();
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${userId}`,
+          },
+          () => {
+            if (!active) return;
+            queryClient.invalidateQueries({ queryKey: ["notifications"] });
+            queryClient.invalidateQueries({ queryKey: ["notifications-all"] });
+          }
+        );
+
+      channel.subscribe();
+    } catch (err) {
+      console.warn("[useNotifications] Realtime subscription error:", err);
+    }
 
     return () => {
       active = false;
-      try {
-        supabase.removeChannel(channel);
-      } catch {}
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch {}
+      }
     };
   }, [userId, supabase, queryClient]);
 
