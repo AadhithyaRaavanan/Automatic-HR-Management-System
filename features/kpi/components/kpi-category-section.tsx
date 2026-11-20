@@ -134,11 +134,15 @@ export function KpiCategorySection({
           <div className="flex items-center gap-2.5 text-text-secondary">
             <Info className="w-4 h-4 text-black shrink-0" />
             <span className="font-semibold text-black">
-              No data yet for this period.
+              {scoredMetrics.some((m) => m.category === "tasks")
+                ? "No tasks assigned or completed in this period."
+                : "No data yet for this period."}
             </span>
-            <span className="text-text-muted hidden md:inline">
-              {categoryHint}
-            </span>
+            {!scoredMetrics.some((m) => m.category === "tasks") && categoryHint && (
+              <span className="text-text-muted hidden md:inline">
+                {categoryHint}
+              </span>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 text-text-tertiary text-[11px]">
@@ -152,10 +156,10 @@ export function KpiCategorySection({
           </div>
         </div>
       ) : (
-        /* Case 2: Scored Metrics in Clean Grid (No orphan rows) */
+        /* Case 2: Scored Metrics in Clean Grid (No orphan rows, single card capped) */
         <div className={cn(
           "grid grid-cols-1 gap-4",
-          scoredMetrics.length === 1 ? "w-full" : "md:grid-cols-2"
+          scoredMetrics.length === 1 ? "max-w-xl" : "md:grid-cols-2"
         )}>
           {scoredMetrics.map((m) => {
             const hasData = m.value != null && m.status !== "no_data";

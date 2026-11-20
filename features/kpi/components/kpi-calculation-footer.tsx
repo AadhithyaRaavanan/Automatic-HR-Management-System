@@ -96,6 +96,10 @@ export function KpiCalculationFooter({
                     </span>
                   </div>
                 ))}
+                <div className="flex items-center justify-between pt-2 border-t border-border-light text-[11px] font-bold">
+                  <span className="text-text-primary">Overall benchmark target</span>
+                  <span className="tabular-nums text-black">{KPI_CONFIG.overallTarget || 90}%</span>
+                </div>
               </div>
             </div>
 

@@ -42,6 +42,7 @@ export interface KpiComputeResult {
   };
   metricsList: KpiMetricItem[];
   dataPointsCount: number;
+  weights?: Record<string, number>;
   configEffectiveDate?: string | null;
   configVersionReason?: string | null;
 }
@@ -575,6 +576,7 @@ export async function computeKpi(
     periodEnd: to,
     employeeType: normType,
     overallScore,
+    weights: activeWeights,
     metrics: metricsRaw,
     metricsList: Object.values(metricsRaw),
     dataPointsCount,

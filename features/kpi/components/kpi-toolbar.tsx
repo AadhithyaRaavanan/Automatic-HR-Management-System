@@ -196,23 +196,43 @@ export function KpiToolbar({
             </div>
           )}
 
-          {/* Employee Type: In self-view, plain label; Managers/HR keep dropdown */}
-          {isSelfView ? (
+          {/* Employee Type: In self-view (non-team), plain label; Managers/HR keep dropdown */}
+          {isSelfView && activeTab !== "team" ? (
             <div className="px-2.5 py-1.5 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary capitalize select-none">
               {empType.replace("_", "-")}
             </div>
           ) : isManagerOrAdmin ? (
-            <select
-              aria-label="Employee Type"
-              value={empType}
-              onChange={(e) => onEmpTypeChange(e.target.value)}
-              className="px-2.5 py-1.5 rounded-xl bg-card-subtle border border-border-light text-xs font-bold text-text-primary cursor-pointer"
-            >
-              <option value="full_time">Full-Time (8h)</option>
-              <option value="part_time">Part-Time (4h)</option>
-              <option value="intern">Intern (8h)</option>
-              <option value="contract">Contract (8h)</option>
-            </select>
+            <div className="flex items-center gap-1.5">
+              <select
+                aria-label="Employee Type"
+                value={empType}
+                onChange={(e) => onEmpTypeChange(e.target.value)}
+                className="px-2.5 py-1.5 rounded-xl bg-card-subtle border border-border-light text-xs font-bold text-text-primary cursor-pointer hover:border-black/30 transition-colors"
+              >
+                {activeTab === "team" && <option value="all">All Types</option>}
+                <option value="full_time">Full-Time (8h)</option>
+                <option value="part_time">Part-Time (4h)</option>
+                <option value="intern">Intern (8h)</option>
+                <option value="contract">Contract (8h)</option>
+              </select>
+
+              {/* Department Filter next to Type filter */}
+              {(activeTab === "team" || departments.length > 0) && (
+                <select
+                  aria-label="Department Filter"
+                  value={deptFilter || "all"}
+                  onChange={(e) => onDeptFilterChange(e.target.value)}
+                  className="px-2.5 py-1.5 rounded-xl bg-card-subtle border border-border-light text-xs font-bold text-text-primary cursor-pointer hover:border-black/30 transition-colors"
+                >
+                  <option value="all">All Departments</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           ) : (
             <div className="px-2.5 py-1.5 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary capitalize select-none">
               {empType.replace("_", "-")}

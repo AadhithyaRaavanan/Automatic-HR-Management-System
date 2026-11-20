@@ -62,6 +62,7 @@ function KpiContent() {
   const [selectedEmpId, setSelectedEmpId] = React.useState<string>("");
   const [empType, setEmpType] = React.useState<string>("full_time");
   const [deptFilter, setDeptFilter] = React.useState<string>("");
+  const [departmentsList, setDepartmentsList] = React.useState<Array<{ id: string; name: string }>>([]);
 
   // Modals state
   const [breakdownOpen, setBreakdownOpen] = React.useState(false);
@@ -105,6 +106,22 @@ function KpiContent() {
 
   const effectiveEmpId = selectedEmpId || userId || "";
   const isManagerOrAdmin = userRole === "manager" || userRole === "hr" || userRole === "admin";
+
+  // Fetch departments for team/department filtering
+  React.useEffect(() => {
+    if (isManagerOrAdmin) {
+      fetch("/api/admin/departments")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.departments && Array.isArray(data.departments)) {
+            setDepartmentsList(
+              data.departments.map((d: any) => ({ id: d.id, name: d.name }))
+            );
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isManagerOrAdmin]);
 
   // 1. Fetch Main KPI Data
   const {
@@ -554,6 +571,7 @@ function KpiContent() {
         onEmpTypeChange={setEmpType}
         deptFilter={deptFilter}
         onDeptFilterChange={setDeptFilter}
+        departments={departmentsList}
       />
       </div>
 
@@ -587,9 +605,10 @@ function KpiContent() {
               <KpiHeroCard
                 overallScore={overallScore}
                 trend={trend}
-                target={90}
+                target={KPI_CONFIG.overallTarget || 90}
                 currentMetrics={currentMetrics}
                 previousMetrics={previousMetrics}
+                customWeights={kpiData?.current?.weights}
                 categoryHistory={historyData?.history || []}
                 onOpenBreakdown={() => setBreakdownOpen(true)}
                 isSelfView={effectiveEmpId === userId}
@@ -664,9 +683,9 @@ function KpiContent() {
               {/* Category 3: Task Delivery & Execution */}
               <KpiCategorySection
                 title="Task Delivery & Execution"
-                description="Sprint deliverables, sprint completion rate, on-time delivery, and cycle time."
+                description="Tasks completed, on-time delivery and cycle time."
                 icon={<CheckCircle2 className="w-4 h-4 text-brand-purple" />}
-                categoryHint="Sprint deliverables: 90% completion and 90% on-time delivery."
+                categoryHint=""
                 metrics={[
                   currentMetrics.tasks_completed_vs_assigned,
                   currentMetrics.task_on_time_rate,
@@ -1035,9 +1054,8 @@ function KpiContent() {
         >
           <div className="w-full max-w-lg bg-card rounded-[28px] border border-border-light shadow-shell p-6 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-border-light">
-              <h3 className="text-sm font-extrabold text-text-primary flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-brand-purple" />
-                <span>Overall Score Weight Breakdown</span>
+              <h3 className="text-sm font-extrabold text-text-primary">
+                Overall score weight breakdown
               </h3>
               <button
                 type="button"
@@ -1093,9 +1111,8 @@ function KpiContent() {
         >
           <div className="w-full max-w-md bg-card rounded-[28px] border border-border-light shadow-shell p-6 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-border-light">
-              <h3 className="text-sm font-extrabold text-text-primary flex items-center gap-2">
-                <Edit3 className="w-4 h-4 text-brand-purple" />
-                <span>Adjust Metric Override</span>
+              <h3 className="text-sm font-extrabold text-text-primary">
+                Adjust metric override
               </h3>
               <button
                 type="button"
@@ -1118,8 +1135,8 @@ function KpiContent() {
               className="space-y-3"
             >
               <div>
-                <label className="block text-[11px] font-bold uppercase text-text-secondary mb-1">
-                  Override Value
+                <label className="block text-xs font-semibold text-text-secondary mb-1">
+                  Override value
                 </label>
                 <input
                   type="number"
@@ -1133,8 +1150,8 @@ function KpiContent() {
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold uppercase text-text-secondary mb-1">
-                  Justification Reason * (Min 5 chars)
+                <label className="block text-xs font-semibold text-text-secondary mb-1">
+                  Justification reason
                 </label>
                 <textarea
                   rows={3}
@@ -1145,6 +1162,12 @@ function KpiContent() {
                   placeholder="Explain why this metric is being adjusted (e.g. verified technical emergency, clock drift)..."
                   className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
                 />
+                <div className="flex justify-between items-center text-[11px] text-text-tertiary mt-1">
+                  <span>Minimum 5 characters</span>
+                  <span className={cn(adjustReason.trim().length >= 5 ? "text-text-primary font-semibold" : "text-rose-600 font-medium")}>
+                    {adjustReason.trim().length} / 5 characters
+                  </span>
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
@@ -1178,9 +1201,8 @@ function KpiContent() {
         >
           <div className="w-full max-w-lg bg-card rounded-[28px] border border-border-light shadow-shell p-6 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-border-light">
-              <h3 className="text-sm font-extrabold text-text-primary flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-brand-purple" />
-                <span>Write Manager Review</span>
+              <h3 className="text-sm font-extrabold text-text-primary">
+                Write manager review
               </h3>
               <button
                 type="button"
@@ -1199,16 +1221,16 @@ function KpiContent() {
               className="space-y-3"
             >
               <div>
-                <label className="block text-[11px] font-bold uppercase text-text-secondary mb-1">
-                  Review Period Type
+                <label className="block text-xs font-semibold text-text-secondary mb-1">
+                  Review period type
                 </label>
                 <select
                   value={reviewPeriodType}
                   onChange={(e) => setReviewPeriodType(e.target.value as any)}
                   className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
                 >
-                  <option value="monthly">Monthly Cycle</option>
-                  <option value="quarterly">Quarterly Cycle</option>
+                  <option value="monthly">Monthly cycle</option>
+                  <option value="quarterly">Quarterly cycle</option>
                 </select>
               </div>
 
@@ -1216,8 +1238,8 @@ function KpiContent() {
               <div className="grid grid-cols-2 gap-3">
                 {(["quality", "communication", "initiative", "teamwork"] as const).map((key) => (
                   <div key={key}>
-                    <label className="block text-[11px] font-bold uppercase text-text-secondary mb-1 capitalize">
-                      {key} (1-5)
+                    <label className="block text-xs font-semibold text-text-secondary mb-1 capitalize">
+                      {key} (1–5)
                     </label>
                     <select
                       value={reviewRatings[key]}
@@ -1237,8 +1259,8 @@ function KpiContent() {
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold uppercase text-text-secondary mb-1">
-                  Manager Feedback & Note * (Min 5 chars)
+                <label className="block text-xs font-semibold text-text-secondary mb-1">
+                  Manager feedback and note
                 </label>
                 <textarea
                   rows={3}
@@ -1249,6 +1271,12 @@ function KpiContent() {
                   placeholder="Provide qualitative feedback on performance, achievements, and improvement areas..."
                   className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
                 />
+                <div className="flex justify-between items-center text-[11px] text-text-tertiary mt-1">
+                  <span>Minimum 5 characters</span>
+                  <span className={cn(reviewNote.trim().length >= 5 ? "text-text-primary font-semibold" : "text-rose-600 font-medium")}>
+                    {reviewNote.trim().length} / 5 characters
+                  </span>
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
@@ -1282,9 +1310,8 @@ function KpiContent() {
         >
           <div className="w-full max-w-md bg-card rounded-[28px] border border-border-light shadow-shell p-6 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-border-light">
-              <h3 className="text-sm font-extrabold text-text-primary flex items-center gap-2">
-                <Target className="w-4 h-4 text-brand-purple" />
-                <span>Assign Performance Goal</span>
+              <h3 className="text-sm font-extrabold text-text-primary">
+                {effectiveEmpId === userId ? "Add goal" : "Assign performance goal"}
               </h3>
               <button
                 type="button"
@@ -1303,8 +1330,8 @@ function KpiContent() {
               className="space-y-3"
             >
               <div>
-                <label className="block text-[11px] font-bold uppercase text-text-secondary mb-1">
-                  Goal Title *
+                <label className="block text-[11px] font-bold text-text-secondary mb-1">
+                  Goal title *
                 </label>
                 <input
                   required
@@ -1316,8 +1343,8 @@ function KpiContent() {
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold uppercase text-text-secondary mb-1">
-                  Target Criteria & Note
+                <label className="block text-[11px] font-bold text-text-secondary mb-1">
+                  Target criteria and note
                 </label>
                 <textarea
                   rows={2}
@@ -1341,7 +1368,7 @@ function KpiContent() {
                   disabled={submitGoal.isPending}
                   className="px-5 py-2 rounded-full bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold cursor-pointer disabled:opacity-60"
                 >
-                  Set Goal
+                  {effectiveEmpId === userId ? "Add goal" : "Set goal"}
                 </button>
               </div>
             </form>
@@ -1359,9 +1386,8 @@ function KpiContent() {
         >
           <div className="w-full max-w-lg bg-card rounded-[28px] border border-border-light shadow-shell p-6 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-border-light">
-              <h3 className="text-sm font-extrabold text-text-primary flex items-center gap-2">
-                <Edit3 className="w-4 h-4 text-brand-purple" />
-                <span>Write Self-Review Reflection</span>
+              <h3 className="text-sm font-extrabold text-text-primary">
+                Write self-review reflection
               </h3>
               <button
                 type="button"
@@ -1384,8 +1410,8 @@ function KpiContent() {
               className="space-y-3"
             >
               <div>
-                <label className="block text-[11px] font-bold uppercase text-text-secondary mb-1">
-                  Evaluation Reflection * (Min 20 chars)
+                <label className="block text-[11px] font-bold text-text-secondary mb-1">
+                  Evaluation reflection *
                 </label>
                 <textarea
                   rows={4}
@@ -1393,9 +1419,15 @@ function KpiContent() {
                   minLength={20}
                   value={selfReviewReflection}
                   onChange={(e) => setSelfReviewReflection(e.target.value)}
-                  placeholder="Summarize your accomplishments, milestones reached, and areas you focused on during this cycle (min 20 characters)..."
+                  placeholder="Summarize your accomplishments, milestones reached, and areas you focused on during this cycle..."
                   className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
                 />
+                <div className="flex justify-between items-center text-[11px] text-text-tertiary mt-1">
+                  <span>Minimum 20 characters</span>
+                  <span className={cn(selfReviewReflection.trim().length >= 20 ? "text-text-primary font-semibold" : "text-rose-600 font-medium")}>
+                    {selfReviewReflection.trim().length} / 20 characters
+                  </span>
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
@@ -1411,7 +1443,7 @@ function KpiContent() {
                   disabled={submitSelfReview.isPending || selfReviewReflection.trim().length < 20}
                   className="px-5 py-2 rounded-full bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold cursor-pointer disabled:opacity-60"
                 >
-                  {submitSelfReview.isPending ? "Saving..." : "Submit Self-Review"}
+                  {submitSelfReview.isPending ? "Saving..." : "Submit self-review"}
                 </button>
               </div>
             </form>

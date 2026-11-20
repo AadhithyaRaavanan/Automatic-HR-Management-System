@@ -3,7 +3,7 @@
 import * as React from "react";
 import { KpiRadialGauge } from "./kpi-radial-gauge";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { KPI_CONFIG, getKpiBand, getActiveCategoryWeightNotice } from "@/lib/kpi/config";
+import { KPI_CONFIG, getKpiBand, getActiveCategoryWeightNotice, getCategoryWeights } from "@/lib/kpi/config";
 import { cn } from "@/lib/utils";
 import {
   TrendingUp,
@@ -28,6 +28,7 @@ interface KpiHeroCardProps {
   target?: number;
   currentMetrics?: any;
   previousMetrics?: any;
+  customWeights?: Record<string, number>;
   categoryHistory?: CategoryHistorySlice[];
   onOpenBreakdown?: () => void;
   isSelfView?: boolean;
@@ -65,9 +66,10 @@ function CategorySparkline({ data }: { data: (number | null)[] }) {
 export function KpiHeroCard({
   overallScore,
   trend,
-  target = 90,
+  target = KPI_CONFIG.overallTarget || 90,
   currentMetrics,
   previousMetrics,
+  customWeights,
   categoryHistory = [],
   onOpenBreakdown,
   isSelfView = true,
@@ -78,6 +80,27 @@ export function KpiHeroCard({
   const isManagerOrAdmin = userRole === "manager" || userRole === "hr" || userRole === "admin";
   const showBand = !isSelfView && isManagerOrAdmin;
   const band = getKpiBand(overallScore);
+
+  // Category weights: summed per category from active config or fallback
+  const categoryWeights = React.useMemo(() => {
+    return getCategoryWeights(customWeights);
+  }, [customWeights]);
+
+  const areWeightsValid =
+    Number.isFinite(categoryWeights.attendance) &&
+    Number.isFinite(categoryWeights.hours) &&
+    Number.isFinite(categoryWeights.tasks) &&
+    categoryWeights.attendance > 0 &&
+    categoryWeights.hours > 0 &&
+    categoryWeights.tasks > 0;
+
+  const hasLoggedWeightsWarning = React.useRef(false);
+  React.useEffect(() => {
+    if (!areWeightsValid && !hasLoggedWeightsWarning.current) {
+      console.warn("KPI category weights are not finite numbers:", categoryWeights);
+      hasLoggedWeightsWarning.current = true;
+    }
+  }, [areWeightsValid, categoryWeights]);
 
   // Category values & trends for the 3 sub-items under the gauge
   const att1 = currentMetrics?.on_time_check_in_rate?.value;
@@ -160,15 +183,17 @@ export function KpiHeroCard({
 
             <div className="space-y-2 min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge
-                  status={
-                    overallScore >= target
-                      ? "on_track"
-                      : overallScore >= target - 10
-                      ? "at_risk"
-                      : "behind"
-                  }
-                />
+                <div title="Weighted average of the scored metrics">
+                  <StatusBadge
+                    status={
+                      overallScore >= target
+                        ? "on_track"
+                        : overallScore >= target - 10
+                        ? "at_risk"
+                        : "behind"
+                    }
+                  />
+                </div>
 
                 {/* Trend beside gauge (hidden when previous period has no data, no -0% chip) */}
                 {trend != null && trend !== 0 && (
@@ -288,34 +313,36 @@ export function KpiHeroCard({
           </div>
 
           {/* Stacked Weight Bar with legend underneath */}
-          <div className="pt-2 border-t border-border-light/60 space-y-1.5">
-            <div className="flex items-center justify-between text-[11px] font-semibold text-text-tertiary">
-              <span>Category Weighting</span>
-              <span className="tabular-nums">100% Total</span>
-            </div>
+          {areWeightsValid && (
+            <div className="pt-2 border-t border-border-light/60 space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] font-semibold text-text-tertiary">
+                <span>Category Weighting</span>
+                <span className="tabular-nums">100% Total</span>
+              </div>
 
-            <div className="h-2 w-full rounded-full overflow-hidden flex bg-[#E6E6E6]">
-              <div
-                style={{ width: `${Math.round(KPI_CONFIG.weights.attendance * 100)}%` }}
-                className="bg-[#B7FF00] h-full transition-all"
-                title={`Attendance & Reliability (${Math.round(KPI_CONFIG.weights.attendance * 100)}%)`}
-              />
-              <div
-                style={{ width: `${Math.round(KPI_CONFIG.weights.hours * 100)}%` }}
-                className="bg-[#4D4D4D] h-full transition-all"
-                title={`Shift Hours Target (${Math.round(KPI_CONFIG.weights.hours * 100)}%)`}
-              />
-              <div
-                style={{ width: `${Math.round(KPI_CONFIG.weights.tasks * 100)}%` }}
-                className="bg-[#808080] h-full transition-all"
-                title={`Task Delivery & Execution (${Math.round(KPI_CONFIG.weights.tasks * 100)}%)`}
-              />
-            </div>
+              <div className="h-2 w-full rounded-full overflow-hidden flex bg-[#E6E6E6]">
+                <div
+                  style={{ width: `${categoryWeights.attendance}%` }}
+                  className="bg-[#B7FF00] h-full transition-all"
+                  title={`Attendance & Reliability (${categoryWeights.attendance}%)`}
+                />
+                <div
+                  style={{ width: `${categoryWeights.hours}%` }}
+                  className="bg-[#374151] h-full transition-all"
+                  title={`Shift Hours Target (${categoryWeights.hours}%)`}
+                />
+                <div
+                  style={{ width: `${categoryWeights.tasks}%` }}
+                  className="bg-[#6B7280] h-full transition-all"
+                  title={`Task Delivery & Execution (${categoryWeights.tasks}%)`}
+                />
+              </div>
 
-            <p className="text-[10px] text-text-tertiary font-medium">
-              Attendance {Math.round(KPI_CONFIG.weights.attendance * 100)}% · Hours {Math.round(KPI_CONFIG.weights.hours * 100)}% · Tasks {Math.round(KPI_CONFIG.weights.tasks * 100)}%
-            </p>
-          </div>
+              <p className="text-[10px] text-text-tertiary font-medium">
+                Attendance {categoryWeights.attendance}% · Hours {categoryWeights.hours}% · Tasks {categoryWeights.tasks}%
+              </p>
+            </div>
+          )}
         </div>
       ) : (
         /* Empty State with diagnostic checklist */

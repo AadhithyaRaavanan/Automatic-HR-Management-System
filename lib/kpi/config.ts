@@ -12,6 +12,9 @@ export interface EmployeeTypeKpiTargets {
 }
 
 export const KPI_CONFIG = {
+  // Overall performance benchmark target (e.g. 90%)
+  overallTarget: 90,
+
   // Weights for computing the optional overall score (must sum to 1.0)
   weights: {
     on_time_check_in_rate: 0.20,
@@ -162,4 +165,27 @@ export function getActiveCategoryWeightNotice(metrics: {
   }
 
   return { notice: null, percent: 100, activeLabels };
+}
+
+/**
+ * Computes category-level weights by summing metric weights.
+ * Attendance: on_time_check_in_rate + days_worked_vs_expected (e.g. 40%)
+ * Hours: worked_hours_vs_target (e.g. 25%)
+ * Tasks: tasks_completed_vs_assigned + task_on_time_rate (e.g. 35%)
+ */
+export function getCategoryWeights(metricWeights?: Record<string, number>): {
+  attendance: number;
+  hours: number;
+  tasks: number;
+} {
+  const w = metricWeights || KPI_CONFIG.weights;
+  const attendance = Math.round(
+    ((Number(w.on_time_check_in_rate) || 0.20) + (Number(w.days_worked_vs_expected) || 0.20)) * 100
+  );
+  const hours = Math.round((Number(w.worked_hours_vs_target) || 0.25) * 100);
+  const tasks = Math.round(
+    ((Number(w.tasks_completed_vs_assigned) || 0.20) + (Number(w.task_on_time_rate) || 0.15)) * 100
+  );
+
+  return { attendance, hours, tasks };
 }

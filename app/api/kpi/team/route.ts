@@ -58,7 +58,19 @@ export async function GET(request: NextRequest) {
     }
 
     if (departmentFilter && departmentFilter !== "all") {
-      query = query.eq("department_id", departmentFilter);
+      const isUuid = /^[0-9a-fA-F-]{36}$/.test(departmentFilter);
+      if (isUuid) {
+        query = query.eq("department_id", departmentFilter);
+      } else {
+        const { data: dRow } = await (supabaseAdmin as any)
+          .from("departments")
+          .select("id")
+          .ilike("name", departmentFilter)
+          .maybeSingle();
+        if (dRow?.id) {
+          query = query.eq("department_id", dRow.id);
+        }
+      }
     }
     if (employeeTypeFilter && employeeTypeFilter !== "all") {
       query = query.eq("employment_category", employeeTypeFilter);

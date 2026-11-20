@@ -203,8 +203,9 @@ export function KpiTeamOverview({
         <button
           type="button"
           onClick={handleExportTeamCsv}
-          disabled={loading || sorted.length === 0}
-          className="px-3.5 py-1.5 rounded-lg bg-card border border-border-light hover:bg-card-subtle text-xs font-bold text-text-primary transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+          disabled={loading || sorted.length === 0 || team.length === 0}
+          title={sorted.length === 0 ? "No team members to export" : "Export team performance to CSV"}
+          className="px-3.5 py-1.5 rounded-lg bg-card border border-border-light hover:bg-card-subtle text-xs font-bold text-text-primary transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Download className="w-3.5 h-3.5 text-black" />
           <span>Export Team CSV</span>
