@@ -87,7 +87,12 @@ function DashboardContent({
   React.useEffect(() => {
     let active = true;
     async function loadDashboardExtras() {
-      const todayIso = new Date().toISOString().slice(0, 10);
+      const todayIso = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date());
       const { data: hols } = await (supabase as any)
         .from("holidays")
         .select("id, date, name, local_name, region")

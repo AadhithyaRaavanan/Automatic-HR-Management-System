@@ -8,6 +8,8 @@ import { getKpiCallerContext, verifyEmployeeAccess } from "@/lib/kpi/auth-helper
 import { computeKpi } from "@/lib/kpi/compute";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export async function GET(request: NextRequest) {
   if (!FEATURES.KPI) {

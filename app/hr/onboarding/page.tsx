@@ -603,7 +603,7 @@ function HrOnboardingContent() {
                               statusBadgeClass
                             )}
                           >
-                            {c.onboarding_status.replace(/_/g, " ")}
+                            {c.onboarding_status === "DRAFT" ? "PENDING" : c.onboarding_status.replace(/_/g, " ")}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right">

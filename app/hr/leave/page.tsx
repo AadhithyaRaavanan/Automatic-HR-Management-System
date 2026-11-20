@@ -61,21 +61,24 @@ export default function HRLeavePage() {
 
   const pendingRequests = requests.filter((r) => r.status === "pending");
 
-  // Per-employee balances map
+  // Per-employee balances map supporting EL, CL, SL
   const balancesByEmp = React.useMemo(() => {
-    const map = new Map<string, { casualLeft: number; casualUsed: number; sickLeft: number; sickUsed: number }>();
+    const map = new Map<string, { elLeft: number; elUsed: number; clLeft: number; clUsed: number; slLeft: number; slUsed: number }>();
     allBalances.forEach((b) => {
-      const current = map.get(b.employee_id) || { casualLeft: 0, casualUsed: 0, sickLeft: 0, sickUsed: 0 };
+      const current = map.get(b.employee_id) || { elLeft: 0, elUsed: 0, clLeft: 0, clUsed: 0, slLeft: 0, slUsed: 0 };
       const code = b.leave_types?.code;
       const left = Math.max(0, Number(b.allocated) + Number(b.carried_forward) + Number(b.adjusted) - Number(b.used));
       const used = Number(b.used);
 
-      if (code === "CASUAL") {
-        current.casualLeft = left;
-        current.casualUsed = used;
-      } else if (code === "SICK") {
-        current.sickLeft = left;
-        current.sickUsed = used;
+      if (code === "EL" || code === "PL") {
+        current.elLeft = left;
+        current.elUsed = used;
+      } else if (code === "CL" || code === "CASUAL") {
+        current.clLeft = left;
+        current.clUsed = used;
+      } else if (code === "SL" || code === "SICK") {
+        current.slLeft = left;
+        current.slUsed = used;
       }
       map.set(b.employee_id, current);
     });
@@ -251,10 +254,12 @@ export default function HRLeavePage() {
                 {pendingRequests.map((req) => {
                   const isSelfRequest = Boolean(currentUserId && req.employee_id === currentUserId);
                   const empBal = balancesByEmp.get(req.employee_id) || {
-                    casualLeft: 0,
-                    casualUsed: 0,
-                    sickLeft: 0,
-                    sickUsed: 0,
+                    elLeft: 0,
+                    elUsed: 0,
+                    clLeft: 0,
+                    clUsed: 0,
+                    slLeft: 0,
+                    slUsed: 0,
                   };
 
                   return (
@@ -283,23 +288,32 @@ export default function HRLeavePage() {
                         </p>
                       </div>
 
-                      {/* Balances Beside Request */}
+                      {/* Balances Beside Request (EL, CL, SL) */}
                       <div className="flex items-center gap-3 bg-card-subtle px-3 py-2 rounded-xl border border-border-light/60 text-xs shrink-0">
                         <div>
                           <span className="block text-[10px] text-text-tertiary font-bold uppercase">
-                            Casual Left
+                            EL Left
                           </span>
-                          <span className="font-extrabold text-brand-purple text-sm">
-                            {empBal.casualLeft}d
+                          <span className="font-extrabold text-blue-600 text-sm">
+                            {empBal.elLeft}d
                           </span>
                         </div>
                         <div className="w-px h-6 bg-border-light" />
                         <div>
                           <span className="block text-[10px] text-text-tertiary font-bold uppercase">
-                            Sick Left
+                            CL Left
+                          </span>
+                          <span className="font-extrabold text-brand-purple text-sm">
+                            {empBal.clLeft}d
+                          </span>
+                        </div>
+                        <div className="w-px h-6 bg-border-light" />
+                        <div>
+                          <span className="block text-[10px] text-text-tertiary font-bold uppercase">
+                            SL Left
                           </span>
                           <span className="font-extrabold text-rose-500 text-sm">
-                            {empBal.sickLeft}d
+                            {empBal.slLeft}d
                           </span>
                         </div>
                       </div>
@@ -372,17 +386,16 @@ export default function HRLeavePage() {
                 <thead>
                   <tr className="border-b border-border-light/60 bg-card-subtle text-[11px] font-bold text-text-tertiary uppercase tracking-wider">
                     <th className="py-3 px-4">Employee</th>
-                    <th className="py-3 px-4">Casual Used</th>
-                    <th className="py-3 px-4">Casual Remaining</th>
-                    <th className="py-3 px-4">Sick Used</th>
-                    <th className="py-3 px-4">Sick Remaining</th>
+                    <th className="py-3 px-4">EL (Earned)</th>
+                    <th className="py-3 px-4">CL (Casual)</th>
+                    <th className="py-3 px-4">SL (Sick)</th>
                     <th className="py-3 px-4 text-right">Quick Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-light/40">
                   {filteredEmployees.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="p-4">
+                      <td colSpan={5} className="p-4">
                         <EmptyState
                           icon={<Users className="w-6 h-6" />}
                           title="No matching employees"
@@ -398,10 +411,12 @@ export default function HRLeavePage() {
                   ) : (
                     filteredEmployees.map((emp) => {
                       const bal = balancesByEmp.get(emp.id) || {
-                        casualLeft: 0,
-                        casualUsed: 0,
-                        sickLeft: 0,
-                        sickUsed: 0,
+                        elLeft: 0,
+                        elUsed: 0,
+                        clLeft: 0,
+                        clUsed: 0,
+                        slLeft: 0,
+                        slUsed: 0,
                       };
 
                       return (
@@ -410,10 +425,18 @@ export default function HRLeavePage() {
                             <span className="font-bold text-text-primary block">{emp.full_name}</span>
                             <span className="text-[11px] text-text-tertiary">{emp.email}</span>
                           </td>
-                          <td className="py-3 px-4 font-bold text-text-secondary">{bal.casualUsed}d</td>
-                          <td className="py-3 px-4 font-extrabold text-brand-purple">{bal.casualLeft}d</td>
-                          <td className="py-3 px-4 font-bold text-text-secondary">{bal.sickUsed}d</td>
-                          <td className="py-3 px-4 font-extrabold text-rose-500">{bal.sickLeft}d</td>
+                          <td className="py-3 px-4">
+                            <span className="font-extrabold text-blue-600 block">{bal.elLeft}d left</span>
+                            <span className="text-[10px] text-text-tertiary">{bal.elUsed}d used</span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="font-extrabold text-brand-purple block">{bal.clLeft}d left</span>
+                            <span className="text-[10px] text-text-tertiary">{bal.clUsed}d used</span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="font-extrabold text-rose-500 block">{bal.slLeft}d left</span>
+                            <span className="text-[10px] text-text-tertiary">{bal.slUsed}d used</span>
+                          </td>
                           <td className="py-3 px-4 text-right">
                             <button
                               type="button"

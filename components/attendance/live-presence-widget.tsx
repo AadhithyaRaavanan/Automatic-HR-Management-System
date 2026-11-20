@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { formatTimeInTimezone, formatDurationMinutes } from "@/lib/date/timezone";
-import { Users, Clock, LogIn, LogOut, Search, Radio, Filter } from "lucide-react";
+import { Users, Clock, LogIn, LogOut, Search, Radio, Filter, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface EmployeePresenceLog {
@@ -89,6 +89,14 @@ export function LivePresenceWidget({ userTimezone = "UTC" }: { userTimezone?: st
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#B7FF00] text-black">
                 Live
               </span>
+              <button
+                type="button"
+                onClick={loadData}
+                className="p-1 rounded-md text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors cursor-pointer"
+                title="Refresh Live Presence"
+              >
+                <RefreshCw className={cn("w-3 h-3", loading && "animate-spin text-black")} />
+              </button>
             </div>
             <p className="text-xs text-text-secondary mt-0.5">
               Real-time shift login, active session durations, and checkout times across your organization.
