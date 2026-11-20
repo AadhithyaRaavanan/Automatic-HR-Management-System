@@ -83,17 +83,25 @@ export async function GET(request: NextRequest) {
     const checkedOutCount = logs.filter((l: any) => l.status === "checked_out").length;
     const notLoggedInCount = logs.filter((l: any) => l.status === "not_logged_in").length;
 
-    return NextResponse.json({
-      success: true,
-      workDate: todayIso,
-      counts: {
-        total: logs.length,
-        active: activeCount,
-        checkedOut: checkedOutCount,
-        notLoggedIn: notLoggedInCount,
+    return NextResponse.json(
+      {
+        success: true,
+        workDate: todayIso,
+        counts: {
+          total: logs.length,
+          active: activeCount,
+          checkedOut: checkedOutCount,
+          notLoggedIn: notLoggedInCount,
+        },
+        logs,
       },
-      logs,
-    });
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+          "Pragma": "no-cache",
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Failed to load live presence logs" }, { status: 500 });
   }
