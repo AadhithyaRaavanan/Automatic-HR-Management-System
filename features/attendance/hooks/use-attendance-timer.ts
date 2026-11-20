@@ -35,7 +35,8 @@ export function useAttendanceTimer(checkInAtIso?: string | null) {
     return {
       elapsedSeconds: contextValue.elapsedSeconds,
       formattedTime: contextValue.formattedTime,
-      isRunning: contextValue.isCheckedIn,
+      isRunning: contextValue.isCheckedIn && !contextValue.isOnBreak,
+      isOnBreak: contextValue.isOnBreak,
     };
   }
 

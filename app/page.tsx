@@ -329,6 +329,7 @@ function DashboardContent({
           <div data-tour="punch-card">
             <HeroCheckInCard
               isCheckedIn={isCheckedIn}
+              isOnBreak={timer.isOnBreak}
               activeTime={timer.formattedTime}
               workDate={data?.workDate || "Today"}
               targetMinutes={targetMinutes}
