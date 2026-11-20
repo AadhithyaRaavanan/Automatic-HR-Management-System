@@ -3,6 +3,8 @@ import { verifyAdminRouteCaller } from "@/lib/auth/admin-guard";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export async function GET(request: NextRequest) {
   const authResult = await verifyAdminRouteCaller(request, ["admin", "hr", "manager"]);
@@ -12,7 +14,12 @@ export async function GET(request: NextRequest) {
   const { context } = authResult;
 
   try {
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayIso = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
 
     // Fetch all active employees in the organization directly from Supabase
     let empQuery = (supabaseAdmin as any)
@@ -33,11 +40,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: empErr.message }, { status: 400 });
     }
 
-    // Fetch today sessions directly from Supabase
+    // Fetch today sessions or any currently active session directly from Supabase
     const { data: sessions, error: sessErr } = await (supabaseAdmin as any)
       .from("attendance_sessions")
       .select("id, employee_id, check_in_at, check_out_at, work_date")
-      .eq("work_date", todayIso)
+      .or(`work_date.eq.${todayIso},check_out_at.is.null`)
       .order("check_in_at", { ascending: true });
 
     const empList = employees || [];
@@ -56,7 +63,9 @@ export async function GET(request: NextRequest) {
       for (const s of empSessions) {
         const inTime = new Date(s.check_in_at).getTime();
         const outTime = s.check_out_at ? new Date(s.check_out_at).getTime() : Date.now();
-        loggedMinutes += Math.max(0, Math.round((outTime - inTime) / 60000));
+        if (!isNaN(inTime) && !isNaN(outTime) && outTime >= inTime) {
+          loggedMinutes += Math.max(0, Math.round((outTime - inTime) / 60000));
+        }
       }
 
       if (activeSession) {
@@ -67,7 +76,7 @@ export async function GET(request: NextRequest) {
 
       return {
         id: emp.id,
-        name: emp.full_name,
+        name: (emp.full_name || "Employee").replace(/\s+/g, " ").trim(),
         email: emp.email,
         avatarUrl: emp.avatar_url,
         department: emp.departments?.name || "Company",
@@ -97,8 +106,11 @@ export async function GET(request: NextRequest) {
       },
       {
         headers: {
-          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0",
+          "CDN-Cache-Control": "no-store",
+          "Vercel-CDN-Cache-Control": "no-store",
           "Pragma": "no-cache",
+          "Expires": "0",
         },
       }
     );

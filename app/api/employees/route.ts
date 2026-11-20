@@ -6,6 +6,8 @@ import { getStoredUsers, getStoredDepartments, getStoredJobTitles } from "@/lib/
 import { requireApprovedUser } from "@/lib/auth/require-approved-user";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export async function GET(request: NextRequest) {
   const approvedCheck = await requireApprovedUser(request);
@@ -172,7 +174,18 @@ export async function GET(request: NextRequest) {
       employeeList = employeeList.filter((e: any) => e.role === role);
     }
 
-    return NextResponse.json({ employees: employeeList });
+    return NextResponse.json(
+      { employees: employeeList },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0",
+          "CDN-Cache-Control": "no-store",
+          "Vercel-CDN-Cache-Control": "no-store",
+          "Pragma": "no-cache",
+          "Expires": "0",
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Failed to fetch employees" }, { status: 500 });
   }

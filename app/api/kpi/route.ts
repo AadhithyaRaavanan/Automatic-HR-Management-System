@@ -10,6 +10,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getKolkataPresetDates, pad2 } from "@/lib/kpi/date-helper";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export async function GET(request: NextRequest) {
   if (!FEATURES.KPI) {
