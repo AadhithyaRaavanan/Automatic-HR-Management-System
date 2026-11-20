@@ -62,14 +62,16 @@ export function LivePresenceWidget({ userTimezone = "UTC" }: { userTimezone?: st
   }, [loadData]);
 
   const filteredLogs = React.useMemo(() => {
-    if (!data?.logs) return [];
+    if (!data?.logs || !Array.isArray(data.logs)) return [];
+    const query = search.trim().toLowerCase();
     return data.logs.filter((log) => {
+      if (!log) return false;
       const matchesFilter = filter === "ALL" || log.status === filter;
-      const matchesSearch =
-        !search.trim() ||
-        log.name.toLowerCase().includes(search.toLowerCase()) ||
-        log.department.toLowerCase().includes(search.toLowerCase()) ||
-        log.jobTitle.toLowerCase().includes(search.toLowerCase());
+      const name = (log.name || "").toLowerCase();
+      const dept = (log.department || "").toLowerCase();
+      const title = (log.jobTitle || "").toLowerCase();
+      const email = (log.email || "").toLowerCase();
+      const matchesSearch = !query || name.includes(query) || dept.includes(query) || title.includes(query) || email.includes(query);
       return matchesFilter && matchesSearch;
     });
   }, [data?.logs, filter, search]);
@@ -192,18 +194,18 @@ export function LivePresenceWidget({ userTimezone = "UTC" }: { userTimezone?: st
                       <td className="py-2.5 px-4">
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-full bg-black text-[#B7FF00] font-bold text-xs flex items-center justify-center shrink-0">
-                            {log.name.slice(0, 2).toUpperCase()}
+                            {(log.name || log.email || "EM").trim().slice(0, 2).toUpperCase()}
                           </div>
                           <div className="overflow-hidden">
-                            <p className="font-bold text-text-primary truncate">{log.name}</p>
-                            <p className="text-[11px] text-text-secondary truncate">{log.email}</p>
+                            <p className="font-bold text-text-primary truncate">{log.name || "Employee"}</p>
+                            <p className="text-[11px] text-text-secondary truncate">{log.email || "—"}</p>
                           </div>
                         </div>
                       </td>
 
                       <td className="py-2.5 px-4">
-                        <span className="font-medium text-text-primary block">{log.jobTitle}</span>
-                        <span className="text-[11px] text-text-secondary">{log.department}</span>
+                        <span className="font-medium text-text-primary block">{log.jobTitle || "Team Member"}</span>
+                        <span className="text-[11px] text-text-secondary">{log.department || "Company"}</span>
                       </td>
 
                       <td className="py-2.5 px-4">

@@ -65,9 +65,7 @@ export default function NotificationsPage() {
         const list: NotificationItemRecord[] = Array.isArray(json?.notifications) ? json.notifications : [];
         return list.filter(
           (n) =>
-            n &&
-            !n.body?.toLowerCase().includes("example notification") &&
-            !(n as any).metadata?.isExample
+            Boolean(n && (!n.body || !n.body.toLowerCase().includes("example notification")) && !(n as any).metadata?.isExample)
         );
       } catch (err) {
         console.error("[NotificationsPage] Query error:", err);

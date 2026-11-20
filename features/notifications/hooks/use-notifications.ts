@@ -85,9 +85,7 @@ export function useNotifications() {
           const list: NotificationItemRecord[] = Array.isArray(json?.notifications) ? json.notifications : [];
           return list.filter(
             (n) =>
-              n &&
-              !n.body?.toLowerCase().includes("example notification") &&
-              !(n as any).metadata?.isExample
+              Boolean(n && (!n.body || !n.body.toLowerCase().includes("example notification")) && !(n as any).metadata?.isExample)
           );
         }
 
@@ -104,9 +102,7 @@ export function useNotifications() {
         const fallbackList = (Array.isArray(data) ? data : []) as NotificationItemRecord[];
         return fallbackList.filter(
           (n) =>
-            n &&
-            !n.body?.toLowerCase().includes("example notification") &&
-            !(n as any).metadata?.isExample
+            Boolean(n && (!n.body || !n.body.toLowerCase().includes("example notification")) && !(n as any).metadata?.isExample)
         );
       } catch (err) {
         console.error("[useNotifications] Query error:", err);

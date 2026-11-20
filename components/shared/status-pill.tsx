@@ -194,17 +194,17 @@ const statusConfig: Record<
 };
 
 export function StatusPill({ status, label, className, showIcon = true }: StatusPillProps) {
-  const normalizedKey = status.toLowerCase();
+  const normalizedKey = (status || "").toLowerCase().trim();
   const config = statusConfig[normalizedKey] || {
-    label: label || status,
+    label: label || status || "—",
     bg: "bg-card-subtle",
     text: "text-text-secondary",
     dot: "bg-text-tertiary",
     icon: Clock,
   };
 
-  const Icon = config.icon;
-  const displayLabel = label || config.label;
+  const Icon = config.icon || Clock;
+  const displayLabel = label || config.label || "—";
 
   return (
     <span
