@@ -16,12 +16,14 @@ import {
   AlertCircle,
   ExternalLink,
   Filter,
+  Volume2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   NotificationItemRecord,
   formatRelativeTime,
 } from "@/features/notifications/hooks/use-notifications";
+import { playNotificationTone } from "@/lib/notifications/sound";
 import { toast } from "sonner";
 
 function getNotificationIcon(type?: string | null, title?: string | null) {
@@ -196,6 +198,19 @@ export default function NotificationsPage() {
                 Unread
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                playNotificationTone("default");
+                toast.info("Ting sound effect played", { duration: 2000 });
+              }}
+              title="Test ting sound effect"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-[#F5F5F5] border border-[#E6E6E6] text-xs font-semibold text-black transition-colors cursor-pointer shadow-xs"
+            >
+              <Volume2 className="w-4 h-4 text-black" />
+              <span>Test sound</span>
+            </button>
 
             {unreadCount > 0 && (
               <button

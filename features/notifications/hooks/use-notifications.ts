@@ -111,8 +111,48 @@ export function useNotifications() {
     },
     staleTime: 0,
     refetchOnMount: "always",
-    refetchInterval: 60000, // 60s fallback poll
+    refetchInterval: 15000, // 15s fallback poll
   });
+
+  // Track known notification IDs to detect newly arrived notifications via polling or refetch
+  const knownNotificationIds = React.useRef<Set<string> | null>(null);
+
+  React.useEffect(() => {
+    if (!query.data || !Array.isArray(query.data)) return;
+
+    const currentIds = new Set(query.data.map((n) => n?.id).filter(Boolean));
+
+    // On initial load, register existing notification IDs without triggering sound
+    if (knownNotificationIds.current === null) {
+      knownNotificationIds.current = currentIds;
+      return;
+    }
+
+    // Check if any NEW unread notification appeared in this query cycle
+    const newItems = query.data.filter(
+      (n) => n && !n.read_at && !knownNotificationIds.current!.has(n.id)
+    );
+
+    if (newItems.length > 0) {
+      const latest = newItems[0];
+      const nType = (latest?.type || "").toLowerCase();
+      playNotificationTone(
+        nType.includes("warning") || nType.includes("overdue") ? "warning" : "default",
+        latest.id
+      );
+
+      // Trigger subtle toast only if tab is currently focused / visible
+      if (typeof document !== "undefined" && !document.hidden && latest?.title) {
+        toast.info(latest.title, {
+          description: latest.body,
+          id: `notif-${latest.id}`,
+          duration: 5000,
+        });
+      }
+    }
+
+    knownNotificationIds.current = currentIds;
+  }, [query.data]);
 
   // 2. Realtime Subscription to `notifications` table for live updates
   React.useEffect(() => {
@@ -140,9 +180,12 @@ export function useNotifications() {
             queryClient.invalidateQueries({ queryKey: ["notifications-all"] });
 
             const newNotif = payload.new as NotificationItemRecord;
-            // Play notification message chime safely
+            // Play notification "ting" sound safely
             const nType = (newNotif?.type || "").toLowerCase();
-            playNotificationTone(nType.includes("warning") || nType.includes("overdue") ? "warning" : "default");
+            playNotificationTone(
+              nType.includes("warning") || nType.includes("overdue") ? "warning" : "default",
+              newNotif?.id
+            );
 
             // Trigger subtle toast only if tab is currently focused / visible
             if (typeof document !== "undefined" && !document.hidden && newNotif?.title) {

@@ -15,6 +15,7 @@ import {
   ShieldAlert,
   ArrowRight,
   Target,
+  Volume2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -22,6 +23,7 @@ import {
   NotificationItemRecord,
   formatRelativeTime,
 } from "@/features/notifications/hooks/use-notifications";
+import { playNotificationTone } from "@/lib/notifications/sound";
 import { EmptyState } from "@/components/shared/empty-state";
 
 interface NotificationCenterProps {
@@ -139,6 +141,15 @@ export function NotificationCenter({
           </div>
 
           <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => playNotificationTone("default")}
+              title="Test ting sound"
+              aria-label="Test notification sound effect"
+              className="p-1.5 rounded-lg text-[#808080] hover:text-black hover:bg-[#F5F5F5] cursor-pointer transition-colors"
+            >
+              <Volume2 className="w-3.5 h-3.5" />
+            </button>
             {safeUnreadCount > 0 && (
               <button
                 type="button"
