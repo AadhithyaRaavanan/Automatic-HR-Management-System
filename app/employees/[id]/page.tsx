@@ -221,13 +221,31 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
     const emp = profileData?.employee || {};
     const onb = profileData?.onboarding || {};
     const edu = onb.education_details || {};
-    if (emp.emergency_contact) return emp.emergency_contact;
-    const name = onb.emergency_contact_name || edu.emergency_contact_name;
-    const rel = onb.emergency_contact_relationship || edu.emergency_contact_relationship;
-    const phone = onb.emergency_contact_phone || edu.emergency_contact_phone;
+
+    const name = onb.emergency_contact_name || edu.emergency_contact_name || edu.emergencyName;
+    const rel = onb.emergency_contact_relationship || edu.emergency_contact_relationship || edu.emergencyRelationship;
+    const phone = onb.emergency_contact_phone || edu.emergency_contact_phone || edu.emergencyPhone;
+
+    // If onboarding holds relationship/name/phone, always prioritize formatted output with relationship
     if (name || phone) {
-      return rel ? `${name} (${rel}) • ${phone}` : `${name || "Emergency Contact"} • ${phone}`;
+      if (rel) {
+        return `${name || "Emergency Contact"} (${rel}) • ${phone || ""}`.trim();
+      }
+      return `${name || "Emergency Contact"} • ${phone || ""}`.trim();
     }
+
+    if (emp.emergency_contact) {
+      // Check if emp.emergency_contact has "(rel)" or if we can enrich it with onb rel
+      if (rel && !emp.emergency_contact.includes("(")) {
+        const parts = emp.emergency_contact.split(/[-•]/);
+        if (parts.length >= 2) {
+          return `${parts[0].trim()} (${rel}) • ${parts.slice(1).join("-").trim()}`;
+        }
+        return `${emp.emergency_contact} (${rel})`;
+      }
+      return emp.emergency_contact;
+    }
+
     return "Not set";
   }, [profileData]);
 
