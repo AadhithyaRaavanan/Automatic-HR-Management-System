@@ -285,18 +285,20 @@ function DashboardContent({
           {/* Synchronized Header Action Button */}
           <button
             type="button"
-            disabled={!isCheckedIn && lockStatus.isLocked}
+            disabled={(!isCheckedIn && lockStatus.isLocked) || checkInMutation.isPending || isCheckingOut || checkOutMutation.isPending}
             onClick={onTogglePunch}
             title={!isCheckedIn && lockStatus.isLocked ? lockStatus.message : undefined}
             className={cn(
               "px-4 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5",
-              !isCheckedIn && lockStatus.isLocked
+              (!isCheckedIn && lockStatus.isLocked) || checkInMutation.isPending || isCheckingOut || checkOutMutation.isPending
                 ? "bg-card-subtle text-text-tertiary border border-border-light cursor-not-allowed opacity-75"
                 : "bg-brand-navy hover:bg-brand-navy-hover text-white cursor-pointer"
             )}
           >
             {!isCheckedIn && lockStatus.isLocked && <Lock className="w-3.5 h-3.5" />}
-            {isCheckedIn
+            {checkInMutation.isPending || isCheckingOut || checkOutMutation.isPending
+              ? "Updating..."
+              : isCheckedIn
               ? "Check out"
               : lockStatus.isLocked
                 ? "Outside shift hours"
@@ -688,6 +690,7 @@ export default function EmployeeDashboardPage() {
   });
 
   const handleTogglePunch = () => {
+    if (checkInMutation.isPending || checkOutMutation.isPending) return;
     if (isCheckedIn) {
       checkOutMutation.mutate();
     } else {

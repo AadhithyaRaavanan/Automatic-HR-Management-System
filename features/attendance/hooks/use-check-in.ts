@@ -28,6 +28,11 @@ export function useCheckIn() {
         if (res.status === 403 && data.code === "OUTSIDE_SHIFT_HOURS") {
           throw new Error(data.message || "Check-in is not allowed outside your shift hours.");
         }
+        if (res.status === 409 && data.code === "ACTIVE_SESSION_EXISTS") {
+          // Immediately invalidate attendance queries to reflect existing session
+          queryClient.invalidateQueries({ queryKey: ["attendance"] });
+          throw new Error(data.error || "You are already checked in with an active session.");
+        }
         if (isDemoModeEnabled()) {
           return { check_in_at: new Date().toISOString() };
         }
