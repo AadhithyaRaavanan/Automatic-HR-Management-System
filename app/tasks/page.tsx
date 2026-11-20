@@ -95,6 +95,40 @@ function getInitials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+function getPresetDateIso(offsetDays: number, timeZone: string = "Asia/Kolkata"): string {
+  const now = new Date();
+  const kolkataStr = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  const [y, m, d] = kolkataStr.split("-").map(Number);
+  const target = new Date(Date.UTC(y, m - 1, d + offsetDays));
+  const ty = target.getUTCFullYear();
+  const tm = String(target.getUTCMonth() + 1).padStart(2, "0");
+  const td = String(target.getUTCDate()).padStart(2, "0");
+  return `${ty}-${tm}-${td}`;
+}
+
+function formatDueDateDisplay(dateStr: string): string {
+  if (!dateStr) return "";
+  const today = getPresetDateIso(0);
+  const tomorrow = getPresetDateIso(1);
+  const dayAfterTomorrow = getPresetDateIso(2);
+  if (dateStr === today) return "Today";
+  if (dateStr === tomorrow) return "Tomorrow";
+  if (dateStr === dayAfterTomorrow) return "Day after tomorrow";
+  try {
+    const [y, m, d] = dateStr.slice(0, 10).split("-").map(Number);
+    const date = new Date(Date.UTC(y, m - 1, d));
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return `${date.getUTCDate()} ${months[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+  } catch {
+    return dateStr;
+  }
+}
+
 function FilterDropdownMenu({
   label,
   value,
@@ -208,6 +242,7 @@ function TasksWorkspaceContent() {
   const [newAssigneeId, setNewAssigneeId] = React.useState<string>("");
   const [newPriority, setNewPriority] = React.useState<TaskPriority>("medium");
   const [newDueDate, setNewDueDate] = React.useState<string>("");
+  const [showCustomDatePicker, setShowCustomDatePicker] = React.useState<boolean>(false);
   const [suggestedDueText, setSuggestedDueText] = React.useState<string>("");
   const [autoDueSuggested, setAutoDueSuggested] = React.useState<boolean>(false);
   const [estHours, setEstHours] = React.useState<string>("");
@@ -482,11 +517,25 @@ function TasksWorkspaceContent() {
       setEstMinutes(m > 0 ? String(m) : "");
     }
 
-    if (!editedFields.current.has("dueDate") && t.due_rule_working_days != null && t.due_rule_working_days > 0) {
-      const dueInfo = calculateWorkingDaysAhead(t.due_rule_working_days, holidays);
-      setNewDueDate(dueInfo.dateStr);
-      setSuggestedDueText(dueInfo.displayLabel);
-      setAutoDueSuggested(true);
+    if (!editedFields.current.has("dueDate") && t.due_rule_working_days != null) {
+      if (t.due_rule_working_days === 0) {
+        setNewDueDate(getPresetDateIso(0));
+        setSuggestedDueText("Today");
+        setAutoDueSuggested(true);
+      } else if (t.due_rule_working_days === 1) {
+        setNewDueDate(getPresetDateIso(1));
+        setSuggestedDueText("Tomorrow");
+        setAutoDueSuggested(true);
+      } else if (t.due_rule_working_days === 2) {
+        setNewDueDate(getPresetDateIso(2));
+        setSuggestedDueText("Day after tomorrow");
+        setAutoDueSuggested(true);
+      } else {
+        const dueInfo = calculateWorkingDaysAhead(t.due_rule_working_days, holidays);
+        setNewDueDate(dueInfo.dateStr);
+        setSuggestedDueText(dueInfo.displayLabel);
+        setAutoDueSuggested(true);
+      }
     }
 
     if (!editedFields.current.has("description") && t.description_template) {
@@ -1221,95 +1270,100 @@ function TasksWorkspaceContent() {
                       const initials = getInitials(assigneeName);
                       const typeName = task.task_type_id ? typeNameMap.get(task.task_type_id) : null;
 
+                      const hasAcceptAction = task.status === "todo" && task.assignee_id === userId && task.creator_id !== userId;
+
                       return (
                         <button
                           key={task.id}
                           type="button"
                           onClick={() => setSelectedTaskId(task.id)}
-                          className="w-full text-left p-3 rounded-[12px] bg-white hover:border-black/40 border border-[#E6E6E6] shadow-none transition-all cursor-pointer space-y-2 focus-visible:ring-2 focus-visible:ring-black focus-visible:outline-none"
+                          className="w-full text-left p-3.5 rounded-[12px] bg-white hover:border-black/40 border border-[#E6E6E6] shadow-none transition-all cursor-pointer flex flex-col justify-between h-[160px] min-h-[160px] max-h-[160px] focus-visible:ring-2 focus-visible:ring-black focus-visible:outline-none"
                         >
-                          <div className="flex items-center justify-between gap-1.5">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <StatusPill status={task.priority} showIcon={true} />
-                              {typeName && <TaskTypeBadge typeName={typeName} />}
-                              {task.recurrence_id && (
-                                <span title="Recurring Task" className="inline-flex items-center text-xs text-black">
-                                  <Repeat className="w-3 h-3 text-black" />
+                          <div className="space-y-2 w-full">
+                            <div className="flex items-center justify-between gap-1.5 h-6">
+                              <div className="flex items-center gap-1.5 flex-wrap overflow-hidden">
+                                <StatusPill status={task.priority} showIcon={true} />
+                                {typeName && <TaskTypeBadge typeName={typeName} />}
+                                {task.recurrence_id && (
+                                  <span title="Recurring Task" className="inline-flex items-center text-xs text-black">
+                                    <Repeat className="w-3 h-3 text-black" />
+                                  </span>
+                                )}
+                              </div>
+                              {task.project_id && projectNameMap.has(task.project_id) && (
+                                <span className="text-[10px] font-medium text-[#4D4D4D] truncate max-w-[100px]">
+                                  {projectNameMap.get(task.project_id)}
                                 </span>
                               )}
                             </div>
-                            {task.project_id && projectNameMap.has(task.project_id) && (
-                              <span className="text-[10px] font-medium text-[#4D4D4D] truncate max-w-[100px]">
-                                {projectNameMap.get(task.project_id)}
-                              </span>
-                            )}
-                          </div>
 
-                          <p className="text-xs font-semibold text-black line-clamp-2 leading-snug">
-                            {task.title}
-                          </p>
+                            <p className="text-xs font-semibold text-black line-clamp-2 leading-snug h-[2.25rem] flex items-start overflow-hidden" title={task.title}>
+                              {task.title}
+                            </p>
 
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <DueBadge dueDate={task.due_date} status={task.status} />
-                            {task.assignee_id && task.creator_id === task.assignee_id && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#F5F5F5] text-black border border-[#E6E6E6]">
-                                <UserCheck className="w-2.5 h-2.5" />
-                                Self-Assigned
-                              </span>
-                            )}
-                            {task.assignee_id && task.creator_id !== task.assignee_id && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-normal bg-[#F5F5F5] text-[#808080]">
-                                From: {formatPerson(task.creator_id)}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex items-center justify-between pt-1.5 border-t border-[#E6E6E6] text-[11px] text-[#808080] gap-2">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="w-5 h-5 rounded-full bg-[#E6E6E6] text-black font-semibold text-[9px] flex items-center justify-center shrink-0">
-                                {initials}
-                              </span>
-                              <span className="truncate font-medium text-[#4D4D4D]">
-                                {assigneeName}
-                              </span>
+                            <div className="flex items-center gap-1.5 h-5 overflow-hidden text-[11px]">
+                              {task.due_date ? (
+                                <DueBadge dueDate={task.due_date} status={task.status} />
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] text-[#A3A3A3]">
+                                  <Calendar className="w-2.5 h-2.5" /> No deadline
+                                </span>
+                              )}
+                              {task.assignee_id && task.creator_id === task.assignee_id && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-[#F5F5F5] text-black border border-[#E6E6E6] truncate max-w-[100px]">
+                                  <UserCheck className="w-2.5 h-2.5" />
+                                  Self
+                                </span>
+                              )}
+                              {task.assignee_id && task.creator_id !== task.assignee_id && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-normal bg-[#F5F5F5] text-[#808080] truncate max-w-[120px]">
+                                  From: {formatPerson(task.creator_id)}
+                                </span>
+                              )}
                             </div>
-                            {task.estimated_minutes != null && (
-                              <span className="font-mono text-[#808080] shrink-0 tabular-nums text-[10px]">
-                                {formatEstimatedDuration(task.estimated_minutes)} est
-                              </span>
-                            )}
                           </div>
 
-                          {/* Accept action for assigned tasks */}
-                          {task.status === "todo" && task.assignee_id === userId && task.creator_id !== userId && (
-                            <div className="pt-1">
-                              <div
-                                role="button"
-                                tabIndex={0}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  mutations.updateTaskStatus.mutate({
-                                    taskId: task.id,
-                                    status: "in_progress",
-                                    note: "Accepted assigned task",
-                                  });
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" || e.key === " ") {
+                          <div className="w-full pt-2 border-t border-[#E6E6E6] mt-auto">
+                            <div className="flex items-center justify-between text-[11px] text-[#808080] gap-2 h-6">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="w-4 h-4 rounded-full bg-[#E6E6E6] text-black font-semibold text-[8px] flex items-center justify-center shrink-0">
+                                  {initials}
+                                </span>
+                                <span className="truncate font-medium text-[#4D4D4D] text-[11px]">
+                                  {assigneeName}
+                                </span>
+                              </div>
+
+                              {hasAcceptAction && (
+                                <span
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={(e) => {
                                     e.stopPropagation();
                                     mutations.updateTaskStatus.mutate({
                                       taskId: task.id,
                                       status: "in_progress",
                                       note: "Accepted assigned task",
                                     });
-                                  }
-                                }}
-                                className="w-full flex items-center justify-center gap-1 py-1.5 px-3 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-[11px] font-semibold transition-all shadow-xs cursor-pointer"
-                              >
-                                <span>✓ Accept Task</span>
-                              </div>
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                      e.stopPropagation();
+                                      mutations.updateTaskStatus.mutate({
+                                        taskId: task.id,
+                                        status: "in_progress",
+                                        note: "Accepted assigned task",
+                                      });
+                                    }
+                                  }}
+                                  className="px-2 py-0.5 rounded-md bg-black hover:bg-[#1A1A1A] text-white text-[10px] font-semibold transition-all shrink-0 cursor-pointer shadow-xs"
+                                  title="Accept task and move to In Progress"
+                                >
+                                  ✓ Accept
+                                </span>
+                              )}
                             </div>
-                          )}
+                          </div>
                         </button>
                       );
                     })
@@ -1375,11 +1429,6 @@ function TasksWorkspaceContent() {
                     </td>
                     <td className="py-2.5 px-3 text-black">
                       <div className="font-semibold">{formatPerson(task.assignee_id)}</div>
-                      {task.estimated_minutes != null && (
-                        <div className="text-[10px] font-mono font-bold text-black">
-                          {formatEstimatedDuration(task.estimated_minutes)} est
-                        </div>
-                      )}
                     </td>
                     <td className="py-2.5 px-3">
                       <StatusPill status={task.priority} />
@@ -1602,171 +1651,193 @@ function TasksWorkspaceContent() {
                 )}
               </div>
 
-              {/* Priority & Due Date */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-black mb-1">
-                    Priority
-                  </label>
-                  <select
-                    aria-label="Task Priority"
-                    value={newPriority}
-                    onChange={(e) => {
-                      setNewPriority(e.target.value as TaskPriority);
-                      editedFields.current.add("priority");
-                    }}
-                    className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black focus:outline-none focus:border-black"
-                  >
-                    {PRIORITY_OPTIONS.map((p) => (
-                      <option key={p} value={p}>
-                        {p.charAt(0).toUpperCase() + p.slice(1)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {/* Priority */}
+              <div>
+                <label className="block text-xs font-bold text-black mb-1">
+                  Priority
+                </label>
+                <select
+                  aria-label="Task Priority"
+                  value={newPriority}
+                  onChange={(e) => {
+                    setNewPriority(e.target.value as TaskPriority);
+                    editedFields.current.add("priority");
+                  }}
+                  className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black focus:outline-none focus:border-black"
+                >
+                  {PRIORITY_OPTIONS.map((p) => (
+                    <option key={p} value={p}>
+                      {p.charAt(0).toUpperCase() + p.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-black mb-1">
+              {/* Due Date Presets: Today, Tomorrow, Day After Tomorrow, Custom Date */}
+              <div className="space-y-2 p-3.5 rounded-xl bg-[#F9F9F9] border border-[#E6E6E6]">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-black flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-black" />
                     Due date
                   </label>
-                  <input
-                    type="date"
-                    aria-label="Due Date"
-                    value={newDueDate}
-                    onChange={(e) => {
-                      setNewDueDate(e.target.value);
+                  {newDueDate ? (
+                    <span className="text-[11px] font-medium text-black">
+                      Deadline: <span className="font-bold underline">{formatDueDateDisplay(newDueDate)}</span> ({newDueDate})
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-[#808080]">Optional deadline</span>
+                  )}
+                </div>
+
+                {/* Preset Buttons */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewDueDate(getPresetDateIso(0));
+                      setShowCustomDatePicker(false);
                       setAutoDueSuggested(false);
                       setSuggestedDueText("");
                       editedFields.current.add("dueDate");
                     }}
-                    className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black focus:outline-none focus:border-black"
-                  />
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer",
+                      newDueDate === getPresetDateIso(0)
+                        ? "bg-black text-white border-black shadow-xs"
+                        : "bg-white hover:bg-[#F5F5F5] border-[#E6E6E6] text-black"
+                    )}
+                  >
+                    Today
+                  </button>
 
-                  {/* Suggested Due Date Chip */}
-                  {suggestedDueText && newDueDate && autoDueSuggested && (
-                    <div className="mt-1 flex items-center justify-between text-[11px] text-[#4D4D4D] bg-[#F5F5F5] border border-[#E6E6E6] rounded px-2 py-0.5">
-                      <span>Suggested due date: {suggestedDueText}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setNewDueDate("");
-                          setSuggestedDueText("");
-                          setAutoDueSuggested(false);
-                          editedFields.current.add("dueDate");
-                        }}
-                        className="text-[10px] font-bold text-[#808080] hover:text-black underline ml-2 cursor-pointer"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewDueDate(getPresetDateIso(1));
+                      setShowCustomDatePicker(false);
+                      setAutoDueSuggested(false);
+                      setSuggestedDueText("");
+                      editedFields.current.add("dueDate");
+                    }}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer",
+                      newDueDate === getPresetDateIso(1)
+                        ? "bg-black text-white border-black shadow-xs"
+                        : "bg-white hover:bg-[#F5F5F5] border-[#E6E6E6] text-black"
+                    )}
+                  >
+                    Tomorrow
+                  </button>
 
-              {/* Duration Picker & Duration Presets */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-bold text-black flex items-center gap-1.5">
-                    <Timer className="w-3.5 h-3.5 text-black" />
-                    Estimated duration
-                  </label>
-                  {((parseInt(estHours || "0", 10) * 60) + parseInt(estMinutes || "0", 10)) > 0 && (
-                    <span className="text-[11px] font-mono font-bold text-black">
-                      Total: {formatEstimatedDuration((parseInt(estHours || "0", 10) * 60) + parseInt(estMinutes || "0", 10))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewDueDate(getPresetDateIso(2));
+                      setShowCustomDatePicker(false);
+                      setAutoDueSuggested(false);
+                      setSuggestedDueText("");
+                      editedFields.current.add("dueDate");
+                    }}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer",
+                      newDueDate === getPresetDateIso(2)
+                        ? "bg-black text-white border-black shadow-xs"
+                        : "bg-white hover:bg-[#F5F5F5] border-[#E6E6E6] text-black"
+                    )}
+                  >
+                    Day after tomorrow
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCustomDatePicker(!showCustomDatePicker);
+                      editedFields.current.add("dueDate");
+                    }}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer",
+                      Boolean(
+                        newDueDate &&
+                          newDueDate !== getPresetDateIso(0) &&
+                          newDueDate !== getPresetDateIso(1) &&
+                          newDueDate !== getPresetDateIso(2)
+                      )
+                        ? "bg-black text-white border-black shadow-xs"
+                        : "bg-white hover:bg-[#F5F5F5] border-[#E6E6E6] text-black"
+                    )}
+                  >
+                    <Calendar className="w-3 h-3" />
+                    <span>
+                      {Boolean(
+                        newDueDate &&
+                          newDueDate !== getPresetDateIso(0) &&
+                          newDueDate !== getPresetDateIso(1) &&
+                          newDueDate !== getPresetDateIso(2)
+                      )
+                        ? `Custom: ${newDueDate}`
+                        : "Custom date..."}
                     </span>
-                  )}
-                </div>
+                  </button>
 
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 flex-1 bg-white border border-[#E6E6E6] rounded-lg px-3 py-1.5">
-                    <input
-                      type="number"
-                      min={0}
-                      max={24}
-                      aria-label="Estimated hours"
-                      value={estHours}
-                      onChange={(e) => {
-                        setEstHours(e.target.value);
-                        editedFields.current.add("estimate");
-                      }}
-                      placeholder="0"
-                      className="w-16 text-xs font-bold text-black focus:outline-none"
-                    />
-                    <span className="text-xs font-semibold text-[#808080]">hrs</span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 flex-1 bg-white border border-[#E6E6E6] rounded-lg px-3 py-1.5">
-                    <input
-                      type="number"
-                      min={0}
-                      max={59}
-                      step={5}
-                      aria-label="Estimated minutes"
-                      value={estMinutes}
-                      onChange={(e) => {
-                        setEstMinutes(e.target.value);
-                        editedFields.current.add("estimate");
-                      }}
-                      placeholder="0"
-                      className="w-16 text-xs font-bold text-black focus:outline-none"
-                    />
-                    <span className="text-xs font-semibold text-[#808080]">mins</span>
-                  </div>
-
-                  {(estHours || estMinutes) && (
+                  {newDueDate && (
                     <button
                       type="button"
                       onClick={() => {
-                        setEstHours("");
-                        setEstMinutes("");
-                        editedFields.current.add("estimate");
+                        setNewDueDate("");
+                        setShowCustomDatePicker(false);
+                        setAutoDueSuggested(false);
+                        setSuggestedDueText("");
+                        editedFields.current.add("dueDate");
                       }}
-                      className="px-2.5 py-1.5 text-[#808080] hover:text-black text-[11px] font-bold cursor-pointer"
+                      className="px-2 py-1 text-[11px] font-bold text-[#808080] hover:text-black cursor-pointer ml-auto"
                     >
                       Clear
                     </button>
                   )}
                 </div>
 
-                {/* Duration Presets (30m, 1h, 2h, 4h, 8h) */}
-                <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                  <span className="text-[10px] font-bold uppercase text-[#808080] mr-1">Presets:</span>
-                  {[
-                    { label: "30m", h: "", m: "30" },
-                    { label: "1h", h: "1", m: "" },
-                    { label: "2h", h: "2", m: "" },
-                    { label: "4h", h: "4", m: "" },
-                    { label: "8h", h: "8", m: "" },
-                  ].map((preset) => (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      onClick={() => {
-                        setEstHours(preset.h);
-                        setEstMinutes(preset.m);
-                        editedFields.current.add("estimate");
+                {/* Custom Date Input */}
+                {(showCustomDatePicker ||
+                  Boolean(
+                    newDueDate &&
+                      newDueDate !== getPresetDateIso(0) &&
+                      newDueDate !== getPresetDateIso(1) &&
+                      newDueDate !== getPresetDateIso(2)
+                  )) && (
+                  <div className="pt-1.5 flex items-center gap-2">
+                    <input
+                      type="date"
+                      aria-label="Custom Due Date"
+                      value={newDueDate}
+                      onChange={(e) => {
+                        setNewDueDate(e.target.value);
+                        setAutoDueSuggested(false);
+                        setSuggestedDueText("");
+                        editedFields.current.add("dueDate");
                       }}
-                      className="px-2 py-0.5 rounded text-[11px] font-medium bg-white hover:bg-[#F5F5F5] border border-[#E6E6E6] text-black transition-colors cursor-pointer"
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
+                      className="px-3 py-1.5 rounded-lg bg-white border border-black text-xs font-semibold text-black focus:outline-none"
+                    />
+                    <span className="text-[11px] text-[#808080]">
+                      Pick any specific calendar deadline
+                    </span>
+                  </div>
+                )}
 
-                {/* Historical Estimate Suggestion */}
-                {historicalMedianEstimate && (
-                  <div className="mt-2 flex items-center justify-between text-[11px] text-[#4D4D4D] bg-[#F5F5F5] border border-[#E6E6E6] rounded px-2.5 py-1">
-                    <span>Similar tasks usually take about {historicalMedianEstimate.label}</span>
+                {/* Suggested Due Date Chip from Type Preset */}
+                {suggestedDueText && newDueDate && autoDueSuggested && (
+                  <div className="mt-1 flex items-center justify-between text-[11px] text-[#4D4D4D] bg-white border border-[#E6E6E6] rounded px-2.5 py-1">
+                    <span>Preset suggested due date: <strong>{suggestedDueText}</strong></span>
                     <button
                       type="button"
                       onClick={() => {
-                        setEstHours(historicalMedianEstimate.h);
-                        setEstMinutes(historicalMedianEstimate.m);
-                        editedFields.current.add("estimate");
+                        setNewDueDate("");
+                        setSuggestedDueText("");
+                        setAutoDueSuggested(false);
+                        editedFields.current.add("dueDate");
                       }}
-                      className="px-2 py-0.5 text-[10px] font-bold bg-white border border-[#E6E6E6] hover:bg-[#F5F5F5] text-black rounded cursor-pointer ml-2"
+                      className="text-[10px] font-bold text-[#808080] hover:text-black underline ml-2 cursor-pointer"
                     >
-                      Use this
+                      Clear
                     </button>
                   </div>
                 )}
