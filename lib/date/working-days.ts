@@ -91,12 +91,16 @@ export function calculateWorkingDaysAhead(
 
 /**
  * Counts working days between two date strings (inclusive),
- * skipping Saturday, Sunday, and holidays.
+ * strictly following the ZEN XEA working calendar:
+ * Monday through Saturday are working days; Sunday (0) is weekly off.
+ * Also strictly excludes company holidays.
+ * Supports half-day applications ('full' = 1.0, 'first_half'/'second_half' = 0.5).
  */
 export function countWorkingDaysBetween(
   startDateStr: string,
   endDateStr: string,
-  holidays: Array<{ date: string }> = []
+  holidays: Array<{ date: string }> = [],
+  dayPart: "full" | "first_half" | "second_half" = "full"
 ): number {
   if (!startDateStr || !endDateStr || startDateStr > endDateStr) return 0;
   const holidaySet = new Set(holidays.map((h) => h.date.slice(0, 10)));
@@ -105,18 +109,24 @@ export function countWorkingDaysBetween(
   const current = new Date(Date.UTC(sy, sm - 1, sd));
   const end = new Date(Date.UTC(ey, em - 1, ed));
 
-  let count = 0;
+  let workingDaysCount = 0;
   while (current <= end) {
-    const dow = current.getUTCDay();
+    const dow = current.getUTCDay(); // 0 = Sunday
     const y = current.getUTCFullYear();
     const m = String(current.getUTCMonth() + 1).padStart(2, "0");
     const d = String(current.getUTCDate()).padStart(2, "0");
     const dStr = `${y}-${m}-${d}`;
 
-    if (dow !== 0 && dow !== 6 && !holidaySet.has(dStr)) {
-      count++;
+    // Sunday (0) is weekly off; Mon-Sat (1-6) are working days
+    if (dow !== 0 && !holidaySet.has(dStr)) {
+      workingDaysCount++;
     }
     current.setUTCDate(current.getUTCDate() + 1);
   }
-  return count;
+
+  if (dayPart === "first_half" || dayPart === "second_half") {
+    return workingDaysCount > 0 ? 0.5 : 0;
+  }
+
+  return workingDaysCount;
 }
