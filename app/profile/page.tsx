@@ -282,7 +282,9 @@ function ProfilePageContent() {
           if (data.full_name) setFullName(data.full_name);
           if (data.email) setEmail(data.email);
           if (data.phone) setPhone(data.phone);
-          if (data.emergency_contact) setEmergencyContact(data.emergency_contact);
+          if (data.emergency_contact) {
+            setEmergencyContact(data.emergency_contact);
+          }
           if (data.avatar_url) setAvatarPath(data.avatar_url);
           if (data.timezone) setTimezone(data.timezone);
           if (data.work_mode) setWorkMode(data.work_mode);

@@ -211,14 +211,28 @@ export async function GET(request: NextRequest) {
 
           // Check if shift start + 30 mins has passed in Kolkata time
           if (currentTotalMins > shiftStartMins + 30) {
-            // Check if checked in today
+            // Check if checked in today:
+            // 1. Check if an active or completed session exists for today
+            const { data: todaySession } = await (supabaseAdmin.from("attendance_sessions") as any)
+              .select("id")
+              .eq("employee_id", emp.id)
+              .eq("work_date", kolkataDate)
+              .limit(1)
+              .maybeSingle();
+
+            if (todaySession) {
+              // Employee already has a session logged for today, do not remind
+              continue;
+            }
+
+            // 2. Fallback check on attendance_days
             const { data: attDay } = await (supabaseAdmin.from("attendance_days") as any)
-              .select("id, status")
+              .select("id, status, is_present")
               .eq("employee_id", emp.id)
               .eq("work_date", kolkataDate)
               .maybeSingle();
 
-            if (!attDay || attDay.status === "absent") {
+            if (!attDay || attDay.status === "absent" || attDay.is_present === false) {
               await notify({
                 userIds: [emp.id],
                 type: "reminder_shift_missed_checkin",

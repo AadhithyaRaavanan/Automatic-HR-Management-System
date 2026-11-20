@@ -204,6 +204,22 @@ export async function PATCH(request: NextRequest) {
     const onbUpdates: Record<string, any> = { updated_at: new Date().toISOString() };
     if (empUpdates.full_name) onbUpdates.full_name = empUpdates.full_name;
     if (empUpdates.phone) onbUpdates.phone = empUpdates.phone;
+    if (typeof emergencyContact === "string" && emergencyContact.trim()) {
+      // Parse "Name (Relationship) • Phone" or "Name - Phone"
+      const cleanEm = emergencyContact.trim();
+      const relMatch = cleanEm.match(/^(.*?)\s*\((.*?)\)\s*[•\-]\s*(.*?)$/);
+      const dashMatch = cleanEm.match(/^(.*?)\s*[•\-]\s*(.*?)$/);
+      if (relMatch) {
+        onbUpdates.emergency_contact_name = relMatch[1]?.trim() || null;
+        onbUpdates.emergency_contact_relationship = relMatch[2]?.trim() || null;
+        onbUpdates.emergency_contact_phone = relMatch[3]?.trim() || null;
+      } else if (dashMatch) {
+        onbUpdates.emergency_contact_name = dashMatch[1]?.trim() || null;
+        onbUpdates.emergency_contact_phone = dashMatch[2]?.trim() || null;
+      } else {
+        onbUpdates.emergency_contact_name = cleanEm;
+      }
+    }
 
     await ((supabaseAdmin as any).from("onboarding_profiles"))
       .update(onbUpdates)

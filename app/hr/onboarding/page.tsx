@@ -640,7 +640,18 @@ function HrOnboardingContent() {
                   <span className="font-extrabold text-[10px] uppercase text-brand-purple">Personal Info</span>
                   <p><strong>DOB:</strong> {selectedCandidate.personal_details.dob || "—"}</p>
                   <p><strong>Phone:</strong> {selectedCandidate.personal_details.phone || "—"}</p>
-                  <p><strong>Emergency:</strong> {selectedCandidate.personal_details.emergency_contact_name} ({selectedCandidate.personal_details.emergency_contact_phone})</p>
+                  <p>
+                    <strong>Emergency:</strong>{" "}
+                    {selectedCandidate.personal_details.emergency_contact_name || selectedCandidate.personal_details.emergency_contact_phone ? (
+                      <>
+                        {selectedCandidate.personal_details.emergency_contact_name || "Emergency Contact"}
+                        {selectedCandidate.personal_details.emergency_contact_relationship ? ` (${selectedCandidate.personal_details.emergency_contact_relationship})` : ""}
+                        {selectedCandidate.personal_details.emergency_contact_phone ? ` • ${selectedCandidate.personal_details.emergency_contact_phone}` : ""}
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </p>
                 </div>
 
                 <div className="p-3 rounded-xl bg-card-subtle border border-border-light text-xs space-y-1">
