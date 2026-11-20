@@ -36,7 +36,13 @@ export function LivePresenceWidget({ userTimezone = "UTC" }: { userTimezone?: st
 
   const loadData = React.useCallback(async () => {
     try {
-      const res = await fetch("/api/attendance/live-presence");
+      const res = await fetch(`/api/attendance/live-presence?_t=${Date.now()}`, {
+        cache: "no-store",
+        headers: {
+          "Pragma": "no-cache",
+          "Cache-Control": "no-cache",
+        },
+      });
       const json = await res.json();
       if (res.ok && json.success) {
         setData(json);
