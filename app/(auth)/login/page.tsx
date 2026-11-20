@@ -122,9 +122,12 @@ function LoginForm() {
           return;
         }
 
-        if (typeof window !== "undefined" && data.role) {
+        if (typeof window !== "undefined") {
           try {
-            localStorage.setItem("remotehr_cached_role", data.role);
+            if (data.role) localStorage.setItem("remotehr_cached_role", data.role);
+            Object.keys(sessionStorage).forEach((key) => {
+              if (key.startsWith("notif_login_chime_")) sessionStorage.removeItem(key);
+            });
           } catch {}
         }
 

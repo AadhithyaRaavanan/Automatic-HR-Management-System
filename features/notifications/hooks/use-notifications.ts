@@ -122,9 +122,29 @@ export function useNotifications() {
 
     const currentIds = new Set(query.data.map((n) => n?.id).filter(Boolean));
 
-    // On initial load, register existing notification IDs without triggering sound
+    // On initial load (user login / session start):
     if (knownNotificationIds.current === null) {
       knownNotificationIds.current = currentIds;
+
+      // Check if user has active unread / non-viewed notifications on login
+      const unreadNotifications = query.data.filter((n) => Boolean(n && !n.read_at));
+      if (unreadNotifications.length > 0) {
+        const chimeSessionKey = userId ? `notif_login_chime_${userId}` : "notif_login_chime_user";
+        const hasPlayedForSession = typeof sessionStorage !== "undefined" && sessionStorage.getItem(chimeSessionKey);
+
+        if (!hasPlayedForSession) {
+          try {
+            sessionStorage.setItem(chimeSessionKey, "true");
+          } catch {}
+
+          const latest = unreadNotifications[0];
+          const nType = (latest?.type || "").toLowerCase();
+          playNotificationTone(
+            nType.includes("warning") || nType.includes("overdue") ? "warning" : "default",
+            latest.id
+          );
+        }
+      }
       return;
     }
 

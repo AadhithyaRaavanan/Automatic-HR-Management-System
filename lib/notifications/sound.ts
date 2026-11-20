@@ -4,6 +4,7 @@
 let sharedAudioContext: AudioContext | null = null;
 let lastPlayedTime = 0;
 const lastPlayedIds = new Set<string>();
+let pendingToneOnUnlock: { type: "default" | "reminder" | "warning"; id?: string } | null = null;
 
 /**
  * Lazily retrieves or instantiates a shared Web Audio context
@@ -32,8 +33,14 @@ if (typeof window !== "undefined") {
   const unlockAudio = () => {
     try {
       const ctx = getAudioContext();
-      if (ctx && ctx.state === "suspended") {
-        ctx.resume().catch(() => {});
+      if (ctx) {
+        ctx.resume().then(() => {
+          if (pendingToneOnUnlock) {
+            const tone = pendingToneOnUnlock;
+            pendingToneOnUnlock = null;
+            synthesizeTing(ctx, tone.type);
+          }
+        }).catch(() => {});
       }
     } catch {}
     window.removeEventListener("pointerdown", unlockAudio);
@@ -191,9 +198,16 @@ export function playNotificationTone(
     const ctx = getAudioContext();
     if (ctx) {
       if (ctx.state === "suspended") {
+        pendingToneOnUnlock = { type, id: notificationId };
         ctx
           .resume()
-          .then(() => synthesizeTing(ctx, type))
+          .then(() => {
+            if (pendingToneOnUnlock) {
+              const tone = pendingToneOnUnlock;
+              pendingToneOnUnlock = null;
+              synthesizeTing(ctx, tone.type);
+            }
+          })
           .catch(() => fallbackAudioElement());
       } else {
         synthesizeTing(ctx, type);
