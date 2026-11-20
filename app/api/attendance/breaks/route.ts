@@ -15,6 +15,50 @@ export interface AttendanceBreakPayload {
   status: "active" | "completed";
 }
 
+interface ParsedBreakItem {
+  id: string;
+  type: "short_break" | "lunch_break";
+  startTime: string;
+  endTime: string | null;
+  durationMinutes: number;
+  status: "active" | "completed";
+}
+
+interface NoteState {
+  originalNote?: string;
+  breaks: ParsedBreakItem[];
+}
+
+function parseNoteBreaks(rawNote: string | null): NoteState {
+  if (!rawNote) return { originalNote: "", breaks: [] };
+  try {
+    const parsed = JSON.parse(rawNote);
+    if (parsed && Array.isArray(parsed.breaks)) {
+      return {
+        originalNote: parsed.originalNote || "",
+        breaks: parsed.breaks,
+      };
+    }
+    // Legacy single-break payload format
+    if (parsed && parsed.breakType) {
+      return {
+        originalNote: "",
+        breaks: [
+          {
+            id: "legacy",
+            type: parsed.breakType,
+            startTime: new Date().toISOString(),
+            endTime: parsed.status === "completed" ? new Date().toISOString() : null,
+            durationMinutes: parsed.durationMinutes || 0,
+            status: parsed.status || "completed",
+          },
+        ],
+      };
+    }
+  } catch {}
+  return { originalNote: rawNote, breaks: [] };
+}
+
 // GET active/completed breaks for current user today
 export async function GET(request: NextRequest) {
   const approvedCheck = await requireApprovedUser(request);
@@ -53,37 +97,35 @@ export async function GET(request: NextRequest) {
 
     const todayStr = new Date().toISOString().slice(0, 10);
 
-    // Retrieve break sessions stored under source 'web' where note has break payload
+    // Fetch user's active session or today's sessions
     const { data: sessions } = await (supabaseAdmin as any)
       .from("attendance_sessions")
       .select("id, work_date, check_in_at, check_out_at, note")
       .eq("employee_id", user.id)
       .eq("work_date", todayStr)
-      .like("note", '%"breakType"%')
       .order("check_in_at", { ascending: false });
 
-    const breaks: AttendanceBreakPayload[] = (sessions || []).map((s: any) => {
-      let parsedNote: any = {};
-      try {
-        parsedNote = JSON.parse(s.note);
-      } catch {}
+    const allBreaks: AttendanceBreakPayload[] = [];
+    for (const s of sessions || []) {
+      const noteState = parseNoteBreaks(s.note);
+      for (const b of noteState.breaks) {
+        allBreaks.push({
+          id: b.id || s.id,
+          type: b.type,
+          startTime: b.startTime,
+          endTime: b.endTime,
+          durationMinutes: b.durationMinutes,
+          status: b.status,
+        });
+      }
+    }
 
-      return {
-        id: s.id,
-        type: parsedNote.breakType || "short_break",
-        startTime: s.check_in_at,
-        endTime: s.check_out_at,
-        durationMinutes: parsedNote.durationMinutes || (s.check_out_at ? Math.round((new Date(s.check_out_at).getTime() - new Date(s.check_in_at).getTime()) / 60000) : 0),
-        status: s.check_out_at ? "completed" : "active",
-      };
-    });
-
-    const activeBreak = breaks.find((b) => b.status === "active") || null;
-    const shortBreakCount = breaks.filter((b) => b.type === "short_break").length;
-    const lunchBreakCount = breaks.filter((b) => b.type === "lunch_break").length;
+    const activeBreak = allBreaks.find((b) => b.status === "active") || null;
+    const shortBreakCount = allBreaks.filter((b) => b.type === "short_break").length;
+    const lunchBreakCount = allBreaks.filter((b) => b.type === "lunch_break").length;
 
     return NextResponse.json({
-      breaks,
+      breaks: allBreaks,
       activeBreak,
       shortBreakTaken: shortBreakCount >= 1,
       lunchBreakTaken: lunchBreakCount >= 1,
@@ -135,10 +177,28 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { action, breakType, breakId } = body;
-
+    const { action, breakType } = body;
     const todayStr = new Date().toISOString().slice(0, 10);
     const nowIso = new Date().toISOString();
+
+    // 1. Fetch user's currently open/active attendance session
+    const { data: activeSession, error: sessErr } = await (supabaseAdmin as any)
+      .from("attendance_sessions")
+      .select("id, employee_id, work_date, check_in_at, check_out_at, note")
+      .eq("employee_id", user.id)
+      .is("check_out_at", null)
+      .order("check_in_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (sessErr || !activeSession) {
+      return NextResponse.json(
+        { error: "No active shift session found. You must be clocked in to take or end a break." },
+        { status: 400 }
+      );
+    }
+
+    const noteState = parseNoteBreaks(activeSession.note);
 
     if (action === "start") {
       if (!["short_break", "lunch_break"].includes(breakType)) {
@@ -148,33 +208,18 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Check existing breaks for today
-      const { data: existing } = await (supabaseAdmin as any)
-        .from("attendance_sessions")
-        .select("id, check_out_at, note")
-        .eq("employee_id", user.id)
-        .eq("work_date", todayStr)
-        .like("note", '%"breakType"%');
-
-      const existingBreaks = (existing || []).map((s: any) => {
-        try {
-          return { ...s, parsed: JSON.parse(s.note) };
-        } catch {
-          return { ...s, parsed: {} };
-        }
-      });
-
-      const activeBreak = existingBreaks.find((b: any) => !b.check_out_at);
-      if (activeBreak) {
+      // Check if there's already an active ongoing break
+      const currentActive = noteState.breaks.find((b) => b.status === "active");
+      if (currentActive) {
         return NextResponse.json(
-          { error: "You already have an active break session. Please end it before taking another." },
+          { error: "You already have an active break session in progress. Please end it first." },
           { status: 400 }
         );
       }
 
-      // Enforce: 1 short break (15m) and 1 lunch break (1h) per day
+      // Check daily break quotas
       if (breakType === "short_break") {
-        const count = existingBreaks.filter((b: any) => b.parsed.breakType === "short_break").length;
+        const count = noteState.breaks.filter((b) => b.type === "short_break").length;
         if (count >= 1) {
           return NextResponse.json(
             { error: "You have already taken your 15-minute break for today." },
@@ -182,7 +227,7 @@ export async function POST(request: NextRequest) {
           );
         }
       } else if (breakType === "lunch_break") {
-        const count = existingBreaks.filter((b: any) => b.parsed.breakType === "lunch_break").length;
+        const count = noteState.breaks.filter((b) => b.type === "lunch_break").length;
         if (count >= 1) {
           return NextResponse.json(
             { error: "You have already taken your 1-hour lunch break for today." },
@@ -191,91 +236,80 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const notePayload = JSON.stringify({
-        breakType,
-        maxMinutes: breakType === "short_break" ? 15 : 60,
+      const newBreakId = `brk_${Date.now()}`;
+      noteState.breaks.push({
+        id: newBreakId,
+        type: breakType,
+        startTime: nowIso,
+        endTime: null,
+        durationMinutes: 0,
         status: "active",
       });
 
-      const { data: created, error: insertErr } = await (supabaseAdmin as any)
-        .from("attendance_sessions")
-        .insert({
-          organization_id: "00000000-0000-0000-0000-000000000001",
-          employee_id: user.id,
-          work_date: todayStr,
-          check_in_at: nowIso,
-          check_out_at: null,
-          source: "web",
-          note: notePayload,
-        })
-        .select()
-        .single();
+      const updatedNote = JSON.stringify({
+        originalNote: noteState.originalNote || activeSession.note || "",
+        breaks: noteState.breaks,
+      });
 
-      if (insertErr) {
-        return NextResponse.json({ error: insertErr.message }, { status: 500 });
+      const { error: updateErr } = await (supabaseAdmin as any)
+        .from("attendance_sessions")
+        .update({
+          note: updatedNote,
+        })
+        .eq("id", activeSession.id);
+
+      if (updateErr) {
+        return NextResponse.json({ error: updateErr.message }, { status: 500 });
       }
 
       return NextResponse.json({
         success: true,
         message: `${breakType === "short_break" ? "15-minute break" : "1-hour lunch break"} started!`,
         breakSession: {
-          id: created.id,
+          id: newBreakId,
           type: breakType,
-          startTime: created.check_in_at,
+          startTime: nowIso,
           status: "active",
         },
       });
     }
 
     if (action === "end") {
-      let targetId = breakId;
-      if (!targetId) {
-        // Find active break
-        const { data: active } = await (supabaseAdmin as any)
-          .from("attendance_sessions")
-          .select("id, check_in_at, note")
-          .eq("employee_id", user.id)
-          .eq("work_date", todayStr)
-          .is("check_out_at", null)
-          .like("note", '%"breakType"%')
-          .maybeSingle();
-
-        if (!active) {
-          return NextResponse.json({ error: "No active break session found to end." }, { status: 404 });
-        }
-        targetId = active.id;
+      const activeBreakIndex = noteState.breaks.findIndex((b) => b.status === "active");
+      if (activeBreakIndex === -1) {
+        return NextResponse.json(
+          { error: "No active break session found to end." },
+          { status: 404 }
+        );
       }
 
-      const { data: session } = await (supabaseAdmin as any)
-        .from("attendance_sessions")
-        .select("id, check_in_at, note")
-        .eq("id", targetId)
-        .single();
+      const targetBreak = noteState.breaks[activeBreakIndex];
+      const startMs = new Date(targetBreak.startTime).getTime();
+      const durationMinutes = Math.max(1, Math.round((new Date(nowIso).getTime() - startMs) / 60000));
 
-      if (!session) {
-        return NextResponse.json({ error: "Break session not found." }, { status: 404 });
-      }
+      targetBreak.endTime = nowIso;
+      targetBreak.durationMinutes = durationMinutes;
+      targetBreak.status = "completed";
 
-      let parsedNote: any = {};
-      try {
-        parsedNote = JSON.parse(session.note);
-      } catch {}
+      const updatedNote = JSON.stringify({
+        originalNote: noteState.originalNote || "",
+        breaks: noteState.breaks,
+      });
 
-      const durationMinutes = Math.max(1, Math.round((new Date(nowIso).getTime() - new Date(session.check_in_at).getTime()) / 60000));
-      parsedNote.status = "completed";
-      parsedNote.durationMinutes = durationMinutes;
-
-      await (supabaseAdmin as any)
+      const { error: updateErr } = await (supabaseAdmin as any)
         .from("attendance_sessions")
         .update({
-          check_out_at: nowIso,
-          note: JSON.stringify(parsedNote),
+          note: updatedNote,
         })
-        .eq("id", targetId);
+        .eq("id", activeSession.id);
+
+      if (updateErr) {
+        return NextResponse.json({ error: updateErr.message }, { status: 500 });
+      }
 
       return NextResponse.json({
         success: true,
-        message: "Break session ended. Welcome back!",
+        message: "Break ended. Welcome back!",
         durationMinutes,
       });
     }
