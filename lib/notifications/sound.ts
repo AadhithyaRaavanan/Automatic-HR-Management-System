@@ -9,7 +9,7 @@ let decodedBuffer: AudioBuffer | null = null;
 let isFetchingBuffer = false;
 
 // Cache-busting URL so browsers never play stale audio from previous turns
-const AUDIO_URL = "/notification.mp3?v=4";
+const AUDIO_URL = "/notification.mp3?v=5";
 
 /**
  * Lazily retrieves or instantiates a shared Web Audio context
@@ -105,7 +105,7 @@ function playHtmlAudio() {
     if (p !== undefined) {
       p.catch(() => {
         try {
-          const fallback = new Audio("/notification.wav?v=4");
+          const fallback = new Audio("/notification.wav?v=5");
           fallback.volume = 0.95;
           fallback.play().catch(() => {});
         } catch {}
@@ -113,7 +113,7 @@ function playHtmlAudio() {
     }
   } catch {
     try {
-      const fallback = new Audio("/notification.wav?v=4");
+      const fallback = new Audio("/notification.wav?v=5");
       fallback.volume = 0.95;
       fallback.play().catch(() => {});
     } catch {}
