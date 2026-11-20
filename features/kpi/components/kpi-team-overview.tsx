@@ -149,7 +149,7 @@ export function KpiTeamOverview({
       m.attendanceScore != null ? `${m.attendanceScore}%` : "No data",
       m.hoursScore != null ? `${m.hoursScore}%` : "No data",
       m.tasksScore != null ? `${m.tasksScore}%` : "No data",
-      m.latestReviewDate || "None",
+      m.latestReviewDate || "No data",
       `"${m.goals.done} done, ${m.goals.onTrack} on track, ${m.goals.atRisk} at risk"`,
       `"${m.employmentCategory.replace("_", "-")}"`,
     ]);
@@ -325,7 +325,7 @@ export function KpiTeamOverview({
 
                       {/* Latest Review */}
                       <td className="p-3.5 text-text-secondary">
-                        {m.latestReviewDate || <span className="text-text-tertiary">None</span>}
+                        {m.latestReviewDate || <span className="text-text-tertiary">No data</span>}
                       </td>
 
                       {/* Goals Summary */}
@@ -348,9 +348,23 @@ export function KpiTeamOverview({
             </table>
           </div>
         </div>
-      ) : (
+      ) : team.length === 0 ? (
         <div className="p-12 text-center text-xs text-text-tertiary border border-dashed border-border-light rounded-2xl bg-card">
-          No team members match the active filters in this period.
+          No team members yet
+        </div>
+      ) : (
+        <div className="p-12 text-center space-y-3 border border-dashed border-border-light rounded-2xl bg-card">
+          <p className="text-xs text-text-tertiary">No team members match these filters</p>
+          <button
+            type="button"
+            onClick={() => {
+              setSearch("");
+              setNeedsAttentionOnly(false);
+            }}
+            className="px-3.5 py-1.5 rounded-lg bg-black text-white text-xs font-semibold hover:bg-neutral-800 transition-colors cursor-pointer"
+          >
+            Clear filters
+          </button>
         </div>
       )}
     </div>

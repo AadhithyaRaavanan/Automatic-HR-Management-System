@@ -91,16 +91,29 @@ function getInitialSession(propRole?: AppUserRole): AppSessionState {
       requireMfaForPrivileged: true,
     };
   }
-  const defaultRole: AppUserRole = isDemoModeEnabled() ? "admin" : "employee";
+  let cached: AppSessionState | null = null;
+  if (typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem("remotehr_cached_session");
+      if (raw) cached = JSON.parse(raw);
+    } catch {}
+  }
+  const cookieRole = getCookieRole();
+  const defaultRole: AppUserRole =
+    cached?.userRole ||
+    (typeof window !== "undefined" ? (localStorage.getItem("remotehr_cached_role") as AppUserRole) : null) ||
+    cookieRole ||
+    (isDemoModeEnabled() ? "admin" : "employee");
+
   return {
-    userId: null,
-    organizationId: null,
+    userId: cached?.userId || null,
+    organizationId: cached?.organizationId || null,
     userRole: defaultRole,
-    fullName: null,
-    timezone: "Asia/Kolkata",
-    isLoaded: isDemoModeEnabled(),
-    departmentName: null,
-    jobTitleName: null,
+    fullName: cached?.fullName || null,
+    timezone: cached?.timezone || "Asia/Kolkata",
+    isLoaded: Boolean(cached?.fullName),
+    departmentName: cached?.departmentName || null,
+    jobTitleName: cached?.jobTitleName || null,
     requireMfaForPrivileged: true,
   };
 }

@@ -8,6 +8,7 @@ import { getKpiCallerContext, verifyEmployeeAccess } from "@/lib/kpi/auth-helper
 import { computeKpi } from "@/lib/kpi/compute";
 import { sanitizeSpreadsheetCell } from "@/lib/utils";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getKolkataPresetDates } from "@/lib/kpi/date-helper";
 
 export const dynamic = "force-dynamic";
 
@@ -20,10 +21,11 @@ export async function GET(request: NextRequest) {
   if (errorResponse) return errorResponse;
   if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const defaultDates = getKolkataPresetDates("month");
   const { searchParams } = new URL(request.url);
   const targetEmployeeId = searchParams.get("employee_id") || caller.userId;
-  const from = searchParams.get("from") || new Date().toISOString().slice(0, 10);
-  const to = searchParams.get("to") || new Date().toISOString().slice(0, 10);
+  const from = searchParams.get("from") || defaultDates.from;
+  const to = searchParams.get("to") || defaultDates.to;
   const employeeType = searchParams.get("employee_type") || undefined;
 
   const isAllowed = await verifyEmployeeAccess(caller, targetEmployeeId);

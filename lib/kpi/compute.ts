@@ -4,6 +4,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { KPI_CONFIG, EmployeeTypeKpiTargets } from "@/lib/kpi/config";
+import { getKolkataToday } from "@/lib/kpi/date-helper";
 
 export interface KpiMetricItem {
   key: string;
@@ -150,49 +151,88 @@ export async function computeKpi(
   }
 
   // 2. Working days, holidays, and approved leave calculation
-  // Days worked vs expected counts only days that have ALREADY passed (up to current date)
-  const todayIso = new Date().toISOString().slice(0, 10);
+  // Days worked vs expected counts only days that have ALREADY passed (up to current local date)
+  const todayIso = getKolkataToday();
   const effectiveEnd = to > todayIso ? todayIso : to;
-  const totalCalendarWeekdays = effectiveEnd >= from ? getWeekdaysCount(from, effectiveEnd) : 0;
 
-  // Approved leave days in period that fall on weekdays
-  let approvedLeaveWeekdays = 0;
+  // Build exact set of holiday local dates
+  const holidaySet = new Set<string>();
+  for (const h of holidays) {
+    if (h.holiday_date) holidaySet.add(h.holiday_date);
+  }
+
+  // Build exact set of approved leave local dates
+  const leaveSet = new Set<string>();
   for (const leave of approvedLeaves) {
-    const lStart = leave.start_date < from ? from : leave.start_date;
-    const lEnd = leave.end_date > effectiveEnd ? effectiveEnd : leave.end_date;
-    if (lEnd >= lStart) {
-      approvedLeaveWeekdays += getWeekdaysCount(lStart, lEnd);
+    const curL = new Date(`${leave.start_date}T00:00:00Z`);
+    const endL = new Date(`${leave.end_date}T00:00:00Z`);
+    while (curL <= endL) {
+      leaveSet.add(curL.toISOString().slice(0, 10));
+      curL.setUTCDate(curL.getUTCDate() + 1);
     }
   }
 
-  // Holidays that fall on weekdays in elapsed period
+  // Compute expected working weekdays set in [from .. effectiveEnd]
+  const expectedDateSet = new Set<string>();
+  const curD = new Date(`${from}T00:00:00Z`);
+  const endD = new Date(`${effectiveEnd}T00:00:00Z`);
+  let totalCalendarWeekdays = 0;
   let holidayWeekdays = 0;
-  for (const h of holidays) {
-    if (h.holiday_date >= from && h.holiday_date <= effectiveEnd) {
-      const hDate = new Date(`${h.holiday_date}T00:00:00Z`);
-      const day = hDate.getUTCDay();
-      if (day !== 0 && day !== 6) {
+  let approvedLeaveWeekdays = 0;
+
+  while (curD <= endD) {
+    const dayOfWeek = curD.getUTCDay();
+    const dateStr = curD.toISOString().slice(0, 10);
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      totalCalendarWeekdays++;
+      if (holidaySet.has(dateStr)) {
         holidayWeekdays++;
+      } else if (leaveSet.has(dateStr)) {
+        approvedLeaveWeekdays++;
+      } else {
+        expectedDateSet.add(dateStr);
+      }
+    }
+    curD.setUTCDate(curD.getUTCDate() + 1);
+  }
+
+  const expectedWorkingDays = expectedDateSet.size;
+
+  // 3. Attendance Metrics
+  // Count DISTINCT local work dates, restricted to the same expected days used by Days worked
+  const attendedExpectedDaysMap = new Map<string, { is_late: boolean; total_minutes: number }>();
+  for (const d of attendanceDays) {
+    const wDate = d.work_date;
+    if (
+      expectedDateSet.has(wDate) &&
+      (d.status === "present" || d.status === "half_day" || (d.total_minutes || 0) > 0)
+    ) {
+      if (!attendedExpectedDaysMap.has(wDate)) {
+        attendedExpectedDaysMap.set(wDate, {
+          is_late: Boolean(d.is_late),
+          total_minutes: d.total_minutes || 0,
+        });
+      } else {
+        const item = attendedExpectedDaysMap.get(wDate)!;
+        if (d.is_late) item.is_late = true;
+        item.total_minutes += d.total_minutes || 0;
       }
     }
   }
 
-  const expectedWorkingDays = Math.max(
-    0,
-    totalCalendarWeekdays - holidayWeekdays - approvedLeaveWeekdays
-  );
+  const distinctAttendedDaysCount = attendedExpectedDaysMap.size;
+  let onTimeDaysCount = 0;
+  attendedExpectedDaysMap.forEach((val) => {
+    if (!val.is_late) onTimeDaysCount++;
+  });
 
-  // 3. Attendance Metrics
-  // On-time check-in rate
-  const totalAttendedDays = attendanceDays.length;
   let onTimeRate: number | null = null;
   let onTimeDisplay = "No data";
   let onTimeStatus: "on_track" | "at_risk" | "behind" | "no_data" = "no_data";
 
-  if (totalAttendedDays > 0) {
-    const onTimeDays = attendanceDays.filter((d: any) => !d.is_late).length;
-    onTimeRate = Math.round((onTimeDays / totalAttendedDays) * 100);
-    onTimeDisplay = `${onTimeRate}% (${onTimeDays}/${totalAttendedDays} attended days)`;
+  if (distinctAttendedDaysCount > 0) {
+    onTimeRate = Math.round((onTimeDaysCount / distinctAttendedDaysCount) * 100);
+    onTimeDisplay = `${onTimeRate}% (${onTimeDaysCount}/${distinctAttendedDaysCount} attended days)`;
     onTimeStatus =
       onTimeRate >= targetConfig.onTimeTargetRate
         ? "on_track"
@@ -201,11 +241,8 @@ export async function computeKpi(
         : "behind";
   }
 
-  // Days worked vs expected: shows "No data" if the person has no attendance in the period, instead of 0/12 Behind
-  const workedDaysCount = attendanceDays.filter(
-    (d: any) => d.status === "present" || d.status === "half_day" || (d.total_minutes || 0) > 0
-  ).length;
-
+  // Days worked vs expected:
+  const workedDaysCount = distinctAttendedDaysCount;
   const creditedDays = approvedLeaveWeekdays + holidayWeekdays;
   const daysWorkedBreakdown =
     creditedDays > 0
@@ -216,7 +253,7 @@ export async function computeKpi(
   let daysWorkedDisplay = "No data";
   let daysWorkedStatus: "on_track" | "at_risk" | "behind" | "no_data" = "no_data";
 
-  if (totalAttendedDays === 0) {
+  if (distinctAttendedDaysCount === 0) {
     daysWorkedRate = null;
     daysWorkedDisplay = "No data";
     daysWorkedStatus = "no_data";
@@ -241,7 +278,7 @@ export async function computeKpi(
   ).length;
 
   const earlyCheckOutStatus: "on_track" | "at_risk" | "behind" | "no_data" =
-    totalAttendedDays === 0
+    distinctAttendedDaysCount === 0
       ? "no_data"
       : earlyCheckOutCount === 0
       ? "on_track"
@@ -249,7 +286,7 @@ export async function computeKpi(
       ? "at_risk"
       : "behind";
   const earlyCheckOutDisplay =
-    totalAttendedDays === 0 ? "No data" : `${earlyCheckOutCount}`;
+    distinctAttendedDaysCount === 0 ? "No data" : `${earlyCheckOutCount}`;
 
   // Auto-closed / forgotten checkouts
   const autoClosedCount = attendanceSessions.filter(
@@ -257,7 +294,7 @@ export async function computeKpi(
   ).length;
 
   const autoClosedStatus: "on_track" | "at_risk" | "behind" | "no_data" =
-    totalAttendedDays === 0
+    distinctAttendedDaysCount === 0
       ? "no_data"
       : autoClosedCount === 0
       ? "on_track"
@@ -265,12 +302,12 @@ export async function computeKpi(
       ? "at_risk"
       : "behind";
   const autoClosedDisplay =
-    totalAttendedDays === 0 ? "No data" : `${autoClosedCount}`;
+    distinctAttendedDaysCount === 0 ? "No data" : `${autoClosedCount}`;
 
   // Regularization requests count
   const regularizationCount = regularizations.length;
   const regularizationStatus: "on_track" | "at_risk" | "behind" | "no_data" =
-    totalAttendedDays === 0 && regularizationCount === 0
+    distinctAttendedDaysCount === 0 && regularizationCount === 0
       ? "no_data"
       : regularizationCount <= 1
       ? "on_track"
@@ -278,7 +315,7 @@ export async function computeKpi(
       ? "at_risk"
       : "behind";
   const regularizationDisplay =
-    totalAttendedDays === 0 && regularizationCount === 0 ? "No data" : `${regularizationCount}`;
+    distinctAttendedDaysCount === 0 && regularizationCount === 0 ? "No data" : `${regularizationCount}`;
 
   // 4. Hours Metrics
   // Worked hours vs target (approved leave and holidays count as met)
@@ -406,8 +443,8 @@ export async function computeKpi(
       unit: "%",
       status: onTimeStatus,
       displayValue: onTimeDisplay,
-      breakdown: totalAttendedDays > 0 ? `${attendanceDays.filter((d: any) => !d.is_late).length} on-time / ${totalAttendedDays} attended days` : undefined,
-      details: "Percentage of shift check-ins on or before scheduled start time across all attended days in period.",
+      breakdown: distinctAttendedDaysCount > 0 ? `${onTimeDaysCount} on-time / ${distinctAttendedDaysCount} attended days` : undefined,
+      details: "Percentage of shift check-ins on or before scheduled start time across expected attended days.",
     }),
     days_worked_vs_expected: applyAdj("days_worked_vs_expected", {
       key: "days_worked_vs_expected",
@@ -425,7 +462,7 @@ export async function computeKpi(
       key: "early_check_outs",
       label: "Early Check-Outs",
       category: "attendance",
-      value: totalAttendedDays === 0 ? null : earlyCheckOutCount,
+      value: distinctAttendedDaysCount === 0 ? null : earlyCheckOutCount,
       target: 0,
       unit: "count",
       status: earlyCheckOutStatus,
@@ -435,7 +472,7 @@ export async function computeKpi(
       key: "auto_closed_check_outs",
       label: "Auto-Closed / Forgotten Check-Outs",
       category: "attendance",
-      value: totalAttendedDays === 0 ? null : autoClosedCount,
+      value: distinctAttendedDaysCount === 0 ? null : autoClosedCount,
       target: 0,
       unit: "count",
       status: autoClosedStatus,
@@ -445,7 +482,7 @@ export async function computeKpi(
       key: "regularization_requests",
       label: "Regularization Requests",
       category: "attendance",
-      value: totalAttendedDays === 0 && regularizationCount === 0 ? null : regularizationCount,
+      value: distinctAttendedDaysCount === 0 && regularizationCount === 0 ? null : regularizationCount,
       target: 0,
       unit: "count",
       status: regularizationStatus,
@@ -526,7 +563,7 @@ export async function computeKpi(
 
   // If fewer than 2 core metrics have data or zero activity in period, return null overall score (never forced 0%)
   const overallScore =
-    (totalAttendedDays > 0 || tasks.length > 0) &&
+    (distinctAttendedDaysCount > 0 || tasks.length > 0) &&
     dataPointsCount >= 2 &&
     totalWeight > 0
       ? Math.round(weightedSum / totalWeight)

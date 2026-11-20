@@ -53,9 +53,13 @@ export function TopNavBar({
         {/* Left: Greeting only on /dashboard, clean spacer on all other pages so page title leads */}
         {isDashboard ? (
           <div className="flex-1 flex flex-col min-w-0">
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-black truncate">
-              Hello, {displayName}!
-            </h1>
+            {session.isLoaded && session.fullName ? (
+              <h1 className="text-xl md:text-2xl font-bold tracking-tight text-black truncate">
+                Hello, {session.fullName.split(" ")[0]}!
+              </h1>
+            ) : (
+              <div className="h-7 w-44 bg-[#E6E6E6] rounded animate-pulse my-0.5" />
+            )}
             <p className="text-xs text-[#808080] font-normal truncate mt-0.5">
               Here's your workplace overview.
             </p>
@@ -101,19 +105,31 @@ export function TopNavBar({
             </button>
           )}
 
-          {/* User Profile Chip */}
+          {/* User Profile Chip: Uses session, neutral skeleton placeholder when loading */}
           <div className="flex items-center gap-2 pl-2 ml-1 border-l border-[#E6E6E6]">
-            <div className="w-8 h-8 rounded-full bg-black text-[#B7FF00] flex items-center justify-center font-bold text-xs select-none">
-              {session.fullName ? session.fullName.charAt(0).toUpperCase() : "U"}
-            </div>
-            <div className="hidden lg:flex flex-col text-left">
-              <span className="text-xs font-semibold text-black leading-tight truncate max-w-[140px]">
-                {session.fullName || "User"}
-              </span>
-              <span className="text-[10px] text-[#808080] leading-tight truncate max-w-[140px] capitalize">
-                {session.jobTitleName || session.userRole || ""}
-              </span>
-            </div>
+            {session.isLoaded && session.fullName ? (
+              <>
+                <div className="w-8 h-8 rounded-full bg-black text-[#B7FF00] flex items-center justify-center font-bold text-xs select-none">
+                  {session.fullName.charAt(0).toUpperCase()}
+                </div>
+                <div className="hidden lg:flex flex-col text-left">
+                  <span className="text-xs font-semibold text-black leading-tight truncate max-w-[140px]">
+                    {session.fullName}
+                  </span>
+                  <span className="text-[10px] text-[#808080] leading-tight truncate max-w-[140px] capitalize">
+                    {session.jobTitleName || session.userRole}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="w-8 h-8 rounded-full bg-[#E6E6E6] animate-pulse" />
+                <div className="hidden lg:flex flex-col gap-1">
+                  <div className="h-3 w-20 bg-[#E6E6E6] rounded animate-pulse" />
+                  <div className="h-2 w-12 bg-[#E6E6E6] rounded animate-pulse" />
+                </div>
+              </>
+            )}
           </div>
         </div>
       </header>

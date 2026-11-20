@@ -7,6 +7,7 @@ import { FEATURES } from "@/lib/features";
 import { getKpiCallerContext, verifyEmployeeAccess } from "@/lib/kpi/auth-helper";
 import { computeKpi, KpiComputeResult } from "@/lib/kpi/compute";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getKolkataPresetDates, pad2 } from "@/lib/kpi/date-helper";
 
 export const dynamic = "force-dynamic";
 
@@ -30,24 +31,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden: Access denied to target employee KPI" }, { status: 403 });
   }
 
-  // Date range parsing (default: start of month to today)
-  const today = new Date().toISOString().slice(0, 10);
-  const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-    .toISOString()
-    .slice(0, 10);
-
-  const from = searchParams.get("from") || startOfMonth;
-  const to = searchParams.get("to") || today;
+  // Date range parsing (default: Asia/Kolkata current month to date)
+  const defaultDates = getKolkataPresetDates("month");
+  const from = searchParams.get("from") || defaultDates.from;
+  const to = searchParams.get("to") || defaultDates.to;
 
   // Previous period calculation (same number of days immediately preceding `from`)
-  const fromDate = new Date(`${from}T00:00:00Z`);
-  const toDate = new Date(`${to}T00:00:00Z`);
-  const diffTime = Math.max(1, toDate.getTime() - fromDate.getTime());
-  const prevToDate = new Date(fromDate.getTime() - 24 * 60 * 60 * 1000);
+  const [fYear, fMonth, fDay] = from.split("-").map(Number);
+  const [tYear, tMonth, tDay] = to.split("-").map(Number);
+  const fromTime = Date.UTC(fYear, fMonth - 1, fDay);
+  const toTime = Date.UTC(tYear, tMonth - 1, tDay);
+  const diffTime = Math.max(1, toTime - fromTime);
+  const prevToDate = new Date(fromTime - 24 * 60 * 60 * 1000);
   const prevFromDate = new Date(prevToDate.getTime() - diffTime);
 
-  const prevTo = prevToDate.toISOString().slice(0, 10);
-  const prevFrom = prevFromDate.toISOString().slice(0, 10);
+  const prevTo = `${prevToDate.getUTCFullYear()}-${pad2(prevToDate.getUTCMonth() + 1)}-${pad2(prevToDate.getUTCDate())}`;
+  const prevFrom = `${prevFromDate.getUTCFullYear()}-${pad2(prevFromDate.getUTCMonth() + 1)}-${pad2(prevFromDate.getUTCDate())}`;
 
   // Target employee info
   const { data: targetEmp } = await (supabaseAdmin.from("employees") as any)

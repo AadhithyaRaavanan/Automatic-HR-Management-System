@@ -133,16 +133,18 @@ export function KpiToolbar({
           >
             <MessageSquare className="w-3.5 h-3.5" />
             <span>Reviews</span>
-            <span
-              className={cn(
-                "px-1.5 py-0.2 rounded-full text-[10px] font-bold tabular-nums",
-                activeTab === "reviews"
-                  ? "bg-white/20 text-white"
-                  : "bg-card border border-border-light text-text-tertiary"
-              )}
-            >
-              {reviewCount}
-            </span>
+            {reviewCount > 0 && (
+              <span
+                className={cn(
+                  "px-1.5 py-0.2 rounded-full text-[10px] font-bold tabular-nums",
+                  activeTab === "reviews"
+                    ? "bg-white/20 text-white"
+                    : "bg-card border border-border-light text-text-tertiary"
+                )}
+              >
+                {reviewCount}
+              </span>
+            )}
           </button>
 
           {/* Tab 4: Goals */}
@@ -159,16 +161,18 @@ export function KpiToolbar({
           >
             <Target className="w-3.5 h-3.5" />
             <span>Goals</span>
-            <span
-              className={cn(
-                "px-1.5 py-0.2 rounded-full text-[10px] font-bold tabular-nums",
-                activeTab === "goals"
-                  ? "bg-white/20 text-white"
-                  : "bg-card border border-border-light text-text-tertiary"
-              )}
-            >
-              {goalCount}
-            </span>
+            {goalCount > 0 && (
+              <span
+                className={cn(
+                  "px-1.5 py-0.2 rounded-full text-[10px] font-bold tabular-nums",
+                  activeTab === "goals"
+                    ? "bg-white/20 text-white"
+                    : "bg-card border border-border-light text-text-tertiary"
+                )}
+              >
+                {goalCount}
+              </span>
+            )}
           </button>
         </div>
 

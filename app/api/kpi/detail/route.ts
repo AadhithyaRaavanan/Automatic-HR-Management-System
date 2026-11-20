@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { FEATURES } from "@/lib/features";
 import { getKpiCallerContext, verifyEmployeeAccess } from "@/lib/kpi/auth-helper";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getKolkataToday } from "@/lib/kpi/date-helper";
 
 export const dynamic = "force-dynamic";
 
@@ -81,21 +82,60 @@ export async function GET(request: NextRequest) {
     let explanation = "";
 
     if (metric === "on_time_check_in_rate") {
-      const [daysRes, sessRes] = await Promise.all([
+      const todayIso = getKolkataToday();
+      const effectiveEnd = to > todayIso ? todayIso : to;
+
+      const [daysRes, sessRes, leavesRes, holidaysRes] = await Promise.all([
         (supabaseAdmin as any)
           .from("attendance_days")
           .select("work_date, status, is_late, total_minutes")
           .eq("employee_id", employeeId)
           .gte("work_date", from)
-          .lte("work_date", to)
+          .lte("work_date", effectiveEnd)
           .order("work_date", { ascending: true }),
         (supabaseAdmin as any)
           .from("attendance_sessions")
           .select("work_date, check_in_at, check_out_at")
           .eq("employee_id", employeeId)
           .gte("work_date", from)
-          .lte("work_date", to),
+          .lte("work_date", effectiveEnd),
+        (supabaseAdmin as any)
+          .from("leave_applications")
+          .select("start_date, end_date, status")
+          .eq("employee_id", employeeId)
+          .eq("status", "approved")
+          .or(`start_date.lte.${effectiveEnd},end_date.gte.${from}`),
+        (supabaseAdmin as any)
+          .from("holidays")
+          .select("holiday_date, name")
+          .gte("holiday_date", from)
+          .lte("holiday_date", effectiveEnd),
       ]);
+
+      const holidays = holidaysRes?.data || [];
+      const leaves = leavesRes?.data || [];
+      const holidaySet = new Set(holidays.map((h: any) => h.holiday_date));
+      const leaveSet = new Set<string>();
+      for (const l of leaves) {
+        const cur = new Date(`${l.start_date}T00:00:00Z`);
+        const end = new Date(`${l.end_date}T00:00:00Z`);
+        while (cur <= end) {
+          leaveSet.add(cur.toISOString().slice(0, 10));
+          cur.setUTCDate(cur.getUTCDate() + 1);
+        }
+      }
+
+      const expectedDateSet = new Set<string>();
+      const curD = new Date(`${from}T00:00:00Z`);
+      const endD = new Date(`${effectiveEnd}T00:00:00Z`);
+      while (curD <= endD) {
+        const dayOfWeek = curD.getUTCDay();
+        const dateStr = curD.toISOString().slice(0, 10);
+        if (dayOfWeek !== 0 && dayOfWeek !== 6 && !holidaySet.has(dateStr) && !leaveSet.has(dateStr)) {
+          expectedDateSet.add(dateStr);
+        }
+        curD.setUTCDate(curD.getUTCDate() + 1);
+      }
 
       const days = daysRes?.data || [];
       const sess = sessRes?.data || [];
@@ -104,19 +144,38 @@ export async function GET(request: NextRequest) {
         if (!sessMap.has(s.work_date)) sessMap.set(s.work_date, s);
       }
 
-      const total = days.length;
-      const onTime = days.filter((d: any) => !d.is_late).length;
-      formula = total > 0 ? `(${onTime} punctual / ${total} attended) × 100 = ${Math.round((onTime / total) * 100)}%` : "0 attended days";
-      explanation = "Evaluates each day with an attendance punch against the scheduled shift start time. Shift grace windows are counted as on-time.";
+      // Filter to distinct expected working days attended
+      const attendedMap = new Map<string, { is_late: boolean; total_minutes: number }>();
+      for (const d of days) {
+        if (expectedDateSet.has(d.work_date) && (d.status === "present" || d.status === "half_day" || (d.total_minutes || 0) > 0)) {
+          if (!attendedMap.has(d.work_date)) {
+            attendedMap.set(d.work_date, { is_late: Boolean(d.is_late), total_minutes: d.total_minutes || 0 });
+          } else {
+            const item = attendedMap.get(d.work_date)!;
+            if (d.is_late) item.is_late = true;
+          }
+        }
+      }
 
-      rows = days.map((d: any) => {
-        const s = sessMap.get(d.work_date);
+      const distinctDays = Array.from(attendedMap.keys()).sort();
+      const total = distinctDays.length;
+      let onTime = 0;
+      distinctDays.forEach((dt) => {
+        if (!attendedMap.get(dt)!.is_late) onTime++;
+      });
+
+      formula = total > 0 ? `(${onTime} punctual / ${total} attended) × 100 = ${Math.round((onTime / total) * 100)}%` : "0 attended days";
+      explanation = "Evaluates each distinct scheduled day with an attendance punch against the scheduled shift start time. Shift grace windows are counted as on-time.";
+
+      rows = distinctDays.map((wDate) => {
+        const d = attendedMap.get(wDate)!;
+        const s = sessMap.get(wDate);
         const checkInTime = s?.check_in_at
           ? new Date(s.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
           : "—";
         return {
-          id: d.work_date,
-          date: d.work_date,
+          id: wDate,
+          date: wDate,
           checkIn: checkInTime,
           statusText: d.is_late ? "Late" : "On Time",
           statusType: d.is_late ? "late" : "on_time",
@@ -124,7 +183,7 @@ export async function GET(request: NextRequest) {
         };
       });
     } else if (metric === "days_worked_vs_expected") {
-      const todayIso = new Date().toISOString().slice(0, 10);
+      const todayIso = getKolkataToday();
       const effectiveEnd = to > todayIso ? todayIso : to;
       const weekdays = effectiveEnd >= from ? getWeekdays(from, effectiveEnd) : [];
 

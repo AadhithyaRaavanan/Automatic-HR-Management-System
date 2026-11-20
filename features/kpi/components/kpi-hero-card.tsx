@@ -12,7 +12,15 @@ import {
   Clock,
   Calendar,
   CheckSquare,
+  Info,
 } from "lucide-react";
+
+export interface CategoryHistorySlice {
+  label: string;
+  attendanceScore: number | null;
+  hoursScore: number | null;
+  tasksScore: number | null;
+}
 
 interface KpiHeroCardProps {
   overallScore: number | null;
@@ -20,11 +28,38 @@ interface KpiHeroCardProps {
   target?: number;
   currentMetrics?: any;
   previousMetrics?: any;
+  categoryHistory?: CategoryHistorySlice[];
   onOpenBreakdown?: () => void;
   isSelfView?: boolean;
   userRole?: string;
   previousPeriodLabel?: string;
   className?: string;
+}
+
+function CategorySparkline({ data }: { data: (number | null)[] }) {
+  const valid = data.filter((v): v is number => typeof v === "number");
+  if (valid.length < 2) return null;
+
+  const w = 48;
+  const h = 14;
+  const pts = data.map((val, idx) => {
+    const x = (idx / (data.length - 1)) * w;
+    const y = val != null ? h - (Math.min(100, Math.max(0, val)) / 100) * (h - 2) - 1 : h / 2;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+
+  return (
+    <svg width={w} height={h} className="shrink-0 overflow-visible mt-1" aria-hidden="true">
+      <polyline
+        fill="none"
+        stroke="#808080"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={pts.join(" ")}
+      />
+    </svg>
+  );
 }
 
 export function KpiHeroCard({
@@ -33,6 +68,7 @@ export function KpiHeroCard({
   target = 90,
   currentMetrics,
   previousMetrics,
+  categoryHistory = [],
   onOpenBreakdown,
   isSelfView = true,
   userRole = "employee",
@@ -156,11 +192,12 @@ export function KpiHeroCard({
                 )}
               </div>
 
-              {/* Notice when category has no data */}
+              {/* Notice when category has no data: plain grey note matching page */}
               {weightNotice.notice ? (
-                <p className="text-xs text-amber-700 font-semibold bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 w-fit">
-                  {weightNotice.notice}
-                </p>
+                <div className="flex items-center gap-1.5 text-xs text-[#808080] font-normal">
+                  <Info className="w-3.5 h-3.5 shrink-0" />
+                  <span>{weightNotice.notice}</span>
+                </div>
               ) : (
                 <p className="text-xs text-text-secondary font-medium">
                   Goal: <span className="font-bold text-text-primary tabular-nums">{target}%</span> across Attendance, Hours, and Task execution.
@@ -194,6 +231,7 @@ export function KpiHeroCard({
                   </span>
                 )}
               </div>
+              <CategorySparkline data={categoryHistory.map((h) => h.attendanceScore)} />
             </div>
 
             {/* 2. Hours */}
@@ -219,6 +257,7 @@ export function KpiHeroCard({
                   </span>
                 )}
               </div>
+              <CategorySparkline data={categoryHistory.map((h) => h.hoursScore)} />
             </div>
 
             {/* 3. Tasks */}
@@ -244,10 +283,11 @@ export function KpiHeroCard({
                   </span>
                 )}
               </div>
+              <CategorySparkline data={categoryHistory.map((h) => h.tasksScore)} />
             </div>
           </div>
 
-          {/* Stacked Weight Bar (Retained without monospace) */}
+          {/* Stacked Weight Bar with legend underneath */}
           <div className="pt-2 border-t border-border-light/60 space-y-1.5">
             <div className="flex items-center justify-between text-[11px] font-semibold text-text-tertiary">
               <span>Category Weighting</span>
@@ -256,21 +296,25 @@ export function KpiHeroCard({
 
             <div className="h-2 w-full rounded-full overflow-hidden flex bg-[#E6E6E6]">
               <div
-                style={{ width: "40%" }}
+                style={{ width: `${Math.round(KPI_CONFIG.weights.attendance * 100)}%` }}
                 className="bg-[#B7FF00] h-full transition-all"
-                title="Attendance & Reliability (40%)"
+                title={`Attendance & Reliability (${Math.round(KPI_CONFIG.weights.attendance * 100)}%)`}
               />
               <div
-                style={{ width: "25%" }}
+                style={{ width: `${Math.round(KPI_CONFIG.weights.hours * 100)}%` }}
                 className="bg-[#4D4D4D] h-full transition-all"
-                title="Shift Hours Target (25%)"
+                title={`Shift Hours Target (${Math.round(KPI_CONFIG.weights.hours * 100)}%)`}
               />
               <div
-                style={{ width: "35%" }}
+                style={{ width: `${Math.round(KPI_CONFIG.weights.tasks * 100)}%` }}
                 className="bg-[#808080] h-full transition-all"
-                title="Task Delivery & Execution (35%)"
+                title={`Task Delivery & Execution (${Math.round(KPI_CONFIG.weights.tasks * 100)}%)`}
               />
             </div>
+
+            <p className="text-[10px] text-text-tertiary font-medium">
+              Attendance {Math.round(KPI_CONFIG.weights.attendance * 100)}% · Hours {Math.round(KPI_CONFIG.weights.hours * 100)}% · Tasks {Math.round(KPI_CONFIG.weights.tasks * 100)}%
+            </p>
           </div>
         </div>
       ) : (
@@ -334,7 +378,7 @@ export function KpiHeroCard({
                     <CheckSquare className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
                   )}
                   <span className={cn(hasTasks ? "font-semibold text-text-primary" : "text-text-tertiary")}>
-                    Sprint tasks assigned
+                    Tasks assigned
                   </span>
                 </div>
                 <span className="text-[11px] font-medium text-text-tertiary">

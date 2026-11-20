@@ -36,64 +36,17 @@ import {
   MetricItemData,
 } from "@/features/kpi/components/kpi-category-section";
 import { KpiCalculationFooter } from "@/features/kpi/components/kpi-calculation-footer";
-
-// Helper: Compute initial date range for presets
-function getPresetDates(preset: PeriodPreset, baseDate = new Date()): { from: string; to: string } {
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const year = baseDate.getFullYear();
-  const month = baseDate.getMonth();
-
-  if (preset === "week") {
-    const end = new Date(baseDate.getTime());
-    const start = new Date(baseDate.getTime() - 6 * 24 * 60 * 60 * 1000);
-    return {
-      from: start.toISOString().slice(0, 10),
-      to: end.toISOString().slice(0, 10),
-    };
-  }
-
-  if (preset === "quarter") {
-    const qIndex = Math.floor(month / 3);
-    const qStart = new Date(year, qIndex * 3, 1).toISOString().slice(0, 10);
-    const qEnd = new Date(year, (qIndex + 1) * 3, 0).toISOString().slice(0, 10);
-    return { from: qStart, to: qEnd > todayIso ? todayIso : qEnd };
-  }
-
-  // month (default)
-  const startOfMonth = new Date(year, month, 1).toISOString().slice(0, 10);
-  const endOfMonth = new Date(year, month + 1, 0).toISOString().slice(0, 10);
-  return { from: startOfMonth, to: endOfMonth > todayIso ? todayIso : endOfMonth };
-}
-
-// Helper: Format period label
-function formatPeriodLabel(preset: PeriodPreset, from: string, to: string): string {
-  if (preset === "month") {
-    const d = new Date(`${from}T00:00:00Z`);
-    return d.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
-  }
-
-  if (preset === "week") {
-    const d1 = new Date(`${from}T00:00:00Z`);
-    const d2 = new Date(`${to}T00:00:00Z`);
-    const d1Str = d1.toLocaleDateString("en-US", { day: "numeric", month: "short", timeZone: "UTC" });
-    const d2Str = d2.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
-    return `${d1Str} – ${d2Str}`;
-  }
-
-  if (preset === "quarter") {
-    const d = new Date(`${from}T00:00:00Z`);
-    const q = Math.floor(d.getUTCMonth() / 3) + 1;
-    return `Q${q} ${d.getUTCFullYear()}`;
-  }
-
-  // Custom
-  return `${from} to ${to}`;
-}
+import {
+  getKolkataPresetDates,
+  formatKpiPeriodLabel,
+  getKolkataToday,
+  pad2,
+} from "@/lib/kpi/date-helper";
 
 function KpiContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { userId, userRole } = useAppSession();
+  const { userId, userRole, isLoaded: sessionLoaded } = useAppSession();
 
   // Redirect if feature flag is off
   React.useEffect(() => {
@@ -105,7 +58,7 @@ function KpiContent() {
   const targetFromParam = searchParams.get("employee_id");
   const [activeTab, setActiveTab] = React.useState<KpiTab>("metrics");
   const [preset, setPreset] = React.useState<PeriodPreset>("month");
-  const [dateRange, setDateRange] = React.useState(() => getPresetDates("month"));
+  const [dateRange, setDateRange] = React.useState(() => getKolkataPresetDates("month"));
   const [selectedEmpId, setSelectedEmpId] = React.useState<string>("");
   const [empType, setEmpType] = React.useState<string>("full_time");
   const [deptFilter, setDeptFilter] = React.useState<string>("");
@@ -187,17 +140,32 @@ function KpiContent() {
     enabled: Boolean(effectiveEmpId && FEATURES.KPI),
   });
 
-  // Delayed skeleton loading flag (>300ms)
+  // 1b. Fetch Historical Trend Data (for 6-period category sparklines)
+  const { data: historyData } = useQuery({
+    queryKey: ["kpi-history", effectiveEmpId, preset],
+    queryFn: async () => {
+      if (!effectiveEmpId) return null;
+      const res = await fetch(
+        `/api/kpi/history?employee_id=${encodeURIComponent(effectiveEmpId)}&period_type=${preset}&periods=6`
+      );
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: Boolean(effectiveEmpId && FEATURES.KPI),
+  });
+
+  // Delayed skeleton loading flag (>300ms) until profile, role, and first data response arrive
+  const isInitialLoading = !sessionLoaded || kpiLoading || !kpiData;
   const [showSkeleton, setShowSkeleton] = React.useState(false);
   React.useEffect(() => {
     let timer: NodeJS.Timeout;
-    if (kpiLoading) {
+    if (isInitialLoading) {
       timer = setTimeout(() => setShowSkeleton(true), 300);
     } else {
       setShowSkeleton(false);
     }
     return () => clearTimeout(timer);
-  }, [kpiLoading]);
+  }, [isInitialLoading]);
 
   // Sync employment category from data
   React.useEffect(() => {
@@ -263,60 +231,62 @@ function KpiContent() {
     enabled: Boolean(effectiveEmpId && activeTab === "reviews" && FEATURES.KPI),
   });
 
-  // Period shifting handlers
+  // Period shifting handlers using exact Asia/Kolkata dates
   const handlePrevPeriod = () => {
-    const curFrom = new Date(`${dateRange.from}T00:00:00Z`);
-
+    const [y, m, d] = dateRange.from.split("-").map(Number);
     if (preset === "month") {
-      curFrom.setUTCMonth(curFrom.getUTCMonth() - 1);
-      const y = curFrom.getUTCFullYear();
-      const m = curFrom.getUTCMonth();
-      const start = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
-      const end = new Date(Date.UTC(y, m + 1, 0)).toISOString().slice(0, 10);
-      setDateRange({ from: start, to: end });
+      let prevM = m - 1;
+      let prevY = y;
+      if (prevM < 1) {
+        prevM = 12;
+        prevY -= 1;
+      }
+      setDateRange(getKolkataPresetDates("month", prevY, prevM));
     } else if (preset === "week") {
-      const start = new Date(curFrom.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const end = new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000);
-      setDateRange({
-        from: start.toISOString().slice(0, 10),
-        to: end.toISOString().slice(0, 10),
-      });
+      const anchor = new Date(Date.UTC(y, m - 1, d) - 7 * 24 * 60 * 60 * 1000);
+      const start = new Date(anchor.getTime() - 6 * 24 * 60 * 60 * 1000);
+      const from = `${start.getUTCFullYear()}-${pad2(start.getUTCMonth() + 1)}-${pad2(start.getUTCDate())}`;
+      const to = `${anchor.getUTCFullYear()}-${pad2(anchor.getUTCMonth() + 1)}-${pad2(anchor.getUTCDate())}`;
+      setDateRange({ from, to });
     } else if (preset === "quarter") {
-      curFrom.setUTCMonth(curFrom.getUTCMonth() - 3);
-      const y = curFrom.getUTCFullYear();
-      const q = Math.floor(curFrom.getUTCMonth() / 3);
-      const start = new Date(Date.UTC(y, q * 3, 1)).toISOString().slice(0, 10);
-      const end = new Date(Date.UTC(y, (q + 1) * 3, 0)).toISOString().slice(0, 10);
-      setDateRange({ from: start, to: end });
+      const q = Math.floor((m - 1) / 3);
+      let prevQ = q - 1;
+      let prevY = y;
+      if (prevQ < 0) {
+        prevQ = 3;
+        prevY -= 1;
+      }
+      const prevM = prevQ * 3 + 1;
+      setDateRange(getKolkataPresetDates("quarter", prevY, prevM));
     }
   };
 
   const handleNextPeriod = () => {
-    const curFrom = new Date(`${dateRange.from}T00:00:00Z`);
-    const todayIso = new Date().toISOString().slice(0, 10);
-
+    const [y, m, d] = dateRange.from.split("-").map(Number);
     if (preset === "month") {
-      curFrom.setUTCMonth(curFrom.getUTCMonth() + 1);
-      const y = curFrom.getUTCFullYear();
-      const m = curFrom.getUTCMonth();
-      const start = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
-      const end = new Date(Date.UTC(y, m + 1, 0)).toISOString().slice(0, 10);
-      setDateRange({ from: start, to: end > todayIso ? todayIso : end });
+      let nextM = m + 1;
+      let nextY = y;
+      if (nextM > 12) {
+        nextM = 1;
+        nextY += 1;
+      }
+      setDateRange(getKolkataPresetDates("month", nextY, nextM));
     } else if (preset === "week") {
-      const start = new Date(curFrom.getTime() + 7 * 24 * 60 * 60 * 1000);
-      const end = new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000);
-      const endIso = end.toISOString().slice(0, 10);
-      setDateRange({
-        from: start.toISOString().slice(0, 10),
-        to: endIso > todayIso ? todayIso : endIso,
-      });
+      const anchor = new Date(Date.UTC(y, m - 1, d) + 7 * 24 * 60 * 60 * 1000);
+      const start = new Date(anchor.getTime() - 6 * 24 * 60 * 60 * 1000);
+      const from = `${start.getUTCFullYear()}-${pad2(start.getUTCMonth() + 1)}-${pad2(start.getUTCDate())}`;
+      const to = `${anchor.getUTCFullYear()}-${pad2(anchor.getUTCMonth() + 1)}-${pad2(anchor.getUTCDate())}`;
+      setDateRange({ from, to });
     } else if (preset === "quarter") {
-      curFrom.setUTCMonth(curFrom.getUTCMonth() + 3);
-      const y = curFrom.getUTCFullYear();
-      const q = Math.floor(curFrom.getUTCMonth() / 3);
-      const start = new Date(Date.UTC(y, q * 3, 1)).toISOString().slice(0, 10);
-      const end = new Date(Date.UTC(y, (q + 1) * 3, 0)).toISOString().slice(0, 10);
-      setDateRange({ from: start, to: end > todayIso ? todayIso : end });
+      const q = Math.floor((m - 1) / 3);
+      let nextQ = q + 1;
+      let nextY = y;
+      if (nextQ > 3) {
+        nextQ = 0;
+        nextY += 1;
+      }
+      const nextM = nextQ * 3 + 1;
+      setDateRange(getKolkataPresetDates("quarter", nextY, nextM));
     }
   };
 
@@ -324,7 +294,7 @@ function KpiContent() {
   const handlePresetChange = (newPreset: PeriodPreset) => {
     setPreset(newPreset);
     if (newPreset !== "custom") {
-      setDateRange(getPresetDates(newPreset));
+      setDateRange(getKolkataPresetDates(newPreset));
     }
   };
 
@@ -495,7 +465,7 @@ function KpiContent() {
   const trend = kpiData?.trend?.overallScore;
   const scopedEmployees = kpiData?.scopedEmployees || [];
 
-  const periodLabel = formatPeriodLabel(preset, dateRange.from, dateRange.to);
+  const periodLabel = formatKpiPeriodLabel(preset, dateRange.from, dateRange.to);
 
   if (!FEATURES.KPI) {
     return null;
@@ -508,17 +478,43 @@ function KpiContent() {
   const atRiskGoals = goalsList.filter((g: any) => g.status === "at_risk").length;
   const doneGoals = goalsList.filter((g: any) => g.status === "done").length;
 
+  // Delayed skeleton (after 300ms) for the whole /kpi page until profile, role and first data response arrive
+  if (isInitialLoading) {
+    if (!showSkeleton) {
+      return <div className="w-full min-h-[400px]" />;
+    }
+    return (
+      <div className="w-full space-y-6 pb-24">
+        <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1">
+          <div className="space-y-2">
+            <div className="h-8 w-44 bg-card border border-border-light rounded-xl animate-pulse" />
+            <div className="h-4 w-72 bg-card border border-border-light rounded-lg animate-pulse" />
+          </div>
+          <div className="h-9 w-28 bg-card border border-border-light rounded-full animate-pulse" />
+        </section>
+        <div className="h-14 w-full bg-card border border-border-light rounded-2xl animate-pulse" />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+          <div className="lg:col-span-5 h-64 bg-card border border-border-light rounded-[20px] animate-pulse" />
+          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="h-64 bg-card border border-border-light rounded-[18px] animate-pulse" />
+            <div className="h-64 bg-card border border-border-light rounded-[18px] animate-pulse" />
+          </div>
+        </div>
+        <div className="h-56 w-full bg-card border border-border-light rounded-2xl animate-pulse" />
+      </div>
+    );
+  }
+
   return (
     <div className="w-full space-y-6 pb-24">
-      {/* 1. Page Header matching Tasks and Attendance */}
+      {/* 1. Page Header: Plain Performance title and factual subtitle */}
       <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1">
         <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight flex items-center gap-2.5">
-            <BarChart3 className="w-7 h-7 text-black" />
-            <span>Performance</span>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight">
+            Performance
           </h1>
           <p className="text-xs sm:text-sm text-text-secondary mt-1">
-            Data-grounded performance indicators, reviews, and goal milestones.
+            Attendance, hours and task results for the selected period.
           </p>
         </div>
 
@@ -594,6 +590,7 @@ function KpiContent() {
                 target={90}
                 currentMetrics={currentMetrics}
                 previousMetrics={previousMetrics}
+                categoryHistory={historyData?.history || []}
                 onOpenBreakdown={() => setBreakdownOpen(true)}
                 isSelfView={effectiveEmpId === userId}
                 userRole={userRole}
@@ -603,14 +600,12 @@ function KpiContent() {
             </div>
 
             {/* Right: Latest Review & Goals Summary Cards (~60%) */}
-            <div className="lg:col-span-7 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="lg:col-span-7 grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
               <KpiLatestReviewCard
                 latestReview={reviewsData?.reviews?.[0] || null}
-                className="h-full"
               />
               <KpiGoalsSummaryCard
                 goals={goalsList}
-                className="h-full"
               />
             </div>
           </div>
@@ -909,7 +904,7 @@ function KpiContent() {
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                <span>Add Goal</span>
+                <span>Add goal</span>
               </button>
             )}
           </div>
@@ -1021,19 +1016,9 @@ function KpiContent() {
               <EmptyState
                 className="py-12 border-dashed shadow-none"
                 icon={<Target className="w-6 h-6" />}
-                title="No goals assigned yet"
-                description="Define key milestones, strategic deliverables, or personal targets for this evaluation period."
-                action={
-                  isManagerOrAdmin ? (
-                    <button
-                      type="button"
-                      onClick={() => setCreateGoalOpen(true)}
-                      className="px-4 py-2 rounded-xl bg-brand-purple text-white text-xs font-bold cursor-pointer"
-                    >
-                      Set a Goal
-                    </button>
-                  ) : null
-                }
+                title="No goals for this period."
+                description="Key milestones, strategic deliverables, or personal targets for this evaluation period will appear here."
+                action={null}
               />
             )}
           </div>

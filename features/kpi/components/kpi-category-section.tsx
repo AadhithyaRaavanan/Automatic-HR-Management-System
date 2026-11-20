@@ -41,7 +41,7 @@ const METRIC_CALC_TOOLTIPS: Record<string, string> = {
   worked_hours_vs_target:
     "Productive shift hours logged vs scheduled expectations. Approved leave and public holidays credit standard 8h shift hours toward your target.",
   tasks_completed_vs_assigned:
-    "Ratio of sprint tasks completed vs total assigned. Self-assigned tasks placed in progress count toward execution.",
+    "Ratio of tasks completed vs total assigned. Self-assigned tasks placed in progress count toward execution.",
   task_on_time_rate:
     "Percentage of completed tasks delivered on or before their specified due date.",
   task_average_cycle_time:
@@ -155,7 +155,7 @@ export function KpiCategorySection({
         /* Case 2: Scored Metrics in Clean Grid (No orphan rows) */
         <div className={cn(
           "grid grid-cols-1 gap-4",
-          scoredMetrics.length === 1 ? "max-w-md" : "md:grid-cols-2"
+          scoredMetrics.length === 1 ? "w-full" : "md:grid-cols-2"
         )}>
           {scoredMetrics.map((m) => {
             const hasData = m.value != null && m.status !== "no_data";
@@ -172,7 +172,7 @@ export function KpiCategorySection({
                 key={m.key}
                 onClick={() => onSelectMetric?.(m.key, m.label)}
                 className={cn(
-                  "p-4.5 rounded-xl border transition-all flex flex-col justify-between min-h-[148px] space-y-3 cursor-pointer group select-none",
+                  "p-5 rounded-2xl border transition-all flex flex-col justify-between min-h-[156px] space-y-3 cursor-pointer group select-none",
                   hasData
                     ? "bg-card border-border-light shadow-card hover:border-black/30 hover:shadow-card-hover"
                     : "bg-card-subtle/40 border-dashed border-border-light text-text-tertiary"
@@ -235,20 +235,20 @@ export function KpiCategorySection({
                   {/* Main Value Display */}
                   <div>
                     {hasData ? (
-                      <div className="space-y-0.5">
+                      <div className="space-y-1">
                         <div className="flex items-baseline gap-2">
-                          <span className="text-2xl font-bold text-text-primary tabular-nums tracking-tight">
-                            {m.displayValue}
+                          <span className="text-2xl sm:text-3xl font-extrabold text-text-primary tabular-nums tracking-tight">
+                            {m.value != null && m.unit === "%" ? `${m.value}%` : m.displayValue}
                           </span>
 
-                          {/* Trend badge: hide when 0, no -0% */}
+                          {/* Trend pill: hide when 0, no -0% */}
                           {trendDiff != null && trendDiff !== 0 && (
                             <span
                               className={cn(
-                                "inline-flex items-center gap-0.5 text-[11px] font-bold px-1.5 py-0.2 rounded-full tabular-nums",
+                                "inline-flex items-center gap-0.5 text-[11px] font-bold px-2 py-0.5 rounded-full tabular-nums border",
                                 trendDiff > 0
-                                  ? "text-black bg-[#B7FF00]/20"
-                                  : "text-rose-600 bg-rose-50"
+                                  ? "text-black bg-[#B7FF00]/20 border-[#B7FF00]/40"
+                                  : "text-rose-700 bg-rose-50 border-rose-200"
                               )}
                             >
                               {trendDiff > 0 ? (
@@ -263,11 +263,26 @@ export function KpiCategorySection({
                           )}
                         </div>
 
-                        {/* Breakdown label explaining the calculation */}
-                        {m.breakdown && (
-                          <p className="text-xs text-text-secondary font-medium">
-                            {m.breakdown}
+                        {/* Breakdown detail in smaller grey underneath */}
+                        {(m.breakdown || (m.displayValue && m.displayValue.includes("("))) && (
+                          <p className="text-xs text-[#808080] font-medium">
+                            {m.breakdown || m.displayValue.replace(/^[0-9]+%\s*\((.*)\)$/, "$1")}
                           </p>
+                        )}
+
+                        {/* Slim progress bar with tick at target */}
+                        {m.target != null && (
+                          <div className="relative w-full h-1.5 bg-[#E6E6E6] rounded-full overflow-visible mt-2.5 mb-1">
+                            <div
+                              className="h-full bg-black rounded-full transition-all"
+                              style={{ width: `${Math.min(100, Math.max(0, m.value ?? 0))}%` }}
+                            />
+                            <div
+                              className="absolute top-[-3px] bottom-[-3px] w-0.5 bg-[#808080]"
+                              style={{ left: `${Math.min(100, Math.max(0, m.target))}%` }}
+                              title={`Target: ${m.target}%`}
+                            />
+                          </div>
                         )}
                       </div>
                     ) : (
@@ -337,7 +352,7 @@ export function KpiCategorySection({
                     {d.label}:
                   </span>
                   <span className="font-bold text-text-primary tabular-nums">
-                    {hasVal ? d.displayValue : "None"}
+                    {hasVal ? d.displayValue : "No data"}
                   </span>
                 </button>
               );

@@ -451,27 +451,33 @@ export function CurvedSidebar({
         ) : (
           <>
             <div className="flex items-center justify-between p-1.5 rounded-lg bg-[#1A1A1A] border border-[#262626]">
-              <Link
-                href="/profile"
-                className="flex items-center gap-2.5 min-w-0 flex-1 hover:opacity-90 transition-opacity"
-                title="My profile"
-              >
-                <div className="w-7 h-7 rounded-full bg-[#2E2E2E] text-white flex items-center justify-center text-xs font-semibold shrink-0">
-                  {mounted && session.fullName ? session.fullName.charAt(0).toUpperCase() : "U"}
+              {session.isLoaded && session.fullName ? (
+                <Link
+                  href="/profile"
+                  className="flex items-center gap-2.5 min-w-0 flex-1 hover:opacity-90 transition-opacity"
+                  title="My profile"
+                >
+                  <div className="w-7 h-7 rounded-full bg-[#2E2E2E] text-white flex items-center justify-center text-xs font-semibold shrink-0">
+                    {session.fullName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex flex-col min-w-0 flex-1 text-left">
+                    <span className="truncate font-semibold text-xs text-white">
+                      {session.fullName}
+                    </span>
+                    <span className="text-[10px] text-[#808080] truncate capitalize">
+                      {session.jobTitleName || session.userRole}
+                    </span>
+                  </div>
+                </Link>
+              ) : (
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="w-7 h-7 rounded-full bg-[#262626] animate-pulse shrink-0" />
+                  <div className="flex flex-col min-w-0 flex-1 gap-1">
+                    <div className="h-3 w-16 bg-[#262626] rounded animate-pulse" />
+                    <div className="h-2 w-10 bg-[#262626] rounded animate-pulse" />
+                  </div>
                 </div>
-                <div className="flex flex-col min-w-0 flex-1 text-left">
-                  <span className="truncate font-semibold text-xs text-white">
-                    {mounted && session.fullName ? session.fullName : "My profile"}
-                  </span>
-                  <span className="text-[10px] text-[#808080] truncate capitalize">
-                    {mounted && session.jobTitleName
-                      ? session.jobTitleName
-                      : mounted
-                      ? effectiveRole
-                      : "Profile"}
-                  </span>
-                </div>
-              </Link>
+              )}
               <button
                 type="button"
                 onClick={handleSignOut}

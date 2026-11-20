@@ -7,6 +7,7 @@ import { FEATURES } from "@/lib/features";
 import { getKpiCallerContext } from "@/lib/kpi/auth-helper";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { computeKpi } from "@/lib/kpi/compute";
+import { getKolkataPresetDates } from "@/lib/kpi/date-helper";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +28,10 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const defaultDates = getKolkataPresetDates("month");
   const { searchParams } = new URL(request.url);
-  const from = searchParams.get("from") || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
-  const to = searchParams.get("to") || new Date().toISOString().slice(0, 10);
+  const from = searchParams.get("from") || defaultDates.from;
+  const to = searchParams.get("to") || defaultDates.to;
   const departmentFilter = searchParams.get("department");
   const employeeTypeFilter = searchParams.get("employee_type");
 

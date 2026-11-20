@@ -37,19 +37,47 @@ export function KpiGoalsSummaryCard({
 
       {/* Progress pill breakdown */}
       <div className="grid grid-cols-4 gap-1.5 text-center">
-        <div className="p-1.5 rounded-lg bg-card-subtle">
+        <div
+          className={cn(
+            "p-1.5 rounded-lg border",
+            notStarted > 0
+              ? "bg-card-subtle text-text-primary border-border-light"
+              : "bg-[#F5F5F5] text-[#808080] border-[#E6E6E6]"
+          )}
+        >
           <span className="text-[10px] text-text-tertiary block">Not started</span>
-          <span className="text-xs font-bold text-text-primary tabular-nums">{notStarted}</span>
+          <span className="text-xs font-bold tabular-nums">{notStarted}</span>
         </div>
-        <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-800">
+        <div
+          className={cn(
+            "p-1.5 rounded-lg border",
+            onTrack > 0
+              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+              : "bg-[#F5F5F5] text-[#808080] border-[#E6E6E6]"
+          )}
+        >
           <span className="text-[10px] block">On track</span>
           <span className="text-xs font-bold tabular-nums">{onTrack}</span>
         </div>
-        <div className="p-1.5 rounded-lg bg-rose-50 text-rose-800">
+        <div
+          className={cn(
+            "p-1.5 rounded-lg border",
+            atRisk > 0
+              ? "bg-rose-50 text-rose-800 border-rose-200"
+              : "bg-[#F5F5F5] text-[#808080] border-[#E6E6E6]"
+          )}
+        >
           <span className="text-[10px] block">At risk</span>
           <span className="text-xs font-bold tabular-nums">{atRisk}</span>
         </div>
-        <div className="p-1.5 rounded-lg bg-black text-[#B7FF00]">
+        <div
+          className={cn(
+            "p-1.5 rounded-lg border",
+            done > 0
+              ? "bg-[#B7FF00]/20 text-black border-[#B7FF00]/50"
+              : "bg-[#F5F5F5] text-[#808080] border-[#E6E6E6]"
+          )}
+        >
           <span className="text-[10px] block">Done</span>
           <span className="text-xs font-bold tabular-nums">{done}</span>
         </div>
