@@ -123,11 +123,19 @@ function DashboardContent({
   const isCheckedIn = Boolean(data?.activeSession);
   const timer = useAttendanceTimer(data?.activeSession?.check_in_at);
 
-  const todayMinutes = data?.daySummary?.total_minutes || 0;
+  // Completed sessions total minutes + active ongoing session elapsed minutes
+  const activeElapsedMinutes = isCheckedIn ? Math.floor(timer.elapsedSeconds / 60) : 0;
+  const closedSessionsMinutes = (data?.sessions || [])
+    .filter((s) => s.check_out_at)
+    .reduce((acc, s) => {
+      const dur = Math.max(0, Math.round((new Date(s.check_out_at!).getTime() - new Date(s.check_in_at).getTime()) / 60000));
+      return acc + dur;
+    }, 0);
+  const todayMinutes = closedSessionsMinutes + activeElapsedMinutes || data?.daySummary?.total_minutes || 0;
   const targetMinutes = data?.targetMinutes || 480;
   const todayProgress = Math.min(Math.round((todayMinutes / targetMinutes) * 100), 100);
 
-  const weekMinutes = data?.weekTotalMinutes || todayMinutes;
+  const weekMinutes = (data?.weekTotalMinutes || 0) + (isCheckedIn ? activeElapsedMinutes : 0);
   const weeklyTarget = targetMinutes * 5;
   const weekProgress = Math.min(Math.round((weekMinutes / weeklyTarget) * 100), 100);
 
