@@ -34,7 +34,7 @@ export function JobTitlesManager({
   onTitlesUpdated,
   defaultDepartmentId,
 }: JobTitlesManagerProps) {
-  const [titles, setTitles] = React.useState<JobTitleItem[]>(() => getStoredJobTitles());
+  const [titles, setTitles] = React.useState<JobTitleItem[]>([]);
   const [departments, setDepartments] = React.useState<DepartmentSummary[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
@@ -81,7 +81,7 @@ export function JobTitlesManager({
     try {
       const res = await fetch("/api/admin/job-titles");
       const data = await res.json();
-      if (res.ok && data.titles && data.titles.length > 0) {
+      if (res.ok && data.titles) {
         const mapped = data.titles.map((t: any) => ({
           id: t.id,
           title_name: t.title_name,
@@ -91,12 +91,11 @@ export function JobTitlesManager({
           created_at: t.created_at,
         }));
         setTitles(mapped);
-        saveStoredJobTitles(mapped);
       } else {
-        setTitles(getStoredJobTitles());
+        setTitles([]);
       }
     } catch {
-      setTitles(getStoredJobTitles());
+      setTitles([]);
     } finally {
       setLoading(false);
     }
@@ -137,20 +136,10 @@ export function JobTitlesManager({
         throw new Error(data.error || "Failed to create job title");
       }
 
-      const created: JobTitleItem = {
-        id: data.jobTitle?.id || `jt-${Date.now()}`,
-        title_name: trimmedName,
-        description: trimmedDesc,
-        department_id: newDepartmentId || null,
-        department_name: selectedDept ? selectedDept.name : null,
-        created_at: new Date().toISOString(),
-      };
-
-      setTitles((prev) => [created, ...prev.filter((t) => t.id !== created.id)]);
+      await loadTitles();
       if (newDepartmentId) {
         setSelectedDeptFilter(newDepartmentId);
       }
-      addStoredJobTitle(trimmedName, trimmedDesc, newDepartmentId || null, selectedDept ? selectedDept.name : null, created.id);
       toast.success(`Role '${trimmedName}' added successfully under ${selectedDept ? selectedDept.name : "Company"}.`);
       setNewTitleName("");
       setNewDescription("");
