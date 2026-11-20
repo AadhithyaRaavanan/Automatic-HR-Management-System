@@ -603,16 +603,18 @@ function DashboardContent({
                   <Link
                     key={task.id}
                     href={`/tasks?task=${task.id}`}
-                    className="p-3.5 rounded-xl bg-[#F5F5F5] hover:bg-white border border-[#E6E6E6] transition-all space-y-2 block"
+                    className="p-3.5 rounded-xl bg-[#F5F5F5] hover:bg-white border border-[#E6E6E6] transition-all flex flex-col justify-between h-[105px] block"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <StatusPill status={status} />
-                      <StatusPill status={priority} showIcon={false} />
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <StatusPill status={status} />
+                        <StatusPill status={priority} showIcon={false} />
+                      </div>
+                      <h3 className="text-xs font-semibold text-black line-clamp-1 mt-2" title={task.title || "Untitled Task"}>
+                        {task.title || "Untitled Task"}
+                      </h3>
                     </div>
-                    <h3 className="text-xs font-semibold text-black line-clamp-1">
-                      {task.title || "Untitled Task"}
-                    </h3>
-                    <div className="flex items-center justify-between text-[11px]">
+                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-[#E6E6E6]/60">
                       {dueState === "overdue" ? (
                         <span className="inline-flex items-center gap-1 font-semibold text-[#FF1493]">
                           <AlertTriangle className="w-3 h-3" />

@@ -1221,68 +1221,79 @@ function TasksWorkspaceContent() {
                       const initials = getInitials(assigneeName);
                       const typeName = task.task_type_id ? typeNameMap.get(task.task_type_id) : null;
 
+                      const hasAcceptAction = task.status === "todo" && task.assignee_id === userId && task.creator_id !== userId;
+
                       return (
                         <button
                           key={task.id}
                           type="button"
                           onClick={() => setSelectedTaskId(task.id)}
-                          className="w-full text-left p-3 rounded-[12px] bg-white hover:border-black/40 border border-[#E6E6E6] shadow-none transition-all cursor-pointer space-y-2 focus-visible:ring-2 focus-visible:ring-black focus-visible:outline-none"
+                          className="w-full text-left p-3.5 rounded-[12px] bg-white hover:border-black/40 border border-[#E6E6E6] shadow-none transition-all cursor-pointer flex flex-col justify-between min-h-[175px] focus-visible:ring-2 focus-visible:ring-black focus-visible:outline-none"
                         >
-                          <div className="flex items-center justify-between gap-1.5">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <StatusPill status={task.priority} showIcon={true} />
-                              {typeName && <TaskTypeBadge typeName={typeName} />}
-                              {task.recurrence_id && (
-                                <span title="Recurring Task" className="inline-flex items-center text-xs text-black">
-                                  <Repeat className="w-3 h-3 text-black" />
+                          <div className="space-y-2 w-full">
+                            <div className="flex items-center justify-between gap-1.5 h-6">
+                              <div className="flex items-center gap-1.5 flex-wrap overflow-hidden">
+                                <StatusPill status={task.priority} showIcon={true} />
+                                {typeName && <TaskTypeBadge typeName={typeName} />}
+                                {task.recurrence_id && (
+                                  <span title="Recurring Task" className="inline-flex items-center text-xs text-black">
+                                    <Repeat className="w-3 h-3 text-black" />
+                                  </span>
+                                )}
+                              </div>
+                              {task.project_id && projectNameMap.has(task.project_id) && (
+                                <span className="text-[10px] font-medium text-[#4D4D4D] truncate max-w-[100px]">
+                                  {projectNameMap.get(task.project_id)}
                                 </span>
                               )}
                             </div>
-                            {task.project_id && projectNameMap.has(task.project_id) && (
-                              <span className="text-[10px] font-medium text-[#4D4D4D] truncate max-w-[100px]">
-                                {projectNameMap.get(task.project_id)}
-                              </span>
-                            )}
-                          </div>
 
-                          <p className="text-xs font-semibold text-black line-clamp-2 leading-snug">
-                            {task.title}
-                          </p>
+                            <p className="text-xs font-semibold text-black line-clamp-2 leading-snug h-[2.25rem] flex items-start overflow-hidden" title={task.title}>
+                              {task.title}
+                            </p>
 
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <DueBadge dueDate={task.due_date} status={task.status} />
-                            {task.assignee_id && task.creator_id === task.assignee_id && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#F5F5F5] text-black border border-[#E6E6E6]">
-                                <UserCheck className="w-2.5 h-2.5" />
-                                Self-Assigned
-                              </span>
-                            )}
-                            {task.assignee_id && task.creator_id !== task.assignee_id && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-normal bg-[#F5F5F5] text-[#808080]">
-                                From: {formatPerson(task.creator_id)}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex items-center justify-between pt-1.5 border-t border-[#E6E6E6] text-[11px] text-[#808080] gap-2">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="w-5 h-5 rounded-full bg-[#E6E6E6] text-black font-semibold text-[9px] flex items-center justify-center shrink-0">
-                                {initials}
-                              </span>
-                              <span className="truncate font-medium text-[#4D4D4D]">
-                                {assigneeName}
-                              </span>
+                            <div className="flex items-center gap-1.5 h-5 overflow-hidden text-[11px]">
+                              {task.due_date ? (
+                                <DueBadge dueDate={task.due_date} status={task.status} />
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] text-[#A3A3A3]">
+                                  <Calendar className="w-2.5 h-2.5" /> No deadline
+                                </span>
+                              )}
+                              {task.assignee_id && task.creator_id === task.assignee_id && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-[#F5F5F5] text-black border border-[#E6E6E6] truncate max-w-[100px]">
+                                  <UserCheck className="w-2.5 h-2.5" />
+                                  Self
+                                </span>
+                              )}
+                              {task.assignee_id && task.creator_id !== task.assignee_id && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-normal bg-[#F5F5F5] text-[#808080] truncate max-w-[120px]">
+                                  From: {formatPerson(task.creator_id)}
+                                </span>
+                              )}
                             </div>
-                            {task.estimated_minutes != null && (
-                              <span className="font-mono text-[#808080] shrink-0 tabular-nums text-[10px]">
-                                {formatEstimatedDuration(task.estimated_minutes)} est
-                              </span>
-                            )}
                           </div>
 
-                          {/* Accept action for assigned tasks */}
-                          {task.status === "todo" && task.assignee_id === userId && task.creator_id !== userId && (
-                            <div className="pt-1">
+                          <div className="w-full pt-2 border-t border-[#E6E6E6] space-y-2 mt-auto">
+                            <div className="flex items-center justify-between text-[11px] text-[#808080] gap-2 h-5">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="w-4 h-4 rounded-full bg-[#E6E6E6] text-black font-semibold text-[8px] flex items-center justify-center shrink-0">
+                                  {initials}
+                                </span>
+                                <span className="truncate font-medium text-[#4D4D4D] text-[11px]">
+                                  {assigneeName}
+                                </span>
+                              </div>
+                              {task.estimated_minutes != null ? (
+                                <span className="font-mono text-[#808080] shrink-0 tabular-nums text-[10px]">
+                                  {formatEstimatedDuration(task.estimated_minutes)} est
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-[#C0C0C0] shrink-0 font-mono">—</span>
+                              )}
+                            </div>
+
+                            {hasAcceptAction && (
                               <div
                                 role="button"
                                 tabIndex={0}
@@ -1308,8 +1319,8 @@ function TasksWorkspaceContent() {
                               >
                                 <span>✓ Accept Task</span>
                               </div>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </button>
                       );
                     })
