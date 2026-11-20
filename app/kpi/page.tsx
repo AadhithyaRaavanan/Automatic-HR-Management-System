@@ -94,6 +94,7 @@ function KpiContent() {
   // Goal form state
   const [goalTitle, setGoalTitle] = React.useState("");
   const [goalNote, setGoalNote] = React.useState("");
+  const [goalAssigneeId, setGoalAssigneeId] = React.useState<string>("");
 
   // Default target employee to param or current user
   React.useEffect(() => {
@@ -386,11 +387,12 @@ function KpiContent() {
   const submitGoal = useMutation({
     mutationFn: async () => {
       if (!goalTitle.trim()) throw new Error("Goal title is required");
+      const targetEmp = goalAssigneeId || effectiveEmpId || userId;
       const res = await fetch("/api/kpi/goals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          employee_id: effectiveEmpId,
+          employee_id: targetEmp,
           period_start: dateRange.from,
           period_end: dateRange.to,
           title: goalTitle.trim(),
@@ -402,7 +404,8 @@ function KpiContent() {
       return data;
     },
     onSuccess: () => {
-      toast.success("Goal added");
+      const isSelf = (goalAssigneeId || effectiveEmpId) === userId;
+      toast.success(isSelf ? "Goal added" : "Goal assigned successfully");
       setCreateGoalOpen(false);
       setGoalTitle("");
       setGoalNote("");
@@ -901,7 +904,10 @@ function KpiContent() {
             {isManagerOrAdmin && (
               <button
                 type="button"
-                onClick={() => setCreateGoalOpen(true)}
+                onClick={() => {
+                  setGoalAssigneeId(effectiveEmpId || userId || "");
+                  setCreateGoalOpen(true);
+                }}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
@@ -1293,7 +1299,7 @@ function KpiContent() {
           <div className="w-full max-w-md bg-card rounded-[28px] border border-border-light shadow-shell p-6 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-border-light">
               <h3 className="text-sm font-extrabold text-text-primary">
-                {effectiveEmpId === userId ? "Add goal" : "Assign performance goal"}
+                {(goalAssigneeId || effectiveEmpId) === userId ? "Add goal" : "Assign performance goal"}
               </h3>
               <button
                 type="button"
@@ -1311,6 +1317,27 @@ function KpiContent() {
               }}
               className="space-y-3"
             >
+              {/* Employee selector for managers / HR / admin */}
+              {isManagerOrAdmin && scopedEmployees.length > 0 && (
+                <div>
+                  <label className="block text-[11px] font-bold text-text-secondary mb-1">
+                    Assign to employee *
+                  </label>
+                  <select
+                    aria-label="Assign to employee"
+                    value={goalAssigneeId || effectiveEmpId}
+                    onChange={(e) => setGoalAssigneeId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-card-subtle border border-border-light text-xs font-bold text-text-primary cursor-pointer hover:border-black/30 transition-colors"
+                  >
+                    {scopedEmployees.map((emp: { id: string; full_name?: string | null; email: string }) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.full_name || emp.email} {emp.id === userId ? "(You)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="block text-[11px] font-bold text-text-secondary mb-1">
                   Goal title *
@@ -1350,7 +1377,7 @@ function KpiContent() {
                   disabled={submitGoal.isPending}
                   className="px-5 py-2 rounded-full bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold cursor-pointer disabled:opacity-60"
                 >
-                  {effectiveEmpId === userId ? "Add goal" : "Set goal"}
+                  {(goalAssigneeId || effectiveEmpId) === userId ? "Add goal" : "Assign goal"}
                 </button>
               </div>
             </form>
