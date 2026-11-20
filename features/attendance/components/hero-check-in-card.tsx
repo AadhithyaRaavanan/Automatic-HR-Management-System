@@ -10,6 +10,7 @@ import { FEATURES } from "@/lib/features";
 
 interface HeroCheckInCardProps {
   isCheckedIn?: boolean;
+  isOnBreak?: boolean;
   activeTime?: string;
   workDate?: string;
   targetMinutes?: number;
@@ -24,6 +25,7 @@ interface HeroCheckInCardProps {
 
 export function HeroCheckInCard({
   isCheckedIn = false,
+  isOnBreak = false,
   activeTime = "00:00:00",
   workDate = "Today",
   targetMinutes = 480,
@@ -119,7 +121,9 @@ export function HeroCheckInCard({
             <span
               className={cn(
                 "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium",
-                isCheckedIn
+                isOnBreak
+                  ? "bg-brand-purple/15 text-brand-purple border border-brand-purple/30"
+                  : isCheckedIn
                   ? "bg-status-success-bg text-status-success-text"
                   : "bg-card-subtle text-text-secondary"
               )}
@@ -127,12 +131,14 @@ export function HeroCheckInCard({
               <span
                 className={cn(
                   "w-1.5 h-1.5 rounded-full",
-                  isCheckedIn
+                  isOnBreak
+                    ? "bg-brand-purple animate-pulse"
+                    : isCheckedIn
                     ? "bg-status-success-dot"
                     : "bg-text-tertiary"
                 )}
               />
-              {isCheckedIn ? "Active session" : "Checked out"}
+              {isOnBreak ? "On break (Shift paused)" : isCheckedIn ? "Active session" : "Checked out"}
             </span>
 
             {/* Shift Lock Status Badge */}
@@ -158,7 +164,9 @@ export function HeroCheckInCard({
             </div>
             <p className="text-xs text-text-secondary mt-1 flex items-center gap-1">
               <Clock className="w-3.5 h-3.5" />
-              {isCheckedIn
+              {isOnBreak
+                ? "Shift timer paused during break"
+                : isCheckedIn
                 ? `Session running for ${workDate}`
                 : lockStatus.isLocked
                   ? lockStatus.reason === "after_shift"

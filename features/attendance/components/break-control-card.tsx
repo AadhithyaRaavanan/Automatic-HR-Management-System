@@ -5,13 +5,16 @@ import { BentoCard } from "@/components/bento/bento-card";
 import { Coffee, Utensils, Play, Square, Check, Clock, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { playNotificationTone } from "@/lib/notifications/sound";
+import { useAttendanceContext } from "../context/attendance-context";
 
 interface BreakControlCardProps {
   isCheckedIn: boolean;
   className?: string;
+  onBreakChange?: () => void;
 }
 
-export function BreakControlCard({ isCheckedIn, className }: BreakControlCardProps) {
+export function BreakControlCard({ isCheckedIn, className, onBreakChange }: BreakControlCardProps) {
   const [loading, setLoading] = React.useState(true);
   const [submitting, setSubmitting] = React.useState(false);
   const [activeBreak, setActiveBreak] = React.useState<any>(null);
@@ -20,6 +23,12 @@ export function BreakControlCard({ isCheckedIn, className }: BreakControlCardPro
   const [canTakeShort, setCanTakeShort] = React.useState(true);
   const [canTakeLunch, setCanTakeLunch] = React.useState(true);
   const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
+  const hasAlertedOvertimeRef = React.useRef(false);
+
+  let attendanceCtx: any = null;
+  try {
+    attendanceCtx = useAttendanceContext();
+  } catch {}
 
   const fetchBreaks = React.useCallback(async () => {
     try {
@@ -47,12 +56,30 @@ export function BreakControlCard({ isCheckedIn, className }: BreakControlCardPro
     fetchBreaks();
   }, [fetchBreaks]);
 
-  // Break timer ticker
+  // Break timer ticker & 15m/60m overtime audio chime notification
   React.useEffect(() => {
-    if (!activeBreak) return;
+    if (!activeBreak) {
+      hasAlertedOvertimeRef.current = false;
+      return;
+    }
+    const maxAllowedMins = activeBreak.type === "short_break" ? 15 : 60;
+
     const interval = setInterval(() => {
       const startedAt = new Date(activeBreak.startTime).getTime();
-      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+      const currentSec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+      setElapsedSeconds(currentSec);
+
+      // Trigger Notification & Tone when 15m (short break) or 60m (lunch) is reached!
+      if (currentSec >= maxAllowedMins * 60 && !hasAlertedOvertimeRef.current) {
+        hasAlertedOvertimeRef.current = true;
+        playNotificationTone("warning");
+        const breakName = activeBreak.type === "short_break" ? "15-minute break" : "1-hour lunch break";
+        toast.warning(`Your ${breakName} is completed!`, {
+          description: "Please click 'End break and resume work' to resume your shift timer.",
+          duration: 10000,
+          id: "break-overtime-alert",
+        });
+      }
     }, 1000);
     return () => clearInterval(interval);
   }, [activeBreak]);
@@ -74,6 +101,8 @@ export function BreakControlCard({ isCheckedIn, className }: BreakControlCardPro
 
       toast.success(data.message);
       await fetchBreaks();
+      await attendanceCtx?.refetch?.();
+      onBreakChange?.();
     } catch (err: any) {
       toast.error(err.message || "Failed to start break.");
     } finally {
@@ -94,6 +123,8 @@ export function BreakControlCard({ isCheckedIn, className }: BreakControlCardPro
 
       toast.success(data.message);
       await fetchBreaks();
+      await attendanceCtx?.refetch?.();
+      onBreakChange?.();
     } catch (err: any) {
       toast.error(err.message || "Failed to end break.");
     } finally {
