@@ -80,9 +80,18 @@ export default function LeavePage() {
             </div>
           ) : balances.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {balances.map((b) => (
-                <LeaveBalanceCard key={b.id} balance={b} />
-              ))}
+              {balances.map((b) => {
+                const pendingDaysForType = requests
+                  .filter((r) => r.status === "pending" && r.leave_type_id === b.leave_type_id)
+                  .reduce((acc, r) => acc + Number(r.total_days || 0), 0);
+                return (
+                  <LeaveBalanceCard
+                    key={b.id}
+                    balance={b}
+                    pendingDays={pendingDaysForType}
+                  />
+                );
+              })}
             </div>
           ) : (
             <EmptyState
