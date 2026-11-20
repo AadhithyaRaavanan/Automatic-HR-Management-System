@@ -23,6 +23,7 @@ export function TopNavBar({
   const [commandOpen, setCommandOpen] = React.useState(false);
   const [notificationsOpen, setNotificationsOpen] = React.useState(false);
   const { unreadCount } = useNotifications();
+  const safeUnread = typeof unreadCount === "number" && !isNaN(unreadCount) ? unreadCount : 0;
   const session = useAppSession();
   const pathname = usePathname();
   const isDashboard = pathname === "/" || pathname === "/dashboard";
@@ -40,7 +41,12 @@ export function TopNavBar({
     window.open("/api/attendance/export?format=xlsx", "_blank");
   };
 
-  const displayName = session.fullName ? session.fullName.split(" ")[0] : "there";
+  const firstName = typeof session?.fullName === "string" && session.fullName.trim().length > 0
+    ? session.fullName.trim().split(/\s+/)[0]
+    : "there";
+  const userInitial = typeof session?.fullName === "string" && session.fullName.trim().length > 0
+    ? session.fullName.trim().charAt(0).toUpperCase()
+    : "U";
 
   return (
     <>
@@ -55,7 +61,7 @@ export function TopNavBar({
           <div className="flex-1 flex flex-col min-w-0">
             {session.isLoaded && session.fullName ? (
               <h1 className="text-xl md:text-2xl font-bold tracking-tight text-black truncate">
-                Hello, {session.fullName.split(" ")[0]}!
+                Hello, {firstName}!
               </h1>
             ) : (
               <div className="h-7 w-44 bg-[#E6E6E6] rounded animate-pulse my-0.5" />
@@ -77,15 +83,15 @@ export function TopNavBar({
             type="button"
             title="Notifications"
             aria-label={
-              unreadCount > 0
-                ? `Notifications (${unreadCount} unread)`
+              safeUnread > 0
+                ? `Notifications (${safeUnread} unread)`
                 : "Notifications"
             }
             onClick={() => setNotificationsOpen(true)}
             className="relative p-2 rounded-lg bg-white hover:bg-[#F5F5F5] border border-[#E6E6E6] text-black transition-colors cursor-pointer"
           >
             <Bell className="w-4 h-4 text-black" />
-            {unreadCount > 0 && (
+            {safeUnread > 0 && (
               <span
                 className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#FF1493]"
                 aria-hidden="true"
@@ -94,7 +100,7 @@ export function TopNavBar({
           </button>
 
           {/* Quiet Export Data Button (hidden on /kpi where Export CSV exists on page) */}
-          {!pathname?.startsWith("/kpi") && (
+          {(!pathname || !pathname.startsWith("/kpi")) && (
             <button
               type="button"
               onClick={handleExport}
@@ -110,7 +116,7 @@ export function TopNavBar({
             {session.isLoaded && session.fullName ? (
               <>
                 <div className="w-8 h-8 rounded-full bg-black text-[#B7FF00] flex items-center justify-center font-bold text-xs select-none">
-                  {session.fullName.charAt(0).toUpperCase()}
+                  {userInitial}
                 </div>
                 <div className="hidden lg:flex flex-col text-left">
                   <span className="text-xs font-semibold text-black leading-tight truncate max-w-[140px]">

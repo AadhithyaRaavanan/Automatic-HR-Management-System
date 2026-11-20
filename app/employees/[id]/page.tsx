@@ -274,6 +274,11 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
   const openEditModal = () => {
     const emp = profileData?.employee || {};
     const onb = profileData?.onboarding || {};
+    const panNum = onb.pan_number || onb.education_details?.pan_number || onb.education_details?.pan || "";
+    const bName = onb.bank_name || onb.education_details?.bank_name || onb.education_details?.bankName || (onb.bank_ifsc?.startsWith("CNRB") ? "Canara Bank" : "") || "";
+    const bAcc = onb.bank_account_number || onb.education_details?.bank_account_number || onb.education_details?.accountNumber || "";
+    const bIfsc = onb.bank_ifsc || onb.education_details?.bank_ifsc || onb.education_details?.ifsc || "";
+
     setFormData({
       full_name: emp.full_name || "",
       employment_category: emp.employment_category || onb.education_details?.employment_category || "full_time",
@@ -295,10 +300,10 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
       shift_start_time: emp.shift_start_time ? emp.shift_start_time.slice(0, 5) : "09:00",
       shift_end_time: emp.shift_end_time ? emp.shift_end_time.slice(0, 5) : "18:00",
       highest_qualification: onb.highest_qualification || onb.education_details?.highest_qualification || "12th Standard",
-      bank_name: onb.bank_name || "",
-      bank_account_number: onb.bank_account_number || "",
-      bank_ifsc: onb.bank_ifsc || "",
-      pan_number: onb.pan_number || "",
+      bank_name: bName,
+      bank_account_number: bAcc,
+      bank_ifsc: bIfsc,
+      pan_number: panNum,
     });
     setEditModalOpen(true);
   };
@@ -471,6 +476,49 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
   const departments = profileData?.departments || [];
   const jobTitles = profileData?.jobTitles || [];
   const managers = profileData?.managers || [];
+
+  // Resolved identity and banking details
+  const resolvedPanNumber =
+    onb.pan_number ||
+    onb.education_details?.pan_number ||
+    onb.education_details?.pan ||
+    "";
+
+  const resolvedBankName =
+    onb.bank_name ||
+    onb.education_details?.bank_name ||
+    onb.education_details?.bankName ||
+    (onb.bank_ifsc?.startsWith("CNRB") ? "Canara Bank" : null) ||
+    "";
+
+  const resolvedBankAccountNumber =
+    onb.bank_account_number ||
+    onb.education_details?.bank_account_number ||
+    onb.education_details?.accountNumber ||
+    onb.education_details?.account_number ||
+    "";
+
+  const resolvedBankIfsc =
+    onb.bank_ifsc ||
+    onb.education_details?.bank_ifsc ||
+    onb.education_details?.ifsc ||
+    "";
+
+  // Dynamic onboarding status
+  const isOnboardingCompleted =
+    Boolean(emp.onboarding_completed) ||
+    onb.status === "approved" ||
+    onb.onboarding_status === "COMPLETED" ||
+    onb.onboarding_status === "VERIFIED";
+
+  const isOnboardingUnderReview =
+    onb.status === "submitted" ||
+    onb.onboarding_status === "UNDER_REVIEW" ||
+    onb.onboarding_status === "SUBMITTED";
+
+  const isOnboardingChangesRequested =
+    onb.status === "changes_requested" ||
+    onb.onboarding_status === "CORRECTION_REQUIRED";
 
   // Available document types excluding those already uploaded (keeps generic certification available)
   const existingDocTypes = new Set(docs.map((d: any) => d.doc_type));
@@ -740,29 +788,31 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
               <div className="space-y-2.5 text-xs">
                 <div className="flex justify-between py-1 border-b border-border-light/40">
                   <span className="text-text-muted">PAN Card:</span>
-                  <span className="font-mono text-text-primary">{onb.pan_number || "Verified"}</span>
+                  <span className="font-mono text-text-primary">
+                    {resolvedPanNumber || "Not Specified"}
+                  </span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-border-light/40">
                   <span className="text-text-muted">Bank Name:</span>
                   <span className="font-semibold text-text-primary">
-                    {onb.bank_name || (onb.bank_ifsc?.startsWith("CNRB") ? "Canara Bank" : null) || "Not Specified"}
+                    {resolvedBankName || "Not Specified"}
                   </span>
                 </div>
                 <div className="flex justify-between items-center py-1 border-b border-border-light/40">
                   <span className="text-text-muted">Bank A/C:</span>
                   <div className="flex items-center gap-1.5 font-mono text-text-primary">
                     <span>
-                      {onb.bank_account_number
+                      {resolvedBankAccountNumber
                         ? showFullAccount
-                          ? onb.bank_account_number
-                          : `••••${onb.bank_account_number.slice(-4)}`
-                        : "Verified"}
+                          ? resolvedBankAccountNumber
+                          : `••••${resolvedBankAccountNumber.slice(-4)}`
+                        : "Not Specified"}
                     </span>
-                    {onb.bank_account_number && (
+                    {resolvedBankAccountNumber && (
                       <button
                         type="button"
                         onClick={() => setShowFullAccount(!showFullAccount)}
-                        className="text-text-muted hover:text-brand-purple p-0.5 rounded transition-colors"
+                        className="text-text-muted hover:text-brand-purple p-0.5 rounded transition-colors cursor-pointer"
                         title={showFullAccount ? "Hide Account Number" : "Show Full Account Number"}
                       >
                         {showFullAccount ? (
@@ -774,6 +824,12 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
                     )}
                   </div>
                 </div>
+                {resolvedBankIfsc && (
+                  <div className="flex justify-between py-1 border-b border-border-light/40">
+                    <span className="text-text-muted">Bank IFSC:</span>
+                    <span className="font-mono text-text-primary uppercase">{resolvedBankIfsc}</span>
+                  </div>
+                )}
                 <div className="flex justify-between py-1 border-b border-border-light/40">
                   <span className="text-text-muted">Emergency Contact:</span>
                   <span className="font-semibold text-text-primary text-right max-w-[65%] truncate" title={emergencyContactDisplay}>
@@ -782,7 +838,16 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
                 </div>
                 <div className="flex justify-between py-1">
                   <span className="text-text-muted">Onboarding:</span>
-                  <span className="font-semibold text-black">COMPLETED & VERIFIED</span>
+                  <span className={cn(
+                    "font-semibold",
+                    isOnboardingCompleted ? "text-status-success" :
+                    isOnboardingUnderReview ? "text-status-warning" :
+                    isOnboardingChangesRequested ? "text-status-danger" : "text-brand-purple"
+                  )}>
+                    {isOnboardingCompleted ? "COMPLETED & VERIFIED" :
+                     isOnboardingUnderReview ? "UNDER REVIEW" :
+                     isOnboardingChangesRequested ? "CORRECTIONS REQUIRED" : "PENDING"}
+                  </span>
                 </div>
               </div>
             </BentoCard>

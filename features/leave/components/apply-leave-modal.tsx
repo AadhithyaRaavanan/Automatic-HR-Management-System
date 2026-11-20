@@ -4,8 +4,10 @@ import * as React from "react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { useLeaveTypes, useLeaveBalances, useLeavePolicies, useRequestLeave } from "../hooks/use-leave";
-import { format, parseISO, isWeekend } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { AlertCircle, Calendar, Check, Info } from "lucide-react";
+import { countWorkingDaysBetween } from "@/lib/date/working-days";
+import { createClient } from "@/lib/supabase/client";
 
 interface ApplyLeaveModalProps {
   open: boolean;
@@ -13,6 +15,7 @@ interface ApplyLeaveModalProps {
 }
 
 export function ApplyLeaveModal({ open, onOpenChange }: ApplyLeaveModalProps) {
+  const supabase = React.useMemo(() => createClient(), []);
   const { data: leaveTypes = [] } = useLeaveTypes();
   const { data: balances = [] } = useLeaveBalances();
   const { data: policies = [] } = useLeavePolicies();
@@ -23,15 +26,29 @@ export function ApplyLeaveModal({ open, onOpenChange }: ApplyLeaveModalProps) {
   const [endDate, setEndDate] = React.useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [dayPart, setDayPart] = React.useState<"full" | "first_half" | "second_half">("full");
   const [reason, setReason] = React.useState<string>("");
+  const [holidays, setHolidays] = React.useState<Array<{ date: string; name: string }>>([]);
 
-  // Select first leave type by default
+  React.useEffect(() => {
+    async function loadHolidays() {
+      const { data } = await supabase
+        .from("holidays")
+        .select("date, name")
+        .eq("is_active", true);
+      if (data) setHolidays(data);
+    }
+    loadHolidays();
+  }, [supabase]);
+
+  // Select first leave type by default (prefer EL, CL, SL)
   React.useEffect(() => {
     if (leaveTypes.length > 0 && !leaveTypeId) {
-      setLeaveTypeId(leaveTypes[0].id);
+      const preferred = leaveTypes.find((t) => ["EL", "CL", "SL"].includes(t.code)) || leaveTypes[0];
+      setLeaveTypeId(preferred.id);
     }
   }, [leaveTypes, leaveTypeId]);
 
   // Selected balance & policy
+  const selectedType = leaveTypes.find((t) => t.id === leaveTypeId);
   const selectedBalance = balances.find((b) => b.leave_type_id === leaveTypeId);
   const selectedPolicy = policies.find((p) => p.leave_type_id === leaveTypeId);
 
@@ -42,24 +59,49 @@ export function ApplyLeaveModal({ open, onOpenChange }: ApplyLeaveModalProps) {
       Number(selectedBalance.used)
     : 0;
 
-  // Calculate estimated working days (basic client side approximation)
+  // Calculate working days according to ZEN XEA calendar:
+  // Mon-Sat are working days; Sunday (0) is weekly off; company holidays are excluded.
   const estimatedDays = React.useMemo(() => {
     if (!startDate || !endDate) return 0;
     if (startDate > endDate) return 0;
-    if (dayPart !== "full") return 0.5;
+    return countWorkingDaysBetween(startDate, endDate, holidays, dayPart);
+  }, [startDate, endDate, holidays, dayPart]);
 
-    let count = 0;
-    let curr = new Date(startDate);
-    const end = new Date(endDate);
+  // Notice Period Guideline evaluation
+  const noticeEvaluation = React.useMemo(() => {
+    if (!startDate) return { meetsNotice: true, guidelineText: "" };
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const [sy, sm, sd] = startDate.split("-").map(Number);
+    const start = new Date(sy, sm - 1, sd);
+    const diffDays = Math.ceil((start.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
-    while (curr <= end) {
-      if (!isWeekend(curr)) {
-        count += 1;
-      }
-      curr.setDate(curr.getDate() + 1);
+    const code = selectedType?.code;
+    if (code === "EL") {
+      const meets = diffDays >= 14;
+      return {
+        meetsNotice: meets,
+        guidelineText: "Notice guideline: 14 calendar days advance notice for planned EL.",
+        warning: !meets ? "Application is within 14 days notice window (flagged for HR review)." : null,
+      };
     }
-    return count;
-  }, [startDate, endDate, dayPart]);
+    if (code === "CL") {
+      const meets = diffDays >= 1;
+      return {
+        meetsNotice: meets,
+        guidelineText: "Notice guideline: At least 1 day advance notice (emergency CL permitted immediately).",
+        warning: !meets ? "Same-day or retroactive CL application (flagged for HR review)." : null,
+      };
+    }
+    if (code === "SL") {
+      return {
+        meetsNotice: true,
+        guidelineText: "Notice guideline: Notify HR as soon as possible for unexpected illness.",
+        warning: null,
+      };
+    }
+    return { meetsNotice: true, guidelineText: "" };
+  }, [startDate, selectedType]);
 
   // Live validation checks
   const isDateInvalid = startDate > endDate;
@@ -198,12 +240,28 @@ export function ApplyLeaveModal({ open, onOpenChange }: ApplyLeaveModalProps) {
         <div className="flex items-center justify-between px-3 py-2 bg-card-subtle border border-border-light rounded-xl text-xs">
           <span className="text-text-secondary flex items-center gap-1.5">
             <Info className="w-3.5 h-3.5 text-brand-purple" />
-            Working Days (excl. weekends):
+            Working Days (excl. Sundays & Holidays):
           </span>
           <span className="font-extrabold text-brand-purple text-sm">
             {estimatedDays} day{estimatedDays === 1 ? "" : "s"}
           </span>
         </div>
+
+        {/* Notice Guideline Banner */}
+        {noticeEvaluation.guidelineText && (
+          <div className="p-2.5 rounded-xl bg-card border border-border-light text-[11px] space-y-1">
+            <p className="text-text-tertiary flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-brand-purple" />
+              <span>{noticeEvaluation.guidelineText}</span>
+            </p>
+            {noticeEvaluation.warning && (
+              <p className="text-amber-500 font-semibold flex items-center gap-1 pl-5">
+                <AlertCircle className="w-3 h-3 shrink-0" />
+                <span>{noticeEvaluation.warning}</span>
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Half-day overlap policy documentation */}
         <p className="text-[11px] text-text-tertiary leading-relaxed px-1">

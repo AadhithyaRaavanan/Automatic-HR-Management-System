@@ -71,10 +71,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ departments: [] });
     }
 
-    // 2. Fetch employees for headcount & head names
+    // 2. Fetch employees for headcount & head names & designations
     const { data: emps } = await (supabaseAdmin as any)
       .from("employees")
-      .select("id, full_name, email, department_id")
+      .select("id, full_name, email, department_id, job_titles:job_title_id(title_name)")
       .eq("status", "active");
 
     // 3. Fetch roles/job_titles count per department
@@ -83,10 +83,15 @@ export async function GET(request: NextRequest) {
       .select("id, title_name, department_id")
       .eq("organization_id", orgId);
 
-    const empMap = new Map<string, string>();
+    const empMap = new Map<string, { id: string; full_name: string; email: string; designation: string }>();
     const headCounts = new Map<string, number>();
     (emps || []).forEach((e: any) => {
-      empMap.set(e.id, e.full_name);
+      empMap.set(e.id, {
+        id: e.id,
+        full_name: e.full_name,
+        email: e.email,
+        designation: e.job_titles?.title_name || "Department Head",
+      });
       if (e.department_id) {
         headCounts.set(e.department_id, (headCounts.get(e.department_id) || 0) + 1);
       }
@@ -101,18 +106,35 @@ export async function GET(request: NextRequest) {
 
     const deptNameMap = new Map<string, string>((depts || []).map((d: any) => [d.id, d.name]));
 
-    const mapped = (depts || []).map((d: any) => ({
-      id: d.id,
-      name: d.name,
-      code: d.code,
-      headId: d.department_head_id || null,
-      headName: d.department_head_id ? empMap.get(d.department_head_id) || null : null,
-      parentId: d.parent_department_id || null,
-      parentName: d.parent_department_id ? deptNameMap.get(d.parent_department_id) || null : null,
-      memberCount: headCounts.get(d.id) || 0,
-      rolesCount: roleCounts.get(d.id) || 0,
-      createdAt: d.created_at,
-    }));
+    const mapped = (depts || []).map((d: any) => {
+      const headEmp = d.department_head_id ? empMap.get(d.department_head_id) : null;
+      const parentName = d.parent_department_id ? deptNameMap.get(d.parent_department_id) || null : null;
+
+      return {
+        id: d.id,
+        name: d.name,
+        code: d.code,
+        headId: d.department_head_id || null,
+        headName: headEmp?.full_name || null,
+        headDesignation: headEmp?.designation || null,
+        headEmail: headEmp?.email || null,
+        head: headEmp
+          ? {
+              id: headEmp.id,
+              full_name: headEmp.full_name,
+              designation: headEmp.designation,
+              email: headEmp.email,
+            }
+          : null,
+        parentId: d.parent_department_id || null,
+        parentName: parentName,
+        parent_department_id: d.parent_department_id || null,
+        parent: parentName ? { id: d.parent_department_id, name: parentName } : null,
+        memberCount: headCounts.get(d.id) || 0,
+        rolesCount: roleCounts.get(d.id) || 0,
+        createdAt: d.created_at,
+      };
+    });
 
     return NextResponse.json({ departments: mapped });
   } catch (err: any) {

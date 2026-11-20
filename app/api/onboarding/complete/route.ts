@@ -317,6 +317,7 @@ export async function POST(request: NextRequest) {
       uan_number: payload.uan_number || onbProfile.uan_number || null,
       education_details: mergedEdu,
       status: "submitted",
+      onboarding_status: "UNDER_REVIEW",
       submitted_at: nowIso,
       updated_at: nowIso,
     };

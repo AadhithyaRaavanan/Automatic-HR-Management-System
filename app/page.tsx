@@ -126,10 +126,13 @@ function DashboardContent({
   // Completed sessions total minutes + active ongoing session elapsed minutes
   const activeElapsedMinutes = isCheckedIn ? Math.floor(timer.elapsedSeconds / 60) : 0;
   const closedSessionsMinutes = (data?.sessions || [])
-    .filter((s) => s.check_out_at)
+    .filter((s) => s && s.check_in_at && s.check_out_at)
     .reduce((acc, s) => {
-      const dur = Math.max(0, Math.round((new Date(s.check_out_at!).getTime() - new Date(s.check_in_at).getTime()) / 60000));
-      return acc + dur;
+      const inTime = new Date(s.check_in_at).getTime();
+      const outTime = new Date(s.check_out_at!).getTime();
+      if (isNaN(inTime) || isNaN(outTime) || outTime < inTime) return acc;
+      const dur = Math.round((outTime - inTime) / 60000);
+      return acc + Math.max(0, dur);
     }, 0);
   const todayMinutes = closedSessionsMinutes + activeElapsedMinutes || data?.daySummary?.total_minutes || 0;
   const targetMinutes = data?.targetMinutes || 480;
@@ -140,13 +143,13 @@ function DashboardContent({
   const weekProgress = Math.min(Math.round((weekMinutes / weeklyTarget) * 100), 100);
 
   const firstName = fullName ? fullName.split(/\s+/)[0] : "there";
-  const topNotifications = notifications.slice(0, 3);
-  const recentRegularizations = regularizations.slice(0, 2);
+  const topNotifications = (Array.isArray(notifications) ? notifications : []).filter(Boolean).slice(0, 3);
+  const recentRegularizations = (Array.isArray(regularizations) ? regularizations : []).filter(Boolean).slice(0, 2);
 
   // Authoritative shift & lock status matching the check-in card
-  const shiftStartTime = data?.shiftStartTime || "09:00:00";
-  const shiftEndTime = data?.shiftEndTime || "17:00:00";
-  const userTimezone = data?.timezone || timezone || "Asia/Kolkata";
+  const shiftStartTime = String(data?.shiftStartTime || "09:00:00");
+  const shiftEndTime = String(data?.shiftEndTime || "17:00:00");
+  const userTimezone = String(data?.timezone || timezone || "Asia/Kolkata");
 
   const serverOffsetRef = React.useRef<number>(0);
   const [lockStatus, setLockStatus] = React.useState(() =>
@@ -439,7 +442,7 @@ function DashboardContent({
         >
           {topNotifications.length > 0 ? (
             <div className="space-y-2.5">
-              {topNotifications.map((n) => (
+              {topNotifications.filter(Boolean).map((n) => (
                 <button
                   key={n.id}
                   type="button"
@@ -456,14 +459,14 @@ function DashboardContent({
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-black truncate">
-                      {n.title}
+                      {n.title || "Notification"}
                     </span>
                     {!n.read_at && (
                       <span className="w-2 h-2 rounded-full bg-[#FF1493] shrink-0" />
                     )}
                   </div>
                   <p className="text-[11px] text-[#808080] mt-1 line-clamp-2">
-                    {n.body}
+                    {n.body || ""}
                   </p>
                 </button>
               ))}
@@ -494,19 +497,19 @@ function DashboardContent({
         >
           <div className="space-y-2.5 mb-4">
             {recentRegularizations.length > 0 ? (
-              recentRegularizations.map((req) => (
+              recentRegularizations.filter(Boolean).map((req) => (
                 <div
                   key={req.id}
                   className="p-3.5 rounded-2xl bg-card border border-border-light shadow-sm"
                 >
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <span className="text-[11px] font-bold text-text-tertiary uppercase font-mono">
-                      {req.work_date}
+                      {req.work_date || "—"}
                     </span>
                     <StatusPill status={req.status} />
                   </div>
                   <p className="text-xs font-bold text-text-primary line-clamp-2">
-                    {req.reason}
+                    {req.reason || "No reason specified"}
                   </p>
                 </div>
               ))
@@ -587,8 +590,10 @@ function DashboardContent({
         >
           {myTasks.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-              {myTasks.map((task) => {
-                const dueState = getTaskDueState(task.due_date, task.status);
+              {myTasks.filter(Boolean).map((task) => {
+                const status = task.status || "todo";
+                const priority = task.priority || "medium";
+                const dueState = getTaskDueState(task.due_date, status);
                 return (
                   <Link
                     key={task.id}
@@ -596,11 +601,11 @@ function DashboardContent({
                     className="p-3.5 rounded-xl bg-[#F5F5F5] hover:bg-white border border-[#E6E6E6] transition-all space-y-2 block"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <StatusPill status={task.status} />
-                      <StatusPill status={task.priority} showIcon={false} />
+                      <StatusPill status={status} />
+                      <StatusPill status={priority} showIcon={false} />
                     </div>
                     <h3 className="text-xs font-semibold text-black line-clamp-1">
-                      {task.title}
+                      {task.title || "Untitled Task"}
                     </h3>
                     <div className="flex items-center justify-between text-[11px]">
                       {dueState === "overdue" ? (
