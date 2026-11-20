@@ -3,25 +3,27 @@
 import * as React from "react";
 import { KPI_CONFIG } from "@/lib/kpi/config";
 import { cn } from "@/lib/utils";
-import { ChevronDown, HelpCircle, ShieldCheck } from "lucide-react";
+import { ChevronDown, HelpCircle } from "lucide-react";
 
 interface KpiCalculationFooterProps {
   employeeType?: string;
   configEffectiveDate?: string | null;
+  onOpenBreakdown?: () => void;
   className?: string;
 }
 
-const WEIGHT_LABELS: Record<string, string> = {
-  on_time_check_in_rate: "On-time check-in rate",
-  days_worked_vs_expected: "Days worked vs expected",
-  worked_hours_vs_target: "Worked hours vs target",
-  tasks_completed_vs_assigned: "Tasks completed vs assigned",
-  task_on_time_rate: "Task on-time delivery rate",
+const PLAIN_WEIGHT_LABELS: Record<string, string> = {
+  on_time_check_in_rate: "Punctuality (on-time check-ins)",
+  days_worked_vs_expected: "Days present (scheduled workdays)",
+  worked_hours_vs_target: "Hours logged (vs shift target)",
+  tasks_completed_vs_assigned: "Tasks completed",
+  task_on_time_rate: "Tasks delivered on time",
 };
 
 export function KpiCalculationFooter({
   employeeType = "full_time",
   configEffectiveDate = "1 Nov 2026",
+  onOpenBreakdown,
   className,
 }: KpiCalculationFooterProps) {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -52,14 +54,14 @@ export function KpiCalculationFooter({
           <div>
             <div className="flex items-center gap-2">
               <h4 className="text-xs font-bold text-text-primary tracking-tight">
-                How performance & KPI metrics are calculated
+                How this is calculated
               </h4>
               <span className="px-2 py-0.2 rounded-full text-[10px] font-semibold bg-card-subtle border border-border-light text-text-tertiary">
-                Targets effective from {configEffectiveDate || "1 Nov 2026"}
+                Effective {configEffectiveDate || "1 Nov 2026"}
               </span>
             </div>
             <p className="text-[11px] text-text-secondary font-medium">
-              Objective formulas, component weighting, and shift policy targets from the system configuration.
+              Formulas, category weights, and tracking rules.
             </p>
           </div>
         </div>
@@ -78,8 +80,8 @@ export function KpiCalculationFooter({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3">
             {/* 1. Component Weights */}
             <div className="space-y-2 p-3.5 rounded-xl bg-card-subtle border border-border-light">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-text-tertiary block">
-                Overall index component weights
+              <span className="text-[10px] font-bold text-text-tertiary block">
+                What counts toward your result
               </span>
 
               <div className="space-y-1.5 divide-y divide-border-light/60">
@@ -89,105 +91,73 @@ export function KpiCalculationFooter({
                     className="flex items-center justify-between pt-1.5 first:pt-0"
                   >
                     <span className="font-semibold text-text-primary">
-                      {WEIGHT_LABELS[key] || key}
+                      {PLAIN_WEIGHT_LABELS[key] || key}
                     </span>
                     <span className="tabular-nums font-bold text-black">
                       {Math.round(weight * 100)}%
                     </span>
                   </div>
                 ))}
-                <div className="flex items-center justify-between pt-2 border-t border-border-light text-[11px] font-bold">
-                  <span className="text-text-primary">Overall benchmark target</span>
-                  <span className="tabular-nums text-black">{KPI_CONFIG.overallTarget || 90}%</span>
-                </div>
               </div>
+
+              {onOpenBreakdown && (
+                <button
+                  type="button"
+                  onClick={onOpenBreakdown}
+                  className="w-full mt-2 py-1.5 rounded-lg bg-card border border-border-light text-xs font-bold text-black hover:bg-card-subtle text-center cursor-pointer"
+                >
+                  View full formula breakdown
+                </button>
+              )}
             </div>
 
-            {/* 2. Active Role Policy Targets */}
+            {/* 2. Target Expectations */}
             <div className="space-y-2 p-3.5 rounded-xl bg-card-subtle border border-border-light">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-text-tertiary block">
-                  Active policy targets ({normType.replace("_", "-")})
-                </span>
-                <span className="tabular-nums text-[11px] font-bold text-black">
-                  {currentTargets.hoursPerDay}h Shift
-                </span>
-              </div>
+              <span className="text-[10px] font-bold text-text-tertiary block">
+                Target expectations ({employeeType.replace("_", "-")})
+              </span>
 
-              <div className="space-y-1.5 divide-y divide-border-light/60">
-                <div className="flex items-center justify-between pt-1.5 first:pt-0">
-                  <span className="font-semibold text-text-primary">On-time punch target</span>
-                  <span className="tabular-nums font-bold text-text-secondary">
+              <div className="space-y-1.5 text-xs text-text-secondary">
+                <div className="flex justify-between">
+                  <span>Punctuality target</span>
+                  <span className="font-bold text-text-primary tabular-nums">
                     {currentTargets.onTimeTargetRate}%
                   </span>
                 </div>
-                <div className="flex items-center justify-between pt-1.5">
-                  <span className="font-semibold text-text-primary">Working days attendance</span>
-                  <span className="tabular-nums font-bold text-text-secondary">
+                <div className="flex justify-between">
+                  <span>Days present target</span>
+                  <span className="font-bold text-text-primary tabular-nums">
                     {currentTargets.daysWorkedTargetRate}%
                   </span>
                 </div>
-                <div className="flex items-center justify-between pt-1.5">
-                  <span className="font-semibold text-text-primary">Shift hours target</span>
-                  <span className="tabular-nums font-bold text-text-secondary">
-                    {currentTargets.hoursTargetRate}%
+                <div className="flex justify-between">
+                  <span>Daily shift hours</span>
+                  <span className="font-bold text-text-primary tabular-nums">
+                    {currentTargets.hoursPerDay}h / day
                   </span>
                 </div>
-                <div className="flex items-center justify-between pt-1.5">
-                  <span className="font-semibold text-text-primary">Task completion target</span>
-                  <span className="tabular-nums font-bold text-text-secondary">
+                <div className="flex justify-between">
+                  <span>Task completion target</span>
+                  <span className="font-bold text-text-primary tabular-nums">
                     {currentTargets.taskCompletionTargetRate}%
                   </span>
                 </div>
-                <div className="flex items-center justify-between pt-1.5">
-                  <span className="font-semibold text-text-primary">Task on-time delivery</span>
-                  <span className="tabular-nums font-bold text-text-secondary">
-                    {currentTargets.taskOnTimeTargetRate}%
-                  </span>
-                </div>
               </div>
             </div>
 
-            {/* 3. Status Thresholds from Config */}
+            {/* 3. Also Tracked (formerly Diagnostics) */}
             <div className="space-y-2 p-3.5 rounded-xl bg-card-subtle border border-border-light">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-text-tertiary block">
-                Status evaluation thresholds
+              <span className="text-[10px] font-bold text-text-tertiary block">
+                Also tracked (does not reduce score)
               </span>
 
-              <div className="space-y-2 pt-1 text-xs">
-                <div className="flex items-start gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#B7FF00] mt-1 shrink-0" />
-                  <div>
-                    <strong className="text-black block">On track</strong>
-                    <span className="text-[11px] text-text-secondary">At or above target</span>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-2">
-                  <span className="w-2 h-2 rounded-full bg-amber-500 mt-1 shrink-0" />
-                  <div>
-                    <strong className="text-black block">At risk</strong>
-                    <span className="text-[11px] text-text-secondary">Within 10 points below target</span>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-2">
-                  <span className="w-2 h-2 rounded-full bg-rose-500 mt-1 shrink-0" />
-                  <div>
-                    <strong className="text-black block">Behind</strong>
-                    <span className="text-[11px] text-text-secondary">More than 10 points below target</span>
-                  </div>
-                </div>
+              <div className="space-y-1.5 text-xs text-text-secondary">
+                <p>• <strong>Early check-outs:</strong> Leaving before scheduled shift end.</p>
+                <p>• <strong>Forgot to check out:</strong> Punches auto-closed at midnight.</p>
+                <p>• <strong>Correction requests:</strong> Punch adjustments submitted.</p>
+                <p>• <strong>Average task cycle time:</strong> Elapsed hours to finish tasks.</p>
+                <p>• <strong>Overdue tasks:</strong> Open tasks past target due date.</p>
               </div>
-            </div>
-          </div>
-
-          {/* Governance & Privacy Statement */}
-          <div className="flex items-start gap-2.5 p-3 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] text-[11px] text-[#4D4D4D] leading-relaxed">
-            <ShieldCheck className="w-4 h-4 text-black shrink-0 mt-0.5" />
-            <div>
-              <strong className="text-black block mb-0.5">Objective Governance Policy:</strong>
-              Approved leave applications and official corporate holidays automatically count as met and are not charged against your working days or target hours. Periods or metrics with no recorded activity are tagged <strong>No data</strong> and never penalize your score.
             </div>
           </div>
         </div>

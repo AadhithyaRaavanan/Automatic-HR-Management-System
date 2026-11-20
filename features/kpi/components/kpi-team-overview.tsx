@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Search, Download, Filter, ArrowUpDown } from "lucide-react";
+import { Search, Download, ChevronDown, ChevronRight, AlertCircle, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { getStatusDisplay } from "@/lib/kpi/plain-language";
 
 interface TeamMemberRecord {
   id: string;
@@ -49,9 +50,7 @@ export function KpiTeamOverview({
   const [team, setTeam] = React.useState<TeamMemberRecord[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [search, setSearch] = React.useState("");
-  const [needsAttentionOnly, setNeedsAttentionOnly] = React.useState(false);
-  const [sortField, setSortField] = React.useState<"name" | "score" | "review">("name");
-  const [sortAsc, setSortAsc] = React.useState(true);
+  const [everyoneOpen, setEveryoneOpen] = React.useState(true);
 
   React.useEffect(() => {
     let active = true;
@@ -80,54 +79,58 @@ export function KpiTeamOverview({
     };
   }, [from, to, departmentFilter, employeeTypeFilter]);
 
-  // Filtering
-  const filtered = React.useMemo(() => {
+  // Search filtering
+  const searchFiltered = React.useMemo(() => {
     return team.filter((m) => {
-      const matchSearch =
-        m.fullName.toLowerCase().includes(search.toLowerCase()) ||
-        m.email.toLowerCase().includes(search.toLowerCase()) ||
-        m.department.toLowerCase().includes(search.toLowerCase());
-
-      if (!matchSearch) return false;
-      if (needsAttentionOnly && !m.needsAttention) return false;
-      return true;
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return (
+        m.fullName.toLowerCase().includes(q) ||
+        m.email.toLowerCase().includes(q) ||
+        m.department.toLowerCase().includes(q)
+      );
     });
-  }, [team, search, needsAttentionOnly]);
+  }, [team, search]);
 
-  // Sorting: default alphabetical by name, allow column sort, NO leaderboard styling
-  const sorted = React.useMemo(() => {
-    return [...filtered].sort((a, b) => {
-      if (sortField === "name") {
-        const cmp = a.fullName.localeCompare(b.fullName);
-        return sortAsc ? cmp : -cmp;
-      }
-      if (sortField === "score") {
-        const sA = a.overallScore ?? -1;
-        const sB = b.overallScore ?? -1;
-        return sortAsc ? sA - sB : sB - sA;
-      }
-      if (sortField === "review") {
-        const rA = a.latestReviewDate || "";
-        const rB = b.latestReviewDate || "";
-        return sortAsc ? rA.localeCompare(rB) : rB.localeCompare(rA);
-      }
-      return 0;
-    });
-  }, [filtered, sortField, sortAsc]);
-
-  const handleSort = (field: "name" | "score" | "review") => {
-    if (sortField === field) {
-      setSortAsc((prev) => !prev);
-    } else {
-      setSortField(field);
-      setSortAsc(true);
+  // Helper for single reason sentence in Needs Attention
+  const getNeedsAttentionReason = (m: TeamMemberRecord): string => {
+    if (m.overallScore == null) {
+      if (m.tasksScore == null && m.attendanceScore == null) return "No activity recorded yet";
+      if (m.tasksScore == null) return "No tasks assigned";
+      return "Not enough data recorded yet";
     }
+    if (m.hoursScore != null && m.hoursScore < 80) return `Hours at ${m.hoursScore}%`;
+    if (m.attendanceScore != null && m.attendanceScore < 80) return `Attendance at ${m.attendanceScore}%`;
+    if (m.tasksScore != null && m.tasksScore < 70) return `Tasks at ${m.tasksScore}%`;
+    if (m.hoursScore != null && m.hoursScore < 90) return `Hours at ${m.hoursScore}%`;
+    if (m.attendanceScore != null && m.attendanceScore < 90) return `Attendance at ${m.attendanceScore}%`;
+    if (m.tasksScore == null) return "No tasks assigned";
+    if (m.goals.atRisk > 0) return `${m.goals.atRisk} goal marked at risk`;
+    return "Check-ins or deliverables need attention";
   };
 
-  const handleExportTeamCsv = () => {
-    if (sorted.length === 0) return;
+  // Group into "Needs attention" vs All
+  const needsAttentionList = React.useMemo(() => {
+    return searchFiltered.filter((m) => {
+      const isBehind =
+        m.overallScore == null ||
+        (m.attendanceScore != null && m.attendanceScore < 90) ||
+        (m.hoursScore != null && m.hoursScore < 90) ||
+        (m.tasksScore != null && m.tasksScore < 85) ||
+        m.tasksScore == null ||
+        m.needsAttention;
+      return isBehind;
+    });
+  }, [searchFiltered]);
 
-    // Export CSV with Type column LAST
+  // Everyone sorted alphabetically by name
+  const everyoneAlphabetical = React.useMemo(() => {
+    return [...searchFiltered].sort((a, b) => a.fullName.localeCompare(b.fullName));
+  }, [searchFiltered]);
+
+  const handleExportTeamCsv = () => {
+    if (everyoneAlphabetical.length === 0) return;
+
     const headers = [
       "Employee Name",
       "Email",
@@ -141,7 +144,7 @@ export function KpiTeamOverview({
       "Employment Type",
     ];
 
-    const rows = sorted.map((m) => [
+    const rows = everyoneAlphabetical.map((m) => [
       `"${m.fullName.replace(/"/g, '""')}"`,
       `"${m.email.replace(/"/g, '""')}"`,
       `"${m.department.replace(/"/g, '""')}"`,
@@ -159,7 +162,7 @@ export function KpiTeamOverview({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", `team-kpi-${from}-to-${to}.csv`);
+    link.setAttribute("download", `team-performance-${from}-to-${to}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -167,205 +170,205 @@ export function KpiTeamOverview({
   };
 
   return (
-    <div className={cn("space-y-4", className)}>
-      {/* Table Toolbar */}
-      <div className="p-3 rounded-xl bg-card border border-border-light shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
-        <div className="flex flex-1 items-center gap-3 w-full">
-          {/* Search */}
-          <div className="relative flex-1 max-w-sm">
-            <Search className="w-4 h-4 text-text-tertiary absolute left-3 top-2.5" />
-            <input
-              type="text"
-              placeholder="Search team member or department..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-card-subtle border border-border-light text-xs text-text-primary focus:ring-1 focus:ring-black"
-            />
-          </div>
-
-          {/* Needs Attention Toggle */}
-          <button
-            type="button"
-            onClick={() => setNeedsAttentionOnly((prev) => !prev)}
-            className={cn(
-              "px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer",
-              needsAttentionOnly
-                ? "bg-black text-white"
-                : "bg-card-subtle text-text-secondary hover:text-black border border-border-light"
-            )}
-          >
-            <Filter className="w-3.5 h-3.5" />
-            <span>Needs attention</span>
-          </button>
+    <div className={cn("space-y-5", className)}>
+      {/* Search Bar + Export Button */}
+      <div className="p-3 rounded-2xl bg-card border border-border-light shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="relative flex-1 w-full max-w-sm">
+          <Search className="w-4 h-4 text-text-tertiary absolute left-3 top-2.5" />
+          <input
+            type="text"
+            placeholder="Search team member or department..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary focus:ring-1 focus:ring-black outline-none"
+          />
         </div>
 
-        {/* Export Team CSV */}
         <button
           type="button"
           onClick={handleExportTeamCsv}
-          disabled={loading || sorted.length === 0 || team.length === 0}
-          title={sorted.length === 0 ? "No team members to export" : "Export team performance to CSV"}
-          className="px-3.5 py-1.5 rounded-lg bg-card border border-border-light hover:bg-card-subtle text-xs font-bold text-text-primary transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={loading || everyoneAlphabetical.length === 0}
+          className="px-3.5 py-1.5 rounded-xl bg-card border border-border-light hover:bg-card-subtle text-xs font-bold text-text-primary transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
         >
           <Download className="w-3.5 h-3.5 text-black" />
-          <span>Export Team CSV</span>
+          <span>Export team CSV</span>
         </button>
       </div>
 
-      {/* Team Matrix Table */}
       {loading ? (
-        <div className="h-64 rounded-2xl bg-card/60 border border-border-light animate-pulse" />
-      ) : sorted.length > 0 ? (
-        <div className="rounded-2xl bg-card border border-border-light overflow-hidden shadow-xs">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead>
-                <tr className="border-b border-border-light bg-card-subtle/70 text-text-tertiary font-bold uppercase tracking-wider text-[11px]">
-                  <th className="p-3.5 cursor-pointer select-none" onClick={() => handleSort("name")}>
-                    <div className="flex items-center gap-1">
-                      <span>Team Member</span>
-                      <ArrowUpDown className="w-3 h-3" />
-                    </div>
-                  </th>
-                  <th className="p-3.5">Department</th>
-                  <th className="p-3.5 cursor-pointer select-none" onClick={() => handleSort("score")}>
-                    <div className="flex items-center gap-1">
-                      <span>Overall</span>
-                      <ArrowUpDown className="w-3 h-3" />
-                    </div>
-                  </th>
-                  <th className="p-3.5">Attendance</th>
-                  <th className="p-3.5">Hours</th>
-                  <th className="p-3.5">Tasks</th>
-                  <th className="p-3.5 cursor-pointer select-none" onClick={() => handleSort("review")}>
-                    <div className="flex items-center gap-1">
-                      <span>Latest Review</span>
-                      <ArrowUpDown className="w-3 h-3" />
-                    </div>
-                  </th>
-                  <th className="p-3.5">Goals</th>
-                  {/* Type Column placed LAST */}
-                  <th className="p-3.5 text-right">Type</th>
-                </tr>
-              </thead>
+        <div className="space-y-4">
+          <div className="h-32 rounded-2xl bg-card border border-border-light animate-pulse" />
+          <div className="h-64 rounded-2xl bg-card border border-border-light animate-pulse" />
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* SECTION 1: Needs Attention (Opens first) */}
+          <section className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600" />
+                <h3 className="text-sm font-extrabold text-text-primary tracking-tight">
+                  Needs attention
+                </h3>
+              </div>
+              <span className="text-xs text-text-tertiary font-semibold">
+                {needsAttentionList.length} people
+              </span>
+            </div>
 
-              <tbody className="divide-y divide-border-light/60">
-                {sorted.map((m) => {
-                  const initials = m.fullName
-                    .trim()
-                    .split(/\s+/)
-                    .map((w) => w[0])
-                    .join("")
-                    .slice(0, 2)
-                    .toUpperCase() || "ZX";
+            {needsAttentionList.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {needsAttentionList.map((m) => {
+                  const reason = getNeedsAttentionReason(m);
+                  const statusKey =
+                    m.overallScore != null
+                      ? m.overallScore >= 90
+                        ? "on_track"
+                        : m.overallScore >= 80
+                        ? "at_risk"
+                        : "behind"
+                      : "no_data";
+                  const status = getStatusDisplay(statusKey);
 
                   return (
-                    <tr
+                    <div
                       key={m.id}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => onSelectEmployee(m.id)}
-                      className="hover:bg-card-subtle/50 transition-colors cursor-pointer group"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onSelectEmployee(m.id);
+                        }
+                      }}
+                      className="p-4 rounded-2xl bg-card border border-border-light shadow-card hover:border-black/30 hover:shadow-card-hover transition-all cursor-pointer flex flex-col justify-between space-y-3 group select-none"
                     >
-                      {/* Person */}
-                      <td className="p-3.5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-black text-[#B7FF00] font-bold text-xs flex items-center justify-center shrink-0">
-                            {initials}
+                      <div className="space-y-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <span className="text-xs font-bold text-text-primary group-hover:text-black block leading-snug">
+                              {m.fullName}
+                            </span>
+                            <span className="text-[11px] text-text-tertiary">
+                              {m.department || "General"}
+                            </span>
+                          </div>
+
+                          <div className="inline-flex items-center gap-1 text-[11px] shrink-0">
+                            <span className={cn("w-2 h-2 rounded-full", status.dotColor)} aria-hidden="true" />
+                            <span className={status.textColor}>{status.label}</span>
+                          </div>
+                        </div>
+
+                        {/* ONE plain reason sentence */}
+                        <p className="text-xs text-amber-900 font-semibold pt-1">
+                          {reason}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-text-tertiary pt-2 border-t border-border-light/60">
+                        <span>Score: {m.overallScore != null ? `${m.overallScore}%` : "—"}</span>
+                        <span className="text-black font-bold group-hover:underline inline-flex items-center gap-0.5">
+                          View details <ChevronRight className="w-3 h-3" />
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-4 rounded-2xl bg-card border border-border-light text-xs text-text-secondary">
+                No team members need attention right now.
+              </div>
+            )}
+          </section>
+
+          {/* SECTION 2: Collapsible "Everyone" list sorted alphabetically */}
+          <section className="space-y-2.5">
+            <button
+              type="button"
+              onClick={() => setEveryoneOpen((prev) => !prev)}
+              className="w-full flex items-center justify-between p-2 text-left hover:bg-card-subtle/40 rounded-xl transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <ChevronDown
+                  className={cn(
+                    "w-4 h-4 text-text-tertiary transition-transform duration-200",
+                    !everyoneOpen && "-rotate-90"
+                  )}
+                />
+                <h3 className="text-sm font-extrabold text-text-primary tracking-tight">
+                  Everyone
+                </h3>
+              </div>
+              <span className="text-xs text-text-tertiary font-semibold">
+                {everyoneAlphabetical.length} people
+              </span>
+            </button>
+
+            {everyoneOpen && (
+              <div className="rounded-2xl bg-card border border-border-light overflow-hidden shadow-card divide-y divide-border-light">
+                {everyoneAlphabetical.length > 0 ? (
+                  everyoneAlphabetical.map((m) => {
+                    const statusKey =
+                      m.overallScore != null
+                        ? m.overallScore >= 90
+                          ? "on_track"
+                          : m.overallScore >= 80
+                          ? "at_risk"
+                          : "behind"
+                        : "no_data";
+                    const status = getStatusDisplay(statusKey);
+
+                    return (
+                      <div
+                        key={m.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => onSelectEmployee(m.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onSelectEmployee(m.id);
+                          }
+                        }}
+                        className="p-3.5 flex items-center justify-between gap-3 text-xs hover:bg-card-subtle transition-colors cursor-pointer group select-none"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 rounded-full bg-card-subtle border border-border-light text-text-secondary flex items-center justify-center font-bold text-xs shrink-0">
+                            {m.fullName.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <span className="font-bold text-text-primary group-hover:text-black transition-colors block truncate">
+                            <span className="font-bold text-text-primary group-hover:text-black block truncate">
                               {m.fullName}
                             </span>
                             <span className="text-[11px] text-text-tertiary truncate block">
-                              {m.email}
+                              {m.department || "General"}
                             </span>
                           </div>
                         </div>
-                      </td>
 
-                      {/* Department */}
-                      <td className="p-3.5 text-text-secondary font-medium">
-                        {m.department}
-                      </td>
+                        <div className="flex items-center gap-4 shrink-0">
+                          {/* One status word with dot */}
+                          <div className="inline-flex items-center gap-1.5 text-xs">
+                            <span className={cn("w-2 h-2 rounded-full", status.dotColor)} aria-hidden="true" />
+                            <span className={status.textColor}>{status.label}</span>
+                          </div>
 
-                      {/* Overall Score + Status Dot */}
-                      <td className="p-3.5 font-bold tabular-nums">
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={cn(
-                              "w-2 h-2 rounded-full",
-                              m.overallScore == null
-                                ? "bg-[#808080]"
-                                : m.overallScore >= 85
-                                ? "bg-[#B7FF00]"
-                                : m.overallScore >= 70
-                                ? "bg-amber-500"
-                                : "bg-rose-500"
-                            )}
-                            aria-hidden="true"
-                          />
-                          <span className={cn(m.overallScore != null ? "text-text-primary" : "text-[#808080]")}>
-                            {m.overallScore != null ? `${m.overallScore}%` : "No data"}
-                          </span>
+                          <ChevronRight className="w-4 h-4 text-text-tertiary group-hover:text-black transition-colors" />
                         </div>
-                      </td>
-
-                      {/* Attendance */}
-                      <td className="p-3.5 font-medium tabular-nums text-text-secondary">
-                        {m.attendanceScore != null ? `${m.attendanceScore}%` : "—"}
-                      </td>
-
-                      {/* Hours */}
-                      <td className="p-3.5 font-medium tabular-nums text-text-secondary">
-                        {m.hoursScore != null ? `${m.hoursScore}%` : "—"}
-                      </td>
-
-                      {/* Tasks */}
-                      <td className="p-3.5 font-medium tabular-nums text-text-secondary">
-                        {m.tasksScore != null ? `${m.tasksScore}%` : "—"}
-                      </td>
-
-                      {/* Latest Review */}
-                      <td className="p-3.5 text-text-secondary">
-                        {m.latestReviewDate || <span className="text-text-tertiary">No data</span>}
-                      </td>
-
-                      {/* Goals Summary */}
-                      <td className="p-3.5">
-                        <span className="text-[11px] font-semibold text-text-secondary">
-                          {m.goals.total > 0 ? `${m.goals.done}/${m.goals.total} done` : "0 active"}
-                        </span>
-                      </td>
-
-                      {/* Type Column placed LAST */}
-                      <td className="p-3.5 text-right">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-card-subtle border border-border-light text-text-secondary capitalize">
-                          {m.employmentCategory.replace("_", "-")}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : team.length === 0 ? (
-        <div className="p-12 text-center text-xs text-text-tertiary border border-dashed border-border-light rounded-2xl bg-card">
-          No team members yet
-        </div>
-      ) : (
-        <div className="p-12 text-center space-y-3 border border-dashed border-border-light rounded-2xl bg-card">
-          <p className="text-xs text-text-tertiary">No team members match these filters</p>
-          <button
-            type="button"
-            onClick={() => {
-              setSearch("");
-              setNeedsAttentionOnly(false);
-            }}
-            className="px-3.5 py-1.5 rounded-lg bg-black text-white text-xs font-semibold hover:bg-neutral-800 transition-colors cursor-pointer"
-          >
-            Clear filters
-          </button>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="p-8 text-center text-xs text-text-tertiary">
+                    No team members found matching your search.
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
         </div>
       )}
     </div>
