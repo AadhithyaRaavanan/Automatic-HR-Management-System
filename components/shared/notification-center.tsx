@@ -29,18 +29,27 @@ interface NotificationCenterProps {
   onOpenChange: (open: boolean) => void;
 }
 
-function getNotificationIcon(type: string, title?: string) {
-  if (type.includes("birthday") || title?.includes("Birthday") || title?.includes("🎂") || title?.includes("🎉")) {
+function getNotificationIcon(type?: string | null, title?: string | null) {
+  const safeType = (type || "").toLowerCase();
+  const safeTitle = (title || "").toLowerCase();
+
+  if (
+    safeType.includes("birthday") ||
+    safeTitle.includes("birthday") ||
+    safeTitle.includes("🎂") ||
+    safeTitle.includes("🎉")
+  ) {
     return <span className="text-sm shrink-0">🎂</span>;
   }
-  if (type.startsWith("leave")) return <Calendar className="w-3.5 h-3.5 text-black shrink-0" />;
-  if (type.startsWith("request") || type.startsWith("regularization")) return <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />;
-  if (type.startsWith("task")) return <UserCheck className="w-3.5 h-3.5 text-black shrink-0" />;
-  if (type.startsWith("kpi")) return <Target className="w-3.5 h-3.5 text-black shrink-0" />;
-  if (type.startsWith("security") || type.startsWith("password") || type.startsWith("mfa"))
+  if (safeType.startsWith("leave")) return <Calendar className="w-3.5 h-3.5 text-black shrink-0" />;
+  if (safeType.startsWith("request") || safeType.startsWith("regularization"))
+    return <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />;
+  if (safeType.startsWith("task")) return <UserCheck className="w-3.5 h-3.5 text-black shrink-0" />;
+  if (safeType.startsWith("kpi")) return <Target className="w-3.5 h-3.5 text-black shrink-0" />;
+  if (safeType.startsWith("security") || safeType.startsWith("password") || safeType.startsWith("mfa"))
     return <ShieldAlert className="w-3.5 h-3.5 text-[#FF1493] shrink-0" />;
-  if (type.startsWith("holiday")) return <Calendar className="w-3.5 h-3.5 text-[#B7FF00] shrink-0" />;
-  if (type.startsWith("reminder") || type.includes("overdue") || type.includes("missed"))
+  if (safeType.startsWith("holiday")) return <Calendar className="w-3.5 h-3.5 text-[#B7FF00] shrink-0" />;
+  if (safeType.startsWith("reminder") || safeType.includes("overdue") || safeType.includes("missed"))
     return <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />;
   return <Bell className="w-3.5 h-3.5 text-black shrink-0" />;
 }
@@ -73,16 +82,28 @@ export function NotificationCenter({
   if (!open) return null;
 
   const handleNotificationClick = async (item: NotificationItemRecord) => {
-    if (!item.read_at) {
+    if (!item?.read_at) {
       await markSingleRead(item.id).catch(() => {});
     }
-    if (item.link) {
+    if (item?.link) {
       onOpenChange(false);
       router.push(item.link);
     }
   };
 
-  const previewItems = notifications.slice(0, 10);
+  const handleMarkAll = async () => {
+    try {
+      await markAllRead();
+    } catch (err) {
+      console.error("[NotificationCenter] Mark all as read error:", err);
+    }
+  };
+
+  const previewItems = Array.isArray(notifications)
+    ? notifications.filter((n): n is NotificationItemRecord => Boolean(n && n.id)).slice(0, 10)
+    : [];
+
+  const safeUnreadCount = typeof unreadCount === "number" && !isNaN(unreadCount) ? unreadCount : 0;
 
   return (
     <div
@@ -108,21 +129,21 @@ export function NotificationCenter({
               Notifications
             </h2>
             <span className="sr-only" aria-live="polite">
-              {unreadCount} unread notifications
+              {safeUnreadCount} unread notifications
             </span>
-            {unreadCount > 0 && (
+            {safeUnreadCount > 0 && (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black text-white">
-                {unreadCount > 99 ? "99+" : unreadCount}
+                {safeUnreadCount > 99 ? "99+" : safeUnreadCount}
               </span>
             )}
           </div>
 
           <div className="flex items-center gap-1">
-            {unreadCount > 0 && (
+            {safeUnreadCount > 0 && (
               <button
                 type="button"
                 disabled={isMarkingAll}
-                onClick={() => markAllRead().catch(() => {})}
+                onClick={handleMarkAll}
                 title="Mark all as read"
                 aria-label="Mark all notifications as read"
                 className="px-2 py-1 rounded-lg text-[#808080] hover:text-black hover:bg-[#F5F5F5] text-[11px] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50 transition-colors"

@@ -24,19 +24,27 @@ import {
 } from "@/features/notifications/hooks/use-notifications";
 import { toast } from "sonner";
 
-function getNotificationIcon(type: string, title?: string) {
-  if (type.includes("birthday") || title?.includes("Birthday") || title?.includes("🎂") || title?.includes("🎉")) {
+function getNotificationIcon(type?: string | null, title?: string | null) {
+  const safeType = (type || "").toLowerCase();
+  const safeTitle = (title || "").toLowerCase();
+
+  if (
+    safeType.includes("birthday") ||
+    safeTitle.includes("birthday") ||
+    safeTitle.includes("🎂") ||
+    safeTitle.includes("🎉")
+  ) {
     return <span className="text-base shrink-0">🎂</span>;
   }
-  if (type.startsWith("leave")) return <Calendar className="w-4 h-4 text-black shrink-0" />;
-  if (type.startsWith("request") || type.startsWith("regularization"))
+  if (safeType.startsWith("leave")) return <Calendar className="w-4 h-4 text-black shrink-0" />;
+  if (safeType.startsWith("request") || safeType.startsWith("regularization"))
     return <Clock className="w-4 h-4 text-amber-600 shrink-0" />;
-  if (type.startsWith("task")) return <UserCheck className="w-4 h-4 text-black shrink-0" />;
-  if (type.startsWith("kpi")) return <Target className="w-4 h-4 text-black shrink-0" />;
-  if (type.startsWith("security") || type.startsWith("password") || type.startsWith("mfa"))
+  if (safeType.startsWith("task")) return <UserCheck className="w-4 h-4 text-black shrink-0" />;
+  if (safeType.startsWith("kpi")) return <Target className="w-4 h-4 text-black shrink-0" />;
+  if (safeType.startsWith("security") || safeType.startsWith("password") || safeType.startsWith("mfa"))
     return <ShieldAlert className="w-4 h-4 text-[#FF1493] shrink-0" />;
-  if (type.startsWith("holiday")) return <Calendar className="w-4 h-4 text-[#B7FF00] shrink-0" />;
-  if (type.startsWith("reminder") || type.includes("overdue") || type.includes("missed"))
+  if (safeType.startsWith("holiday")) return <Calendar className="w-4 h-4 text-[#B7FF00] shrink-0" />;
+  if (safeType.startsWith("reminder") || safeType.includes("overdue") || safeType.includes("missed"))
     return <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />;
   return <Bell className="w-4 h-4 text-black shrink-0" />;
 }
@@ -46,23 +54,31 @@ export default function NotificationsPage() {
   const queryClient = useQueryClient();
   const [filter, setFilter] = React.useState<"all" | "unread">("all");
 
-  const { data: notifications = [], isLoading } = useQuery<NotificationItemRecord[]>({
+  const { data: rawNotifications = [], isLoading } = useQuery<NotificationItemRecord[]>({
     queryKey: ["notifications-all", filter],
     queryFn: async () => {
-      const url = filter === "unread" ? "/api/notifications?unread_only=true&limit=50" : "/api/notifications?limit=50";
-      const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) return [];
-      const json = await res.json();
-      const list: NotificationItemRecord[] = json.notifications || [];
-      return list.filter(
-        (n) =>
-          !n.body?.toLowerCase().includes("example notification") &&
-          !(n as any).metadata?.isExample
-      );
+      try {
+        const url = filter === "unread" ? "/api/notifications?unread_only=true&limit=50" : "/api/notifications?limit=50";
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) return [];
+        const json = await res.json();
+        const list: NotificationItemRecord[] = Array.isArray(json?.notifications) ? json.notifications : [];
+        return list.filter(
+          (n) =>
+            n &&
+            !n.body?.toLowerCase().includes("example notification") &&
+            !(n as any).metadata?.isExample
+        );
+      } catch (err) {
+        console.error("[NotificationsPage] Query error:", err);
+        return [];
+      }
     },
     staleTime: 0,
     refetchOnMount: "always",
   });
+
+  const notifications = Array.isArray(rawNotifications) ? rawNotifications.filter(Boolean) : [];
 
   const markSingleRead = useMutation({
     mutationFn: async (id: string) => {
@@ -80,20 +96,25 @@ export default function NotificationsPage() {
 
   const markAllRead = useMutation({
     mutationFn: async () => {
-      await fetch("/api/notifications/read", {
+      const res = await fetch("/api/notifications/read", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ all: true }),
       });
+      if (!res.ok) throw new Error("Failed to mark all as read");
+      return res.json().catch(() => ({}));
     },
     onSuccess: () => {
       toast.success("All notifications marked as read");
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       queryClient.invalidateQueries({ queryKey: ["notifications-all"] });
     },
+    onError: () => {
+      toast.error("Failed to mark all as read");
+    },
   });
 
-  const unreadCount = notifications.filter((n) => !n.read_at).length;
+  const unreadCount = notifications.filter((n) => Boolean(n && !n.read_at)).length;
 
   const handleItemClick = async (item: NotificationItemRecord) => {
     if (!item.read_at) {

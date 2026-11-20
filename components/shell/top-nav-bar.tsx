@@ -23,6 +23,7 @@ export function TopNavBar({
   const [commandOpen, setCommandOpen] = React.useState(false);
   const [notificationsOpen, setNotificationsOpen] = React.useState(false);
   const { unreadCount } = useNotifications();
+  const safeUnread = typeof unreadCount === "number" && !isNaN(unreadCount) ? unreadCount : 0;
   const session = useAppSession();
   const pathname = usePathname();
   const isDashboard = pathname === "/" || pathname === "/dashboard";
@@ -77,15 +78,15 @@ export function TopNavBar({
             type="button"
             title="Notifications"
             aria-label={
-              unreadCount > 0
-                ? `Notifications (${unreadCount} unread)`
+              safeUnread > 0
+                ? `Notifications (${safeUnread} unread)`
                 : "Notifications"
             }
             onClick={() => setNotificationsOpen(true)}
             className="relative p-2 rounded-lg bg-white hover:bg-[#F5F5F5] border border-[#E6E6E6] text-black transition-colors cursor-pointer"
           >
             <Bell className="w-4 h-4 text-black" />
-            {unreadCount > 0 && (
+            {safeUnread > 0 && (
               <span
                 className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#FF1493]"
                 aria-hidden="true"
