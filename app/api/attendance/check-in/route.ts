@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
     if (activeSession) {
       return NextResponse.json(
         { error: "Active session already exists. Please check out first.", code: "ACTIVE_SESSION_EXISTS" },
-        { status: 400 }
+        { status: 409 }
       );
     }
 
@@ -141,9 +141,10 @@ export async function POST(request: NextRequest) {
 
     if (insertErr) {
       if (insertErr.code === "23505" || insertErr.message?.includes("idx_single_open_session")) {
+        console.warn(`[Check-In 409 Conflict] Concurrent punch rejected for employee ${user.id} by idx_single_open_session constraint.`);
         return NextResponse.json(
           { error: "You are already checked in with an active session. Please check out first.", code: "ACTIVE_SESSION_EXISTS" },
-          { status: 400 }
+          { status: 409 }
         );
       }
       return NextResponse.json(
