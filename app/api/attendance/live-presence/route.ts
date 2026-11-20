@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRouteCaller } from "@/lib/auth/admin-guard";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { isDemoModeEnabled } from "@/lib/config/demo";
-import { getStoredAttendanceSessions, getStoredUsers } from "@/lib/storage/demo-store";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +14,7 @@ export async function GET(request: NextRequest) {
   try {
     const todayIso = new Date().toISOString().slice(0, 10);
 
-    // Fetch active employees in the organization
+    // Fetch all active employees in the organization directly from Supabase
     let empQuery = (supabaseAdmin as any)
       .from("employees")
       .select("id, full_name, email, avatar_url, timezone, work_mode, department_id, departments:department_id(name), job_titles:job_title_id(title_name)")
@@ -31,32 +29,19 @@ export async function GET(request: NextRequest) {
 
     const { data: employees, error: empErr } = await empQuery;
 
-    // Fetch today sessions
+    if (empErr) {
+      return NextResponse.json({ error: empErr.message }, { status: 400 });
+    }
+
+    // Fetch today sessions directly from Supabase
     const { data: sessions, error: sessErr } = await (supabaseAdmin as any)
       .from("attendance_sessions")
       .select("id, employee_id, check_in_at, check_out_at, work_date")
       .eq("work_date", todayIso)
       .order("check_in_at", { ascending: true });
 
-    let empList = employees || [];
-    let sessList = sessions || [];
-
-    if (isDemoModeEnabled() && (!empList.length || empErr)) {
-      const demoUsers = getStoredUsers();
-      empList = demoUsers.map((u: any) => ({
-        id: u.id,
-        full_name: u.name,
-        email: u.email,
-        avatar_url: u.avatarUrl || null,
-        timezone: u.timezone || "UTC",
-        work_mode: u.workMode || "remote",
-        departments: u.department ? { name: u.department } : null,
-        job_titles: u.jobTitle ? { title_name: u.jobTitle } : null,
-      }));
-
-      const demoSessions = getStoredAttendanceSessions();
-      sessList = demoSessions.filter((s: any) => s.work_date === todayIso);
-    }
+    const empList = employees || [];
+    const sessList = sessions || [];
 
     // Map each employee to their live attendance status
     const logs = empList.map((emp: any) => {
