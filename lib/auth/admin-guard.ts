@@ -149,7 +149,7 @@ export async function verifyAdminRouteCaller(
     }
   } catch {}
 
-  const mfaRequired = !isDemo && (hasEnrolledFactor || ((role === "admin" || role === "hr") && reqMfa));
+  const mfaRequired = !isDemo && reqMfa && (hasEnrolledFactor || role === "admin" || role === "hr");
 
   if (mfaRequired && currentAal !== "aal2") {
     return {
