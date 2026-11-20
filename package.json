@@ -78,6 +78,7 @@
     "eslint": "^8.57.1",
     "eslint-config-next": "14.2.18",
     "jsdom": "^25.0.1",
+    "mpg123-decoder": "^1.0.3",
     "otplib": "^13.6.0",
     "pg": "^8.23.1",
     "postcss": "^8.4.49",

@@ -1,12 +1,15 @@
-// Notification sound player using /notification.mp3 played twice
-// Supports Web Audio API decoded buffer, HTMLAudioElement, auto-unlock on user interaction, and synthesizer fallback
+// Notification sound player using the user's custom chime tone played twice
+// Features instant Web Audio buffer playback, HTML5 Audio element, cache-busting, and user-interaction auto-unlock
 
 let sharedAudioContext: AudioContext | null = null;
 let lastPlayedTime = 0;
 const lastPlayedIds = new Set<string>();
 let pendingPlayOnUnlock = false;
-let decodedNotificationBuffer: AudioBuffer | null = null;
+let decodedBuffer: AudioBuffer | null = null;
 let isFetchingBuffer = false;
+
+// Cache-busting URL so browsers never play stale audio from previous turns
+const AUDIO_URL = "/notification.mp3?v=3";
 
 /**
  * Lazily retrieves or instantiates a shared Web Audio context
@@ -31,18 +34,18 @@ function getAudioContext(): AudioContext | null {
 }
 
 /**
- * Pre-fetches and decodes /notification.mp3 into an AudioBuffer for zero-latency playback
+ * Pre-fetches and decodes the audio track into an AudioBuffer for zero-latency playback
  */
-async function preloadNotificationBuffer(ctx: AudioContext): Promise<AudioBuffer | null> {
-  if (decodedNotificationBuffer) return decodedNotificationBuffer;
+async function preloadAudioBuffer(ctx: AudioContext): Promise<AudioBuffer | null> {
+  if (decodedBuffer) return decodedBuffer;
   if (isFetchingBuffer) return null;
   isFetchingBuffer = true;
   try {
-    const res = await fetch("/notification.mp3");
+    const res = await fetch(AUDIO_URL);
     if (!res.ok) return null;
     const arrayBuffer = await res.arrayBuffer();
-    decodedNotificationBuffer = await ctx.decodeAudioData(arrayBuffer);
-    return decodedNotificationBuffer;
+    decodedBuffer = await ctx.decodeAudioData(arrayBuffer);
+    return decodedBuffer;
   } catch {
     return null;
   } finally {
@@ -50,24 +53,7 @@ async function preloadNotificationBuffer(ctx: AudioContext): Promise<AudioBuffer
   }
 }
 
-// Preload buffer on window load
-if (typeof window !== "undefined") {
-  const tryPreload = () => {
-    const ctx = getAudioContext();
-    if (ctx) {
-      preloadNotificationBuffer(ctx).catch(() => {});
-    }
-  };
-  if (document.readyState === "complete") {
-    tryPreload();
-  } else {
-    window.addEventListener("load", tryPreload, { once: true });
-  }
-}
-
-/**
- * Auto-unlock Web Audio on first user interaction in browser
- */
+// Auto-unlock Web Audio on first user interaction in browser
 if (typeof window !== "undefined") {
   const unlockAudio = () => {
     try {
@@ -76,10 +62,10 @@ if (typeof window !== "undefined") {
         ctx
           .resume()
           .then(() => {
-            preloadNotificationBuffer(ctx).catch(() => {});
+            preloadAudioBuffer(ctx).catch(() => {});
             if (pendingPlayOnUnlock) {
               pendingPlayOnUnlock = false;
-              playTwiceInternal(ctx);
+              playDirect(ctx);
             }
           })
           .catch(() => {});
@@ -96,142 +82,59 @@ if (typeof window !== "undefined") {
 }
 
 /**
- * Plays decoded AudioBuffer twice with precise timing
+ * Plays via Web Audio API BufferSource
  */
-function playBufferTwice(ctx: AudioContext, buffer: AudioBuffer) {
-  const now = ctx.currentTime;
-
-  // Detect where the audible portion ends so the second chime starts naturally
-  let audibleDuration = 0.75;
-  try {
-    const data = buffer.getChannelData(0);
-    let lastAudible = data.length - 1;
-    for (let i = data.length - 1; i >= 0; i--) {
-      if (Math.abs(data[i]) > 0.015) {
-        lastAudible = i;
-        break;
-      }
-    }
-    audibleDuration = Math.max(0.35, Math.min(1.0, lastAudible / buffer.sampleRate + 0.08));
-  } catch {
-    audibleDuration = Math.min(0.85, buffer.duration);
-  }
-
-  // 1st play
-  const src1 = ctx.createBufferSource();
-  const gain1 = ctx.createGain();
-  gain1.gain.value = 0.9;
-  src1.buffer = buffer;
-  src1.connect(gain1);
-  gain1.connect(ctx.destination);
-  src1.start(now);
-
-  // 2nd play
-  const src2 = ctx.createBufferSource();
-  const gain2 = ctx.createGain();
-  gain2.gain.value = 0.9;
-  src2.buffer = buffer;
-  src2.connect(gain2);
-  gain2.connect(ctx.destination);
-  src2.start(now + audibleDuration);
+function playBuffer(ctx: AudioContext, buffer: AudioBuffer) {
+  const src = ctx.createBufferSource();
+  const gain = ctx.createGain();
+  gain.gain.value = 0.95;
+  src.buffer = buffer;
+  src.connect(gain);
+  gain.connect(ctx.destination);
+  src.start(ctx.currentTime);
 }
 
 /**
- * Synthesizes a crystal ting sound at given offset (fallback)
+ * Plays via standard HTMLAudioElement
  */
-function synthesizeTingAt(ctx: AudioContext, offsetSeconds: number = 0) {
-  const startTime = ctx.currentTime + offsetSeconds;
-  const master = ctx.createGain();
-  master.gain.setValueAtTime(0.35, startTime);
-  master.connect(ctx.destination);
-
-  // Fundamental (C7 - 2093 Hz)
-  const osc1 = ctx.createOscillator();
-  const gain1 = ctx.createGain();
-  osc1.type = "sine";
-  osc1.frequency.setValueAtTime(2093.0, startTime);
-  gain1.gain.setValueAtTime(0.0001, startTime);
-  gain1.gain.linearRampToValueAtTime(0.65, startTime + 0.003);
-  gain1.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.55);
-  osc1.connect(gain1);
-  gain1.connect(master);
-  osc1.start(startTime);
-  osc1.stop(startTime + 0.55);
-
-  // Shimmer (C8 - 4186 Hz)
-  const osc2 = ctx.createOscillator();
-  const gain2 = ctx.createGain();
-  osc2.type = "sine";
-  osc2.frequency.setValueAtTime(4186.0, startTime);
-  gain2.gain.setValueAtTime(0.0001, startTime);
-  gain2.gain.linearRampToValueAtTime(0.3, startTime + 0.002);
-  gain2.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.15);
-  osc2.connect(gain2);
-  gain2.connect(master);
-  osc2.start(startTime);
-  osc2.stop(startTime + 0.15);
-}
-
-function playSynthesizedTwice(ctx: AudioContext) {
-  synthesizeTingAt(ctx, 0);
-  synthesizeTingAt(ctx, 0.45); // 2nd chime after 450ms
-}
-
-/**
- * Fallback to HTMLAudioElement playing /notification.mp3 twice
- */
-function playHtmlAudioTwice() {
+function playHtmlAudio() {
   try {
-    const audio1 = new Audio("/notification.mp3");
-    audio1.volume = 0.85;
-
-    let secondPlayed = false;
-    const playSecond = () => {
-      if (secondPlayed) return;
-      secondPlayed = true;
-      try {
-        const audio2 = new Audio("/notification.mp3");
-        audio2.volume = 0.85;
-        audio2.play().catch(() => {});
-      } catch {}
-    };
-
-    audio1.addEventListener("ended", playSecond, { once: true });
-    // Guard timer in case 'ended' is delayed by trailing silence
-    const timer = setTimeout(playSecond, 850);
-
-    const p = audio1.play();
+    const audio = new Audio(AUDIO_URL);
+    audio.volume = 0.95;
+    const p = audio.play();
     if (p !== undefined) {
-      p.catch(() => {
-        clearTimeout(timer);
-      });
+      p.catch(() => {});
     }
   } catch {}
 }
 
 /**
- * Internal player: tries decoded buffer in Web Audio API, falls back to HTMLAudioElement
+ * Plays the audio through the best available channel
  */
-function playTwiceInternal(ctx: AudioContext) {
-  if (decodedNotificationBuffer) {
-    playBufferTwice(ctx, decodedNotificationBuffer);
-  } else {
-    preloadNotificationBuffer(ctx)
+function playDirect(ctx?: AudioContext | null) {
+  if (ctx && ctx.state === "running") {
+    if (decodedBuffer) {
+      playBuffer(ctx, decodedBuffer);
+      return;
+    }
+    preloadAudioBuffer(ctx)
       .then((buf) => {
         if (buf) {
-          playBufferTwice(ctx, buf);
+          playBuffer(ctx, buf);
         } else {
-          playHtmlAudioTwice();
+          playHtmlAudio();
         }
       })
       .catch(() => {
-        playHtmlAudioTwice();
+        playHtmlAudio();
       });
+    return;
   }
+  playHtmlAudio();
 }
 
 /**
- * Plays the user's notification sound (/notification.mp3) TWICE whenever a user gets a notification
+ * Plays the notification sound (which contains the double chime) whenever a user gets a notification
  * or logs in to active unread notifications.
  * @param type Sound type ('default', 'reminder', or 'warning')
  * @param notificationId Optional notification ID for deduplication
@@ -254,8 +157,8 @@ export function playNotificationTone(
     }
   }
 
-  // Throttle minimum interval (avoid overlapping triggers within 600ms)
-  if (now - lastPlayedTime < 600) {
+  // Throttle minimum interval (avoid overlapping triggers within 1.2s)
+  if (now - lastPlayedTime < 1200) {
     return;
   }
   lastPlayedTime = now;
@@ -270,18 +173,18 @@ export function playNotificationTone(
           .resume()
           .then(() => {
             pendingPlayOnUnlock = false;
-            playTwiceInternal(ctx);
+            playDirect(ctx);
           })
           .catch(() => {
-            playHtmlAudioTwice();
+            playHtmlAudio();
           });
       } else {
-        playTwiceInternal(ctx);
+        playDirect(ctx);
       }
       return;
     }
   } catch {}
 
   // 2. Fallback to HTMLAudioElement
-  playHtmlAudioTwice();
+  playHtmlAudio();
 }
