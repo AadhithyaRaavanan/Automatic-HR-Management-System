@@ -12,6 +12,7 @@ import {
   Briefcase,
   Mail,
   Phone,
+  ShieldAlert,
   Calendar,
   Clock,
   CheckCircle2,
@@ -216,6 +217,20 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
 
   const isAdminOrHr = userRole === "admin" || userRole === "hr";
 
+  const emergencyContactDisplay = React.useMemo(() => {
+    const emp = profileData?.employee || {};
+    const onb = profileData?.onboarding || {};
+    const edu = onb.education_details || {};
+    if (emp.emergency_contact) return emp.emergency_contact;
+    const name = onb.emergency_contact_name || edu.emergency_contact_name;
+    const rel = onb.emergency_contact_relationship || edu.emergency_contact_relationship;
+    const phone = onb.emergency_contact_phone || edu.emergency_contact_phone;
+    if (name || phone) {
+      return rel ? `${name} (${rel}) • ${phone}` : `${name || "Emergency Contact"} • ${phone}`;
+    }
+    return "Not set";
+  }, [profileData]);
+
   const loadProfile = React.useCallback(async () => {
     if (!employeeId) return;
     setLoading(true);
@@ -252,7 +267,13 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
       work_target_minutes: emp.work_target_minutes || 480,
       status: emp.status || "active",
       phone: emp.phone || onb.phone || "",
-      emergency_contact: emp.emergency_contact || (onb.education_details?.emergency_contact_name ? `${onb.education_details.emergency_contact_name} (${onb.education_details.emergency_contact_phone || ""})` : ""),
+      emergency_contact:
+        emp.emergency_contact ||
+        (onb.emergency_contact_name
+          ? `${onb.emergency_contact_name}${onb.emergency_contact_relationship ? ` (${onb.emergency_contact_relationship})` : ""} - ${onb.emergency_contact_phone || ""}`
+          : onb.education_details?.emergency_contact_name
+            ? `${onb.education_details.emergency_contact_name}${onb.education_details.emergency_contact_relationship ? ` (${onb.education_details.emergency_contact_relationship})` : ""} - ${onb.education_details.emergency_contact_phone || ""}`
+            : ""),
       shift_start_time: emp.shift_start_time ? emp.shift_start_time.slice(0, 5) : "09:00",
       shift_end_time: emp.shift_end_time ? emp.shift_end_time.slice(0, 5) : "18:00",
       highest_qualification: onb.highest_qualification || onb.education_details?.highest_qualification || "12th Standard",
@@ -571,14 +592,18 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
             <p className="text-xs text-[#808080] mt-1">
               {emp.job_titles?.title_name || "Specialist"} • {emp.departments?.name || "Zenxea"}
             </p>
-            <div className="flex items-center gap-3 mt-2 text-xs text-[#808080]">
+            <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-[#808080]">
               <span className="flex items-center gap-1">
                 <Mail className="w-3 h-3 text-black" />
                 {emp.email}
               </span>
               <span className="flex items-center gap-1">
                 <Phone className="w-3 h-3 text-black" />
-                {emp.phone || onb.phone || onb.education_details?.emergency_contact_phone || "Not set"}
+                {emp.phone || onb.phone || "Not set"}
+              </span>
+              <span className="flex items-center gap-1 text-[#FF1493] font-medium" title="Emergency Contact">
+                <ShieldAlert className="w-3.5 h-3.5 text-[#FF1493]" />
+                <span className="text-[#808080]">Emergency:</span> {emergencyContactDisplay}
               </span>
             </div>
           </div>
@@ -730,6 +755,12 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
                       </button>
                     )}
                   </div>
+                </div>
+                <div className="flex justify-between py-1 border-b border-border-light/40">
+                  <span className="text-text-muted">Emergency Contact:</span>
+                  <span className="font-semibold text-text-primary text-right max-w-[65%] truncate" title={emergencyContactDisplay}>
+                    {emergencyContactDisplay}
+                  </span>
                 </div>
                 <div className="flex justify-between py-1">
                   <span className="text-text-muted">Onboarding:</span>

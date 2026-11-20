@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
         full_name,
         email,
         phone,
+        emergency_contact,
         status,
         onboarding_completed,
         departments:department_id(name),
@@ -165,6 +166,47 @@ export async function GET(request: NextRequest) {
 
         const rawStatus = (c.onboarding_status || c.status || "NOT_STARTED").toUpperCase();
 
+        const edu = c.education_details || {};
+        const empEmergency = emp?.emergency_contact || "";
+
+        // Extract candidate emergency contact information with multiple fallbacks
+        let parsedEmpName = "";
+        let parsedEmpRel = "";
+        let parsedEmpPhone = "";
+        if (empEmergency) {
+          const matchWithRel = empEmergency.match(/^(.*?)\s*\((.*?)\)\s*[•\-]\s*(.*?)$/);
+          const matchWithDash = empEmergency.match(/^(.*?)\s*[•\-]\s*(.*?)$/);
+          if (matchWithRel) {
+            parsedEmpName = matchWithRel[1]?.trim() || "";
+            parsedEmpRel = matchWithRel[2]?.trim() || "";
+            parsedEmpPhone = matchWithRel[3]?.trim() || "";
+          } else if (matchWithDash) {
+            parsedEmpName = matchWithDash[1]?.trim() || "";
+            parsedEmpPhone = matchWithDash[2]?.trim() || "";
+          } else {
+            parsedEmpName = empEmergency;
+          }
+        }
+
+        const emergencyName =
+          c.emergency_contact_name ||
+          edu.emergency_contact_name ||
+          edu.emergencyName ||
+          parsedEmpName ||
+          null;
+        const emergencyRel =
+          c.emergency_contact_relationship ||
+          edu.emergency_contact_relationship ||
+          edu.emergencyRelationship ||
+          parsedEmpRel ||
+          null;
+        const emergencyPhone =
+          c.emergency_contact_phone ||
+          edu.emergency_contact_phone ||
+          edu.emergencyPhone ||
+          parsedEmpPhone ||
+          null;
+
         return {
           id: c.id,
           user_id: c.user_id,
@@ -195,9 +237,9 @@ export async function GET(request: NextRequest) {
             phone: c.phone || emp?.phone,
             current_address: c.current_address,
             permanent_address: c.permanent_address,
-            emergency_contact_name: c.emergency_contact_name,
-            emergency_contact_relationship: c.emergency_contact_relationship,
-            emergency_contact_phone: c.emergency_contact_phone,
+            emergency_contact_name: emergencyName,
+            emergency_contact_relationship: emergencyRel,
+            emergency_contact_phone: emergencyPhone,
             blood_group: c.blood_group,
           },
           employment_details: {

@@ -4,6 +4,7 @@ import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { playNotificationTone } from "@/lib/notifications/sound";
 
 export interface NotificationItemRecord {
   id: string;
@@ -110,6 +111,9 @@ export function useNotifications() {
           queryClient.invalidateQueries({ queryKey: ["notifications-all"] });
 
           const newNotif = payload.new as NotificationItemRecord;
+          // Play notification message chime
+          playNotificationTone(newNotif?.type?.includes("warning") || newNotif?.type?.includes("overdue") ? "warning" : "default");
+
           // Trigger subtle toast only if tab is currently focused / visible
           if (typeof document !== "undefined" && !document.hidden && newNotif?.title) {
             toast.info(newNotif.title, {
