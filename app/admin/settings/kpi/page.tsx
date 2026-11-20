@@ -75,6 +75,7 @@ export default function AdminKpiSettingsPage() {
   const [versions, setVersions] = React.useState<any[]>([]);
   const [effectiveFrom, setEffectiveFrom] = React.useState(getFirstDayOfNextMonth);
   const [reason, setReason] = React.useState("");
+  const [reasonTouched, setReasonTouched] = React.useState(false);
 
   // Number inputs for weights (0..100)
   const [weights, setWeights] = React.useState<WeightsType>(PRESETS.balanced.weights);
@@ -137,22 +138,73 @@ export default function AdminKpiSettingsPage() {
     (weights.tasks_completed_vs_assigned || 0) +
     (weights.task_on_time_rate || 0);
 
-  // Result preview calculation: Sample employee scores with typical performance:
-  // onTime: 90, daysWorked: 100, hours: 95, tasks: 80, taskOnTime: 85
-  const liveSampleScore =
-    totalWeight === 100
-      ? Math.round(
-          (90 * weights.on_time_check_in_rate +
-            100 * weights.days_worked_vs_expected +
-            95 * weights.worked_hours_vs_target +
-            80 * weights.tasks_completed_vs_assigned +
-            85 * weights.task_on_time_rate) /
-            100
-        )
-      : null;
+  // Active config weights (converted to 0..100)
+  const activeW = React.useMemo(() => {
+    const raw = activeConfig?.weights || KPI_CONFIG.weights;
+    return {
+      on_time_check_in_rate: Math.round((raw.on_time_check_in_rate ?? 0.2) * 100),
+      days_worked_vs_expected: Math.round((raw.days_worked_vs_expected ?? 0.2) * 100),
+      worked_hours_vs_target: Math.round((raw.worked_hours_vs_target ?? 0.25) * 100),
+      tasks_completed_vs_assigned: Math.round((raw.tasks_completed_vs_assigned ?? 0.2) * 100),
+      task_on_time_rate: Math.round((raw.task_on_time_rate ?? 0.15) * 100),
+    };
+  }, [activeConfig]);
 
-  // Baseline standard score under default 20/20/25/20/15 weights = 89
-  const baselineSampleScore = 89;
+  // Result preview calculation: computed with the SAME sample inputs and SAME function
+  // Sample typical performance inputs: onTime: 90, daysWorked: 100, hours: 95, tasks: 80, taskOnTime: 85
+  const computeSampleScore = (w: WeightsType): number => {
+    return Math.round(
+      (90 * (w.on_time_check_in_rate || 0) +
+        100 * (w.days_worked_vs_expected || 0) +
+        95 * (w.worked_hours_vs_target || 0) +
+        80 * (w.tasks_completed_vs_assigned || 0) +
+        85 * (w.task_on_time_rate || 0)) /
+        100
+    );
+  };
+
+  const beforeSampleScore = computeSampleScore(activeW);
+  const afterSampleScore = totalWeight === 100 ? computeSampleScore(weights) : null;
+
+  // Check if anything has changed from active settings
+  const hasChanged = React.useMemo(() => {
+    if (!activeConfig) return false;
+    if (
+      weights.on_time_check_in_rate !== activeW.on_time_check_in_rate ||
+      weights.days_worked_vs_expected !== activeW.days_worked_vs_expected ||
+      weights.worked_hours_vs_target !== activeW.worked_hours_vs_target ||
+      weights.tasks_completed_vs_assigned !== activeW.tasks_completed_vs_assigned ||
+      weights.task_on_time_rate !== activeW.task_on_time_rate
+    ) {
+      return true;
+    }
+    const curTargets = targetsByType[selectedTypeTab];
+    const actType =
+      activeConfig.employeeTypes?.[selectedTypeTab] ||
+      KPI_CONFIG.employeeTypes[selectedTypeTab] ||
+      KPI_CONFIG.employeeTypes.full_time;
+    if (
+      curTargets.onTime !== actType.onTimeTargetRate ||
+      curTargets.daysWorked !== actType.daysWorkedTargetRate ||
+      curTargets.hours !== actType.hoursTargetRate ||
+      curTargets.taskCompletion !== actType.taskCompletionTargetRate ||
+      curTargets.taskOnTime !== actType.taskOnTimeTargetRate
+    ) {
+      return true;
+    }
+    return false;
+  }, [activeConfig, weights, activeW, targetsByType, selectedTypeTab]);
+
+  let saveDisabledReason = "";
+  if (totalWeight !== 100) {
+    saveDisabledReason = `Weights must add up to 100% (currently ${totalWeight}%).`;
+  } else if (!hasChanged) {
+    saveDisabledReason = "No changes to save.";
+  } else if (reason.trim().length < 5) {
+    saveDisabledReason = "Please enter a reason with at least 5 characters.";
+  }
+
+  const isSaveDisabled = saving || Boolean(saveDisabledReason);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -246,7 +298,7 @@ export default function AdminKpiSettingsPage() {
             <span>Admin settings</span>
           </Link>
           <span>/</span>
-          <span className="text-text-primary font-bold">KPI settings</span>
+          <span className="text-text-primary font-bold">Performance settings</span>
         </div>
 
         {/* Page Header */}
@@ -299,12 +351,24 @@ export default function AdminKpiSettingsPage() {
               <span className="text-xs font-semibold text-text-tertiary">Presets:</span>
               {(["balanced", "attendance", "delivery"] as const).map((key) => {
                 const preset = PRESETS[key];
+                const isMatching =
+                  preset.weights.on_time_check_in_rate === weights.on_time_check_in_rate &&
+                  preset.weights.days_worked_vs_expected === weights.days_worked_vs_expected &&
+                  preset.weights.worked_hours_vs_target === weights.worked_hours_vs_target &&
+                  preset.weights.tasks_completed_vs_assigned === weights.tasks_completed_vs_assigned &&
+                  preset.weights.task_on_time_rate === weights.task_on_time_rate;
+
                 return (
                   <button
                     key={key}
                     type="button"
                     onClick={() => setWeights(preset.weights)}
-                    className="px-3 py-1 rounded-xl bg-card-subtle border border-border-light text-xs font-bold text-text-primary hover:border-black transition-colors cursor-pointer"
+                    className={cn(
+                      "px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                      isMatching
+                        ? "bg-black text-white border border-black shadow-xs"
+                        : "bg-card-subtle border border-border-light text-text-primary hover:border-black"
+                    )}
                   >
                     {preset.label}
                   </button>
@@ -444,9 +508,11 @@ export default function AdminKpiSettingsPage() {
             <div className="p-3.5 rounded-xl bg-card-subtle/80 border border-border-light text-xs flex items-center justify-between gap-2">
               <span className="text-text-secondary font-medium">Result preview:</span>
               <span className="font-bold text-text-primary">
-                {liveSampleScore != null
-                  ? `A typical employee would score ${liveSampleScore} instead of ${baselineSampleScore}.`
-                  : "Fix weights to equal 100% to calculate preview."}
+                {totalWeight !== 100
+                  ? "Fix weights to equal 100% to calculate preview."
+                  : afterSampleScore === beforeSampleScore
+                  ? "No change from the current settings."
+                  : `A typical employee would score ${afterSampleScore} instead of ${beforeSampleScore}.`}
               </span>
             </div>
           </section>
@@ -591,8 +657,12 @@ export default function AdminKpiSettingsPage() {
               </p>
             </div>
 
-            <div className="max-w-xs">
+            <div className="max-w-xs space-y-1">
+              <label htmlFor="effective-from-date" className="text-xs font-bold text-text-primary block">
+                Starts on
+              </label>
               <input
+                id="effective-from-date"
                 type="date"
                 value={effectiveFrom}
                 onChange={(e) => setEffectiveFrom(e.target.value)}
@@ -618,28 +688,45 @@ export default function AdminKpiSettingsPage() {
                 rows={2}
                 placeholder="e.g. Updating task delivery weighting for the new quarterly cycle..."
                 value={reason}
-                onChange={(e) => setReason(e.target.value)}
+                onBlur={() => setReasonTouched(true)}
+                onChange={(e) => {
+                  setReason(e.target.value);
+                  if (!reasonTouched) setReasonTouched(true);
+                }}
                 className="w-full p-3 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary"
                 required
                 minLength={5}
               />
               <div className="flex justify-between items-center text-[11px] text-text-tertiary">
                 <span>Minimum 5 characters required</span>
-                <span className={cn(reason.trim().length >= 5 ? "text-text-primary font-bold" : "text-rose-600 font-semibold")}>
+                <span
+                  className={cn(
+                    !reasonTouched
+                      ? "text-text-tertiary"
+                      : reason.trim().length < 5
+                      ? "text-[#FF007A] font-semibold"
+                      : "text-text-primary font-bold"
+                  )}
+                >
                   {reason.trim().length} characters
                 </span>
               </div>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 space-y-2">
               <button
                 type="submit"
-                disabled={saving || totalWeight !== 100 || reason.trim().length < 5}
+                disabled={isSaveDisabled}
                 className="px-6 py-2.5 rounded-xl bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
               >
                 <Save className="w-4 h-4" />
                 <span>{saving ? "Saving..." : "Save changes"}</span>
               </button>
+              {saveDisabledReason && (
+                <p className="text-xs text-text-tertiary font-medium">
+                  {saveDisabledReason}
+                </p>
+              )}
             </div>
           </section>
 

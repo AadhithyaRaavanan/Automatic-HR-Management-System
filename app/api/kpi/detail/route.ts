@@ -100,28 +100,32 @@ export async function GET(request: NextRequest) {
           .gte("work_date", from)
           .lte("work_date", effectiveEnd),
         (supabaseAdmin as any)
-          .from("leave_applications")
-          .select("start_date, end_date, status")
+          .from("leave_requests")
+          .select("starts_on, ends_on, status")
           .eq("employee_id", employeeId)
           .eq("status", "approved")
-          .or(`start_date.lte.${effectiveEnd},end_date.gte.${from}`),
+          .or(`starts_on.lte.${effectiveEnd},ends_on.gte.${from}`),
         (supabaseAdmin as any)
           .from("holidays")
-          .select("holiday_date, name")
-          .gte("holiday_date", from)
-          .lte("holiday_date", effectiveEnd),
+          .select("date, name")
+          .gte("date", from)
+          .lte("date", effectiveEnd),
       ]);
 
       const holidays = holidaysRes?.data || [];
       const leaves = leavesRes?.data || [];
-      const holidaySet = new Set(holidays.map((h: any) => h.holiday_date));
+      const holidaySet = new Set(holidays.map((h: any) => h.date || h.holiday_date));
       const leaveSet = new Set<string>();
       for (const l of leaves) {
-        const cur = new Date(`${l.start_date}T00:00:00Z`);
-        const end = new Date(`${l.end_date}T00:00:00Z`);
-        while (cur <= end) {
-          leaveSet.add(cur.toISOString().slice(0, 10));
-          cur.setUTCDate(cur.getUTCDate() + 1);
+        const sDate = l.starts_on || l.start_date;
+        const eDate = l.ends_on || l.end_date;
+        if (sDate && eDate) {
+          const cur = new Date(`${sDate}T00:00:00Z`);
+          const end = new Date(`${eDate}T00:00:00Z`);
+          while (cur <= end) {
+            leaveSet.add(cur.toISOString().slice(0, 10));
+            cur.setUTCDate(cur.getUTCDate() + 1);
+          }
         }
       }
 
@@ -195,28 +199,32 @@ export async function GET(request: NextRequest) {
           .gte("work_date", from)
           .lte("work_date", effectiveEnd),
         (supabaseAdmin as any)
-          .from("leave_applications")
-          .select("start_date, end_date, status")
+          .from("leave_requests")
+          .select("starts_on, ends_on, status")
           .eq("employee_id", employeeId)
           .eq("status", "approved")
-          .or(`start_date.lte.${effectiveEnd},end_date.gte.${from}`),
+          .or(`starts_on.lte.${effectiveEnd},ends_on.gte.${from}`),
         (supabaseAdmin as any)
           .from("holidays")
-          .select("holiday_date, name")
-          .gte("holiday_date", from)
-          .lte("holiday_date", effectiveEnd),
+          .select("date, name")
+          .gte("date", from)
+          .lte("date", effectiveEnd),
       ]);
 
       const attendedSet = new Set((daysRes?.data || []).filter((d: any) => d.status === "present" || d.status === "half_day" || (d.total_minutes || 0) > 0).map((d: any) => d.work_date));
-      const holidayMap = new Map((holidaysRes?.data || []).map((h: any) => [h.holiday_date, h.name || "Holiday"]));
+      const holidayMap = new Map((holidaysRes?.data || []).map((h: any) => [h.date || h.holiday_date, h.name || "Holiday"]));
 
       const leaveSet = new Set<string>();
       for (const l of leavesRes?.data || []) {
-        const cur = new Date(`${l.start_date}T00:00:00Z`);
-        const end = new Date(`${l.end_date}T00:00:00Z`);
-        while (cur <= end) {
-          leaveSet.add(cur.toISOString().slice(0, 10));
-          cur.setUTCDate(cur.getUTCDate() + 1);
+        const sDate = l.starts_on || l.start_date;
+        const eDate = l.ends_on || l.end_date;
+        if (sDate && eDate) {
+          const cur = new Date(`${sDate}T00:00:00Z`);
+          const end = new Date(`${eDate}T00:00:00Z`);
+          while (cur <= end) {
+            leaveSet.add(cur.toISOString().slice(0, 10));
+            cur.setUTCDate(cur.getUTCDate() + 1);
+          }
         }
       }
 

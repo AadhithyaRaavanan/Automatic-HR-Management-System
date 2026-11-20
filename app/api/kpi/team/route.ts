@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     // 2. Fetch scoped employees
     let query = (supabaseAdmin as any)
       .from("employees")
-      .select("id, full_name, email, employment_category, department_id, departments(id, name)")
+      .select("id, full_name, email, department_id, departments:department_id(id, name)")
       .eq("status", "active")
       .order("full_name", { ascending: true });
 
@@ -71,9 +71,6 @@ export async function GET(request: NextRequest) {
           query = query.eq("department_id", dRow.id);
         }
       }
-    }
-    if (employeeTypeFilter && employeeTypeFilter !== "all") {
-      query = query.eq("employment_category", employeeTypeFilter);
     }
 
     const { data: employees, error: empErr } = await query;

@@ -36,6 +36,7 @@ interface KpiTeamOverviewProps {
   departmentFilter: string;
   employeeTypeFilter: string;
   onSelectEmployee: (employeeId: string) => void;
+  onClearFilters?: () => void;
   className?: string;
 }
 
@@ -45,6 +46,7 @@ export function KpiTeamOverview({
   departmentFilter,
   employeeTypeFilter,
   onSelectEmployee,
+  onClearFilters,
   className,
 }: KpiTeamOverviewProps) {
   const [team, setTeam] = React.useState<TeamMemberRecord[]>([]);
@@ -169,6 +171,11 @@ export function KpiTeamOverview({
     toast.success("Team performance exported to CSV");
   };
 
+  const hasFilters =
+    Boolean(search.trim()) ||
+    (departmentFilter && departmentFilter !== "all") ||
+    (employeeTypeFilter && employeeTypeFilter !== "all");
+
   return (
     <div className={cn("space-y-5", className)}>
       {/* Search Bar + Export Button */}
@@ -202,87 +209,89 @@ export function KpiTeamOverview({
         </div>
       ) : (
         <div className="space-y-6">
-          {/* SECTION 1: Needs Attention (Opens first) */}
-          <section className="space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-600" />
-                <h3 className="text-sm font-extrabold text-text-primary tracking-tight">
-                  Needs attention
-                </h3>
+          {/* SECTION 1: Needs Attention (Hidden when 0 total team members; "Nobody needs attention right now." when none need attention) */}
+          {team.length > 0 && (
+            <section className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                  <h3 className="text-sm font-extrabold text-text-primary tracking-tight">
+                    Needs attention
+                  </h3>
+                </div>
+                <span className="text-xs text-text-tertiary font-semibold">
+                  {needsAttentionList.length} people
+                </span>
               </div>
-              <span className="text-xs text-text-tertiary font-semibold">
-                {needsAttentionList.length} people
-              </span>
-            </div>
 
-            {needsAttentionList.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {needsAttentionList.map((m) => {
-                  const reason = getNeedsAttentionReason(m);
-                  const statusKey =
-                    m.overallScore != null
-                      ? m.overallScore >= 90
-                        ? "on_track"
-                        : m.overallScore >= 80
-                        ? "at_risk"
-                        : "behind"
-                      : "no_data";
-                  const status = getStatusDisplay(statusKey);
+              {needsAttentionList.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {needsAttentionList.map((m) => {
+                    const reason = getNeedsAttentionReason(m);
+                    const statusKey =
+                      m.overallScore != null
+                        ? m.overallScore >= 90
+                          ? "on_track"
+                          : m.overallScore >= 80
+                          ? "at_risk"
+                          : "behind"
+                        : "no_data";
+                    const status = getStatusDisplay(statusKey);
 
-                  return (
-                    <div
-                      key={m.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => onSelectEmployee(m.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          onSelectEmployee(m.id);
-                        }
-                      }}
-                      className="p-4 rounded-2xl bg-card border border-border-light shadow-card hover:border-black/30 hover:shadow-card-hover transition-all cursor-pointer flex flex-col justify-between space-y-3 group select-none"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <span className="text-xs font-bold text-text-primary group-hover:text-black block leading-snug">
-                              {m.fullName}
-                            </span>
-                            <span className="text-[11px] text-text-tertiary">
-                              {m.department || "General"}
-                            </span>
+                    return (
+                      <div
+                        key={m.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => onSelectEmployee(m.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onSelectEmployee(m.id);
+                          }
+                        }}
+                        className="p-4 rounded-2xl bg-card border border-border-light shadow-card hover:border-black/30 hover:shadow-card-hover transition-all cursor-pointer flex flex-col justify-between space-y-3 group select-none"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <span className="text-xs font-bold text-text-primary group-hover:text-black block leading-snug">
+                                {m.fullName}
+                              </span>
+                              <span className="text-[11px] text-text-tertiary">
+                                {m.department || "General"}
+                              </span>
+                            </div>
+
+                            <div className="inline-flex items-center gap-1 text-[11px] shrink-0">
+                              <span className={cn("w-2 h-2 rounded-full", status.dotColor)} aria-hidden="true" />
+                              <span className={status.textColor}>{status.label}</span>
+                            </div>
                           </div>
 
-                          <div className="inline-flex items-center gap-1 text-[11px] shrink-0">
-                            <span className={cn("w-2 h-2 rounded-full", status.dotColor)} aria-hidden="true" />
-                            <span className={status.textColor}>{status.label}</span>
-                          </div>
+                          {/* ONE plain reason sentence */}
+                          <p className="text-xs text-amber-900 font-semibold pt-1">
+                            {reason}
+                          </p>
                         </div>
 
-                        {/* ONE plain reason sentence */}
-                        <p className="text-xs text-amber-900 font-semibold pt-1">
-                          {reason}
-                        </p>
+                        <div className="flex items-center justify-between text-[11px] text-text-tertiary pt-2 border-t border-border-light/60">
+                          <span>Score: {m.overallScore != null ? `${m.overallScore}%` : "—"}</span>
+                          <span className="text-black font-bold group-hover:underline inline-flex items-center gap-0.5">
+                            View details <ChevronRight className="w-3 h-3" />
+                          </span>
+                        </div>
                       </div>
-
-                      <div className="flex items-center justify-between text-[11px] text-text-tertiary pt-2 border-t border-border-light/60">
-                        <span>Score: {m.overallScore != null ? `${m.overallScore}%` : "—"}</span>
-                        <span className="text-black font-bold group-hover:underline inline-flex items-center gap-0.5">
-                          View details <ChevronRight className="w-3 h-3" />
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="p-4 rounded-2xl bg-card border border-border-light text-xs text-text-secondary">
-                No team members need attention right now.
-              </div>
-            )}
-          </section>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-4 rounded-2xl bg-card border border-border-light text-xs text-text-secondary">
+                  Nobody needs attention right now.
+                </div>
+              )}
+            </section>
+          )}
 
           {/* SECTION 2: Collapsible "Everyone" list sorted alphabetically */}
           <section className="space-y-2.5">
@@ -361,9 +370,25 @@ export function KpiTeamOverview({
                       </div>
                     );
                   })
+                ) : hasFilters ? (
+                  <div className="p-8 text-center space-y-3">
+                    <p className="text-xs text-text-secondary font-medium">
+                      No team members match these filters.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearch("");
+                        onClearFilters?.();
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl bg-card border border-border-light hover:bg-card-subtle text-xs font-bold text-text-primary transition-colors cursor-pointer"
+                    >
+                      Clear filters
+                    </button>
+                  </div>
                 ) : (
-                  <div className="p-8 text-center text-xs text-text-tertiary">
-                    No team members found matching your search.
+                  <div className="p-8 text-center text-xs text-text-secondary font-medium">
+                    No team members yet.
                   </div>
                 )}
               </div>

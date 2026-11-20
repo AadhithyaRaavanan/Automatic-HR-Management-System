@@ -180,8 +180,8 @@ export function KpiToolbar({
 
         {/* Right Side: Simple Period Control + Month/Quarter Switch + Scoped Controls */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Manager/HR: Employee Selector (visible only when manager/HR is browsing) */}
-          {isManagerOrAdmin && scopedEmployees.length > 0 && (
+          {/* Manager/HR: Employee Selector (shown to managers, HR & admin on Overview/Reviews tabs, hidden on Team tab) */}
+          {isManagerOrAdmin && !isTeam && scopedEmployees.length > 0 && (
             <div className="flex items-center gap-1.5">
               <select
                 aria-label="Select Employee"
@@ -198,8 +198,8 @@ export function KpiToolbar({
             </div>
           )}
 
-          {/* Filters Popover for Managers/HR (Department & Employee Type) */}
-          {isManagerOrAdmin && (
+          {/* Filters Popover for Managers/HR: Shown ONLY on the Team tab */}
+          {isTeam && (
             <div className="relative" ref={filtersRef}>
               <button
                 type="button"

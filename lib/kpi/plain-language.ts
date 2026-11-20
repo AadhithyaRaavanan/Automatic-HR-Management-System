@@ -41,45 +41,95 @@ export function getStatusDisplay(
   }
 }
 
+export interface HeadlineInfo {
+  headline: string;
+  statusKey: "on_track" | "at_risk" | "behind" | "no_data";
+}
+
+/**
+ * Headline card information (sentence + status matching the first sentence)
+ */
+export function getHeadlineInfo(
+  score: number | null,
+  currentMetrics?: any,
+  periodType: string = "month",
+  target: number = 90
+): HeadlineInfo {
+  const periodWord = periodType === "quarter" ? "this quarter" : periodType === "week" ? "this week" : "this month";
+
+  if (score == null) {
+    return {
+      headline: "Not enough data yet. Keep checking in and your result will appear.",
+      statusKey: "no_data",
+    };
+  }
+
+  // Identify evaluated metrics
+  const metricList = [
+    { label: "Hours", key: "worked_hours_vs_target", data: currentMetrics?.worked_hours_vs_target },
+    { label: "Check-in days", key: "days_worked_vs_expected", data: currentMetrics?.days_worked_vs_expected },
+    { label: "Punctuality", key: "on_time_check_in_rate", data: currentMetrics?.on_time_check_in_rate },
+    { label: "Tasks", key: "tasks_completed_vs_assigned", data: currentMetrics?.tasks_completed_vs_assigned },
+    { label: "Task delivery", key: "task_on_time_rate", data: currentMetrics?.task_on_time_rate },
+  ].filter((m) => m.data && m.data.value != null && m.data.status !== "no_data");
+
+  // Find weakest metric: first "behind", then "at_risk" (lowest score)
+  const behindMetrics = metricList.filter((m) => m.data?.status === "behind");
+  const atRiskMetrics = metricList.filter((m) => m.data?.status === "at_risk");
+
+  let weakestMetric: { label: string; data: any } | null = null;
+  if (behindMetrics.length > 0) {
+    behindMetrics.sort((a, b) => (a.data?.value ?? 0) - (b.data?.value ?? 0));
+    weakestMetric = behindMetrics[0];
+  } else if (atRiskMetrics.length > 0) {
+    atRiskMetrics.sort((a, b) => (a.data?.value ?? 0) - (b.data?.value ?? 0));
+    weakestMetric = atRiskMetrics[0];
+  }
+
+  const isOverallOnTrack = score >= target;
+  const isOverallBehind = score < target - 10;
+
+  if (isOverallBehind) {
+    const extra = weakestMetric ? ` ${weakestMetric.label} is behind.` : "";
+    return {
+      headline: `Behind ${periodWord}.${extra}`,
+      statusKey: "behind",
+    };
+  }
+
+  if (!isOverallOnTrack) {
+    const extra = weakestMetric ? ` ${weakestMetric.label} is slightly behind.` : "";
+    return {
+      headline: `Slightly behind ${periodWord}.${extra}`,
+      statusKey: "at_risk",
+    };
+  }
+
+  // Overall is On track
+  if (weakestMetric) {
+    return {
+      headline: `You're on track overall. ${weakestMetric.label} is slightly behind.`,
+      statusKey: "on_track",
+    };
+  }
+
+  // All fine
+  return {
+    headline: `You're on track ${periodWord}.`,
+    statusKey: "on_track",
+  };
+}
+
 /**
  * Headline card sentence (e.g. "You're on track this month.")
  */
 export function getHeadlineSentence(
   score: number | null,
   currentMetrics?: any,
-  periodType: string = "month"
+  periodType: string = "month",
+  target: number = 90
 ): string {
-  const periodWord = periodType === "quarter" ? "this quarter" : periodType === "week" ? "this week" : "this month";
-
-  if (score == null) {
-    return "Not enough data yet. Keep checking in and your result will appear.";
-  }
-
-  const hoursStatus = currentMetrics?.worked_hours_vs_target?.status;
-  const attStatus = currentMetrics?.days_worked_vs_expected?.status;
-  const onTimeStatus = currentMetrics?.on_time_check_in_rate?.status;
-  const taskStatus = currentMetrics?.tasks_completed_vs_assigned?.status;
-
-  if (hoursStatus === "behind" || hoursStatus === "at_risk") {
-    return `Slightly behind on hours ${periodWord}.`;
-  }
-  if (attStatus === "behind" || attStatus === "at_risk") {
-    return `Slightly behind on check-in days ${periodWord}.`;
-  }
-  if (onTimeStatus === "behind" || onTimeStatus === "at_risk") {
-    return `Slightly behind on punctuality ${periodWord}.`;
-  }
-  if (taskStatus === "behind" || taskStatus === "at_risk") {
-    return `Slightly behind on tasks ${periodWord}.`;
-  }
-
-  if (score >= 90) {
-    return `You're on track ${periodWord}.`;
-  }
-  if (score >= 80) {
-    return `You're on track ${periodWord}.`;
-  }
-  return `Slightly behind ${periodWord}.`;
+  return getHeadlineInfo(score, currentMetrics, periodType, target).headline;
 }
 
 /**
@@ -175,10 +225,24 @@ export interface NextActionItem {
   trigger?: "self_review";
 }
 
+export function formatMissingDates(dates: string[]): string {
+  if (!dates || dates.length === 0) return "";
+  const formatted = dates.map((d) => {
+    const dt = new Date(`${d}T00:00:00Z`);
+    const day = dt.getUTCDate();
+    const month = dt.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
+    return `${day} ${month}`;
+  });
+  if (formatted.length === 1) return `Missing check-in on ${formatted[0]}`;
+  if (formatted.length === 2) return `Missing check-in on ${formatted[0]} and ${formatted[1]}`;
+  return `Missing check-in on ${formatted.slice(0, -1).join(", ")} and ${formatted[formatted.length - 1]}`;
+}
+
 export function getNextActionSuggestions(params: {
   daysWorkedMetric?: any;
   hasUnloggedDays?: boolean;
   unloggedCount?: number;
+  missingDates?: string[];
   hasPendingSelfReview?: boolean;
   atRiskGoals?: Array<{ id: string; title: string }>;
   overdueTasksCount?: number;
@@ -186,7 +250,15 @@ export function getNextActionSuggestions(params: {
   const actions: NextActionItem[] = [];
 
   // 1. Missing check-in days
-  if (params.unloggedCount && params.unloggedCount > 0) {
+  if (params.missingDates && params.missingDates.length > 0) {
+    const firstDate = params.missingDates[0];
+    actions.push({
+      id: "unlogged_days",
+      label: formatMissingDates(params.missingDates),
+      actionText: "Request correction",
+      href: `/requests?date=${firstDate}`,
+    });
+  } else if (params.unloggedCount && params.unloggedCount > 0) {
     actions.push({
       id: "unlogged_days",
       label: `${params.unloggedCount} unlogged workday${params.unloggedCount > 1 ? "s" : ""} in this period.`,
