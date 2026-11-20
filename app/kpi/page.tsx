@@ -510,11 +510,11 @@ function KpiContent() {
           <div className="h-9 w-28 bg-card border border-border-light rounded-full animate-pulse" />
         </section>
         <div className="h-14 w-full bg-card border border-border-light rounded-2xl animate-pulse" />
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-          <div className="lg:col-span-5 h-64 bg-card border border-border-light rounded-[20px] animate-pulse" />
-          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="h-64 bg-card border border-border-light rounded-[18px] animate-pulse" />
-            <div className="h-64 bg-card border border-border-light rounded-[18px] animate-pulse" />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+          <div className="lg:col-span-7 h-64 bg-card border border-border-light rounded-[20px] animate-pulse" />
+          <div className="lg:col-span-5 flex flex-col gap-3">
+            <div className="h-30 bg-card border border-border-light rounded-[18px] animate-pulse" />
+            <div className="h-30 bg-card border border-border-light rounded-[18px] animate-pulse" />
           </div>
         </div>
         <div className="h-56 w-full bg-card border border-border-light rounded-2xl animate-pulse" />
@@ -523,7 +523,7 @@ function KpiContent() {
   }
 
   return (
-    <div className="w-full space-y-6 pb-24">
+    <div className="w-full space-y-4 pb-20">
       {/* 1. Page Header: Plain Performance title and factual subtitle */}
       <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1">
         <div>
@@ -597,11 +597,11 @@ function KpiContent() {
         </div>
       ) : activeTab === "metrics" ? (
         /* TAB 1: METRICS & SCORE */
-        <div className="space-y-7">
-          {/* Hero Row: Two Columns (40% Left + 60% Right) */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-            {/* Left: Overall Performance Index Card (~40%) */}
-            <div data-tour="kpi-overview" className="lg:col-span-5 flex flex-col">
+        <div className="space-y-4 sm:space-y-4.5">
+          {/* Hero Row: Two Columns (Balanced ~58% Left + ~42% Right) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 sm:gap-4 items-stretch">
+            {/* Left: Overall Performance Index Card */}
+            <div data-tour="kpi-overview" className="lg:col-span-7 flex flex-col">
               <KpiHeroCard
                 overallScore={overallScore}
                 trend={trend}
@@ -618,29 +618,32 @@ function KpiContent() {
               />
             </div>
 
-            {/* Right: Latest Review & Goals Summary Cards (~60%) */}
-            <div className="lg:col-span-7 grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+            {/* Right: Latest Review & Goals Summary Cards stacked vertically */}
+            <div className="lg:col-span-5 flex flex-col gap-3 justify-between">
               <KpiLatestReviewCard
                 latestReview={reviewsData?.reviews?.[0] || null}
+                className="flex-1"
               />
               <KpiGoalsSummaryCard
                 goals={goalsList}
+                className="flex-1"
               />
             </div>
           </div>
 
           {/* Metric Sections */}
           {currentMetrics && (
-            <div data-tour="kpi-metrics-grid" className="space-y-7">
-              {/* Category 1: Attendance & Reliability */}
+            <div data-tour="kpi-metrics-grid" className="space-y-4 sm:space-y-4.5">
+              {/* Category 1: Attendance & Working Hours (3 cards in clean 3-col row) */}
               <KpiCategorySection
-                title="Attendance & Reliability"
-                description="Punctuality, shift attendance frequency, early departures, and correction volume."
+                title="Attendance & Working Hours"
+                description="Punctuality, shift attendance frequency, and total logged hours vs shift targets."
                 icon={<Clock className="w-4 h-4 text-brand-purple" />}
-                categoryHint="Punctuality targets: 95% on-time punches and 100% expected workdays."
+                categoryHint="Punctuality target: 95% on-time punches and 100% expected workdays and shift hours."
                 metrics={[
                   currentMetrics.on_time_check_in_rate,
                   currentMetrics.days_worked_vs_expected,
+                  currentMetrics.worked_hours_vs_target,
                   currentMetrics.early_check_outs,
                   currentMetrics.auto_closed_check_outs,
                   currentMetrics.regularization_requests,
@@ -659,28 +662,7 @@ function KpiContent() {
                 }}
               />
 
-              {/* Category 2: Hours & Shift Completion */}
-              <KpiCategorySection
-                title="Hours & Shift Completion"
-                description="Total productive work hours vs shift target expectations."
-                icon={<Calendar className="w-4 h-4 text-brand-purple" />}
-                categoryHint="Standard daily target is 8h per full working shift."
-                metrics={[currentMetrics.worked_hours_vs_target]}
-                previousMetricsMap={previousMetrics}
-                isManagerOrAdmin={isManagerOrAdmin}
-                isSelfView={effectiveEmpId === userId}
-                onSelectMetric={(key, label) => {
-                  setSelectedMetricKey(key);
-                  setSelectedMetricLabel(label);
-                  setDetailDrawerOpen(true);
-                }}
-                onAdjustMetric={(m) => {
-                  setAdjustMetric(m);
-                  setAdjustValue(m.value != null ? String(m.value) : "");
-                }}
-              />
-
-              {/* Category 3: Task Delivery & Execution */}
+              {/* Category 2: Task Delivery & Execution */}
               <KpiCategorySection
                 title="Task Delivery & Execution"
                 description="Tasks completed, on-time delivery and cycle time."

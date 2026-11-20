@@ -152,12 +152,12 @@ export function KpiHeroCard({
     <div
       data-tour="kpi-overview"
       className={cn(
-        "rounded-[20px] bg-card border border-border-light shadow-card p-5 lg:p-6 flex flex-col justify-between transition-all",
+        "rounded-[20px] bg-card border border-border-light shadow-card p-4.5 sm:p-5 flex flex-col justify-between transition-all",
         className
       )}
     >
       {/* Card Header (Normal sentence case, no duplicate links) */}
-      <div className="flex items-center justify-between gap-3 pb-3 border-b border-border-light/60">
+      <div className="flex items-center justify-between gap-3 pb-2.5 border-b border-border-light/60">
         <span className="text-xs font-bold text-text-primary">
           Overall performance
         </span>
@@ -177,11 +177,11 @@ export function KpiHeroCard({
 
       {overallScore != null ? (
         /* Active Performance View */
-        <div className="space-y-4 pt-3">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
-            <KpiRadialGauge score={overallScore} target={target} size={112} />
+        <div className="space-y-3 pt-2">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <KpiRadialGauge score={overallScore} target={target} size={106} />
 
-            <div className="space-y-2 min-w-0 flex-1">
+            <div className="space-y-1.5 min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <div title="Weighted average of the scored metrics">
                   <StatusBadge
@@ -232,11 +232,11 @@ export function KpiHeroCard({
           </div>
 
           {/* Three Small Category Items under the Gauge */}
-          <div className="grid grid-cols-3 gap-2.5 pt-2 border-t border-border-light/60">
+          <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border-light/60">
             {/* 1. Attendance */}
-            <div className="p-2.5 rounded-xl bg-card-subtle/80 border border-border-light flex flex-col justify-between">
+            <div className="p-2 rounded-xl bg-card-subtle/80 border border-border-light flex flex-col justify-between">
               <span className="text-[11px] font-semibold text-text-tertiary">Attendance</span>
-              <div className="flex items-baseline justify-between gap-1 mt-1">
+              <div className="flex items-baseline justify-between gap-1 mt-0.5">
                 <span
                   className={cn(
                     "text-sm font-bold tabular-nums",
@@ -260,9 +260,9 @@ export function KpiHeroCard({
             </div>
 
             {/* 2. Hours */}
-            <div className="p-2.5 rounded-xl bg-card-subtle/80 border border-border-light flex flex-col justify-between">
+            <div className="p-2 rounded-xl bg-card-subtle/80 border border-border-light flex flex-col justify-between">
               <span className="text-[11px] font-semibold text-text-tertiary">Hours</span>
-              <div className="flex items-baseline justify-between gap-1 mt-1">
+              <div className="flex items-baseline justify-between gap-1 mt-0.5">
                 <span
                   className={cn(
                     "text-sm font-bold tabular-nums",
@@ -286,9 +286,9 @@ export function KpiHeroCard({
             </div>
 
             {/* 3. Tasks */}
-            <div className="p-2.5 rounded-xl bg-card-subtle/80 border border-border-light flex flex-col justify-between">
+            <div className="p-2 rounded-xl bg-card-subtle/80 border border-border-light flex flex-col justify-between">
               <span className="text-[11px] font-semibold text-text-tertiary">Tasks</span>
-              <div className="flex items-baseline justify-between gap-1 mt-1">
+              <div className="flex items-baseline justify-between gap-1 mt-0.5">
                 <span
                   className={cn(
                     "text-sm font-bold tabular-nums",

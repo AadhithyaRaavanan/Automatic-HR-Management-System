@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { AppShell, useAppSession } from "@/components/shell/app-shell";
 import { BentoGrid } from "@/components/bento/bento-grid";
 import { BentoCard } from "@/components/bento/bento-card";
+import { Skeleton } from "@/components/shared/skeleton";
 import { createClient } from "@/lib/supabase/client";
 import { compressAvatarImage } from "@/lib/media/avatar-compress";
 import {
@@ -52,7 +53,7 @@ const DOC_TYPE_LABELS: Record<string, string> = {
 
 function ProfilePageContent() {
   const router = useRouter();
-  const { userId, userRole, isLoaded } = useAppSession();
+  const { userId, userRole, isLoaded, fullName: sessionFullName, timezone: sessionTimezone } = useAppSession();
   const supabase = React.useMemo(() => createClient(), []);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const loadedUserIdRef = React.useRef<string | null>(null);
@@ -61,7 +62,7 @@ function ProfilePageContent() {
   const [saving, setSaving] = React.useState(false);
   const [uploadingAvatar, setUploadingAvatar] = React.useState(false);
 
-  const [fullName, setFullName] = React.useState("");
+  const [fullName, setFullName] = React.useState(sessionFullName || "");
   const [email, setEmail] = React.useState("");
   const [phone, setPhone] = React.useState("");
   const [emergencyContact, setEmergencyContact] = React.useState("");
@@ -69,7 +70,7 @@ function ProfilePageContent() {
   const [avatarSignedUrl, setAvatarSignedUrl] = React.useState<string | null>(null);
 
   // Governed read-only fields
-  const [timezone, setTimezone] = React.useState("UTC");
+  const [timezone, setTimezone] = React.useState(sessionTimezone || "Asia/Kolkata");
   const [workMode, setWorkMode] = React.useState("remote");
   const [workTargetMinutes, setWorkTargetMinutes] = React.useState(480);
   const [departmentName, setDepartmentName] = React.useState<string | null>(null);
@@ -78,7 +79,7 @@ function ProfilePageContent() {
   const [tourOpen, setTourOpen] = React.useState(false);
 
   // Onboarding & Verified Details State
-  const [onboardingStatus, setOnboardingStatus] = React.useState<string>("NOT_STARTED");
+  const [onboardingStatus, setOnboardingStatus] = React.useState<string | null>(null);
   const [onboardingData, setOnboardingData] = React.useState<{
     dob?: string;
     gender?: string;
@@ -425,8 +426,103 @@ function ProfilePageContent() {
     .slice(0, 2)
     .toUpperCase();
 
-  const isVerified = ["COMPLETED", "VERIFIED", "APPROVED"].includes(onboardingStatus);
-  const isSubmitted = ["SUBMITTED", "PENDING_VERIFICATION", "IN_REVIEW"].includes(onboardingStatus);
+  const isVerified = Boolean(
+    onboardingStatus && ["COMPLETED", "VERIFIED", "APPROVED"].includes(onboardingStatus)
+  );
+  const isSubmitted = Boolean(
+    onboardingStatus && ["SUBMITTED", "PENDING_VERIFICATION", "IN_REVIEW"].includes(onboardingStatus)
+  );
+
+  if (loading || !isLoaded) {
+    return (
+      <div className="space-y-6">
+        {/* Top Profile Header Skeleton */}
+        <section className="pt-1 pb-2 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-8 w-44 rounded-xl" />
+              <Skeleton className="h-6 w-36 rounded-full" />
+            </div>
+            <Skeleton className="h-4 w-72 rounded-md" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-8 w-20 rounded-lg" />
+          </div>
+        </section>
+
+        <BentoGrid>
+          {/* Avatar & Identity Card Skeleton */}
+          <div className="lg:col-span-4">
+            <div className="w-full p-6 rounded-[28px] bg-card border border-border-light shadow-card space-y-5">
+              <Skeleton className="h-5 w-36 rounded-md" />
+              <div className="flex flex-col items-center text-center space-y-4 py-2">
+                <Skeleton className="w-24 h-24 rounded-full" />
+                <div className="space-y-2 w-full flex flex-col items-center">
+                  <Skeleton className="h-6 w-44 rounded-md" />
+                  <Skeleton className="h-4 w-52 rounded-md" />
+                  <div className="flex gap-2 pt-1">
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Contact Details Card Skeleton */}
+          <div className="lg:col-span-8">
+            <div className="w-full p-6 rounded-[28px] bg-card border border-border-light shadow-card space-y-5">
+              <Skeleton className="h-5 w-48 rounded-md" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Skeleton className="h-3 w-20 rounded" />
+                  <Skeleton className="h-10 w-full rounded-xl" />
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-3 w-28 rounded" />
+                  <Skeleton className="h-10 w-full rounded-xl" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-36 rounded" />
+                <Skeleton className="h-10 w-full rounded-xl" />
+              </div>
+              <div className="pt-4 border-t border-border-light space-y-3">
+                <Skeleton className="h-3.5 w-48 rounded" />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <Skeleton className="h-10 w-full rounded-xl" />
+                  <Skeleton className="h-10 w-full rounded-xl" />
+                  <Skeleton className="h-10 w-full rounded-xl" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bank & Payroll Details Skeleton */}
+          <div className="lg:col-span-6">
+            <div className="w-full p-6 rounded-[28px] bg-card border border-border-light shadow-card space-y-4">
+              <Skeleton className="h-5 w-40 rounded-md" />
+              <div className="grid grid-cols-2 gap-3">
+                <Skeleton className="h-14 w-full rounded-xl" />
+                <Skeleton className="h-14 w-full rounded-xl" />
+              </div>
+            </div>
+          </div>
+
+          {/* Education & Experience Skeleton */}
+          <div className="lg:col-span-6">
+            <div className="w-full p-6 rounded-[28px] bg-card border border-border-light shadow-card space-y-4">
+              <Skeleton className="h-5 w-44 rounded-md" />
+              <div className="grid grid-cols-2 gap-3">
+                <Skeleton className="h-14 w-full rounded-xl" />
+                <Skeleton className="h-14 w-full rounded-xl" />
+              </div>
+            </div>
+          </div>
+        </BentoGrid>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -437,35 +533,37 @@ function ProfilePageContent() {
             <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight">
               My Profile
             </h1>
-            <span
-              className={cn(
-                "px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider border flex items-center gap-1.5 shadow-sm",
-                isVerified
-                  ? "bg-status-success/15 text-status-success border-status-success/30"
-                  : isSubmitted
-                  ? "bg-brand-purple/15 text-brand-purple border-brand-purple/30"
-                  : onboardingStatus === "CORRECTION_REQUIRED"
-                  ? "bg-status-danger/15 text-status-danger border-status-danger/30"
-                  : "bg-brand-navy/10 text-brand-navy border-brand-navy/20"
-              )}
-            >
-              {isVerified ? (
-                <>
-                  <BadgeCheck className="w-4 h-4 text-status-success" />
-                  <span>Verified Onboarding</span>
-                </>
-              ) : isSubmitted ? (
-                <>
-                  <Clock className="w-3.5 h-3.5 text-brand-purple" />
-                  <span>Onboarding: Submitted & In Review</span>
-                </>
-              ) : (
-                <>
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>Onboarding: {onboardingStatus.replace(/_/g, " ")}</span>
-                </>
-              )}
-            </span>
+            {onboardingStatus ? (
+              <span
+                className={cn(
+                  "px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider border flex items-center gap-1.5 shadow-sm",
+                  isVerified
+                    ? "bg-status-success/15 text-status-success border-status-success/30"
+                    : isSubmitted
+                    ? "bg-brand-purple/15 text-brand-purple border-brand-purple/30"
+                    : onboardingStatus === "CORRECTION_REQUIRED"
+                    ? "bg-status-danger/15 text-status-danger border-status-danger/30"
+                    : "bg-brand-navy/10 text-brand-navy border-brand-navy/20"
+                )}
+              >
+                {isVerified ? (
+                  <>
+                    <BadgeCheck className="w-4 h-4 text-status-success" />
+                    <span>Verified Onboarding</span>
+                  </>
+                ) : isSubmitted ? (
+                  <>
+                    <Clock className="w-3.5 h-3.5 text-brand-purple" />
+                    <span>Onboarding: Submitted & In Review</span>
+                  </>
+                ) : (
+                  <>
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Onboarding: {onboardingStatus.replace(/_/g, " ")}</span>
+                  </>
+                )}
+              </span>
+            ) : null}
           </div>
           <p className="text-xs sm:text-sm text-text-secondary mt-1">
             Official employee record, verified onboarding credentials, and payroll details.
@@ -473,7 +571,7 @@ function ProfilePageContent() {
         </div>
 
         <div className="flex items-center gap-2">
-          {!isVerified && (
+          {!isVerified && onboardingStatus && (
             <Link
               href="/onboarding"
               className="px-3.5 py-1.5 rounded-lg bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-medium transition-colors flex items-center gap-1.5"

@@ -104,7 +104,7 @@ export function KpiCategorySection({
   const canAdjust = isManagerOrAdmin && !isSelfView;
 
   return (
-    <section className="space-y-3.5">
+    <section className="space-y-2.5">
       {/* Category Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1">
         <div className="space-y-0.5">
@@ -158,8 +158,12 @@ export function KpiCategorySection({
       ) : (
         /* Case 2: Scored Metrics in Clean Grid (No orphan rows, single card capped) */
         <div className={cn(
-          "grid grid-cols-1 gap-4",
-          scoredMetrics.length === 1 ? "max-w-xl" : "md:grid-cols-2"
+          "grid grid-cols-1 gap-3.5",
+          scoredMetrics.length === 1
+            ? "max-w-xl"
+            : scoredMetrics.length === 3
+            ? "md:grid-cols-3"
+            : "md:grid-cols-2"
         )}>
           {scoredMetrics.map((m) => {
             const hasData = m.value != null && m.status !== "no_data";
@@ -322,7 +326,7 @@ export function KpiCategorySection({
 
       {/* Slim Diagnostics Strip: Label, Value, small status dot, clickable */}
       {diagnosticMetrics.length > 0 && (
-        <div className="p-3 rounded-xl bg-card border border-border-light shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="p-2.5 px-3.5 rounded-xl bg-card border border-border-light shadow-xs flex flex-wrap items-center justify-between gap-2.5 text-xs">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-bold text-text-tertiary uppercase tracking-wider">
               Diagnostics:
