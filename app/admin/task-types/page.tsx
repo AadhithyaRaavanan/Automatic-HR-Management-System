@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { TaskType } from "@/lib/tasks/types";
+import { cn } from "@/lib/utils";
 
 export default function AdminTaskTypesPage() {
   const [types, setTypes] = React.useState<TaskType[]>([]);
@@ -36,9 +37,8 @@ export default function AdminTaskTypesPage() {
   const [formName, setFormName] = React.useState("");
   const [formDeptId, setFormDeptId] = React.useState<string>("");
   const [formPriority, setFormPriority] = React.useState<"low" | "medium" | "high" | "urgent">("medium");
-  const [formEstHours, setFormEstHours] = React.useState<number>(0);
-  const [formEstMins, setFormEstMins] = React.useState<number>(0);
-  const [formDueDays, setFormDueDays] = React.useState<string>("");
+  const [formDueDays, setFormDueDays] = React.useState<string>("1");
+  const [showCustomDueRule, setShowCustomDueRule] = React.useState<boolean>(false);
   const [formTemplate, setFormTemplate] = React.useState<string>("");
   const [formChecklist, setFormChecklist] = React.useState<string[]>([]);
   const [newChecklistItem, setNewChecklistItem] = React.useState("");
@@ -102,9 +102,8 @@ export default function AdminTaskTypesPage() {
     setFormName("");
     setFormDeptId("");
     setFormPriority("medium");
-    setFormEstHours(1);
-    setFormEstMins(0);
-    setFormDueDays("2");
+    setFormDueDays("1");
+    setShowCustomDueRule(false);
     setFormTemplate("Objective:\n\nDetails:\n\nDeliverable:");
     setFormChecklist([]);
     setNewChecklistItem("");
@@ -116,10 +115,12 @@ export default function AdminTaskTypesPage() {
     setFormName(t.name);
     setFormDeptId(t.department_id || "");
     setFormPriority(t.default_priority || "medium");
-    const totalMinutes = t.default_estimate_minutes || 0;
-    setFormEstHours(Math.floor(totalMinutes / 60));
-    setFormEstMins(totalMinutes % 60);
-    setFormDueDays(t.due_rule_working_days !== null && t.due_rule_working_days !== undefined ? String(t.due_rule_working_days) : "");
+    const dueVal =
+      t.due_rule_working_days !== null && t.due_rule_working_days !== undefined
+        ? String(t.due_rule_working_days)
+        : "";
+    setFormDueDays(dueVal);
+    setShowCustomDueRule(Boolean(dueVal !== "" && Number(dueVal) > 2));
     setFormTemplate(t.description_template || "");
     setFormChecklist(Array.isArray(t.checklist) ? [...t.checklist] : []);
     setNewChecklistItem("");
@@ -143,12 +144,6 @@ export default function AdminTaskTypesPage() {
       return;
     }
 
-    const totalEstimateMinutes = formEstHours * 60 + formEstMins;
-    if (totalEstimateMinutes < 0 || totalEstimateMinutes > 1440) {
-      toast.error("Estimate must be between 0 and 24 hours (1440 minutes).");
-      return;
-    }
-
     let parsedDueRule: number | null = null;
     if (formDueDays.trim() !== "") {
       const parsed = Number(formDueDays);
@@ -165,7 +160,7 @@ export default function AdminTaskTypesPage() {
         name: formName.trim(),
         department_id: formDeptId || null,
         default_priority: formPriority,
-        default_estimate_minutes: totalEstimateMinutes > 0 ? totalEstimateMinutes : null,
+        default_estimate_minutes: null,
         due_rule_working_days: parsedDueRule,
         description_template: formTemplate.trim() || null,
         checklist: formChecklist,
@@ -333,8 +328,7 @@ export default function AdminTaskTypesPage() {
                   <th className="py-2.5 px-4">Type Name</th>
                   <th className="py-2.5 px-3">Team Scope</th>
                   <th className="py-2.5 px-3">Default Priority</th>
-                  <th className="py-2.5 px-3">Estimate</th>
-                  <th className="py-2.5 px-3">Due Rule</th>
+                  <th className="py-2.5 px-3">Due Date Preset</th>
                   <th className="py-2.5 px-3">Checklist</th>
                   <th className="py-2.5 px-3 text-center">Status</th>
                   <th className="py-2.5 px-4 text-right">Actions</th>
@@ -344,13 +338,6 @@ export default function AdminTaskTypesPage() {
                 {types.map((t, idx) => {
                   const dept = departments.find((d) => d.id === t.department_id);
                   const deptLabel = dept ? dept.name : "General (All Teams)";
-                  const estHours = t.default_estimate_minutes ? Math.floor(t.default_estimate_minutes / 60) : 0;
-                  const estMins = t.default_estimate_minutes ? t.default_estimate_minutes % 60 : 0;
-                  const estStr = t.default_estimate_minutes
-                    ? estHours > 0
-                      ? `${estHours}h${estMins > 0 ? ` ${estMins}m` : ""}`
-                      : `${estMins}m`
-                    : "—";
 
                   return (
                     <tr
@@ -413,22 +400,20 @@ export default function AdminTaskTypesPage() {
                         </span>
                       </td>
 
-                      {/* Estimate */}
+                      {/* Due Date Preset */}
                       <td className="py-2.5 px-3 text-[#4D4D4D] font-medium">
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-[#808080]" />
-                          <span>{estStr}</span>
-                        </div>
-                      </td>
-
-                      {/* Due Rule */}
-                      <td className="py-2.5 px-3 text-[#4D4D4D] font-medium">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-[#808080]" />
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-[#808080]" />
                           <span>
-                            {t.due_rule_working_days !== null && t.due_rule_working_days !== undefined
-                              ? `${t.due_rule_working_days} working d`
-                              : "—"}
+                            {t.due_rule_working_days === 0
+                              ? "Today"
+                              : t.due_rule_working_days === 1
+                              ? "Tomorrow"
+                              : t.due_rule_working_days === 2
+                              ? "Day after tomorrow"
+                              : t.due_rule_working_days !== null && t.due_rule_working_days !== undefined
+                              ? `+${t.due_rule_working_days} working days`
+                              : "No preset"}
                           </span>
                         </div>
                       </td>
@@ -546,7 +531,7 @@ export default function AdminTaskTypesPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Default Priority */}
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-black">Default Priority</label>
@@ -562,51 +547,80 @@ export default function AdminTaskTypesPage() {
                     </select>
                   </div>
 
-                  {/* Default Estimate */}
+                  {/* Due Date Preset */}
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-black">Default Estimate</label>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 flex items-center gap-1 border border-[#E6E6E6] rounded px-2 py-1">
-                        <input
-                          type="number"
-                          min="0"
-                          max="24"
-                          value={formEstHours}
-                          onChange={(e) => setFormEstHours(Math.max(0, parseInt(e.target.value) || 0))}
-                          className="w-full text-xs focus:outline-none"
-                        />
-                        <span className="text-[10px] text-[#808080]">h</span>
-                      </div>
-                      <div className="flex-1 flex items-center gap-1 border border-[#E6E6E6] rounded px-2 py-1">
-                        <input
-                          type="number"
-                          min="0"
-                          max="59"
-                          step="5"
-                          value={formEstMins}
-                          onChange={(e) => setFormEstMins(Math.max(0, parseInt(e.target.value) || 0))}
-                          className="w-full text-xs focus:outline-none"
-                        />
-                        <span className="text-[10px] text-[#808080]">m</span>
-                      </div>
+                    <label className="text-xs font-bold text-black">Due Date Preset</label>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {[
+                        { label: "Today", val: "0" },
+                        { label: "Tomorrow", val: "1" },
+                        { label: "Day after tomorrow", val: "2" },
+                      ].map((preset) => {
+                        const isSelected = !showCustomDueRule && formDueDays === preset.val;
+                        return (
+                          <button
+                            key={preset.val}
+                            type="button"
+                            onClick={() => {
+                              setShowCustomDueRule(false);
+                              setFormDueDays(preset.val);
+                            }}
+                            className={cn(
+                              "px-2.5 py-1 rounded text-[11px] font-semibold border transition-all cursor-pointer",
+                              isSelected
+                                ? "bg-black text-white border-black shadow-xs"
+                                : "bg-white text-black border-[#E6E6E6] hover:bg-[#F5F5F5]"
+                            )}
+                          >
+                            {preset.label}
+                          </button>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCustomDueRule(true);
+                          if (formDueDays === "0" || formDueDays === "1" || formDueDays === "2") {
+                            setFormDueDays("3");
+                          }
+                        }}
+                        className={cn(
+                          "px-2.5 py-1 rounded text-[11px] font-semibold border transition-all cursor-pointer",
+                          showCustomDueRule
+                            ? "bg-black text-white border-black shadow-xs"
+                            : "bg-white text-black border-[#E6E6E6] hover:bg-[#F5F5F5]"
+                        )}
+                      >
+                        Custom days...
+                      </button>
+                      {formDueDays !== "" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormDueDays("");
+                            setShowCustomDueRule(false);
+                          }}
+                          className="px-2 py-1 text-[11px] font-bold text-[#808080] hover:text-black cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      )}
                     </div>
-                  </div>
 
-                  {/* Due Rule Working Days */}
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-black">Working Days Due Rule</label>
-                    <div className="flex items-center gap-2 border border-[#E6E6E6] rounded px-2 py-1">
-                      <input
-                        type="number"
-                        min="0"
-                        max="30"
-                        value={formDueDays}
-                        onChange={(e) => setFormDueDays(e.target.value)}
-                        placeholder="e.g. 2"
-                        className="w-full text-xs focus:outline-none"
-                      />
-                      <span className="text-[10px] text-[#808080] whitespace-nowrap">working days</span>
-                    </div>
+                    {showCustomDueRule && (
+                      <div className="pt-2 flex items-center gap-2">
+                        <input
+                          type="number"
+                          min="0"
+                          max="30"
+                          value={formDueDays}
+                          onChange={(e) => setFormDueDays(e.target.value)}
+                          placeholder="e.g. 5"
+                          className="w-24 px-3 py-1.5 text-xs border border-black rounded focus:outline-none bg-white font-semibold"
+                        />
+                        <span className="text-[11px] text-[#808080]">working days ahead</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
