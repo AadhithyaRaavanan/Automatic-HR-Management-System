@@ -50,11 +50,11 @@ export async function GET(request: NextRequest) {
 
   // Target employee info
   const { data: targetEmp } = await (supabaseAdmin.from("employees") as any)
-    .select("id, full_name, email, department_id, job_title_id, status, employment_category")
+    .select("id, full_name, email, department_id, job_title_id, status")
     .eq("id", targetEmployeeId)
     .maybeSingle();
 
-  const effectiveEmpType = employeeType || targetEmp?.employment_category || "full_time";
+  const effectiveEmpType = employeeType || "full_time";
 
   // Compute current and previous period KPI
   const [currentKpi, previousKpi] = await Promise.all([

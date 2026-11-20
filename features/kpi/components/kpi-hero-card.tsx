@@ -10,7 +10,7 @@ import {
   Info,
 } from "lucide-react";
 import {
-  getHeadlineSentence,
+  getHeadlineInfo,
   getScoreTrendSentence,
   getStatusDisplay,
 } from "@/lib/kpi/plain-language";
@@ -45,23 +45,12 @@ export function KpiHeroCard({
   const showBand = !isSelfView && isManagerOrAdmin;
   const band = getKpiBand(overallScore);
 
-  const headline = getHeadlineSentence(overallScore, currentMetrics, periodType);
+  const headlineInfo = getHeadlineInfo(overallScore, currentMetrics, periodType, target);
+  const headline = headlineInfo.headline;
   const trendText = getScoreTrendSentence(trend, previousPeriodLabel);
 
-  const statusKey =
-    overallScore != null
-      ? overallScore >= target
-        ? "on_track"
-        : overallScore >= target - 10
-        ? "at_risk"
-        : "behind"
-      : "no_data";
-
-  const statusInfo = getStatusDisplay(statusKey);
-
-  // Short notice when tasks are not included because none were assigned
-  const tasksMetric = currentMetrics?.tasks_completed_vs_assigned;
-  const hasNoTasks = !tasksMetric || tasksMetric.value == null || tasksMetric.status === "no_data";
+  // Status chip matches the first sentence of the headline
+  const statusInfo = getStatusDisplay(headlineInfo.statusKey);
 
   return (
     <div
@@ -72,7 +61,7 @@ export function KpiHeroCard({
       )}
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        {/* Left: Headline sentence + Trend + Plain explanation */}
+        {/* Left: Headline sentence + Trend */}
         <div className="space-y-2 min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             {/* Status dot + text (Always dot plus text) */}
@@ -104,27 +93,15 @@ export function KpiHeroCard({
                 <span>{trendText}</span>
               </span>
             )}
-
-            {hasNoTasks && overallScore != null && (
-              <span className="text-[11px] text-text-tertiary">
-                Tasks aren&apos;t included because none were assigned.
-              </span>
-            )}
           </div>
         </div>
 
-        {/* Right: Score + Small Gauge */}
-        <div className="flex items-center gap-3 shrink-0 self-start sm:self-center">
-          <div className="text-right">
-            <span className="text-3xl font-black tabular-nums tracking-tight text-text-primary block leading-none">
-              {overallScore != null ? `${overallScore}%` : "—"}
-            </span>
-            <span className="text-[10px] font-bold text-text-tertiary block mt-1">
-              Target {target}%
-            </span>
-          </div>
-
-          <KpiRadialGauge score={overallScore} target={target} size={72} />
+        {/* Right: Gauge with score inside ring + Target below it */}
+        <div className="flex flex-col items-center shrink-0 self-start sm:self-center">
+          <KpiRadialGauge score={overallScore} target={target} size={88} strokeWidth={8} />
+          <span className="text-[11px] font-bold text-text-tertiary block mt-1">
+            Target {target}%
+          </span>
         </div>
       </div>
     </div>

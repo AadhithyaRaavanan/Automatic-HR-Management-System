@@ -87,6 +87,7 @@ function KpiContent() {
   const [goalTitle, setGoalTitle] = React.useState("");
   const [goalNote, setGoalNote] = React.useState("");
   const [goalAssigneeId, setGoalAssigneeId] = React.useState<string>("");
+  const [missingCheckInDates, setMissingCheckInDates] = React.useState<string[]>([]);
 
   // Default target employee to param or current user
   React.useEffect(() => {
@@ -475,8 +476,34 @@ function KpiContent() {
       ? parseInt(matchWorked[2], 10) - parseInt(matchWorked[1], 10)
       : 0;
 
+  React.useEffect(() => {
+    let active = true;
+    if (unloggedCount > 0 && effectiveEmpId) {
+      fetch(
+        `/api/kpi/detail?employee_id=${encodeURIComponent(effectiveEmpId)}&metric=days_worked_vs_expected&from=${dateRange.from}&to=${dateRange.to}`
+      )
+        .then((res) => (res.ok ? res.json() : null))
+        .then((d) => {
+          if (!active || !d?.rows) return;
+          const miss = d.rows
+            .filter((r: any) => r.statusType === "missing")
+            .map((r: any) => r.date);
+          setMissingCheckInDates(miss);
+        })
+        .catch(() => {
+          if (active) setMissingCheckInDates([]);
+        });
+    } else {
+      setMissingCheckInDates([]);
+    }
+    return () => {
+      active = false;
+    };
+  }, [unloggedCount, effectiveEmpId, dateRange.from, dateRange.to]);
+
   const nextActions = getNextActionSuggestions({
     unloggedCount,
+    missingDates: missingCheckInDates,
     hasPendingSelfReview: !selfReviewData?.selfReview,
     atRiskGoals: goalsList.filter((g: any) => g.status === "at_risk"),
     overdueTasksCount: currentMetrics?.task_overdue_count?.value || 0,
@@ -523,7 +550,7 @@ function KpiContent() {
   return (
     <div className="w-full space-y-4.5 pb-20">
       {/* 1. Page Header: Plain "Performance" title and short subtitle */}
-      <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1">
+      <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-1 mb-2">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight">
             Performance
@@ -801,21 +828,23 @@ function KpiContent() {
               )}
             </div>
 
-            {/* Goal status summary pills */}
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="px-3 py-1 rounded-full bg-card-subtle border border-border-light font-medium">
-                Not started: <strong>{notStartedGoals}</strong>
-              </span>
-              <span className="px-3 py-1 rounded-full bg-card-subtle border border-border-light font-medium">
-                On track: <strong>{onTrackGoals}</strong>
-              </span>
-              <span className="px-3 py-1 rounded-full bg-card-subtle border border-border-light font-medium">
-                At risk: <strong>{atRiskGoals}</strong>
-              </span>
-              <span className="px-3 py-1 rounded-full bg-card-subtle border border-border-light font-medium">
-                Completed: <strong>{doneGoals}</strong>
-              </span>
-            </div>
+            {/* Goal status summary pills (hidden until at least one goal exists) */}
+            {goalsList.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="px-3 py-1 rounded-full bg-card-subtle border border-border-light font-medium">
+                  Not started: <strong>{notStartedGoals}</strong>
+                </span>
+                <span className="px-3 py-1 rounded-full bg-card-subtle border border-border-light font-medium">
+                  On track: <strong>{onTrackGoals}</strong>
+                </span>
+                <span className="px-3 py-1 rounded-full bg-card-subtle border border-border-light font-medium">
+                  At risk: <strong>{atRiskGoals}</strong>
+                </span>
+                <span className="px-3 py-1 rounded-full bg-card-subtle border border-border-light font-medium">
+                  Completed: <strong>{doneGoals}</strong>
+                </span>
+              </div>
+            )}
 
             {/* List of Goals */}
             <div className="space-y-3 pt-1">
@@ -875,6 +904,10 @@ function KpiContent() {
             onSelectEmployee={(empId) => {
               setSelectedEmpId(empId);
               setActiveTab("overview");
+            }}
+            onClearFilters={() => {
+              setDeptFilter("all");
+              setEmpType("full_time");
             }}
           />
         </div>

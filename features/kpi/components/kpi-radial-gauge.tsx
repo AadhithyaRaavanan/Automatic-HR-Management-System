@@ -89,26 +89,16 @@ export function KpiRadialGauge({
         )}
       </svg>
 
-      {/* Center Display */}
+      {/* Center Display: score only, large, comfortably fitted inside ring */}
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center select-none">
         {validScore != null ? (
-          <>
-            <span className="text-2xl font-black text-text-primary tabular-nums tracking-tight leading-none">
-              {validScore}%
-            </span>
-            <span className="text-[10px] font-bold text-text-tertiary uppercase mt-1">
-              Goal {target}%
-            </span>
-          </>
+          <span className="text-2xl sm:text-3xl font-black text-text-primary tabular-nums tracking-tight leading-none">
+            {validScore}%
+          </span>
         ) : (
-          <>
-            <span className="text-xl font-bold text-text-tertiary leading-none">
-              —
-            </span>
-            <span className="text-[9px] font-semibold text-text-muted uppercase mt-1">
-              No Score
-            </span>
-          </>
+          <span className="text-2xl font-bold text-text-tertiary leading-none">
+            —
+          </span>
         )}
       </div>
     </div>
