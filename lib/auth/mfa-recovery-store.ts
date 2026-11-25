@@ -10,8 +10,8 @@ const localRecoveryCodes = new Map<string, { code: string; expiresAt: number; to
 const consumedTokens = new Set<string>();
 
 export function generateRecoveryOtp(): string {
-  // Cryptographically secure 6-digit numeric string
-  return crypto.randomInt(100000, 999999).toString();
+  // Cryptographically secure guaranteed 6-digit numeric string (100000 - 999999)
+  return crypto.randomInt(100000, 1000000).toString();
 }
 
 export function createRecoveryProof(

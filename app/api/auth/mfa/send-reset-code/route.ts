@@ -52,16 +52,21 @@ export async function POST(request: NextRequest) {
       otpCode: code,
     });
 
-    if (!emailResult.success && !isDemo) {
+    if (!emailResult.success) {
+      console.error("[send-reset-code] Failed to deliver recovery email:", emailResult.error);
       return NextResponse.json(
-        { error: emailResult.error || "Failed to deliver recovery email." },
-        { status: 500 }
+        {
+          error:
+            emailResult.error ||
+            "Unable to send recovery email. Please check that mail services are operational or try again in a moment.",
+        },
+        { status: 502 }
       );
     }
 
     const response = NextResponse.json({
       success: true,
-      message: "Recovery code sent to your registered email.",
+      message: "A 6-digit recovery code has been delivered to your email.",
       maskedEmail: maskEmail(user.email),
       demoCode: isDemo ? code : undefined,
     });

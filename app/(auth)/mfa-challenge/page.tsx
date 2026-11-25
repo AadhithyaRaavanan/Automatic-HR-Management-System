@@ -324,9 +324,14 @@ function MfaChallengeForm() {
           </div>
         ) : (
           <form onSubmit={handleVerifyReset} className="space-y-4">
-            <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-xs text-[#475569]">
-              <span>We sent a 6-digit recovery code to </span>
-              <strong className="text-black">{maskedEmail || userEmail}</strong>.
+            <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-xs text-[#475569] space-y-1">
+              <p>
+                <span>We sent a 6-digit recovery code to </span>
+                <strong className="text-black">{maskedEmail || userEmail}</strong>.
+              </p>
+              <p className="text-[11px] text-[#64748B]">
+                Please check your inbox and <strong>Spam / Junk</strong> folder from <em>business@zenxea.com</em>.
+              </p>
             </div>
 
             {isDemoMode && demoRecoveryCode && (
@@ -374,10 +379,10 @@ function MfaChallengeForm() {
                 type="button"
                 onClick={handleSendRecoveryCode}
                 disabled={isSendingCode}
-                className="text-[#808080] hover:text-black flex items-center gap-1 transition-colors hover:underline"
+                className="text-[#808080] hover:text-black flex items-center gap-1 transition-colors hover:underline disabled:opacity-50 cursor-pointer"
               >
                 <RefreshCw className={cn("w-3 h-3", isSendingCode && "animate-spin")} />
-                <span>Resend code</span>
+                <span>{isSendingCode ? "Resending..." : "Resend code"}</span>
               </button>
               <button
                 type="button"

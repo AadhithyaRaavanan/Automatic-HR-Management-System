@@ -26,6 +26,10 @@ export function getSmtpTransporter() {
       user,
       pass,
     },
+    family: 4, // Force IPv4 to prevent serverless IPv6 connection hangs on Vercel/AWS
+    connectionTimeout: 10000,
+    greetingTimeout: 5000,
+    socketTimeout: 10000,
   });
 }
 
@@ -678,20 +682,25 @@ export async function sendMfaResetEmail(params: SendMfaResetParams): Promise<{
   messageId?: string;
   error?: string;
 }> {
-  const { to } = params;
-  const subject = `Your Two-Factor Authentication Recovery Code`;
+  const { to, otpCode } = params;
+  const subject = `Your 6-Digit Two-Factor Authentication Recovery Code: ${otpCode}`;
   const htmlContent = buildMfaResetEmailHtml(params);
+  const textContent = `Your Pulse two-factor authentication recovery code is: ${otpCode}\n\nThis 6-digit code expires in 10 minutes. Enter this code on the screen to unbind your lost device and configure a replacement.\n\nIf you did not initiate this request, please contact your workplace administrator immediately.`;
 
   // 1. Prioritize Hostinger SMTP if configured
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {
-        const fromAddress = process.env.SMTP_FROM || `Pulse <${process.env.SMTP_USER || "business@zenxea.com"}>`;
+        // Guarantee from address matches authenticated mailbox to avoid SPF/DMARC rejection
+        const authenticatedUser = process.env.SMTP_USER || "business@zenxea.com";
+        const fromAddress = `Pulse <${authenticatedUser}>`;
         const info = await transporter.sendMail({
           from: fromAddress,
+          replyTo: authenticatedUser,
           to,
           subject,
+          text: textContent,
           html: htmlContent,
         });
         return { success: true, messageId: info.messageId };
@@ -710,6 +719,7 @@ export async function sendMfaResetEmail(params: SendMfaResetParams): Promise<{
         from: fromAddress,
         to: [to],
         subject,
+        text: textContent,
         html: htmlContent,
       });
 
