@@ -8,6 +8,7 @@ import {
   checkRateLimit,
   recordFailure,
   clearRateLimit,
+  isRateLimitDisabled,
 } from "@/lib/auth/rate-limiter";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 
@@ -84,8 +85,8 @@ export async function POST(request: NextRequest) {
     const ipEmailKey = getRateLimitKey(clientIp, email);
     const emailKey = getEmailRateLimitKey(email);
 
-    // 2. Evaluate Dual Rate Limits: IP+Email AND Email-only counters (bypassed in demo mode)
-    if (!isDemoModeEnabled()) {
+    // 2. Evaluate Dual Rate Limits: IP+Email AND Email-only counters (bypassed in demo mode / dev mode / when rate limiting disabled)
+    if (!isDemoModeEnabled() && !isRateLimitDisabled()) {
       const [ipEmailCheck, emailCheck] = await Promise.all([
         checkRateLimit(ipEmailKey),
         checkRateLimit(emailKey),
@@ -194,7 +195,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (authError || !authData.user) {
-      if (!isDemoModeEnabled()) {
+      if (!isDemoModeEnabled() && !isRateLimitDisabled()) {
         // Record failure on both IP+Email AND Email-only rate limit stores
         await Promise.all([
           recordFailure(ipEmailKey),

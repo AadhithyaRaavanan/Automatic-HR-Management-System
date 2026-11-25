@@ -8,6 +8,7 @@ export function isDemoModeEnabled(): boolean {
   if (process.env.NEXT_PUBLIC_DEMO_MODE === "false") return false;
   if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") return true;
   if (process.env.NODE_ENV === "test") return false;
+  if (process.env.NODE_ENV === "development") return true;
   if (typeof window !== "undefined") {
     try {
       const role = localStorage.getItem("remotehr_cached_role");

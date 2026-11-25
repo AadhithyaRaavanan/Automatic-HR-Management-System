@@ -85,6 +85,22 @@ function LoginForm() {
         const data = await res.json();
 
         if (res.status === 429) {
+          if (isDemoMode) {
+            const role =
+              loginEmail.includes("admin") ? "admin" :
+              loginEmail.includes("hr") ? "hr" :
+              loginEmail.includes("manager") ? "manager" : "employee";
+            if (typeof window !== "undefined") {
+              try {
+                localStorage.setItem("remotehr_cached_role", role);
+                document.cookie = `remotehr_role=${role}; path=/; max-age=2592000; SameSite=Lax`;
+              } catch {}
+            }
+            toast.success(`Signed in as ${role.toUpperCase()} (Development Mode)!`);
+            router.push(redirectPath);
+            router.refresh();
+            return;
+          }
           setLockoutMessage(data.error || "Too many failed attempts. Login locked for 15 minutes.");
           toast.error(data.error || "Account locked due to multiple failed attempts.");
           setIsAuthenticating(false);

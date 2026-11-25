@@ -18,10 +18,25 @@ export function getEmailRateLimitKey(email: string): string {
 }
 
 /**
+ * Checks whether rate limiting is explicitly or conditionally disabled
+ * (e.g. in development mode, demo mode, or when DISABLE_AUTH_RATE_LIMIT=true)
+ */
+export function isRateLimitDisabled(): boolean {
+  if (process.env.DISABLE_AUTH_RATE_LIMIT === "true") return true;
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") return true;
+  if (process.env.NODE_ENV === "development") return true;
+  return false;
+}
+
+/**
  * Check if the given rate limit key has exceeded maximum attempts.
  * Uses Upstash Redis (if configured) or Supabase persistent table public.auth_rate_limits.
  */
 export async function checkRateLimit(key: string): Promise<RateLimitResult> {
+  if (isRateLimitDisabled()) {
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
+
   const now = Date.now();
 
   // 1. Upstash Redis (if configured)
@@ -93,6 +108,10 @@ export async function checkRateLimit(key: string): Promise<RateLimitResult> {
  * Record a failed login attempt for a key.
  */
 export async function recordFailure(key: string): Promise<void> {
+  if (isRateLimitDisabled()) {
+    return;
+  }
+
   const now = Date.now();
 
   // 1. Upstash Redis
