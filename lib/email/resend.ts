@@ -453,6 +453,67 @@ export function buildPasswordResetEmailHtml(params: SendPasswordResetParams): st
 </html>`;
 }
 
+export interface SendMfaResetParams {
+  to: string;
+  otpCode: string;
+}
+
+export function buildMfaResetEmailHtml(params: SendMfaResetParams): string {
+  const { otpCode } = params;
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reset Authenticator - Pulse</title>
+    <style>
+      body { margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; }
+      .wrapper { width: 100%; padding: 40px 0; background-color: #f8fafc; }
+      .card { max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; }
+      .header { background: #000000; padding: 28px 32px; text-align: center; }
+      .brand { font-size: 20px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px; }
+      .badge { display: inline-block; background: rgba(99, 85, 220, 0.25); color: #c4b5fd; font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase; margin-top: 8px; }
+      .body { padding: 32px; }
+      .title { font-size: 20px; font-weight: 700; color: #0f172a; margin: 0 0 12px; line-height: 1.3; }
+      .paragraph { font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 24px; }
+      .otp-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; text-align: center; margin: 24px 0; }
+      .otp-label { font-size: 11px; font-weight: 600; color: #000000; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+      .otp-number { font-size: 32px; font-weight: 700; font-family: monospace; letter-spacing: 6px; color: #000000; }
+      .notice { background: #f1f5f9; border-radius: 8px; padding: 16px; font-size: 12px; color: #64748b; line-height: 1.5; margin-top: 24px; }
+      .footer { text-align: center; padding: 24px 32px; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; }
+    </style>
+  </head>
+  <body>
+    <div class="wrapper">
+      <div class="card">
+        <div class="header">
+          <div class="brand">Pulse</div>
+          <div class="badge">Two-Factor Recovery</div>
+        </div>
+        <div class="body">
+          <h1 class="title">Reset Two-Factor Authentication</h1>
+          <p class="paragraph">
+            We received a request to reset your authenticator app for Pulse. Enter this 6-digit recovery code on the verification screen to disconnect your previous device and set up a new one.
+          </p>
+
+          <div class="otp-box">
+            <div class="otp-label">Your recovery code</div>
+            <div class="otp-number">${otpCode}</div>
+          </div>
+
+          <div class="notice">
+            This code expires in 10 minutes. If you did not request to reset your authenticator, please change your password immediately.
+          </div>
+        </div>
+        <div class="footer">
+          Delivered securely via Hostinger SMTP &bull; Pulse Automated Platform
+        </div>
+      </div>
+    </div>
+  </body>
+</html>`;
+}
+
 export interface SendOnboardingSubmittedParams {
   to?: string;
   candidateName: string;
@@ -607,6 +668,64 @@ export async function sendPasswordResetEmail(params: SendPasswordResetParams): P
     } catch (err: any) {
       return { success: false, error: err.message || String(err) };
     }
+  }
+
+  return { success: false, error: "Email delivery failed. Check the configured mail transport." };
+}
+
+export async function sendMfaResetEmail(params: SendMfaResetParams): Promise<{
+  success: boolean;
+  messageId?: string;
+  error?: string;
+}> {
+  const { to } = params;
+  const subject = `Your Two-Factor Authentication Recovery Code`;
+  const htmlContent = buildMfaResetEmailHtml(params);
+
+  // 1. Prioritize Hostinger SMTP if configured
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      const transporter = getSmtpTransporter();
+      if (transporter) {
+        const fromAddress = process.env.SMTP_FROM || `Pulse <${process.env.SMTP_USER || "business@zenxea.com"}>`;
+        const info = await transporter.sendMail({
+          from: fromAddress,
+          to,
+          subject,
+          html: htmlContent,
+        });
+        return { success: true, messageId: info.messageId };
+      }
+    } catch (smtpErr: any) {
+      console.warn("[SMTP Error, falling back to Resend]:", smtpErr?.message || smtpErr);
+    }
+  }
+
+  // 2. Fall back to Resend if configured
+  if (process.env.RESEND_API_KEY) {
+    const client = resend || new Resend(process.env.RESEND_API_KEY);
+    try {
+      const fromAddress = process.env.RESEND_FROM_EMAIL || "Pulse <onboarding@remotehr.io>";
+      const response = await client.emails.send({
+        from: fromAddress,
+        to: [to],
+        subject,
+        html: htmlContent,
+      });
+
+      if (response.error) {
+        return { success: false, error: response.error.message };
+      }
+
+      return { success: true, messageId: response.data?.id };
+    } catch (err: any) {
+      return { success: false, error: err.message || String(err) };
+    }
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    console.warn(`[Simulated MFA Reset Email to ${to}] OTP: ${params.otpCode}`);
+    return { success: true, messageId: `sim_mfa_${Date.now()}` };
   }
 
   return { success: false, error: "Email delivery failed. Check the configured mail transport." };
@@ -1312,3 +1431,4 @@ export async function sendMagicLinkEmail(params: SendMagicLinkParams): Promise<{
 
   return { success: false, error: "Email delivery failed. Check the configured mail transport." };
 }
+

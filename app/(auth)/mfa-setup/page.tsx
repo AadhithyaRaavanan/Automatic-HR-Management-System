@@ -37,7 +37,7 @@ function MfaSetupForm() {
         if (!listError && factorData) {
           const verified = factorData.totp?.find((f) => f.status === "verified");
           if (verified) {
-            router.push(`/mfa-challenge?redirect=${encodeURIComponent(redirectPath)}`);
+            router.push(`/mfa-challenge?redirect=${encodeURIComponent(redirectPath)}&reset=true`);
             return;
           }
 
