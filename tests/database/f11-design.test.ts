@@ -48,7 +48,7 @@ describe("Section 11: Design System & Frontend UX", () => {
   // [F11.1.1] Bento Grid Architecture & Design Tokens
   it("[F11.1.1] verifies Bento grid design tokens (#D9DBEC, #6C5CE7, #14123A, 32px)", () => {
     // 1. Inspect globals.css for design tokens
-    const cssPath = path.resolve(process.cwd(), "app/globals.css");
+    const cssPath = path.resolve(process.cwd(), "src/app/globals.css");
     const cssContent = fs.readFileSync(cssPath, "utf-8");
 
     expect(cssContent).toMatch(/--canvas-bg:\s*#D9DBEC/i);
@@ -56,7 +56,7 @@ describe("Section 11: Design System & Frontend UX", () => {
     expect(cssContent).toMatch(/--brand-navy:\s*#14123A/i);
 
     // 2. Inspect sidebar for curved shell layout
-    const sidebarPath = path.resolve(process.cwd(), "components/shell/curved-sidebar.tsx");
+    const sidebarPath = path.resolve(process.cwd(), "src/components/shell/curved-sidebar.tsx");
     const sidebarContent = fs.readFileSync(sidebarPath, "utf-8");
     expect(sidebarContent).toMatch(/rounded-r-\[28px\]|rounded-r-\[32px\]/);
     expect(sidebarContent).toMatch(/bg-brand-purple/);
@@ -107,7 +107,7 @@ describe("Section 11: Design System & Frontend UX", () => {
     expect((packageJson.dependencies as any)["sonner"]).toBeDefined();
 
     // 2. /gallery route checks isDemoModeEnabled()
-    const galleryPagePath = path.resolve(process.cwd(), "app/gallery/page.tsx");
+    const galleryPagePath = path.resolve(process.cwd(), "src/app/gallery/page.tsx");
     const galleryContent = fs.readFileSync(galleryPagePath, "utf-8");
     expect(galleryContent).toMatch(/isDemoModeEnabled\(\)/);
     expect(galleryContent).toMatch(/notFound\(\)/);

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { sanitizeRedirectPath, getSafeRedirectUrl } from "@/lib/auth/redirect";
+import { sanitizeRedirectPath, getSafeRedirectUrl } from "@/features/auth/redirect";
 
 const mockExchangeCodeForSession = vi.fn();
 

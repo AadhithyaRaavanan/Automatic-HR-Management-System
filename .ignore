@@ -1,0 +1,4 @@
+# Keep routine ripgrep searches focused. Name an archive path explicitly to search it.
+/docs/history/
+/supabase/snapshots/
+/release-logs/

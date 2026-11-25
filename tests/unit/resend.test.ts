@@ -24,13 +24,14 @@ describe("Section 3.2: Resend Email Templates and Production Hardening", () => {
     shiftEndTime: "05:00 PM",
   };
 
-  it("1. builds responsive HTML template incorporating RemoteHR brand tokens", () => {
+  it("1. builds a responsive invitation with the Pulse brand and palette", () => {
     const html = buildWelcomeEmailHtml(sampleParams);
 
-    // Assert RemoteHR brand color tokens
-    expect(html).toContain("#14123A"); // Deep Indigo
-    expect(html).toContain("#6C5CE7"); // Electric Purple
-    expect(html).toContain("#e2e0f0"); // Border / Accent
+    const email = new DOMParser().parseFromString(html, "text/html");
+    expect(email.title).toBe("Welcome to Pulse");
+    expect(email.querySelector(".brand-title")?.textContent).toBe("Pulse");
+    expect(email.querySelector("style")?.textContent).toMatch(/\.header\s*\{\s*background-color:\s*#000000/i);
+    expect(html).toContain("#E6E6E6");
 
     // Assert responsive meta tags
     expect(html).toContain('meta name="viewport" content="width=device-width, initial-scale=1.0"');

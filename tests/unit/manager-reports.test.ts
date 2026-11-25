@@ -28,7 +28,7 @@ describe("Phase 4: Manager Roster, Reports & Export Services Suite", () => {
   });
 
   describe("2. Email Notification Template Builder", () => {
-    it("generates branded HTML email with RemoteHR tokens", () => {
+    it("renders the Pulse brand, attendance message and review link", () => {
       const html = buildAttendanceEmailTemplate(
         "Auto-Checkout Recorded",
         "Your evening punch was auto-closed at 23:59.",
@@ -36,12 +36,13 @@ describe("Phase 4: Manager Roster, Reports & Export Services Suite", () => {
         "https://app.remotehr.io/attendance"
       );
 
-      expect(html).toContain("RemoteHR Workplace");
-      expect(html).toContain("Auto-Checkout Recorded");
-      expect(html).toContain("Review Session");
-      expect(html).toContain("https://app.remotehr.io/attendance");
-      expect(html).toContain("#6C5CE7"); // Brand Purple
-      expect(html).toContain("#14123A"); // Deep Navy
+      const email = new DOMParser().parseFromString(html, "text/html");
+      expect(email.querySelector("h2")?.textContent).toBe("Pulse");
+      expect(email.querySelector("h3")?.textContent).toBe("Auto-Checkout Recorded");
+      expect(email.querySelector("p")?.textContent).toBe("Your evening punch was auto-closed at 23:59.");
+      const action = email.querySelector("a");
+      expect(action?.textContent?.trim()).toBe("Review Session");
+      expect(action?.getAttribute("href")).toBe("https://app.remotehr.io/attendance");
     });
   });
 

@@ -1,0 +1,54 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getNotificationCaller } from "@/features/notifications/auth";
+import { getAllActiveEmployees } from "@/features/notifications/recipients";
+import { notify } from "@/features/notifications/notify";
+import { requireApprovedUser } from "@/features/auth/require-approved-user";
+
+export const dynamic = "force-dynamic";
+
+export async function POST(request: NextRequest) {
+  try {
+    const approvedCheck = await requireApprovedUser(request);
+    if ("response" in approvedCheck) {
+      return approvedCheck.response;
+    }
+
+    const user = approvedCheck.user;
+
+    const body = await request.json().catch(() => ({}));
+    const { action, holidayName, holidayDate, count } = body;
+
+    const allEmployees = await getAllActiveEmployees();
+    if (allEmployees.length === 0) {
+      return NextResponse.json({ success: true, count: 0 });
+    }
+
+    const title =
+      action === "import"
+        ? `${count || "Official"} Holiday Schedule Published`
+        : `Holiday Notice: ${holidayName || "Upcoming Holiday"}`;
+
+    const bodyText =
+      action === "import"
+        ? `The official company holiday calendar for the upcoming cycle has been updated with ${count} holidays.`
+        : `${holidayName || "A holiday"} has been scheduled on ${holidayDate || "the calendar"}.`;
+
+    await notify({
+      userIds: allEmployees,
+      type: "holiday_scheduled",
+      typeGroup: "announcements",
+      title,
+      body: bodyText,
+      link: "/holidays",
+      entityType: "holidays",
+      actorId: user.id,
+    });
+
+    return NextResponse.json({ success: true, count: allEmployees.length });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: err?.message || "Internal server error" },
+      { status: 500 }
+    );
+  }
+}

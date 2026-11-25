@@ -179,7 +179,7 @@ describe("Phase 1: Application-Level RBAC & Route Guard Suite", () => {
 
   describe("7. Phase 1 Server-Side Rate Limiting Module", () => {
     it("allows retry under attempt limit", async () => {
-      const { checkRateLimit, recordFailure, clearRateLimit } = await import("@/lib/auth/rate-limiter");
+      const { checkRateLimit, recordFailure, clearRateLimit } = await import("@/features/auth/rate-limiter");
       const testKey = "192.168.1.1::testuser-under@remotehr.io";
       await clearRateLimit(testKey);
 
@@ -193,7 +193,7 @@ describe("Phase 1: Application-Level RBAC & Route Guard Suite", () => {
     });
 
     it("locks account upon reaching 5 failed attempts", async () => {
-      const { checkRateLimit, recordFailure, clearRateLimit } = await import("@/lib/auth/rate-limiter");
+      const { checkRateLimit, recordFailure, clearRateLimit } = await import("@/features/auth/rate-limiter");
       const testKey = "192.168.1.1::testuser-lock@remotehr.io";
       await clearRateLimit(testKey);
 
@@ -334,7 +334,7 @@ describe("Phase 1: Application-Level RBAC & Route Guard Suite", () => {
 
     it("rejects login unconditionally in production when captchaToken is missing", async () => {
       (process.env as any).NODE_ENV = "production";
-      const { checkTurnstileRequirements } = await import("@/lib/auth/turnstile");
+      const { checkTurnstileRequirements } = await import("@/features/auth/turnstile");
 
       // Even without TURNSTILE_SECRET_KEY, production must fail closed
       delete process.env.TURNSTILE_SECRET_KEY;
@@ -351,7 +351,7 @@ describe("Phase 1: Application-Level RBAC & Route Guard Suite", () => {
 
     it("allows login when captchaToken is provided in production", async () => {
       (process.env as any).NODE_ENV = "production";
-      const { checkTurnstileRequirements } = await import("@/lib/auth/turnstile");
+      const { checkTurnstileRequirements } = await import("@/features/auth/turnstile");
 
       const resValid = checkTurnstileRequirements("valid-turnstile-token-abc");
       expect(resValid.valid).toBe(true);
@@ -362,7 +362,7 @@ describe("Phase 1: Application-Level RBAC & Route Guard Suite", () => {
 
     it("bypasses CAPTCHA check in development and test environments", async () => {
       (process.env as any).NODE_ENV = "test";
-      const { checkTurnstileRequirements } = await import("@/lib/auth/turnstile");
+      const { checkTurnstileRequirements } = await import("@/features/auth/turnstile");
 
       const res = checkTurnstileRequirements(undefined);
       expect(res.valid).toBe(true);
@@ -374,7 +374,7 @@ describe("Phase 1: Application-Level RBAC & Route Guard Suite", () => {
 
   describe("11. Phase 1 Dual-Counter Rate Limiter Keys", () => {
     it("generates separate scoped keys for ip+email and email-only", async () => {
-      const { getRateLimitKey, getEmailRateLimitKey } = await import("@/lib/auth/rate-limiter");
+      const { getRateLimitKey, getEmailRateLimitKey } = await import("@/features/auth/rate-limiter");
 
       const ipEmailKey = getRateLimitKey("192.168.1.50", "Alex@RemoteHR.IO");
       const emailKey = getEmailRateLimitKey("Alex@RemoteHR.IO");

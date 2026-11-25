@@ -22,7 +22,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Client } from "pg";
 import * as fs from "fs";
 import * as path from "path";
-import { computeWeightedKpiScore } from "@/lib/kpi/helpers";
+import { computeWeightedKpiScore } from "@/features/kpi/helpers";
 
 function getDatabaseUrl(): string {
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL;

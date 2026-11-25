@@ -233,7 +233,7 @@ describe("Section 9: Data Retention, Archiving & Compliance", () => {
       /html2canvas/g,
     ];
 
-    const dirsToScan = ["app", "components", "features", "lib"];
+    const dirsToScan = ["src/app", "src/components", "src/features", "src/lib"];
     const foundViolations: string[] = [];
 
     function scanDir(dir: string) {
@@ -265,7 +265,7 @@ describe("Section 9: Data Retention, Archiving & Compliance", () => {
     expect(foundViolations).toEqual([]);
 
     // 2. Settings page contains Privacy Manifesto
-    const settingsPath = path.resolve(process.cwd(), "app/settings/page.tsx");
+    const settingsPath = path.resolve(process.cwd(), "src/app/settings/page.tsx");
     expect(fs.existsSync(settingsPath)).toBe(true);
     const settingsContent = fs.readFileSync(settingsPath, "utf-8");
     expect(settingsContent).toMatch(/Zero-Invasive Privacy Manifesto/i);

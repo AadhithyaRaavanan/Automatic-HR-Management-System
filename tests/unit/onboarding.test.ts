@@ -4,12 +4,12 @@ import {
   formatEmployeeFolderName,
   formatDocumentFileName,
   sanitizeNameForNaming,
-} from "@/lib/onboarding-storage";
+} from "@/features/onboarding/storage";
 import {
   QUALIFICATION_DOC_MAP,
   HighestQualification,
   OnboardingWorkflowStatus,
-} from "@/lib/onboarding-types";
+} from "@/features/onboarding/types";
 
 describe("ZEN XEA HRMS – Onboarding & Document Verification Suite", () => {
   describe("PDF Magic Byte Validation", () => {

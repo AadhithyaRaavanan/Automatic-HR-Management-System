@@ -253,7 +253,7 @@ async function main() {
       suite: "tests/unit/f2-auth.test.ts",
       command: 'npx vitest run tests/unit/f2-auth.test.ts -t "[F2.2.1]"',
       mutate: async () => {
-        const filePath = path.join(rootDir, "lib/auth/rate-limiter.ts");
+        const filePath = path.join(rootDir, "src/features/auth/rate-limiter.ts");
         const originalContent = fs.readFileSync(filePath, "utf-8");
         fs.writeFileSync(filePath + ".bak", originalContent, "utf-8");
         const mutatedContent = originalContent.replaceAll(
@@ -263,7 +263,7 @@ async function main() {
         fs.writeFileSync(filePath, mutatedContent, "utf-8");
       },
       revert: async () => {
-        const filePath = path.join(rootDir, "lib/auth/rate-limiter.ts");
+        const filePath = path.join(rootDir, "src/features/auth/rate-limiter.ts");
         if (fs.existsSync(filePath + ".bak")) {
           fs.writeFileSync(filePath, fs.readFileSync(filePath + ".bak", "utf-8"), "utf-8");
           fs.unlinkSync(filePath + ".bak");
@@ -278,7 +278,7 @@ async function main() {
       suite: "tests/unit/f2-auth.test.ts",
       command: 'npx vitest run tests/unit/f2-auth.test.ts -t "[F2.2.3]"',
       mutate: async () => {
-        const filePath = path.join(rootDir, "lib/auth/redirect.ts");
+        const filePath = path.join(rootDir, "src/features/auth/redirect.ts");
         const originalContent = fs.readFileSync(filePath, "utf-8");
         fs.writeFileSync(filePath + ".bak", originalContent, "utf-8");
         const mutatedContent = originalContent.replace(
@@ -288,7 +288,7 @@ async function main() {
         fs.writeFileSync(filePath, mutatedContent, "utf-8");
       },
       revert: async () => {
-        const filePath = path.join(rootDir, "lib/auth/redirect.ts");
+        const filePath = path.join(rootDir, "src/features/auth/redirect.ts");
         if (fs.existsSync(filePath + ".bak")) {
           fs.writeFileSync(filePath, fs.readFileSync(filePath + ".bak", "utf-8"), "utf-8");
           fs.unlinkSync(filePath + ".bak");

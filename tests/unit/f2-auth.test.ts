@@ -21,8 +21,8 @@ import {
   checkRateLimit,
   recordFailure,
   clearRateLimit,
-} from "@/lib/auth/rate-limiter";
-import { sanitizeRedirectPath, getSafeRedirectUrl } from "@/lib/auth/redirect";
+} from "@/features/auth/rate-limiter";
+import { sanitizeRedirectPath, getSafeRedirectUrl } from "@/features/auth/redirect";
 
 describe("Section 2: Authentication, MFA & Security Infrastructure", () => {
   // [F2.1.1] Time-Based One-Time Password (TOTP) Full Lifecycle

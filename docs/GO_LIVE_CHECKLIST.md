@@ -199,4 +199,4 @@ If critical defects or telemetry errors are observed post-promotion:
 2. **Database Schema Rollback**:
    - If a migration caused breaking column constraints, connect via direct psql and apply the documented rollback SQL from `docs/history/`.
 3. **MFA Emergency Reset**:
-   - If an administrator loses their TOTP factor during initial enrollment, follow the recovery procedure in [`docs/ADMIN_RECOVERY.md`](file:///c:/Users/Hp/OneDrive/Desktop/Automatic%20HR%20Management%20System/docs/ADMIN_RECOVERY.md).
+   - If an administrator loses their TOTP factor during initial enrollment, follow the recovery procedure in [`docs/ADMIN_RECOVERY.md`](ADMIN_RECOVERY.md).

@@ -359,7 +359,7 @@ Projects provide high-level organizational buckets for grouping tasks by client,
 
 ## 10. Deep Integration: How Tasks Power the KPI Module
 
-The Tasks module is directly coupled to the automated KPI engine (`lib/kpi/compute.ts`). Daily task activity dynamically impacts an employee's performance score:
+The Tasks module is directly coupled to the automated KPI engine (`src/features/kpi/compute.ts`). Daily task activity dynamically impacts an employee's performance score:
 
 ```mermaid
 flowchart LR
