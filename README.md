@@ -1,205 +1,261 @@
-# RemoteHR: Production-Grade Attendance Management Module
+# RemoteHR (Pulse) — Enterprise Automatic HR Management System
 
 [![Next.js](https://img.shields.io/badge/Next.js-14.2%20App%20Router-black?logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%205.6-blue?logo=typescript)](https://www.typescriptlang.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4%20Custom%20Tokens-38bdf8?logo=tailwindcss)](https://tailwindcss.com/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4%20Bento%20Tokens-38bdf8?logo=tailwindcss)](https://tailwindcss.com/)
 [![Supabase](https://img.shields.io/badge/Supabase-Auth%20%7C%20Postgres%20%7C%20RLS-3ecf8e?logo=supabase)](https://supabase.com/)
-[![Vitest](https://img.shields.io/badge/Vitest-38%2F38%20Passing-green?logo=vitest)](https://vitest.dev/)
-[![Playwright](https://img.shields.io/badge/Playwright-E2E%20Ready-orange?logo=playwright)](https://playwright.dev/)
+[![Vitest](https://img.shields.io/badge/Vitest-Unit%20Tests%20Passing-green?logo=vitest)](https://vitest.dev/)
+[![Playwright](https://img.shields.io/badge/Playwright-E2E%20Automated-orange?logo=playwright)](https://playwright.dev/)
 [![WCAG AA](https://img.shields.io/badge/Accessibility-WCAG%20AA%20Compliant-purple)](#accessibility--contrast)
-[![Free Tier Optimized](https://img.shields.io/badge/Supabase%20Free%20Tier-<500MB%20Storage-brightgreen)](#supabase-free-tier-optimization)
+[![Multi-Tenant](https://img.shields.io/badge/Multi--Tenant-RLS%20Isolated-blueviolet)](#1-core-architecture--multi-tenancy)
 
-A scalable, secure, and privacy-respecting **Attendance Management System** designed for modern remote companies. Built with pixel-level fidelity to the modern dashboard design system featuring a soft lavender canvas (`#D9DBEC`), curved purple sidebar (`#6C5CE7`), rounded white shell container (`32px` radius), deep navy primary action buttons (`#14123A`), and a responsive Bento grid.
-
-> 📖 **Full Engineering Walkthrough**: For an end-to-end report of all architectural decisions, database schemas, Tamil Nadu calendar integration, bug fixes, and development phases, see [PROJECT_WALKTHROUGH.md](docs/history/PROJECT_WALKTHROUGH.md).
+**RemoteHR** (internally code-named **Pulse**) is a production-grade, multi-tenant Human Resource Management System (HRMS) built for remote, hybrid, and distributed companies. It combines zero-invasive attendance tracking, automated shift engines, leave governance, task allocation, performance (KPI) scoring, candidate onboarding, real-time notification alerts, and role-based access control (RBAC) backed by Time-Based One-Time Password Multi-Factor Authentication (TOTP MFA).
 
 ---
 
-## 📸 Visual Design & Bento Architecture
+## 📑 Table of Contents
 
-| Design Element | Specification | Visual Reference Match |
+1. [High-Level Architecture & Data Flow](#-high-level-architecture--data-flow)
+2. [Visual Design & Bento UI System](#-visual-design--bento-ui-system)
+3. [Zero-Invasive Privacy Manifesto](#-zero-invasive-privacy-manifesto)
+4. [Complete Module Breakdown](#-complete-module-breakdown)
+   - [Authentication, Security & MFA Suite](#1-authentication-security--mfa-suite)
+   - [Employee Management System (EMS)](#2-employee-management-system-ems)
+   - [Attendance Tracking & Live Time Clock](#3-attendance-tracking--live-time-clock)
+   - [Leave Management & Accrual Engine](#4-leave-management--accrual-engine)
+   - [Task Management & Recurrence System](#5-task-management--recurrence-system)
+   - [Performance & Automated KPI Engine](#6-performance--automated-kpi-engine)
+   - [Candidate Onboarding Portal](#7-candidate-onboarding-portal)
+   - [Real-Time Notification & Audio Chime Engine](#8-real-time-notification--audio-chime-engine)
+   - [Reporting, Analytics & Data Portability](#9-reporting-analytics--data-portability)
+   - [System Administration & Audit Governance](#10-system-administration--audit-governance)
+5. [Role-Based Access Control (RBAC) Matrix](#-role-based-access-control-rbac-matrix)
+6. [Quick Start & Local Setup Guide](#-quick-start--local-setup-guide)
+7. [Demo Accounts & Development Mode](#-demo-accounts--development-mode)
+8. [Environment Configuration Reference](#-environment-configuration-reference)
+9. [Testing & Quality Assurance](#-testing--quality-assurance)
+10. [Production Deployment & Operational Runbook](#-production-deployment--operational-runbook)
+11. [License](#-license)
+
+---
+
+## 🏛️ High-Level Architecture & Data Flow
+
+The platform is designed around Next.js App Router for server-rendered layouts and API endpoints, connected to a dedicated PostgreSQL database managed through Supabase with Row-Level Security (RLS) on all tables.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        Next.js App Router (Client / SSR)               │
+│   ├── Bento Grid Dashboard (Attendance, Calendar, KPIs, Tasks, Teams)  │
+│   ├── Realtime Audio Engine (Web Audio API Buffer + Dual Chime Tone)   │
+│   └── RBAC Route Guards (MFA Step-Up, AAL2 Gating, Sanity Checks)      │
+└────────────────────────────────────┬───────────────────────────────────┘
+                                     │ HTTPS / WSS
+┌────────────────────────────────────▼───────────────────────────────────┐
+│                     Next.js Edge & Node API Handlers                   │
+│   ├── /api/auth/login, /api/auth/verify-otp, /api/auth/magic-link      │
+│   ├── /api/attendance/* (Check-In, Check-Out, Breaks, Export)          │
+│   ├── /api/kpi/* (Goals, Reviews, Periods, Scorecards)                 │
+│   ├── /api/tasks/* (Assignments, Recurrences, Sound Dispatch)          │
+│   └── /api/cron/* (Nightly Auto-Checkout, Day Consolidation)           │
+└────────────────────────────────────┬───────────────────────────────────┘
+                                     │ Supabase Service / JWT
+┌────────────────────────────────────▼───────────────────────────────────┐
+│                       Supabase Cloud / PostgreSQL                      │
+│   ├── Multi-Tenant RLS Policies (100% tenant-isolated via current_org) │
+│   ├── Custom Access Token Hook (Minting organization_id & user_role)   │
+│   ├── Security Definer Stored Procedures (Atomic Check-in/out & Recalc)│
+│   ├── Database Triggers (Audit logging, Timestamp updates)             │
+│   └── Supabase Realtime Channels (Instant presence & notification bus) │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🎨 Visual Design & Bento UI System
+
+The user interface follows a modern Bento Grid architecture with high-contrast, accessible visual hierarchy:
+
+| Design Token | Value | Description / Usage |
 | :--- | :--- | :--- |
-| **Canvas Backdrop** | `#D9DBEC` (Soft lavender-gray) | Exact reference canvas tone |
-| **Main App Shell** | White `#FFFFFF` with `rounded-[32px]` and soft diffuse shadow | Centered rounded desktop container |
-| **Curved Sidebar** | `#6C5CE7` Brand Purple with soft inner curve & squircle active states | Faithful translation of the curved sidebar |
-| **Primary Buttons** | `#14123A` Deep Navy with crisp hover feedback | Contrast-first CTA buttons |
-| **Bento Grid** | 12-column modular CSS grid with `rounded-[24px]` bento cards | Bento modular organization |
-| **Typography** | Plus Jakarta Sans (Headers: 40px bold, Cards: 20px semibold) | High legibility & WCAG AA contrast (≥ 4.5:1) |
-| **Component Gallery** | Available at `/gallery` for isolated design inspection | Live component token showcase |
+| **Canvas Tone** | `#D9DBEC` | Soft lavender backdrop across all authenticated views |
+| **App Shell** | `#FFFFFF` | Centered rounded desktop container with `rounded-[32px]` and diffuse shadow |
+| **Curved Sidebar** | `#6C5CE7` | Signature Brand Purple with smooth squircle active states |
+| **Primary Buttons**| `#14123A` | Deep Navy primary CTA buttons with tactile focus rings |
+| **Accent Glow** | `#8B5CF6` / `#A78BFA` | Violet glow on hover states and active countdown dials |
+| **Bento Grid** | 12-Column Grid | Responsive modular layout with `rounded-[24px]` cards |
+| **Typography** | Plus Jakarta Sans | High legibility font strictly compliant with WCAG AA ($\ge 4.5:1$) |
+| **Design Gallery** | `/gallery` | Live visual preview of all components, badges, and tokens |
 
 ---
 
 ## 🛡️ Zero-Invasive Privacy Manifesto
 
-RemoteHR is architected on the fundamental principle that employee trust is paramount. **We deliberately exclude all invasive surveillance mechanisms:**
+RemoteHR is founded on the principle that mutual respect and transparency drive true productivity. **All invasive monitoring mechanisms are strictly excluded:**
 
-* ❌ **NO Keystroke or Mouse Tracking**: We never measure keystrokes, idle mouse jitter, or screen activity.
-* ❌ **NO Webcam or Desktop Screenshots**: No automated screen grabs or photo verification.
-* ❌ **NO GPS or Geo-location Sniffing**: No background device location polling.
-* ✅ **Recorded Data Only**: Timestamp of check-in, timestamp of check-out, employee-entered note, and calculated duration against company shift policy.
-* 📜 **Transparency Page**: Employees can view the full privacy declaration directly at `/settings`.
-
----
-
-## 🚀 Key Features
-
-### 1. Employee Self-Service
-* **Live Stopwatch & Check-In**: Single-click session punch with real-time live elapsed timer (`HH:MM:SS`).
-* **Concurrency-Safe Open Sessions**: Guaranteed single open session per employee enforced by a partial unique index in Postgres.
-* **Daily Work Target Tracker**: Visual progress row and animated SVG ring tracking hours against daily target (e.g., 8 hours = 480 mins).
-* **Color-Coded Attendance Calendar**: Month grid highlighting `present`, `half_day`, `absent`, `holiday`, `weekend`, and `leave` with an interactive selected-day agenda.
-* **Regularization Request Flow**: Modal to submit missed punch corrections with reason validation and status tracker (`Pending`, `Approved`, `Rejected`).
-* **Timezone Crossover Protection**: Seamless handling of distributed remote employees working across midnight boundaries (`America/New_York`, `Asia/Kolkata`, `Europe/London`).
-
-### 2. Manager Team Hub (`/team`)
-* **Realtime Presence Stack**: Live avatar stack of who is online right now powered by Supabase Realtime.
-* **Team Roster Overview**: Real-time status badges for direct reports (`Online`, `Completed`, `Late`, `Absent`).
-* **Regularization Approval Queue**: Review missed punches, inspect employee notes, and Approve or Reject with manager review notes. Approvals automatically trigger server-side recalculation of `attendance_days` and log changes to `audit_logs`.
-
-### 3. HR & Admin Suite (`/reports`, `/holidays`)
-* **Attendance Ledger**: TanStack Table with multi-column filtering, search, keyset pagination, and column visibility toggles.
-* **Recharts Visual Analytics**: Weekly and monthly trends for on-time rates, average hours worked, and absenteeism.
-* **Holiday Management**: Public and regional holiday calendar with instant date blackout detection.
-* **Policy Configuration**: Dynamic company-wide grace period (default: 15 mins), half-day threshold (240 mins), and automated checkout cutoffs.
-* **Month Finalization**: One-click immutable month locking (`lock_month`) preventing edits to past payroll periods.
-* **Comprehensive Audit Trail**: Complete historical audit log (`audit_logs`) tracking actor, action, table, old values, and new values.
-
-### 4. Enterprise Export Engine (`/api/attendance/export`)
-* **Excel (.xlsx)**: Server-side formatted workbook built with `exceljs` featuring styled Deep Navy `#14123A` header rows, white bold typography, and auto-fitted columns.
-* **Streaming CSV**: Fast fallback CSV export with compliant headers.
-
-### 5. Automated Background Cron & Alerts
-* **Auto-Checkout at 23:59**: Nightly Postgres cron function (`cron_auto_checkout`) closing unclosed sessions with source marked as `'auto'`.
-* **Nightly Day Consolidation at 01:00 AM**: Finalizes all attendance summaries, flags late arrivals, and detects unexcused absences.
-* **Alert Integrations**: Pre-configured hooks for **Resend** (transactional email notifications) and **Slack Incoming Webhooks** (team alert channels).
+- ❌ **No Keystroke Logging**: Never records typing velocity or key combinations.
+- ❌ **No Mouse Tracking**: Never monitors mouse coordinate jitter or idle movement.
+- ❌ **No Webcam / Screen Captures**: Never takes automated background screenshots or photos.
+- ❌ **No Background Geolocation Sniffing**: Never polls background device GPS coordinates.
+- ✅ **Recorded Data Only**: Explicit check-in timestamps, explicit check-out timestamps, employee-entered punch notes, and calculated durations against company shift rules.
+- 📜 **Full Transparency**: Any employee can review the full privacy pledge under the [Settings](file:///c:/Users/Hp/OneDrive/Desktop/Automatic%20HR%20Management%20System/app/settings/page.tsx) page.
 
 ---
 
-## 🔐 Roles & Role-Based Access Control (RBAC)
+## 📦 Complete Module Breakdown
 
-RemoteHR enforces 4 distinct roles stored in the dedicated `user_roles` table (never in user-editable metadata):
+### 1. Authentication, Security & MFA Suite
+- **Password & Magic Link Auth**: Standard password login alongside passwordless single-use email magic links.
+- **Two-Factor Authentication (TOTP / AAL2)**: Gated via RFC 6238 time-based authenticator apps (Google Authenticator, 1Password, Authy).
+- **Step-Up Verification**: Administrative mutations (inviting employees, altering policies, exporting data) enforce Authenticator Assurance Level 2 (AAL2).
+- **Native Bot Protection (Cloudflare Turnstile)**: Embedded Turnstile CAPTCHA protects against credential stuffing and automated bot assaults.
+- **Configurable Rate Limiting**: Dual-level protection tracking client IP and target email in `public.auth_rate_limits`. Configurable or bypassable in development using `DISABLE_AUTH_RATE_LIMIT=true`.
+- **Instant Authentication Overlay**: Blur overlay displaying `"Authenticating & Syncing Session..."` to prevent duplicate clicks.
 
-| Role | Access Permissions | Accessible Routes |
-| :--- | :--- | :--- |
-| **`employee`** | Self attendance check-in/out, calendar, personal regularizations, notifications | `/`, `/attendance`, `/requests`, `/settings` |
-| **`manager`** | Self attendance + direct reports presence, roster, and regularization approvals | `/`, `/attendance`, `/team`, `/requests`, `/settings` |
-| **`hr`** | Full company records, company policies, holiday calendars, month locking, reports, exports | `/`, `/attendance`, `/team`, `/requests`, `/reports`, `/holidays`, `/settings` |
-| **`admin`** | Super Admin: full company records, policy config, role management, audit log inspection | `/`, `/attendance`, `/team`, `/requests`, `/reports`, `/holidays`, `/settings` |
+### 2. Employee Management System (EMS)
+- **Centralized Directory (`/ems/employees`)**: Searchable, facet-filtered directory with avatars, department tags, job designations, and status badges (`Active`, `Onboarding`, `Terminated`).
+- **Department Tree (`/ems/departments` & `/admin/departments`)**: Hierarchical structure with assigned department heads.
+- **Job Designations (`/ems/designations`)**: Title mapping, organizational rank, and grade bands.
+- **Team Roster Management (`/ems/teams`)**: Direct-report squad assignments under specific team leads.
+- **Internship Pipeline (`/ems/internships`)**: Tracking intern cohorts, tenure duration, and conversion pipelines.
+- **Bulk CSV Import (`/admin/users/bulk-import`)**: Uploading employee rosters with auto-generated invitations.
 
-> **Security Rule**: Non-admin clients have **zero direct INSERT/UPDATE permissions** on attendance tables. All writes are strictly mediated by `SECURITY DEFINER` Postgres RPC functions (`check_in`, `check_out`, `recalculate_day`, `approve_regularization`).
+### 3. Attendance Tracking & Live Time Clock
+- **Live Stopwatch**: Single-click punch with active real-time elapsed timer (`HH:MM:SS`) persisted across route changes via `AttendanceProvider`.
+- **Single Open Session Guarantee**: Enforced by a PostgreSQL partial unique index (`idx_single_open_session`) preventing concurrent active check-ins.
+- **5-Minute Pre-Shift Locking**: Check-in button unlocks exactly 5 minutes before scheduled shift start time.
+- **Late Arrival Flagging**: Automatically flags punch as `is_late = TRUE` if clocked in after the shift start time plus grace period (default: 15 minutes).
+- **Timezone Crossover Protection**: Seamless handling of remote staff working across midnight boundaries (`Asia/Kolkata`, `America/New_York`, `UTC`).
+- **Break Time Tracker**: Log lunch and coffee pauses with live pause counters.
+- **Automated Nightly Processing**:
+  - `cron_auto_checkout` at 23:59: Automatically closes unclosed punches with `source = 'auto'`.
+  - Day consolidation cron at 01:00 AM: Reconciles total hours, identifies unexcused absences, and finalizes records.
+- **Regularization Workflow (`/requests`)**: Self-service correction request modal for forgotten check-outs, routed to manager approval queues.
+
+### 4. Leave Management & Accrual Engine
+- **Leave Types**: Casual Leave (CL), Sick Leave (SL), Earned/Privilege Leave (EL/PL), Maternity/Paternity, and Unpaid Leave.
+- **Balance Governance**: Dynamic calculation of consumed vs. remaining allowances.
+- **Approval Lifecycle**: Employee submits $\rightarrow$ Manager/HR review modal with accept/reject notes $\rightarrow$ Approved leaves automatically update `attendance_days` to status `on_leave`.
+- **Calendar Visualization**: Leave blocks highlighted across personal and team calendars to prevent scheduling conflicts.
+
+### 5. Task Management & Recurrence System
+- **Task Workspace (`/tasks`)**: Task cards with priority indicators (`Low`, `Medium`, `High`, `Urgent`), estimated hours, and due dates.
+- **Recurring Tasks**: Automated generation of daily, weekly, or monthly recurring duties.
+- **Assignment Dispatch**: Assigning tasks immediately triggers a real-time notification with sound to the assignee.
+
+### 6. Performance & Automated KPI Engine
+- **8 Automated KPI Metrics**:
+  1. *Attendance Rate*: Percentage of scheduled workdays attended.
+  2. *Punctuality Rate*: Percentage of shifts started on time without late flags.
+  3. *Task Completion Rate*: Percentage of assigned tasks completed.
+  4. *On-Time Task Delivery*: Tasks completed on or before the due date.
+  5. *Billable / Logged Hours*: Total hours logged against assigned work.
+  6. *Overtime Contribution*: Overtime volume relative to policy ceilings.
+  7. *Leave Policy Adherence*: Absence patterns and leave notice compliance.
+  8. *Manager Qualitative Review*: Manager evaluation score (1.0 to 5.0).
+- **Weighted Formula**: Division-by-zero protected calculation:
+  $$\text{Weighted Total} = \frac{\sum (\text{metric\_score} \times \text{weight})}{\text{NULLIF}(\sum \text{weight}, 0)}$$
+- **Evaluation Cycles (`/kpi`)**: Review cycles (Monthly, Quarterly, Annual) with employee self-evaluations and manager sign-offs.
+
+### 7. Candidate Onboarding Portal
+- **Self-Service Wizard (`/onboarding`)**: Candidate portal for entering personal details, emergency contacts, bank details, and address.
+- **Document Verification**: Upload government IDs, educational certificates, and experience letters.
+- **HR Review Center (`/hr/onboarding`)**: HR review dashboard to inspect uploaded documents, request document revisions, approve profiles, and auto-provision active employee records.
+- **Google Drive Storage Sync**: Automated synchronization of onboarding documents with designated corporate folders.
+
+### 8. Real-Time Notification & Audio Chime Engine
+- **Realtime Push**: Supabase Realtime channel bus delivers live notifications without page polling.
+- **High-Fidelity Audio Engine**:
+  - Engineered master audio featuring a crisp musical chime played **twice** (Chime 1 + 130ms musical gap + Chime 2) encoded in both high-definition MP3 (`/notification.mp3`) and uncompressed 44.1kHz 16-bit PCM WAV (`/notification.wav`).
+  - **Zero-Latency Web Audio API Buffer**: Pre-decodes into an in-memory `AudioBuffer` on initial user interaction to eliminate playback delay.
+  - **HTML5 Audio Fallback**: Auto-fallback channel ensuring reliable playback across mobile browsers and background tabs.
+  - **Active Login Chime**: Plays the chime tone automatically when a user logs in with unread notifications waiting in their inbox.
+
+### 9. Reporting, Analytics & Data Portability
+- **Attendance & KPI Ledger (`/reports`)**: TanStack Table with multi-column sorting, facet filtering, date range pickers, and keyset pagination.
+- **Interactive Visualizations**: Recharts trends for punctuality, attendance rates, departmental hours, and absenteeism.
+- **Excel Export Engine (`/api/attendance/export`)**: Server-side formatted `.xlsx` workbooks generated using `exceljs`, styled with Navy headers (`#14123A`), bold text, and formulas.
+- **Streaming CSV Export**: Fast fallback exports with sanitization protecting against formula injection (`=, +, -, @`).
+
+### 10. System Administration & Audit Governance
+- **Role Governance (`/admin/users`)**: Managing system roles, resetting MFA factors, or deactivating accounts (with triggers protecting against deleting the sole remaining administrator).
+- **Shift Policies (`/admin/shifts`)**: Standard day, afternoon, and rotational night shift configurations.
+- **Data Retention & Archiving**: Configurable retention thresholds (90, 180, 365 days) with mandatory gzip-compressed cloud archiving before deletion.
+- **Immutable Audit Trail (`/admin/audits`)**: Detailed tracking of actor ID, IP address, target table, action (`INSERT`, `UPDATE`, `DELETE`), old values, and new values.
 
 ---
 
-## 🛡️ Production Security Hardening & Break-Glass Procedures
+## 👥 Role-Based Access Control (RBAC) Matrix
 
-### 1. Supabase Auth Dashboard Hardening Checklist
-Before taking RemoteHR to production, configure the following settings in your Supabase Project Dashboard (`Authentication` -> `Providers` & `Configuration`):
+RemoteHR enforces 4 distinct roles stored in the database `user_roles` table:
 
-1. **Disable Public Sign-ups**:
-   - Navigate to `Authentication` -> `Providers` -> `Email`.
-   - Set **"Enable Signups"** to **OFF**. All employees must be provisioned via the admin invite flow.
-2. **Password Policy & Leaked-Password Protection**:
-   - Navigate to `Authentication` -> `Password Policy`.
-   - Set **Minimum Password Length** to **12** characters.
-   - Toggle **"Prevent Leaked Passwords"** to **ON** (checks against HaveIBeenPwned API).
-3. **Multi-Factor Authentication (TOTP)**:
-   - Navigate to `Authentication` -> `Multi-Factor Authentication`.
-   - Enable **TOTP** (RFC 6238 time-based one-time passwords).
-   - In RemoteHR, `hr` and `admin` roles are subject to **RESTRICTIVE AAL2 policies**; unverified sessions cannot reach management tools.
-4. **Custom SMTP (Resend / SendGrid)**:
-   - Navigate to `Authentication` -> `SMTP Settings`.
-   - Toggle **Enable Custom SMTP**.
-   - Host: `smtp.resend.com` • Port: `465` / `587` • Encryption: `TLS` • User: `resend` • Password: `<RESEND_API_KEY>`.
-5. **Bot Protection & Native CAPTCHA (Cloudflare Turnstile)**:
-   - Navigate to `Authentication` -> `Bot Protection` (or `Security and Protection`).
-   - Toggle **"Enable CAPTCHA protection"** to **ON**.
-   - Select Provider: **Cloudflare Turnstile**.
-   - Input your Cloudflare **Turnstile Site Key** and **Secret Key**.
-   - RemoteHR forwards the single-use `captchaToken` directly to `supabase.auth.signInWithPassword({ options: { captchaToken } })`. GoTrue natively verifies the token against Cloudflare's API, shielding both direct Supabase Auth API calls and route-level actions from credential stuffing and automated bot assaults.
-   - In production (`NODE_ENV=production`), the login route strictly fails closed if a client attempts to authenticate without a `captchaToken`.
-
-### 2. Demo Mode Isolation
-In production, demo accounts and one-click role switchers are strictly disabled by default:
-* The demo role switcher on `/login` renders **only** when `NEXT_PUBLIC_DEMO_MODE=true` is set.
-* In production `.env.local`, leave `NEXT_PUBLIC_DEMO_MODE` omitted or `false`.
-* To rotate or delete seeded demo accounts once your real admin is enrolled with TOTP MFA, run:
-  ```bash
-  npx tsx scripts/cleanup-demo-accounts.ts --action=rotate
-  # Or permanently delete:
-  npx tsx scripts/cleanup-demo-accounts.ts --action=delete
-  ```
-
-### 3. Emergency Break-Glass Procedure (Admin MFA Recovery)
-If an administrator loses their TOTP device or authenticator backup and cannot sign in to an elevated role:
-1. Open the [Supabase Dashboard](https://supabase.com/dashboard/project/_/sql) -> **SQL Editor**.
-2. Run the following emergency break-glass query to reset the factor for the affected admin:
-   ```sql
-   -- Emergency Break-Glass MFA Factor Reset (Dashboard SQL Editor Only)
-   DELETE FROM auth.mfa_factors
-   WHERE user_id = (SELECT id FROM auth.users WHERE email = 'your-admin@company.com');
-   ```
-3. The administrator can now sign in using password/magic link and immediately re-enroll a new TOTP factor at `/settings`. All actions are immutably logged to `audit_logs`.
+| Capability / Route | Employee | Manager | HR Admin | System Admin |
+| :--- | :---: | :---: | :---: | :---: |
+| **Personal Attendance Stopwatch & Calendar** (`/`, `/attendance`) | ✅ | ✅ | ✅ | ✅ |
+| **Submit Missed Punch Regularization** (`/requests`) | ✅ | ✅ | ✅ | ✅ |
+| **Personal Leave Portal & Balances** (`/leave`) | ✅ | ✅ | ✅ | ✅ |
+| **Personal Tasks & Work Board** (`/tasks`) | ✅ | ✅ | ✅ | ✅ |
+| **Self-Service Profile & Privacy Manifesto** (`/profile`, `/settings`) | ✅ | ✅ | ✅ | ✅ |
+| **Team Hub & Live Presence Stack** (`/team`) | ❌ | ✅ | ✅ | ✅ |
+| **Approve/Reject Direct Report Regularizations** | ❌ | ✅ | ✅ | ✅ |
+| **Approve/Reject Team Leave Requests** | ❌ | ✅ | ✅ | ✅ |
+| **Departmental KPI Reviews & Grading** (`/kpi`) | ❌ | ✅ | ✅ | ✅ |
+| **HR Company Reports & Excel Exports** (`/reports`) | ❌ | ❌ | ✅ | ✅ |
+| **Holiday Calendar & Public Blackout Rules** (`/holidays`) | ❌ | ❌ | ✅ | ✅ |
+| **Candidate Onboarding Approval Portal** (`/hr/onboarding`) | ❌ | ❌ | ✅ | ✅ |
+| **Employee Directory & Lifecycle Management** (`/ems/*`) | ❌ | ❌ | ✅ | ✅ |
+| **Organization Settings & Shift Policies** (`/admin/settings`, `/admin/shifts`) | ❌ | ❌ | ❌ | ✅ |
+| **User Role Assignments & MFA Resets** (`/admin/users`) | ❌ | ❌ | ❌ | ✅ |
+| **System Audit Logs & Retention Archiver** (`/admin/audits`) | ❌ | ❌ | ❌ | ✅ |
 
 ---
 
-## 💾 Supabase Free Tier Optimization
-
-This project is engineered to operate comfortably within Supabase's **Free Tier (500 MB database limit)** for over 10 years of startup usage:
-
-1. **Zero Blobs in Database**: Photos, documents, and exports are stored via CDN URLs or generated on the fly; no binaries or base64 data are stored in Postgres.
-2. **Compact Normalized Types**: All dates use Postgres `DATE`, timestamps use `TIMESTAMPTZ`, durations use `INTEGER` (minutes), and roles use `TEXT` with strict check constraints.
-3. **High-Efficiency Composite Indexes**: Targeted composite indexes (`(employee_id, work_date)`) and partial indexes (`WHERE check_out_at IS NULL`) minimize index bloat.
-4. **Deny-by-Default RLS**: Subquery-evaluated RLS policies using `(SELECT auth.uid())` prevent costly multi-row joins during security evaluation.
-
----
-
-## ⚡ Quick Start: 15-Minute Local Setup
+## ⚡ Quick Start & Local Setup Guide
 
 ### 1. Prerequisites
-* **Node.js**: `v18.17.0` or higher (tested on Node `v24.18.0`)
-* **npm**: `v9.0.0` or higher
-* A free [Supabase](https://supabase.com/) account (or local Supabase CLI)
+- **Node.js**: `v18.17.0` or higher (tested on Node `v24.18.0`)
+- **npm**: `v9.0.0` or higher
+- A free [Supabase](https://supabase.com/) project (or local Supabase CLI instance)
 
-### 2. Clone and Install Dependencies
+### 2. Installation
 ```bash
-git clone https://github.com/your-username/automatic-hr-management-system.git
+git clone https://github.com/AadhithyaRaavanan/Automatic-HR-Management-System.git
 cd "Automatic HR Management System"
 npm install
 ```
 
-### 3. Configure Environment Variables
-Copy `.env.example` to `.env.local`:
+### 3. Environment Configuration
+Create a `.env.local` file by copying the example template:
 ```bash
 cp .env.example .env.local
 ```
-Fill in your Supabase project credentials in `.env.local`:
+Configure your credentials in `.env.local`:
 ```env
-NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+DATABASE_URL=postgresql://postgres:[password]@db.[project].supabase.co:5432/postgres
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 
-# Optional integrations
-RESEND_API_KEY=
-RESEND_FROM_EMAIL=notifications@yourdomain.com
-SLACK_WEBHOOK_URL=
+# Development Mode (Enables one-click demo presets and bypasses rate limit lockouts)
+NEXT_PUBLIC_DEMO_MODE=true
+DISABLE_AUTH_RATE_LIMIT=true
+
+# Optional Integrations
+RESEND_API_KEY=re_your_key_here
+SMTP_HOST=smtp.hostinger.com
+SMTP_PORT=465
+SMTP_USER=business@yourdomain.com
+SMTP_PASS=your_password
 ```
 
-### 4. Apply Database Migrations & Seed Data (1-Click Setup)
-In your Supabase project SQL Editor:
+### 4. Database Setup & Migrations
+In your Supabase project's **SQL Editor**:
+1. Open [supabase/complete_setup.sql](file:///c:/Users/Hp/OneDrive/Desktop/Automatic%20HR%20Management%20System/supabase/complete_setup.sql).
+2. Copy the entire contents, paste it into the **Supabase SQL Editor**, and click **Run**.
+   *This provisions all tables, RLS policies, custom JWT claims hooks, RPC functions, and demo seed data.*
 
-> 💡 **Quickest Option**: Open [supabase/complete_setup.sql](file:///c:/Users/Hp/OneDrive/Desktop/Automatic%20HR%20Management%20System/supabase/complete_setup.sql), copy its entire contents, paste it into the **Supabase SQL Editor**, and click **Run**. This sets up all 9 tables, JWT claims hook, RLS policies, RPC functions, nightly crons, and demo seed data in one step!
-
-*Alternatively, you can run the files individually in this order:*
-1. `supabase/migrations/20261107000001_initial_schema.sql` (Tables & composite indexes)
-2. `supabase/migrations/20261107000002_custom_access_token_hook.sql` (Custom JWT claim hook)
-3. `supabase/migrations/20261107000003_rls_policies.sql` (Row-level security policies)
-4. `supabase/migrations/20261107000004_attendance_rpcs.sql` (Check-in/out & recalculation RPCs)
-5. `supabase/migrations/20261107000005_regularization_rpcs.sql` (Regularization workflow RPCs)
-6. `supabase/migrations/20261107000006_cron_jobs.sql` (Nightly auto-checkout & reconciliation crons)
-7. `supabase/seed.sql` (Demo team members, 30-day history, holidays & policies)
-
-### 5. Launch Development Server
+### 5. Start Development Server
 ```bash
 npm run dev
 ```
@@ -207,135 +263,100 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## 🔑 Demo Login Credentials
+## 🔑 Demo Accounts & Development Mode
 
-The seed script initializes 4 pre-configured demo accounts. You can also click the **Quick Demo Presets** on the `/login` page to auto-fill them:
+When `NEXT_PUBLIC_DEMO_MODE=true` is enabled in `.env.local`, the `/login` screen displays **One-Click Demo Role Presets**:
 
-| Role | Email | Password | Persona |
+| Role | Pre-configured Email | Default Password | Persona Description |
 | :--- | :--- | :--- | :--- |
-| **Super Admin** | `admin@remotehr.io` | `DemoPassword123!` | Sarah Connor (Full system access, policy management, audit logs) |
-| **HR Admin** | `hr@remotehr.io` | `DemoPassword123!` | Marcus Vance (Reports, holiday calendars, lock month, XLSX export) |
-| **Manager** | `manager@remotehr.io` | `DemoPassword123!` | Alex Morgan (Team presence, direct reports roster, approval queue) |
-| **Employee** | `employee@remotehr.io` | `DemoPassword123!` | James Sullivan (Check-in stopwatch, attendance calendar, requests) |
+| **System Admin** | `admin@remotehr.io` | `DemoPassword123!` | Super Admin: Full system governance, audit logs, policy settings |
+| **HR Admin** | `hr@remotehr.io` | `DemoPassword123!` | HR Manager: Reports, onboarding approvals, leave reviews, exports |
+| **Manager** | `manager@remotehr.io` | `DemoPassword123!` | Team Lead: Live team presence, approval queue, KPI grading |
+| **Employee** | `employee@remotehr.io` | `DemoPassword123!` | Team Member: Attendance stopwatch, leave portal, task lists |
+
+*Note: For testing individual accounts, `aadhithya.raavanan@gmail.com` is configured with password `Demo123!`.*
+
+---
+
+## ⚙️ Environment Configuration Reference
+
+| Variable Name | Required | Target Runtime | Description |
+| :--- | :---: | :---: | :--- |
+| `NEXT_PUBLIC_SUPABASE_URL` | **Yes** | Client + Server | Supabase project API endpoint URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | **Yes** | Client + Server | Supabase public anonymous client JWT key |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Yes** | Server Only | Privileged service role key for admin operations |
+| `DATABASE_URL` | Optional | Server Only | Direct PostgreSQL connection string |
+| `NEXT_PUBLIC_APP_URL` | **Yes** | Client + Server | Base canonical URL (e.g. `http://localhost:3000`) |
+| `NEXT_PUBLIC_DEMO_MODE` | Optional | Client + Server | Toggle `"true"` to enable login presets in dev |
+| `DISABLE_AUTH_RATE_LIMIT`| Optional | Server Only | Toggle `"true"` to disable sign-in attempt lockouts |
+| `RESEND_API_KEY` | Optional | Server Only | API key for transactional emails via Resend |
+| `SMTP_HOST` / `SMTP_PORT` | Optional | Server Only | Custom SMTP host and port configuration |
+| `SMTP_USER` / `SMTP_PASS` | Optional | Server Only | Custom SMTP credentials |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Optional | Client | Cloudflare Turnstile public site key |
+| `TURNSTILE_SECRET_KEY` | Optional | Server Only | Cloudflare Turnstile secret verification key |
+| `UPSTASH_REDIS_REST_URL` | Optional | Server Only | Distributed sliding-window Redis URL |
+| `UPSTASH_REDIS_REST_TOKEN` | Optional | Server Only | Distributed sliding-window Redis token |
 
 ---
 
 ## 🧪 Testing & Quality Assurance
 
-### 1. Vitest Unit Test Suite (38 Tests)
-Runs comprehensive unit tests across the design system, RLS evaluation, attendance timezone engine, regularization state machine, and reporting aggregation:
+### Vitest Unit Test Suite
+Execute the unit test suite covering auth guards, timezone conversions, regularization state machines, and KPI calculations:
 ```bash
-npm run test
+npm test
 ```
-* `tests/unit/design-system.test.tsx` (8 tests) - Tokens, WCAG contrast, progress ring math, pill variants
-* `tests/unit/rls-rbac.test.ts` (9 tests) - Role hierarchies, table read/write policies, subquery constraints
-* `tests/unit/attendance-engine.test.ts` (9 tests) - Work date derivation across time zones, late arrivals, 16h duration capping
-* `tests/unit/regularization-flow.test.ts` (7 tests) - Zod schema validation, approval state transitions, audit logging
-* `tests/unit/manager-reports.test.ts` (5 tests) - Keyset pagination, summary calculation, auto-checkout capping
+To run targeted test suites:
+```bash
+npx vitest run tests/unit/f2-auth.test.ts
+npx vitest run tests/unit/kpi-formulas.test.ts
+npx vitest run tests/unit/attendance-engine.test.ts
+```
 
-### 2. Playwright End-to-End Suite
-Runs headless E2E verification across Chromium and Mobile Chrome viewports:
+### Playwright End-to-End Suite
+Execute the headless browser test suite across Desktop and Mobile viewports:
 ```bash
 npm run test:e2e
 ```
-* Tests the design system gallery `/gallery`
-* Tests the login page authentication and demo role buttons `/login`
-* Tests the settings page and Zero-Invasive Privacy Manifesto `/settings`
-* Tests the server-side export routes `/api/attendance/export` for CSV and Excel XLSX
 
-### 3. Production Build Verification
-Verifies TypeScript compilation, route bundling, and SSR compatibility:
+### Production Build Verification
+Verify type safety and compile all 53 production routes:
 ```bash
 npm run build
 ```
 
 ---
 
-## 🔒 Enterprise Security & Attack Protection
+## 🚀 Production Deployment & Operational Runbook
 
-### 1. Multi-Factor Authentication (TOTP MFA / AAL2)
-* Privileged roles (`hr` and `admin`) require Authenticator-based TOTP (RFC 6238) verification before accessing protected dashboard routes or administrative RPCs.
-* **MFA Lockout Protection**: Privileged users with zero enrolled factors are routed directly to `/mfa-setup` at `aal1` with QR code / secret key enrollment. Enrolled users are prompted at `/mfa-challenge`.
-* **RESTRICTIVE Database Policies**: All 8 sensitive public tables enforce `AS RESTRICTIVE` AAL2 policies for HR and Admin queries.
+### Deploying to Vercel
+1. Push your repository to GitHub.
+2. Import the project in the [Vercel Dashboard](https://vercel.com).
+3. Add the required environment variables in **Project Settings ➔ Environment Variables**.
+4. In production environments, set `NEXT_PUBLIC_DEMO_MODE=false` and `DISABLE_AUTH_RATE_LIMIT=false`.
+5. Deploy. Every commit to `main` triggers an automatic immutable deployment.
 
-### 2. Multi-Tier Rate Limiting & Bot Protection
-* **Platform-Trusted Client IP**: The server-side login endpoint (`/api/auth/login`) inspects strictly Vercel's platform-level header `x-vercel-ip` (or `request.ip`), preventing client-side spoofing via forged `x-forwarded-for` headers.
-* **Shared Persistent Store**: Login rate limiting operates across serverless lambda instances using:
-  1. **Upstash Redis** (when `UPSTASH_REDIS_REST_URL` & `UPSTASH_REDIS_REST_TOKEN` are set).
-  2. **Supabase Shared Table** (`public.auth_rate_limits`, managed via `service_role`).
-  3. Ephemeral in-memory fallback for local unit tests.
-* **Cloudflare Turnstile CAPTCHA (Fail-Closed in Production)**:
-  - If `TURNSTILE_SECRET_KEY` is missing in production (`NODE_ENV === 'production'`), authentication fails closed immediately.
-  - Upstream network errors or invalid tokens reject login requests with HTTP 400.
-* **Supabase Native Bot & Rate Protection**:
-  - Configure **Bot Protection** under Supabase Dashboard $\rightarrow$ Authentication $\rightarrow$ Attack Protection $\rightarrow$ Enable CAPTCHA (Cloudflare Turnstile). Direct calls to `/auth/v1/token` or `/auth/v1/otp` without `{ gotrue_meta_security: { captcha_token } }` are rejected at the edge gateway before touching database resources.
-  - Configure **Rate Limits** under Authentication $\rightarrow$ Rate Limits (e.g. 30 requests / 5 mins per IP, 3 OTPs / 60s).
+### Cache Control & Notification Audio
+Static notification audio files (`/notification.mp3` and `/notification.wav`) are served with explicit zero-cache headers configured in [next.config.mjs](file:///c:/Users/Hp/OneDrive/Desktop/Automatic%20HR%20Management%20System/next.config.mjs):
+```
+Cache-Control: no-store, no-cache, must-revalidate, max-age=0, s-maxage=0
+CDN-Cache-Control: no-store
+Vercel-CDN-Cache-Control: no-store
+```
+Audio requests include automatic version query parameters (e.g. `?v=5`) in [sound.ts](file:///c:/Users/Hp/OneDrive/Desktop/Automatic%20HR%20Management%20System/lib/notifications/sound.ts) to guarantee browsers immediately pick up newly deployed chimes.
 
-### 3. Emergency Break-Glass Procedure
-If an administrative lockout occurs (e.g. lost TOTP authenticator with no backup admins):
-1. Obtain the `SUPABASE_SERVICE_ROLE_KEY` from your secure vault or Supabase Dashboard.
-2. In the Supabase SQL Editor, run:
+### Emergency Break-Glass Procedure (Admin MFA Recovery)
+If an administrator loses their authenticator app and is locked out of their privileged session:
+1. Open the [Supabase SQL Editor](https://supabase.com/dashboard/project/_/sql).
+2. Execute the emergency factor reset query:
    ```sql
-   -- Identify user ID
-   SELECT id, email FROM auth.users WHERE email = 'admin@yourcompany.com';
-   
-   -- Delete enrolled MFA factors to allow re-enrollment at aal1
-   DELETE FROM auth.mfa_factors WHERE user_id = '<user-id>';
+   DELETE FROM auth.mfa_factors
+   WHERE user_id = (SELECT id FROM auth.users WHERE email = 'admin@yourcompany.com');
    ```
-3. The administrator can then sign in with password at `aal1` and will be immediately routed to `/mfa-setup` to bind a new TOTP factor.
-
----
-
-## 📁 Project Architecture
-
-```
-├── app/
-│   ├── (auth)/login/page.tsx      # Sign-in page with quick demo role presets
-│   ├── api/attendance/export/     # Server-side Excel (.xlsx) & CSV export route
-│   ├── attendance/page.tsx        # Employee monthly attendance calendar & agenda
-│   ├── gallery/page.tsx           # Design system token & component gallery
-│   ├── holidays/page.tsx          # Holiday & company attendance policy management
-│   ├── reports/page.tsx           # HR analytics (Recharts) & keyset ledger table
-│   ├── requests/page.tsx          # Regularization submission & status tracker
-│   ├── settings/page.tsx          # Privacy manifesto, work hours & notification settings
-│   ├── team/page.tsx              # Manager hub: live presence & approval queue
-│   ├── page.tsx                   # Main employee live dashboard & stopwatch
-│   ├── layout.tsx                 # Root layout with theme provider & font
-│   └── globals.css                # CSS variables, design tokens & custom utilities
-├── components/
-│   ├── bento/                     # BentoCard & BentoGrid layouts
-│   ├── shell/                     # AppShell, CurvedSidebar, TopNavBar, BottomTabBar
-│   ├── shared/                    # AvatarStack, StatusPill, CommandPalette, ThemeToggle
-│   └── ui/                        # Radix primitives & shadcn building blocks
-├── features/
-│   ├── admin/                     # AuditLogViewer & policy management
-│   ├── attendance/                # HeroCheckInCard, StatCard, AnimatedProgressRing
-│   ├── calendar/                  # AttendanceCalendarCard & week strip
-│   └── requests/                  # Regularization modal, card, & hook layer
-├── lib/
-│   ├── date/timezone.ts           # date-fns-tz timezone computation engine
-│   ├── email/resend.ts            # Resend email notifications
-│   ├── slack/webhook.ts           # Slack alert dispatcher
-│   └── supabase/                  # SSR Supabase client, server, & middleware
-├── supabase/
-│   ├── migrations/                # 6 sequential SQL migrations (Schema, RLS, RPCs, Crons)
-│   ├── tests/                     # SQL test scripts for RLS security validation
-│   └── seed.sql                   # Realistic demo company seed data
-└── tests/
-    ├── e2e/                       # Playwright end-to-end tests
-    └── unit/                      # Vitest unit test suites
-```
-
----
-
-## 🔮 Future HR Modules Integration Roadmap
-
-The schema and data architecture were explicitly designed to facilitate seamless plug-and-play expansion:
-* **Leave Management**: `attendance_days.status` already natively recognizes `'leave'` entries. A future Leave module will simply populate leave days without conflicting with session reconciliation.
-* **Payroll Processing**: The month-locking mechanism (`lock_month`) and keyset-paginated Excel export directly feed payroll accounting software.
-* **Shift Scheduling**: `work_target_minutes` on `employees` allows custom variable shifts (part-time, 4-day workweeks, or rotational rosters).
+3. The administrator can now sign in using their password and immediately re-enroll a new TOTP authenticator device at `/mfa-setup`.
 
 ---
 
 ## 📄 License
-This project is licensed under the MIT License.
+
+This project is licensed under the [MIT License](LICENSE).
