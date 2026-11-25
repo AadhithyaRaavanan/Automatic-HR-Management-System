@@ -60,7 +60,7 @@ export function ApplyLeaveModal({ open, onOpenChange }: ApplyLeaveModalProps) {
     : 0;
 
   // Calculate working days according to ZEN XEA calendar:
-  // Mon-Sat are working days; Sunday (0) is weekly off; company holidays are excluded.
+  // Mon-Fri are working days; Saturday (6) and Sunday (0) are weekly off; company holidays are excluded.
   const estimatedDays = React.useMemo(() => {
     if (!startDate || !endDate) return 0;
     if (startDate > endDate) return 0;

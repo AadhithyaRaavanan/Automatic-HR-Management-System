@@ -189,17 +189,17 @@ function AttendanceCalendarContent() {
         };
       });
 
-      const isSunday = dow === 0;
+      const isWeekend = dow === 0 || dow === 6;
       let dayStatus: AttendanceDayStatus | "unrecorded" = "unrecorded";
 
       if (dbHoliday) {
         dayStatus = "holiday";
-      } else if (isSunday) {
+      } else if (daySessions.length > 0 || (dbDay?.total_minutes && dbDay.total_minutes > 0)) {
+        dayStatus = (dbDay?.status || "present") as AttendanceDayStatus;
+      } else if (isWeekend) {
         dayStatus = "weekend";
       } else if (dbDay?.status && dbDay.status !== "absent") {
         dayStatus = dbDay.status as AttendanceDayStatus;
-      } else if (daySessions.length > 0) {
-        dayStatus = (dbDay?.status || "present") as AttendanceDayStatus;
       } else {
         dayStatus = "unrecorded";
       }
@@ -410,7 +410,7 @@ function AttendanceCalendarContent() {
             <span>Wed</span>
             <span>Thu</span>
             <span>Fri</span>
-            <span>Sat</span>
+            <span className="text-[#FF1493]">Sat</span>
           </div>
 
           {loading ? (
@@ -419,7 +419,7 @@ function AttendanceCalendarContent() {
             <div className="grid grid-cols-7 gap-2 pt-3">
               {monthDays.map((day, idx) => {
                 const isSelected = day.dateKey === selectedDayKey;
-                const isSunday = day.status === "weekend";
+                const isWeekend = day.status === "weekend";
                 return (
                   <button
                     key={day.dateKey}
@@ -431,7 +431,7 @@ function AttendanceCalendarContent() {
                       isSelected
                         ? "border-black bg-black/5"
                         : "border-[#E6E6E6] bg-white hover:bg-[#F5F5F5]",
-                      isSunday && "opacity-85 bg-[#F5F5F5]/40"
+                      isWeekend && "opacity-85 bg-[#F5F5F5]/40"
                     )}
                   >
                     <div className="flex items-center justify-between w-full">
@@ -635,7 +635,7 @@ function AttendanceCalendarContent() {
                     selectedDay.holidayName
                       ? `Attendance is excused for ${selectedDay.holidayName}.`
                       : selectedDay.status === "weekend"
-                      ? "Sunday is a scheduled non-working weekend day."
+                      ? `${new Date(selectedDay.dateKey + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" })} is a scheduled non-working weekend day.`
                       : "No shift punches recorded for this date."
                   }
                 />
