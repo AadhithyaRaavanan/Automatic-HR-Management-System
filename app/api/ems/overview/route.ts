@@ -58,10 +58,10 @@ export async function GET(request: NextRequest) {
     }
 
     // 1. Fetch counts from real database
-    const [empsRes, deptsRes, teamsRes, onbRes, internsRes] = await Promise.all([
+    const [empsRes, deptsRes, teamsRes, onbRes, internsRes, titlesRes] = await Promise.all([
       (supabaseAdmin as any)
         .from("employees")
-        .select("id, status, department_id, manager_id, work_mode"),
+        .select("id, status, department_id, manager_id, work_mode, job_title_id"),
       (supabaseAdmin as any)
         .from("departments")
         .select("id, name, department_head_id, parent_department_id"),
@@ -75,6 +75,9 @@ export async function GET(request: NextRequest) {
       (supabaseAdmin as any)
         .from("internships")
         .select("id, status, end_date"),
+      (supabaseAdmin as any)
+        .from("job_titles")
+        .select("id, title_name"),
     ]);
 
     let emps = empsRes.data || [];
@@ -82,6 +85,7 @@ export async function GET(request: NextRequest) {
     let teams = teamsRes.data || [];
     let onbPending = onbRes.data || [];
     let internships = internsRes.data || [];
+    const jobTitles = titlesRes.data || [];
 
     // Fallback to demo store if database empty or demo mode
     if (emps.length === 0 && isDemo) {
@@ -121,10 +125,22 @@ export async function GET(request: NextRequest) {
 
     const totalEmployees = emps.length;
     const activeEmployees = emps.filter((e: any) => e.status === "active").length;
-    const fullTimeEmployees = emps.filter((e: any) => e.employment_category === "full_time").length;
+
+    const internTitleIds = new Set(
+      (jobTitles || [])
+        .filter((t: any) => /intern/i.test(t.title_name))
+        .map((t: any) => t.id)
+    );
+
+    const activeInterns = emps.filter(
+      (e: any) => e.employment_category === "intern" || internTitleIds.has(e.job_title_id)
+    ).length;
     const partTimeEmployees = emps.filter((e: any) => e.employment_category === "part_time").length;
     const contractEmployees = emps.filter((e: any) => e.employment_category === "contract").length;
-    const activeInterns = emps.filter((e: any) => e.employment_category === "intern").length;
+    const fullTimeEmployees = Math.max(
+      0,
+      totalEmployees - (activeInterns + partTimeEmployees + contractEmployees)
+    );
 
     const vacantLeadership =
       depts.filter((d: any) => !d.department_head_id).length +

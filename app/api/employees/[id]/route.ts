@@ -123,11 +123,31 @@ export async function GET(
     );
 
     // 3. Internship details if any
-    const { data: internship } = await (supabaseAdmin as any)
-      .from("internships")
-      .select("*, mentor:mentor_id(id, full_name, email)")
-      .eq("employee_id", targetUserId)
-      .maybeSingle();
+    let internship: any = null;
+    try {
+      const { data } = await (supabaseAdmin as any)
+        .from("internships")
+        .select("*, mentor:mentor_id(id, full_name, email)")
+        .eq("employee_id", targetUserId)
+        .maybeSingle();
+      internship = data;
+    } catch {}
+
+    if (!internship && emp && /intern/i.test(emp.job_titles?.title_name || "")) {
+      internship = {
+        id: `intern-${emp.id}`,
+        employee_id: emp.id,
+        mentor: emp.manager
+          ? { id: emp.manager.id, full_name: emp.manager.full_name, email: emp.manager.email }
+          : null,
+        start_date: emp.joined_on || emp.created_at?.slice(0, 10),
+        end_date: null,
+        duration_months: 3,
+        status: emp.status === "active" ? "Active" : emp.status || "Active",
+        certificate_issued: false,
+        job_title: emp.job_titles?.title_name || "Intern",
+      };
+    }
 
     // 4. Career History (from table if available, otherwise from education_details.career_timeline)
     let careerHistory: any[] = [];
