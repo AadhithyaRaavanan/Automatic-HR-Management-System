@@ -33,7 +33,7 @@ function LoginForm() {
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [authMode, setAuthMode] = React.useState<"password" | "magic-link" | "otp-request" | "otp-verify">("password");
+  const [authMode, setAuthMode] = React.useState<"password" | "magic-link" | "otp-request" | "otp-verify" | "link-sent">("password");
   const [otpCode, setOtpCode] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
   const [isAuthenticating, setIsAuthenticating] = React.useState(false);
@@ -44,7 +44,107 @@ function LoginForm() {
   // Security: Demo role switcher is only accessible in non-production demo mode
   const isDemoMode = isDemoModeEnabled();
 
-  const supabase = createClient();
+  const supabase = React.useMemo(() => createClient(), []);
+  const hashHandledRef = React.useRef(false);
+
+  // Surface callback/expiry error banners when redirected back to /login
+  React.useEffect(() => {
+    const errParam = searchParams.get("error");
+    if (errParam === "auth_callback_failed") {
+      setLockoutMessage("Your sign-in link has expired or could not be verified. Please request a new link.");
+    } else if (errParam === "expired_temp_password") {
+      setLockoutMessage("Your temporary password has expired. Please use Forgot password to reset it.");
+    }
+  }, [searchParams]);
+
+  // Complete implicit magic-link / recovery redirects if Supabase landed on "/" and bounced to "/login#access_token=..."
+  React.useEffect(() => {
+    if (hashHandledRef.current) return;
+    if (typeof window === "undefined" || !window.location.hash) return;
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const accessToken = hashParams.get("access_token");
+    const refreshToken = hashParams.get("refresh_token");
+    const hashType = hashParams.get("type");
+    if (!accessToken || !refreshToken) return;
+
+    hashHandledRef.current = true;
+    setIsAuthenticating(true);
+
+    const timeoutId = window.setTimeout(() => {
+      setIsAuthenticating(false);
+      setLockoutMessage("Verification timed out. Please try signing in again.");
+    }, 12000);
+
+    (async () => {
+      try {
+        // Wait for browser client URL auto-detection first to avoid duplicate GoTrue lock calls
+        const {
+          data: { session: existingSession },
+        } = await supabase.auth.getSession();
+
+        if (!existingSession) {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (error) {
+            throw error;
+          }
+        }
+
+        window.clearTimeout(timeoutId);
+        const target =
+          hashType === "recovery" ? "/settings?must_change_password=true" : redirectPath;
+        window.location.replace(target);
+      } catch (err: any) {
+        window.clearTimeout(timeoutId);
+        setIsAuthenticating(false);
+        setLockoutMessage(err?.message || "Your sign-in link could not be verified. Please try again.");
+      }
+    })();
+  }, [redirectPath, supabase]);
+
+  const handleMagicLinkRequest = async (targetEmail: string) => {
+    const cleanEmail = targetEmail.trim();
+    if (!cleanEmail) {
+      toast.error("Please enter your registered work email.");
+      return;
+    }
+
+    setLockoutMessage(null);
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/auth/magic-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: cleanEmail,
+          redirectPath,
+          turnstileToken: captchaToken || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        const msg =
+          data.error || "Unable to send magic link. Please check the email address and try again.";
+        if (res.status === 429) {
+          setLockoutMessage(msg);
+        }
+        toast.error(msg);
+        return;
+      }
+
+      toast.success(
+        data.message || "Check your inbox for a sign-in link."
+      );
+      setAuthMode("link-sent");
+    } catch (err: any) {
+      toast.error(err?.message || "Unable to send magic link. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const performLogin = async (loginEmail: string, loginPassword: string) => {
     setLockoutMessage(null);
@@ -52,143 +152,106 @@ function LoginForm() {
     setIsAuthenticating(true);
 
     try {
-      if (authMode === "magic-link") {
-        const res = await fetch("/api/auth/magic-link", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: loginEmail,
-            redirectPath,
-            turnstileToken: captchaToken || undefined,
-          }),
-        });
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: loginEmail,
+          password: loginPassword,
+          captchaToken: captchaToken || undefined,
+        }),
+      });
 
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || "Unable to send magic link. Please check the email address and try again.");
+      const data = await res.json();
+
+      if (res.status === 429) {
+        if (isDemoMode) {
+          const role =
+            loginEmail.includes("admin") ? "admin" :
+            loginEmail.includes("hr") ? "hr" :
+            loginEmail.includes("manager") ? "manager" : "employee";
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem("remotehr_cached_role", role);
+              document.cookie = `remotehr_role=${role}; path=/; max-age=2592000; SameSite=Lax`;
+            } catch {}
+          }
+          toast.success(`Signed in as ${role.toUpperCase()} (Development Mode)!`);
+          router.push(redirectPath);
+          router.refresh();
+          return;
         }
-
-        toast.success(data.message || "A secure sign-in link and verification code have been dispatched to your email.");
-        setAuthMode("otp-verify");
+        setLockoutMessage(data.error || "Too many failed attempts. Login locked for 15 minutes.");
+        toast.error(data.error || "Account locked due to multiple failed attempts.");
         setIsAuthenticating(false);
-      } else {
-        const res = await fetch("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: loginEmail,
-            password: loginPassword,
-            captchaToken: captchaToken || undefined,
-          }),
-        });
-
-        const data = await res.json();
-
-        if (res.status === 429) {
-          if (isDemoMode) {
-            const role =
-              loginEmail.includes("admin") ? "admin" :
-              loginEmail.includes("hr") ? "hr" :
-              loginEmail.includes("manager") ? "manager" : "employee";
-            if (typeof window !== "undefined") {
-              try {
-                localStorage.setItem("remotehr_cached_role", role);
-                document.cookie = `remotehr_role=${role}; path=/; max-age=2592000; SameSite=Lax`;
-              } catch {}
-            }
-            toast.success(`Signed in as ${role.toUpperCase()} (Development Mode)!`);
-            router.push(redirectPath);
-            router.refresh();
-            return;
-          }
-          setLockoutMessage(data.error || "Too many failed attempts. Login locked for 15 minutes.");
-          toast.error(data.error || "Account locked due to multiple failed attempts.");
-          setIsAuthenticating(false);
-          return;
-        }
-
-        if (!res.ok) {
-          if (isDemoMode) {
-            const role =
-              loginEmail.includes("admin") ? "admin" :
-              loginEmail.includes("hr") ? "hr" :
-              loginEmail.includes("manager") ? "manager" : "employee";
-            if (typeof window !== "undefined") {
-              try {
-                localStorage.setItem("remotehr_cached_role", role);
-                document.cookie = `remotehr_role=${role}; path=/; max-age=2592000; SameSite=Lax`;
-              } catch {}
-            }
-            toast.success(`Signed in as ${role.toUpperCase()} (Demo Mode)!`);
-            router.push(redirectPath);
-            router.refresh();
-            return;
-          }
-          setIsAuthenticating(false);
-          throw new Error(data.error || "Invalid email or password. Please verify your credentials and try again.");
-        }
-
-        if (data.requireMfa && data.mfaDestination) {
-          toast.info(
-            data.mfaDestination === "/mfa-setup"
-              ? "Please complete two-factor authentication setup."
-              : "Two-Factor Authentication required. Please enter your authenticator code."
-          );
-          router.push(`${data.mfaDestination}?redirect=${encodeURIComponent(redirectPath)}`);
-          return;
-        }
-
-        if (typeof window !== "undefined") {
-          try {
-            if (data.role) localStorage.setItem("remotehr_cached_role", data.role);
-            Object.keys(sessionStorage).forEach((key) => {
-              if (key.startsWith("notif_login_chime_")) sessionStorage.removeItem(key);
-            });
-          } catch {}
-        }
-
-        if (data.onboardingRequired || data.destination === "/onboarding" || data.mfaDestination === "/onboarding") {
-          toast.success("Welcome aboard! Please complete your mandatory employee onboarding.");
-          router.push("/onboarding");
-          router.refresh();
-          return;
-        }
-
-        if (data.destination === "/onboarding/pending" || data.mfaDestination === "/onboarding/pending") {
-          toast.info("Your onboarding profile is currently under review.");
-          router.push("/onboarding/pending");
-          router.refresh();
-          return;
-        }
-
-        if (data.destination) {
-          toast.success("Signed in successfully!");
-          router.push(data.destination);
-          router.refresh();
-          return;
-        }
-
-        toast.success("Signed in successfully!");
-        router.push(redirectPath);
-        router.refresh();
+        return;
       }
-    } catch (err: any) {
-      if (isDemoMode) {
-        const role =
-          loginEmail.includes("admin") ? "admin" :
-          loginEmail.includes("hr") ? "hr" :
-          loginEmail.includes("manager") ? "manager" : "employee";
-        if (typeof window !== "undefined") {
-          try {
-            localStorage.setItem("remotehr_cached_role", role);
-            document.cookie = `remotehr_role=${role}; path=/; max-age=2592000; SameSite=Lax`;
-          } catch {}
+
+      if (!res.ok) {
+        if (isDemoMode) {
+          const role =
+            loginEmail.includes("admin") ? "admin" :
+            loginEmail.includes("hr") ? "hr" :
+            loginEmail.includes("manager") ? "manager" : "employee";
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem("remotehr_cached_role", role);
+              document.cookie = `remotehr_role=${role}; path=/; max-age=2592000; SameSite=Lax`;
+            } catch {}
+          }
+          toast.success(`Signed in as ${role.toUpperCase()} (Demo Mode)!`);
+          router.push(redirectPath);
+          router.refresh();
+          return;
         }
-        toast.success(`Signed in as ${role.toUpperCase()} (Demo Mode)!`);
-        router.push(redirectPath);
+        setIsAuthenticating(false);
+        throw new Error(data.error || "Invalid email or password. Please verify your credentials and try again.");
+      }
+
+      if (data.requireMfa && data.mfaDestination) {
+        toast.info(
+          data.mfaDestination === "/mfa-setup"
+            ? "Please complete two-factor authentication setup."
+            : "Two-Factor Authentication required. Please enter your authenticator code."
+        );
+        router.push(`${data.mfaDestination}?redirect=${encodeURIComponent(redirectPath)}`);
+        return;
+      }
+
+      if (typeof window !== "undefined") {
+        try {
+          if (data.role) localStorage.setItem("remotehr_cached_role", data.role);
+          Object.keys(sessionStorage).forEach((key) => {
+            if (key.startsWith("notif_login_chime_")) sessionStorage.removeItem(key);
+          });
+        } catch {}
+      }
+
+      if (data.onboardingRequired || data.destination === "/onboarding" || data.mfaDestination === "/onboarding") {
+        toast.success("Welcome aboard! Please complete your mandatory employee onboarding.");
+        router.push("/onboarding");
         router.refresh();
         return;
       }
+
+      if (data.destination === "/onboarding/pending" || data.mfaDestination === "/onboarding/pending") {
+        toast.info("Your onboarding profile is currently under review.");
+        router.push("/onboarding/pending");
+        router.refresh();
+        return;
+      }
+
+      if (data.destination) {
+        toast.success("Signed in successfully!");
+        router.push(data.destination);
+        router.refresh();
+        return;
+      }
+
+      toast.success("Signed in successfully!");
+      router.push(redirectPath);
+      router.refresh();
+    } catch (err: any) {
       setIsAuthenticating(false);
       toast.error(err.message || "Invalid credentials. Please try again.");
     } finally {
@@ -198,6 +261,10 @@ function LoginForm() {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (authMode === "magic-link") {
+      await handleMagicLinkRequest(email);
+      return;
+    }
     await performLogin(email, password);
   };
 
@@ -234,8 +301,8 @@ function LoginForm() {
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanCode = otpCode.replace(/\s+/g, "");
-    if (cleanCode.length !== 6) {
-      toast.error("Please enter the 6-digit code received in your email.");
+    if (cleanCode.length < 6 || cleanCode.length > 8) {
+      toast.error("Please enter the 6 to 8 digit code received in your email.");
       return;
     }
     setIsAuthenticating(true);
@@ -257,12 +324,11 @@ function LoginForm() {
 
       if (data.requireMfa && data.mfaDestination) {
         toast.info(data.message || "Please complete Two-Factor Authentication.");
-        router.push(data.mfaDestination);
+        window.location.assign(data.mfaDestination);
       } else {
         toast.success(data.message || "Logged in successfully. Please set your new password.");
-        router.push(data.mfaDestination || "/settings?must_change_password=true");
+        window.location.assign(data.mfaDestination || "/settings?must_change_password=true");
       }
-      router.refresh();
     } catch (err: any) {
       setIsAuthenticating(false);
       toast.error(err.message || "Invalid or expired OTP code. Please try again.");
@@ -274,13 +340,11 @@ function LoginForm() {
   const handleResendOtp = async () => {
     setResendingOtp(true);
     try {
+      const payload = { email: email.trim(), turnstileToken: captchaToken || undefined };
       const res = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email.trim(),
-          turnstileToken: captchaToken || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -350,14 +414,16 @@ function LoginForm() {
             {authMode === "otp-request"
               ? "Forgot password"
               : authMode === "otp-verify"
-              ? "Verify email code"
-              : "Sign in to Pulse"}
+              ? "Check your email"
+              : authMode === "link-sent" ? "Check your email" : "Sign in to Pulse"}
           </h1>
           <p className="text-xs text-[#4D4D4D] mt-1">
             {authMode === "otp-request"
-              ? "Enter your work email to receive a secure one-time login code."
+              ? "Enter your work email to reset your password."
               : authMode === "otp-verify"
-              ? `Enter the 6-digit code sent to ${email}.`
+              ? `Open the password reset link sent to ${email}. If your email includes a code, you can enter it below instead.`
+              : authMode === "link-sent"
+              ? `Open the sign-in link sent to ${email} to continue.`
               : "Enter your credentials to access your account."}
           </p>
         </div>
@@ -418,20 +484,20 @@ function LoginForm() {
           <form onSubmit={handleVerifyOtp} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-black mb-1.5">
-                6-digit verification code
+                Verification code (6–8 digits)
               </label>
               <div className="relative">
                 <KeyRound className="w-4 h-4 text-[#808080] absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   required
-                  maxLength={6}
+                  maxLength={8}
                   inputMode="numeric"
                   pattern="[0-9]*"
                   disabled={isFormDisabled}
                   value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  placeholder="123456"
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                  placeholder="12345678"
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-white border border-[#E6E6E6] text-center font-mono tracking-widest text-base font-semibold text-black placeholder:text-[#808080] focus:outline-none focus:border-black focus:ring-1 focus:ring-black transition-colors disabled:opacity-50"
                 />
               </div>
@@ -463,10 +529,19 @@ function LoginForm() {
                 className="text-black font-semibold hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
               >
                 <RefreshCw className={`w-3 h-3 ${resendingOtp ? "animate-spin" : ""}`} />
-                <span>Resend code</span>
+                <span>Resend email</span>
               </button>
             </div>
           </form>
+        )}
+
+        {authMode === "link-sent" && (
+          <div className="flex items-center justify-between text-sm">
+            <button type="button" disabled={isLoading} onClick={() => setAuthMode("magic-link")}>Change email</button>
+            <button type="button" disabled={isLoading} onClick={() => handleMagicLinkRequest(email)}>
+              Resend sign-in link
+            </button>
+          </div>
         )}
 
         {/* Mode 3: Standard Password & Magic Link Form */}

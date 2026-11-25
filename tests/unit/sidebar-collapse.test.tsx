@@ -190,43 +190,40 @@ describe("Sidebar Collapse & Expand with Command Support", () => {
     });
   });
 
-  describe("TopNavBar Clean Bar Rendering", () => {
-    it("renders only search bar, theme toggle, notification bell, and export data button", async () => {
+  describe("Shell navigation", () => {
+    it("opens search from the sidebar and exposes export and notifications in the header", async () => {
       await act(async () => {
         render(
           <SidebarProvider>
+            <CurvedSidebar isCollapsed={false} />
             <TopNavBar />
           </SidebarProvider>
         );
       });
 
-      // Search bar
-      expect(screen.getByText("Search or type command")).toBeInTheDocument();
-      // Export data
-      expect(screen.getByText("Export data")).toBeInTheDocument();
-      // Notification bell
-      expect(screen.getByTitle("Notifications")).toBeInTheDocument();
-
-      // Verify that clutter buttons and horizontal navigation tabs are completely removed
-      expect(screen.queryByTestId("navbar-sidebar-toggle")).not.toBeInTheDocument();
-      expect(screen.queryByText("Founder • Management")).not.toBeInTheDocument();
-      expect(screen.queryByLabelText("My Profile")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Export data" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Notifications" })).toBeInTheDocument();
+      expect(screen.queryByRole("dialog", { name: "Command palette" })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /search here/i }));
+      expect(await screen.findByRole("dialog", { name: "Command palette" })).toBeVisible();
     });
   });
 
   describe("CommandPalette Sidebar Commands", () => {
-    it("renders sidebar collapse & expand commands inside Command Palette", async () => {
+    it("collapses and expands the sidebar through the command palette", async () => {
       await act(async () => {
         render(
           <SidebarProvider>
             <CommandPalette open={true} onOpenChange={vi.fn()} />
+            <TestConsumer />
           </SidebarProvider>
         );
       });
 
-      expect(screen.getAllByText(/Collapse Sidebar/).length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText("Expand Sidebar Navigation")).toBeInTheDocument();
-      expect(screen.getByText("Collapse Sidebar Navigation")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("option", { name: /collapse sidebar/i }));
+      expect(screen.getByTestId("sidebar-state")).toHaveTextContent("collapsed");
+      fireEvent.click(screen.getByRole("option", { name: /expand sidebar/i }));
+      expect(screen.getByTestId("sidebar-state")).toHaveTextContent("expanded");
     });
   });
 });

@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { Database } from "@/types/database.types";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getSiteUrl } from "@/lib/site-url";
-import { sendMagicLinkEmail } from "@/lib/email/resend";
+import { requestAuthEmail } from "@/lib/auth/request-email";
 import {
   getRateLimitKey,
   getEmailRateLimitKey,
@@ -40,10 +37,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Dual IP & Email Rate Limiting
+    // 1. Dual IP & Email Rate Limiting (isolated to magic_link scope)
     const clientIp = getPlatformTrustedClientIp(request);
-    const ipLimitKey = getRateLimitKey(clientIp, email);
-    const emailLimitKey = getEmailRateLimitKey(email);
+    const ipLimitKey = getRateLimitKey(clientIp, email, "magic_link");
+    const emailLimitKey = getEmailRateLimitKey(email, "magic_link");
 
     const [ipLimit, emailLimit] = await Promise.all([
       checkRateLimit(ipLimitKey),
@@ -70,85 +67,19 @@ export async function POST(request: NextRequest) {
       recordFailure(emailLimitKey),
     ]);
 
-    let response = NextResponse.next();
-    const supabase = createServerClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll();
-          },
-          setAll(cookiesToSet: { name: string; value: string; options?: any }[]) {
-            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-            response = NextResponse.next();
-            cookiesToSet.forEach(({ name, value, options }) =>
-              response.cookies.set(name, value, options)
-            );
-          },
-        },
-      }
-    );
-
     const siteUrl = getSiteUrl();
-    const callbackRedirect = `${siteUrl}/auth/callback?redirect=${encodeURIComponent(redirectPath)}`;
-
-    let actionLink: string | undefined = undefined;
-    let otpCode: string | undefined = undefined;
-
-    // 1. Generate authoritative magiclink from Supabase Admin
-    try {
-      const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
-        type: "magiclink",
-        email,
-        options: {
-          redirectTo: callbackRedirect,
-        },
-      });
-
-      if (linkData?.properties) {
-        actionLink = linkData.properties.action_link;
-        otpCode = linkData.properties.email_otp;
-      }
-    } catch (linkErr) {
-      console.warn("[MagicLink Gen]:", linkErr);
-    }
-
-    // 2. Also register client signInWithOtp
-    try {
-      await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: callbackRedirect,
-          shouldCreateUser: false,
-          captchaToken: turnstileToken,
-        },
-      });
-    } catch {}
-
-    // 3. Dispatch directly via Hostinger SMTP / Resend fallback
-    if (actionLink || otpCode) {
-      await sendMagicLinkEmail({
-        to: email,
-        otpCode,
-        magicLink: actionLink,
-      });
-    }
+    const callbackRedirect = `${siteUrl}/auth/confirm?redirect=${encodeURIComponent(redirectPath)}`;
+    const failure = await requestAuthEmail("magic-link", email, callbackRedirect, turnstileToken);
+    if (failure) return failure;
 
     // 4. Return generic safe response
-    const res = NextResponse.json({
+    return NextResponse.json({
       success: true,
-      message: "If an account exists for this email, a sign-in link and verification code have been dispatched.",
+      message: "If an account exists for this email, check your inbox for a sign-in link.",
     });
-
-    response.cookies.getAll().forEach((cookie) => {
-      res.cookies.set(cookie);
-    });
-
-    return res;
   } catch (err: any) {
     return NextResponse.json(
-      { error: err.message || "An unexpected error occurred." },
+      { error: "Unable to send email. Please try again later." },
       { status: 500 }
     );
   }

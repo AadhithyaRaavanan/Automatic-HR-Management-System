@@ -45,7 +45,7 @@ vi.mock("@/lib/auth/rate-limiter", () => ({
 
 // Mock Supabase SSR
 const mockSupabase = vi.hoisted(() => ({
-  signInWithOtp: vi.fn(),
+  resetPasswordForEmail: vi.fn(),
   verifyOtp: vi.fn(),
   updateUser: vi.fn(),
   mfa: {
@@ -56,10 +56,18 @@ const mockSupabase = vi.hoisted(() => ({
 vi.mock("@supabase/ssr", () => ({
   createServerClient: vi.fn(() => ({
     auth: {
-      signInWithOtp: mockSupabase.signInWithOtp,
+      resetPasswordForEmail: mockSupabase.resetPasswordForEmail,
       verifyOtp: mockSupabase.verifyOtp,
       updateUser: mockSupabase.updateUser,
       mfa: mockSupabase.mfa,
+    },
+  })),
+}));
+
+vi.mock("@supabase/supabase-js", () => ({
+  createClient: vi.fn(() => ({
+    auth: {
+      resetPasswordForEmail: mockSupabase.resetPasswordForEmail,
     },
   })),
 }));
@@ -73,7 +81,7 @@ describe("Section 1.3: Forgot Password with Email OTP Server Endpoints", () => {
     mockRateLimit.checkRateLimit.mockResolvedValue({ allowed: true, retryAfterSeconds: 0 });
     mockRateLimit.recordFailure.mockResolvedValue(undefined);
     mockRateLimit.clearRateLimit.mockResolvedValue(undefined);
-    mockSupabase.signInWithOtp.mockResolvedValue({ data: {}, error: null });
+    mockSupabase.resetPasswordForEmail.mockResolvedValue({ data: {}, error: null });
     mockSupabase.verifyOtp.mockResolvedValue({
       data: { user: { id: "user-123", email: "test@remotehr.io" }, session: { access_token: "jwt" } },
       error: null,
@@ -100,7 +108,7 @@ describe("Section 1.3: Forgot Password with Email OTP Server Endpoints", () => {
 
   it("2. [Forgot Password] returns identical generic message on unknown email to prevent enumeration", async () => {
     // Even if Supabase returns an error for unknown user
-    mockSupabase.signInWithOtp.mockResolvedValue({
+    mockSupabase.resetPasswordForEmail.mockResolvedValue({
       data: {},
       error: { message: "Signups not allowed for otp" },
     });
@@ -134,17 +142,61 @@ describe("Section 1.3: Forgot Password with Email OTP Server Endpoints", () => {
     expect(body.error).toContain("Too many");
   });
 
-  it("4. [Verify OTP] enforces exactly 6 numeric digits format", async () => {
-    const req = new NextRequest("http://localhost:3000/api/auth/verify-otp", {
+  it("reports a mail provider outage without claiming a reset email was sent", async () => {
+    mockSupabase.resetPasswordForEmail.mockResolvedValueOnce({
+      data: {}, error: { status: 500, message: "mail provider unavailable" },
+    });
+    const response = await forgotPasswordRoute(new NextRequest("http://localhost/api/auth/forgot-password", {
+      method: "POST", body: JSON.stringify({ email: "employee@example.test" }),
+    }));
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: expect.stringContaining("Email delivery") });
+  });
+
+  it("4. [Verify OTP] enforces 6 to 8 numeric digits format and accepts 8-digit OTP", async () => {
+    const badReq = new NextRequest("http://localhost:3000/api/auth/verify-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: "user@remotehr.io", token: "12345" }),
     });
 
-    const res = await verifyOtpRoute(req);
-    expect(res.status).toBe(400);
+    const badRes = await verifyOtpRoute(badReq);
+    expect(badRes.status).toBe(400);
+    const badBody = await badRes.json();
+    expect(badBody.error).toContain("6 to 8 digits");
+
+    const eightDigitReq = new NextRequest("http://localhost:3000/api/auth/verify-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "user@remotehr.io", token: "12345678" }),
+    });
+
+    const eightDigitRes = await verifyOtpRoute(eightDigitReq);
+    expect(eightDigitRes.status).toBe(200);
+    expect(mockSupabase.verifyOtp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "user@remotehr.io",
+        token: "12345678",
+      })
+    );
+  });
+
+  it("4b. [Forgot Password] returns 429 when Supabase built-in email rate limit is hit", async () => {
+    mockSupabase.resetPasswordForEmail.mockResolvedValue({
+      data: {},
+      error: { status: 429, code: "over_email_send_rate_limit", message: "Email rate limit exceeded" },
+    });
+
+    const req = new NextRequest("http://localhost:3000/api/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "user@remotehr.io" }),
+    });
+
+    const res = await forgotPasswordRoute(req);
+    expect(res.status).toBe(429);
     const body = await res.json();
-    expect(body.error).toContain("exactly 6 digits");
+    expect(body.error).toContain("rate limit");
   });
 
   it("5. [Verify OTP] rejects invalid or expired verification code with 401 and records failure", async () => {

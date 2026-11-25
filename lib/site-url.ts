@@ -7,10 +7,14 @@
  */
 export function getSiteUrl(): string {
   const envUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL;
+  const isProd = process.env.NODE_ENV === "production";
 
-  if (envUrl && envUrl.trim() && !envUrl.includes("localhost")) {
-    return envUrl.trim().replace(/\/+$/, "");
+  if (envUrl && envUrl.trim()) {
+    const cleanUrl = envUrl.trim().replace(/\/+$/, "");
+    if (!isProd || !cleanUrl.includes("localhost")) {
+      return cleanUrl;
+    }
   }
 
-  return "https://pulse.zenxea.com";
+  return isProd ? "https://pulse.zenxea.com" : "http://localhost:3000";
 }

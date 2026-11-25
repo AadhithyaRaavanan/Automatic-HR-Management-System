@@ -435,7 +435,7 @@ export function buildPasswordResetEmailHtml(params: SendPasswordResetParams): st
         <div class="body">
           <h1 class="title">Password Reset Verification</h1>
           <p class="paragraph">
-            We received a request to reset the password for your Pulse account. You can verify your identity using the 6-digit code below or click the direct button.
+            We received a request to reset the password for your Pulse account. You can verify your identity using the verification code below or click the direct button.
           </p>
 
           ${
@@ -626,7 +626,7 @@ export async function sendPasswordResetEmail(params: SendPasswordResetParams): P
     }
   }
 
-  return { success: true, messageId: `sim_${Date.now()}` };
+  return { success: false, error: "Email delivery failed. Check the configured mail transport." };
 }
 
 export interface SendNotificationEmailParams {
@@ -1216,7 +1216,7 @@ export interface SendMagicLinkParams {
 }
 
 export function buildMagicLinkEmailHtml(params: SendMagicLinkParams): string {
-  const { magicLink, otpCode } = params;
+  const { magicLink } = params;
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -1252,7 +1252,7 @@ export function buildMagicLinkEmailHtml(params: SendMagicLinkParams): string {
         <div class="body">
           <h1 class="title">Sign In With Your Magic Link</h1>
           <p class="paragraph">
-            You requested passwordless sign-in for your Pulse workplace account. Click the button below to sign in instantly, or enter the verification code on the sign-in page.
+            You requested passwordless sign-in for your Pulse workplace account. Click the button below to sign in instantly.
           </p>
 
           ${
@@ -1261,15 +1261,6 @@ export function buildMagicLinkEmailHtml(params: SendMagicLinkParams): string {
                   <a href="${magicLink}" class="cta-btn" target="_blank" rel="noopener noreferrer">
                     Sign In to Pulse
                   </a>
-                </div>`
-              : ""
-          }
-
-          ${
-            otpCode
-              ? `<div class="otp-box">
-                  <div class="otp-label">Or Use Your 6-Digit Code</div>
-                  <div class="otp-number">${otpCode}</div>
                 </div>`
               : ""
           }
@@ -1337,5 +1328,5 @@ export async function sendMagicLinkEmail(params: SendMagicLinkParams): Promise<{
     }
   }
 
-  return { success: true, messageId: `sim_${Date.now()}` };
+  return { success: false, error: "Email delivery failed. Check the configured mail transport." };
 }

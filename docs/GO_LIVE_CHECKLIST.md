@@ -71,6 +71,7 @@ Configure the following settings in **Authentication** in the Supabase Dashboard
     - Set OTP Expiration: `300 seconds` (5 minutes).
 
 - [ ] **Step 2.6: Custom SMTP Configuration (Resend)**
+  - For hosted Supabase Auth delivery, use [the password recovery template](../supabase/templates/recovery.html) for Reset Password and [the sign-in template](../supabase/templates/magic-link.html) for Magic Link in Authentication → Email Templates. Set the email OTP length to six and allow the deployed app's `/auth/confirm` redirect. These settings apply to Supabase-managed email. The application's SMTP and Resend transports render their own messages.
   - Enable **Custom SMTP** in **Authentication** -> **SMTP Settings**.
   - Configure with separate dedicated Resend SMTP credentials:
     - **Host**: `smtp.resend.com`

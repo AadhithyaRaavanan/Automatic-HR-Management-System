@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { Database } from "@/types/database.types";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getSiteUrl } from "@/lib/site-url";
-import { sendPasswordResetEmail } from "@/lib/email/resend";
+import { requestAuthEmail } from "@/lib/auth/request-email";
 import {
   getRateLimitKey,
   getEmailRateLimitKey,
@@ -39,10 +36,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Dual IP & Email Rate Limiting
+    // 1. Dual IP & Email Rate Limiting (isolated to forgot_password scope)
     const clientIp = getPlatformTrustedClientIp(request);
-    const ipLimitKey = getRateLimitKey(clientIp, email);
-    const emailLimitKey = getEmailRateLimitKey(email);
+    const ipLimitKey = getRateLimitKey(clientIp, email, "forgot_password");
+    const emailLimitKey = getEmailRateLimitKey(email, "forgot_password");
 
     const [ipLimit, emailLimit] = await Promise.all([
       checkRateLimit(ipLimitKey),
@@ -63,27 +60,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Trigger Supabase Auth signInWithOtp with shouldCreateUser: false
-    let response = NextResponse.next();
-    const supabase = createServerClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll();
-          },
-          setAll(cookiesToSet: { name: string; value: string; options?: any }[]) {
-            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-            response = NextResponse.next();
-            cookiesToSet.forEach(({ name, value, options }) =>
-              response.cookies.set(name, value, options)
-            );
-          },
-        },
-      }
-    );
-
     // Record request count for rate limiting
     await Promise.all([
       recordFailure(ipLimitKey),
@@ -91,61 +67,18 @@ export async function POST(request: NextRequest) {
     ]);
 
     const siteUrl = getSiteUrl();
-    let actionLink: string | undefined = undefined;
-    let otpCode: string | undefined = undefined;
-
-    // 1. Generate privileged recovery token & 6-digit OTP from Supabase Admin
-    try {
-      const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
-        type: "recovery",
-        email,
-        options: {
-          redirectTo: `${siteUrl}/settings?must_change_password=true`,
-        },
-      });
-
-      if (linkData?.properties) {
-        actionLink = linkData.properties.action_link;
-        otpCode = linkData.properties.email_otp;
-      }
-    } catch (linkErr) {
-      console.warn("[Forgot Password Link Gen]:", linkErr);
-    }
-
-    // 2. Also register via client signInWithOtp for session state
-    try {
-      await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          shouldCreateUser: false,
-          captchaToken: turnstileToken,
-        },
-      });
-    } catch {}
-
-    // 3. Dispatch directly via Hostinger SMTP (business@zenxea.com)
-    if (actionLink || otpCode) {
-      await sendPasswordResetEmail({
-        to: email,
-        otpCode,
-        resetLink: actionLink,
-      });
-    }
+    const confirmRedirect = `${siteUrl}/auth/confirm?redirect=${encodeURIComponent("/settings?must_change_password=true")}`;
+    const failure = await requestAuthEmail("forgot-password", email, confirmRedirect, turnstileToken);
+    if (failure) return failure;
 
     // 4. Return identical generic response to prevent email enumeration
-    const res = NextResponse.json({
+    return NextResponse.json({
       success: true,
-      message: "If an account exists for this email, a verification code and reset link have been sent via email.",
+      message: "If an account exists for this email, check your inbox for password reset instructions.",
     });
-
-    response.cookies.getAll().forEach((cookie) => {
-      res.cookies.set(cookie);
-    });
-
-    return res;
   } catch (err: any) {
     return NextResponse.json(
-      { error: err.message || "An unexpected error occurred." },
+      { error: "Unable to send email. Please try again later." },
       { status: 500 }
     );
   }
