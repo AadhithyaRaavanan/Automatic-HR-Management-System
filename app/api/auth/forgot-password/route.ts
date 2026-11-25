@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     // 4. Return identical generic response to prevent email enumeration
     return NextResponse.json({
       success: true,
-      message: "If an account exists for this email, check your inbox for password reset instructions.",
+      message: "If an account exists for this email, check your inbox for your password reset code.",
     });
   } catch (err: any) {
     return NextResponse.json(

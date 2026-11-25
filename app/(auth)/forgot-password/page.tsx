@@ -186,7 +186,7 @@ function ForgotPasswordContent() {
               Check your email
             </h1>
             <p className="text-xs text-[#4D4D4D] mt-1">
-              Open the reset link sent to <strong className="text-black font-mono">{email}</strong>. If your email includes a code, you can enter it below instead.
+              Enter the password reset code sent to <strong className="text-black font-mono">{email}</strong>.
             </p>
           </div>
 

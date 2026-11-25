@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { buildWelcomeEmailHtml, sendMagicLinkEmail, sendPasswordResetEmail, sendWelcomeCredentialsEmail, SendInviteEmailParams } from "@/lib/email/resend";
+import { buildPasswordResetEmailHtml, buildWelcomeEmailHtml, sendMagicLinkEmail, sendPasswordResetEmail, sendWelcomeCredentialsEmail, SendInviteEmailParams } from "@/lib/email/resend";
 
 describe("Section 3.2: Resend Email Templates and Production Hardening", () => {
   const originalEnv = process.env;
@@ -23,6 +23,13 @@ describe("Section 3.2: Resend Email Templates and Production Hardening", () => {
     shiftStartTime: "09:00 AM",
     shiftEndTime: "05:00 PM",
   };
+
+  it("renders a recovery code with leading zeros and no sign-in or reset link", () => {
+    const html = buildPasswordResetEmailHtml({ to: "employee@example.test", otpCode: "001234" });
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    expect(doc.querySelector(".otp-number")?.textContent).toBe("001234");
+    expect(doc.querySelector("a, button")).toBeNull();
+  });
 
   it("reports undelivered sign-in and recovery emails when no transport accepts the message", async () => {
     delete process.env.RESEND_API_KEY;

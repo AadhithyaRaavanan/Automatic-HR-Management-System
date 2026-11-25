@@ -22,6 +22,10 @@ export async function updateSession(request: NextRequest) {
 
   // 1. Instant Fast-Path for static assets, images, fonts, and public routes that don't need auth checks
   if (
+    pathname === "/auth/confirm" ||
+    pathname === "/auth/callback" ||
+    pathname === "/forgot-password" ||
+    (pathname === "/login" && request.nextUrl.searchParams.has("error")) ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api") ||
     pathname === "/favicon.ico" ||
@@ -260,15 +264,25 @@ export async function updateSession(request: NextRequest) {
         ((expiresAt && new Date(expiresAt).getTime() < Date.now()) ||
         (createdAt && Date.now() - new Date(createdAt).getTime() > 24 * 60 * 60 * 1000));
 
-      if (isExpired) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/login";
-        url.searchParams.set("error", "expired_temp_password");
-        return NextResponse.redirect(url);
+      // A verified email session can replace the expired temporary password.
+      // A session established with that password must still use account recovery.
+      const signedInByEmail = Array.isArray(claims?.amr) && claims.amr.some(
+        (entry: { method?: string }) => ["otp", "recovery", "magiclink"].includes(entry?.method || "")
+      );
+      if (isExpired && !signedInByEmail) {
+        if (!pathname.startsWith("/login")) {
+          const url = request.nextUrl.clone();
+          url.pathname = "/login";
+          url.search = "";
+          url.searchParams.set("error", "expired_temp_password");
+          return NextResponse.redirect(url);
+        }
+        return response;
       }
 
       if (
         pathname !== "/settings" &&
+        pathname !== "/mfa-challenge" &&
         !pathname.startsWith("/auth") &&
         !pathname.startsWith("/login") &&
         !pathname.startsWith("/api")
@@ -308,7 +322,7 @@ export async function updateSession(request: NextRequest) {
           !pathname.startsWith("/mfa-challenge") &&
           !pathname.startsWith("/mfa-setup") &&
           !pathname.startsWith("/auth") &&
-          !pathname.startsWith("/settings") &&
+          (!pathname.startsWith("/settings") || mustChangePassword) &&
           !pathname.startsWith("/api")
         ) {
           const url = request.nextUrl.clone();

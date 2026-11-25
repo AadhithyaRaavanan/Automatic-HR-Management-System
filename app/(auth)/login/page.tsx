@@ -50,7 +50,9 @@ function LoginForm() {
   // Surface callback/expiry error banners when redirected back to /login
   React.useEffect(() => {
     const errParam = searchParams.get("error");
-    if (errParam === "auth_callback_failed") {
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    if (hash.get("error_code") === "otp_expired" || errParam === "auth_callback_failed") {
+      setAuthMode("magic-link");
       setLockoutMessage("Your sign-in link has expired or could not be verified. Please request a new link.");
     } else if (errParam === "expired_temp_password") {
       setLockoutMessage("Your temporary password has expired. Please use Forgot password to reset it.");
@@ -77,20 +79,11 @@ function LoginForm() {
 
     (async () => {
       try {
-        // Wait for browser client URL auto-detection first to avoid duplicate GoTrue lock calls
-        const {
-          data: { session: existingSession },
-        } = await supabase.auth.getSession();
-
-        if (!existingSession) {
-          const { error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-          if (error) {
-            throw error;
-          }
-        }
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (error) throw error;
 
         window.clearTimeout(timeoutId);
         const target =
@@ -421,7 +414,7 @@ function LoginForm() {
             {authMode === "otp-request"
               ? "Enter your work email to reset your password."
               : authMode === "otp-verify"
-              ? `Open the password reset link sent to ${email}. If your email includes a code, you can enter it below instead.`
+              ? `Enter the password reset code sent to ${email}.`
               : authMode === "link-sent"
               ? `Open the sign-in link sent to ${email} to continue.`
               : "Enter your credentials to access your account."}

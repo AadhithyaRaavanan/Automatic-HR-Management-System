@@ -394,12 +394,11 @@ export async function sendWelcomeCredentialsEmail(params: SendInviteEmailParams)
 
 export interface SendPasswordResetParams {
   to: string;
-  otpCode?: string;
-  resetLink?: string;
+  otpCode: string;
 }
 
 export function buildPasswordResetEmailHtml(params: SendPasswordResetParams): string {
-  const { otpCode, resetLink } = params;
+  const { otpCode } = params;
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -419,8 +418,6 @@ export function buildPasswordResetEmailHtml(params: SendPasswordResetParams): st
       .otp-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; text-align: center; margin: 24px 0; }
       .otp-label { font-size: 11px; font-weight: 600; color: #000000; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
       .otp-number { font-size: 32px; font-weight: 700; font-family: monospace; letter-spacing: 6px; color: #000000; }
-      .cta-box { text-align: center; margin: 28px 0; }
-      .cta-btn { display: inline-block; background: #000000; color: #ffffff !important; text-decoration: none; font-size: 14px; font-weight: 600; padding: 12px 28px; border-radius: 8px; }
       .notice { background: #f1f5f9; border-radius: 8px; padding: 16px; font-size: 12px; color: #64748b; line-height: 1.5; margin-top: 24px; }
       .footer { text-align: center; padding: 24px 32px; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; }
     </style>
@@ -435,27 +432,13 @@ export function buildPasswordResetEmailHtml(params: SendPasswordResetParams): st
         <div class="body">
           <h1 class="title">Password Reset Verification</h1>
           <p class="paragraph">
-            We received a request to reset the password for your Pulse account. You can verify your identity using the verification code below or click the direct button.
+            We received a request to reset the password for your Pulse account. Enter this code on the password reset screen to continue.
           </p>
 
-          ${
-            otpCode
-              ? `<div class="otp-box">
-                  <div class="otp-label">Your Verification Code</div>
-                  <div class="otp-number">${otpCode}</div>
-                </div>`
-              : ""
-          }
-
-          ${
-            resetLink
-              ? `<div class="cta-box">
-                  <a href="${resetLink}" class="cta-btn" target="_blank" rel="noopener noreferrer">
-                    Reset My Password
-                  </a>
-                </div>`
-              : ""
-          }
+          <div class="otp-box">
+            <div class="otp-label">Your verification code</div>
+            <div class="otp-number">${otpCode}</div>
+          </div>
 
           <div class="notice">
             If you did not initiate this request, you can safely disregard this email. Your account credentials will remain secure and unchanged.
@@ -1211,8 +1194,7 @@ export async function sendAdminOnboardingDossierEmail(params: SendAdminDossierEm
 
 export interface SendMagicLinkParams {
   to: string;
-  magicLink?: string;
-  otpCode?: string;
+  magicLink: string;
 }
 
 export function buildMagicLinkEmailHtml(params: SendMagicLinkParams): string {
@@ -1252,7 +1234,7 @@ export function buildMagicLinkEmailHtml(params: SendMagicLinkParams): string {
         <div class="body">
           <h1 class="title">Sign In With Your Magic Link</h1>
           <p class="paragraph">
-            You requested passwordless sign-in for your Pulse workplace account. Click the button below to sign in instantly.
+            You requested passwordless sign-in for your Pulse workplace account. Open the link below and choose Continue to finish signing in.
           </p>
 
           ${
@@ -1266,7 +1248,7 @@ export function buildMagicLinkEmailHtml(params: SendMagicLinkParams): string {
           }
 
           <div class="notice">
-            This secure sign-in link is valid for 15 minutes and can only be used once. If you did not request this login, please contact your workplace administrator.
+            This secure sign-in link can only be used once. If you did not request this login, please contact your workplace administrator.
           </div>
         </div>
         <div class="footer">

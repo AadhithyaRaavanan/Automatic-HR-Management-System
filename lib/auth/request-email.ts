@@ -31,11 +31,17 @@ export async function requestAuthEmail(flow: Flow, email: string, redirectTo: st
       options: { redirectTo },
     });
     if (error) return providerFailure(error);
-    const link = data.properties?.action_link;
-    if (!link) return deliveryFailure();
-    const result = recovery
-      ? await sendPasswordResetEmail({ to: email, resetLink: link, otpCode: data.properties.email_otp })
-      : await sendMagicLinkEmail({ to: email, magicLink: link });
+    if (recovery) {
+      const otpCode = data.properties?.email_otp;
+      if (!otpCode) return deliveryFailure();
+      const result = await sendPasswordResetEmail({ to: email, otpCode });
+      return result.success ? null : deliveryFailure();
+    }
+    const tokenHash = data.properties?.hashed_token;
+    if (!tokenHash) return deliveryFailure();
+    const link = new URL(redirectTo);
+    link.hash = new URLSearchParams({ token_hash: tokenHash }).toString();
+    const result = await sendMagicLinkEmail({ to: email, magicLink: link.href });
     return result.success ? null : deliveryFailure();
   }
 
