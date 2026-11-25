@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
 import { useTheme } from "next-themes";
 import {
@@ -36,6 +37,7 @@ interface CommandPaletteProps {
 }
 
 export function CommandPalette({ open, onOpenChange, userRole = "employee" }: CommandPaletteProps) {
+  const router = useRouter();
   const { setTheme, theme } = useTheme();
   const { isCollapsed, toggleSidebar } = useSidebar();
   const attendance = useOptionalAttendanceContext();
@@ -85,7 +87,7 @@ export function CommandPalette({ open, onOpenChange, userRole = "employee" }: Co
       // "N" for new task
       if (FEATURES.TASKS && key === "n" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
-        window.location.href = "/tasks?create=1";
+        router.push("/tasks?create=1");
         return;
       }
 
@@ -104,18 +106,18 @@ export function CommandPalette({ open, onOpenChange, userRole = "employee" }: Co
         if (gTimer) clearTimeout(gTimer);
         if (key === "d") {
           e.preventDefault();
-          window.location.href = "/";
+          router.push("/");
         } else if (key === "a") {
           e.preventDefault();
-          window.location.href = "/attendance";
+          router.push("/attendance");
         } else if (key === "t") {
           e.preventDefault();
           if (FEATURES.TASKS) {
-            window.location.href = "/tasks";
+            router.push("/tasks");
           }
         } else if (key === "l") {
           e.preventDefault();
-          window.location.href = "/leave";
+          router.push("/leave");
         }
       }
     };
@@ -125,12 +127,12 @@ export function CommandPalette({ open, onOpenChange, userRole = "employee" }: Co
       document.removeEventListener("keydown", handleKeyDown);
       if (gTimer) clearTimeout(gTimer);
     };
-  }, [open, onOpenChange]);
+  }, [open, onOpenChange, router]);
 
   if (!open) return null;
 
   const navigate = (url: string) => {
-    window.location.href = url;
+    router.push(url);
     onOpenChange(false);
   };
 

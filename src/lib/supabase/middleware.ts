@@ -124,14 +124,21 @@ export async function updateSession(request: NextRequest) {
 
   // If unauthenticated user tries to access a protected app route
   if (!isTokenValid && !isPublicPath) {
+    // Rescue Supabase Site-URL fallback (?code=...) on "/" before bouncing to /login
+    if (pathname === "/" && request.nextUrl.searchParams.get("code")) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/callback";
+      return NextResponse.redirect(url);
+    }
+
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirect", pathname);
     return NextResponse.redirect(url);
   }
 
-  // If authenticated user visits login
-  if (isTokenValid && pathname === "/login") {
+  // If authenticated user visits login (do not loop if an error state explicitly landed on /login)
+  if (isTokenValid && pathname === "/login" && !request.nextUrl.searchParams.get("error")) {
     // If user has an active enrolled TOTP factor but has not verified AAL2, route to MFA challenge
     const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     if (aalData?.nextLevel === "aal2" && aal !== "aal2") {

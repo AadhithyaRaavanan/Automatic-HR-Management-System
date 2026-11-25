@@ -79,25 +79,33 @@ export function CurvedSidebar({
   const session = useAppSession();
 
   const [mounted, setMounted] = React.useState(false);
+  const [transitionsEnabled, setTransitionsEnabled] = React.useState(false);
   const [mountedRole, setMountedRole] = React.useState<string | null>(null);
   const [teamMemberCount, setTeamMemberCount] = React.useState<number | null>(null);
   const [isMac, setIsMac] = React.useState(false);
 
   React.useEffect(() => {
     setMounted(true);
+    let rafId: number | null = null;
     if (typeof window !== "undefined") {
       setIsMac(/(Mac|iPhone|iPod|iPad)/i.test(navigator.platform || navigator.userAgent));
       const match = document.cookie.match(/(?:^|;\s*)remotehr_role=([^;]*)/);
       const cookieRole = match ? decodeURIComponent(match[1]) : null;
       const stored = localStorage.getItem("remotehr_cached_role") || cookieRole;
       if (stored) setMountedRole(stored);
+      rafId = window.requestAnimationFrame(() => setTransitionsEnabled(true));
     }
+    return () => {
+      if (rafId !== null && typeof window !== "undefined") {
+        window.cancelAnimationFrame(rafId);
+      }
+    };
   }, []);
 
   const isCollapsed =
     typeof controlledCollapsed === "boolean"
       ? controlledCollapsed
-      : (mounted ? sidebar.isCollapsed : false);
+      : (sidebar.mounted ? sidebar.isCollapsed : false);
 
   const toggleSidebar = controlledOnToggle || sidebar.toggleSidebar;
 
@@ -203,7 +211,8 @@ export function CurvedSidebar({
   return (
     <aside
       className={cn(
-        "sticky top-0 left-0 hidden md:flex flex-col justify-between py-4 h-screen max-h-screen bg-[#000000] text-white select-none shrink-0 z-40 transition-[width,padding] duration-200 ease-in-out overflow-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0",
+        "sticky top-0 left-0 hidden md:flex flex-col justify-between py-4 h-screen max-h-screen bg-[#000000] text-white select-none shrink-0 z-40 overflow-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0",
+        transitionsEnabled && "transition-[width,padding] duration-200 ease-in-out",
         isCollapsed
           ? "w-[72px] px-2 items-center"
           : "w-[260px] px-3.5 items-stretch",

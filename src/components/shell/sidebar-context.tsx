@@ -12,6 +12,15 @@ export interface SidebarContextValue {
 const SidebarContext = React.createContext<SidebarContextValue | undefined>(undefined);
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
+  const existingContext = React.useContext(SidebarContext);
+  if (existingContext) {
+    // Reuse the root-level SidebarProvider so per-page AppShell mounts keep collapsed state
+    return <>{children}</>;
+  }
+  return <SidebarProviderInner>{children}</SidebarProviderInner>;
+}
+
+function SidebarProviderInner({ children }: { children: React.ReactNode }) {
   // Always initialize to false on both server and client to prevent hydration mismatch
   const [isCollapsed, setIsCollapsed] = React.useState<boolean>(false);
   const [mounted, setMounted] = React.useState<boolean>(false);

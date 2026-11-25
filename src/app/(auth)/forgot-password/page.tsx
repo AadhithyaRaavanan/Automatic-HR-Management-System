@@ -61,8 +61,8 @@ function ForgotPasswordContent() {
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanCode = otpCode.replace(/\s+/g, "");
-    if (cleanCode.length !== 6) {
-      toast.error("Please enter the 6-digit code received in your email.");
+    if (cleanCode.length < 6 || cleanCode.length > 8) {
+      toast.error("Please enter the 6 to 8 digit code received in your email.");
       return;
     }
 
@@ -186,7 +186,7 @@ function ForgotPasswordContent() {
               Verify email code
             </h1>
             <p className="text-xs text-[#4D4D4D] mt-1">
-              We sent a 6-digit code to <strong className="text-black font-mono">{email}</strong>. Enter it below to sign in and set your new password.
+              We sent a verification code to <strong className="text-black font-mono">{email}</strong>. Enter the 6–8 digit code below to sign in and set your new password.
             </p>
           </div>
 
@@ -196,7 +196,7 @@ function ForgotPasswordContent() {
                 htmlFor="otp-code"
                 className="block text-xs font-semibold text-black mb-1.5"
               >
-                6-digit verification code
+                Verification code (6–8 digits)
               </label>
               <div className="relative">
                 <KeyRound className="w-4 h-4 text-[#808080] absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -204,13 +204,13 @@ function ForgotPasswordContent() {
                   id="otp-code"
                   type="text"
                   required
-                  maxLength={6}
+                  maxLength={8}
                   inputMode="numeric"
                   pattern="[0-9]*"
                   disabled={loading}
                   value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  placeholder="123456"
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                  placeholder="12345678"
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-white border border-[#E6E6E6] text-center font-mono tracking-widest text-base font-semibold text-black placeholder:text-[#808080] focus:outline-none focus:border-black focus:ring-1 focus:ring-black transition-colors disabled:opacity-50"
                 />
               </div>

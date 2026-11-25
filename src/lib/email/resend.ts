@@ -435,7 +435,7 @@ export function buildPasswordResetEmailHtml(params: SendPasswordResetParams): st
         <div class="body">
           <h1 class="title">Password Reset Verification</h1>
           <p class="paragraph">
-            We received a request to reset the password for your Pulse account. You can verify your identity using the 6-digit code below or click the direct button.
+            We received a request to reset the password for your Pulse account. You can verify your identity using the verification code below or click the direct button.
           </p>
 
           ${
@@ -1268,7 +1268,7 @@ export function buildMagicLinkEmailHtml(params: SendMagicLinkParams): string {
           ${
             otpCode
               ? `<div class="otp-box">
-                  <div class="otp-label">Or Use Your 6-Digit Code</div>
+                  <div class="otp-label">Or Use Your Verification Code</div>
                   <div class="otp-number">${otpCode}</div>
                 </div>`
               : ""

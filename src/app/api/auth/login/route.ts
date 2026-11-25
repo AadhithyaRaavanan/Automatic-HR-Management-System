@@ -291,7 +291,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Ensure user_role is stored on app_metadata so JWTs carry the role claim
-    if (userRole && authData.user?.id && process.env.NODE_ENV !== "test") {
+    if (
+      userRole &&
+      authData.user?.id &&
+      authData.user.app_metadata?.user_role !== userRole &&
+      process.env.NODE_ENV !== "test"
+    ) {
       try {
         const { getAdminClient } = await import("@/lib/supabase/admin");
         await getAdminClient().auth.admin.updateUserById(authData.user.id, {

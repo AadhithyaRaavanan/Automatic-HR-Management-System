@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { Database } from "@/types/database.types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getSiteUrl } from "@/lib/site-url";
@@ -39,10 +39,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Dual IP & Email Rate Limiting
+    // 1. Dual IP & Email Rate Limiting (isolated to forgot_password scope)
     const clientIp = getPlatformTrustedClientIp(request);
-    const ipLimitKey = getRateLimitKey(clientIp, email);
-    const emailLimitKey = getEmailRateLimitKey(email);
+    const ipLimitKey = getRateLimitKey(clientIp, email, "forgot_password");
+    const emailLimitKey = getEmailRateLimitKey(email, "forgot_password");
 
     const [ipLimit, emailLimit] = await Promise.all([
       checkRateLimit(ipLimitKey),
@@ -63,27 +63,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Trigger Supabase Auth signInWithOtp with shouldCreateUser: false
-    let response = NextResponse.next();
-    const supabase = createServerClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll();
-          },
-          setAll(cookiesToSet: { name: string; value: string; options?: any }[]) {
-            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-            response = NextResponse.next();
-            cookiesToSet.forEach(({ name, value, options }) =>
-              response.cookies.set(name, value, options)
-            );
-          },
-        },
-      }
-    );
-
     // Record request count for rate limiting
     await Promise.all([
       recordFailure(ipLimitKey),
@@ -91,58 +70,99 @@ export async function POST(request: NextRequest) {
     ]);
 
     const siteUrl = getSiteUrl();
-    let actionLink: string | undefined = undefined;
-    let otpCode: string | undefined = undefined;
+    const confirmRedirect = `${siteUrl}/auth/confirm?redirect=${encodeURIComponent("/settings?must_change_password=true")}`;
+    const hasCustomEmailTransport = Boolean(
+      (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) ||
+      process.env.RESEND_API_KEY
+    );
 
-    // 1. Generate privileged recovery token & 6-digit OTP from Supabase Admin
-    try {
-      const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
-        type: "recovery",
-        email,
-        options: {
-          redirectTo: `${siteUrl}/settings?must_change_password=true`,
-        },
-      });
+    if (hasCustomEmailTransport) {
+      // Custom SMTP/Resend path: generate one authoritative recovery link + OTP and send once
+      let actionLink: string | undefined = undefined;
+      let otpCode: string | undefined = undefined;
 
-      if (linkData?.properties) {
-        actionLink = linkData.properties.action_link;
-        otpCode = linkData.properties.email_otp;
+      try {
+        const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+          type: "recovery",
+          email,
+          options: {
+            redirectTo: confirmRedirect,
+          },
+        });
+
+        if (linkError) {
+          console.warn("[Forgot Password Link Gen Error]:", linkError.message);
+        } else if (linkData?.properties) {
+          actionLink = linkData.properties.action_link;
+          otpCode = linkData.properties.email_otp;
+        }
+      } catch (linkErr) {
+        console.warn("[Forgot Password Link Gen]:", linkErr);
       }
-    } catch (linkErr) {
-      console.warn("[Forgot Password Link Gen]:", linkErr);
-    }
 
-    // 2. Also register via client signInWithOtp for session state
-    try {
-      await supabase.auth.signInWithOtp({
+      if (actionLink || otpCode) {
+        const sendResult = await sendPasswordResetEmail({
+          to: email,
+          otpCode,
+          resetLink: actionLink,
+        });
+        if (!sendResult.success) {
+          console.error("[Forgot Password Email Error]:", sendResult.error);
+          return NextResponse.json(
+            { error: "Unable to deliver password reset email right now. Please try again later." },
+            { status: 502 }
+          );
+        }
+      }
+    } else {
+      // No SMTP/Resend configured: use implicit flow so email link works without a server-side PKCE verifier cookie
+      const supabase = createSupabaseClient<Database>(
+        process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
+        {
+          auth: {
+            flowType: "implicit",
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false,
+          },
+        }
+      );
+
+      const { error: otpError } = await supabase.auth.signInWithOtp({
         email,
         options: {
+          emailRedirectTo: confirmRedirect,
           shouldCreateUser: false,
           captchaToken: turnstileToken,
         },
       });
-    } catch {}
 
-    // 3. Dispatch directly via Hostinger SMTP (business@zenxea.com)
-    if (actionLink || otpCode) {
-      await sendPasswordResetEmail({
-        to: email,
-        otpCode,
-        resetLink: actionLink,
-      });
+      if (otpError) {
+        const msg = otpError.message || "";
+        const isRateLimitError =
+          (otpError as any).status === 429 ||
+          (otpError as any).code === "over_email_send_rate_limit" ||
+          /rate.?limit|over_email_send_rate_limit|after \d+ second|too many/i.test(msg);
+
+        if (isRateLimitError) {
+          return NextResponse.json(
+            {
+              error:
+                "Supabase email rate limit reached. Please wait a few minutes before retrying, or configure SMTP/Resend in .env.local.",
+            },
+            { status: 429 }
+          );
+        }
+        console.warn("[Forgot Password Supabase OTP]:", msg);
+      }
     }
 
     // 4. Return identical generic response to prevent email enumeration
-    const res = NextResponse.json({
+    return NextResponse.json({
       success: true,
       message: "If an account exists for this email, a verification code and reset link have been sent via email.",
     });
-
-    response.cookies.getAll().forEach((cookie) => {
-      res.cookies.set(cookie);
-    });
-
-    return res;
   } catch (err: any) {
     return NextResponse.json(
       { error: err.message || "An unexpected error occurred." },

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { sanitizeRedirectPath, getSafeRedirectUrl } from "@/features/auth/redirect";
+import { getSiteUrl } from "@/lib/site-url";
 
 const mockExchangeCodeForSession = vi.fn();
 
@@ -84,6 +85,21 @@ describe("Auth redirect sanitization & /auth/callback guard", () => {
     const res = await authCallbackGet(req);
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toBe("http://localhost:3000/login?error=auth_callback_failed");
+  });
+
+  it("getSiteUrl preserves localhost in non-production and enforces production domain in production", () => {
+    const prevEnv = { ...process.env };
+    try {
+      (process.env as any).NODE_ENV = "development";
+      process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3000";
+      delete process.env.NEXT_PUBLIC_SITE_URL;
+      expect(getSiteUrl()).toBe("http://localhost:3000");
+
+      (process.env as any).NODE_ENV = "production";
+      expect(getSiteUrl()).toBe("https://pulse.zenxea.com");
+    } finally {
+      process.env = prevEnv;
+    }
   });
 });
 

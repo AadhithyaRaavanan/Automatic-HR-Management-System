@@ -38,17 +38,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!/^\d{6}$/.test(token)) {
+    if (!/^\d{6,8}$/.test(token)) {
       return NextResponse.json(
-        { error: "Verification code must be exactly 6 digits." },
+        { error: "Verification code must be 6 to 8 digits." },
         { status: 400 }
       );
     }
 
-    // 1. Rate Limiting for verification attempts
+    // 1. Rate Limiting for verification attempts (isolated from request/resend bucket)
     const clientIp = getPlatformTrustedClientIp(request);
-    const ipLimitKey = getRateLimitKey(clientIp, email);
-    const emailLimitKey = getEmailRateLimitKey(email);
+    const ipLimitKey = getRateLimitKey(clientIp, email, "verify_otp");
+    const emailLimitKey = getEmailRateLimitKey(email, "verify_otp");
 
     const [ipLimit, emailLimit] = await Promise.all([
       checkRateLimit(ipLimitKey),

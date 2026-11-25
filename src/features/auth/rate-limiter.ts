@@ -9,12 +9,14 @@ const LOCKOUT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 // In-memory fallback cache for fast local testing and offline execution
 const fallbackMemoryMap = new Map<string, { attempts: number; lockedUntil: number | null }>();
 
-export function getRateLimitKey(ip: string, email: string): string {
-  return `ip_email::${ip}::${email.toLowerCase().trim()}`;
+export function getRateLimitKey(ip: string, email: string, scope = "auth"): string {
+  const cleanEmail = email.toLowerCase().trim();
+  return scope === "auth" ? `ip_email::${ip}::${cleanEmail}` : `${scope}::ip_email::${ip}::${cleanEmail}`;
 }
 
-export function getEmailRateLimitKey(email: string): string {
-  return `email::${email.toLowerCase().trim()}`;
+export function getEmailRateLimitKey(email: string, scope = "auth"): string {
+  const cleanEmail = email.toLowerCase().trim();
+  return scope === "auth" ? `email::${cleanEmail}` : `${scope}::email::${cleanEmail}`;
 }
 
 /**

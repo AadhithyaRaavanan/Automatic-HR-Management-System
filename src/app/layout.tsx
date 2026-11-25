@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { QueryProvider } from "@/components/query-provider";
 import { AttendanceProvider } from "@/features/attendance/context/attendance-context";
+import { SidebarProvider } from "@/components/shell/sidebar-context";
 import { Toaster } from "sonner";
 import { DesktopOnlyGatekeeper } from "@/components/shared/desktop-only-gatekeeper";
 import { PwaRegister } from "@/components/pwa/pwa-register";
@@ -65,7 +66,9 @@ export default function RootLayout({
           <QueryProvider>
             <DesktopOnlyGatekeeper>
               <AttendanceProvider>
-                {children}
+                <SidebarProvider>
+                  {children}
+                </SidebarProvider>
               </AttendanceProvider>
             </DesktopOnlyGatekeeper>
             <Toaster

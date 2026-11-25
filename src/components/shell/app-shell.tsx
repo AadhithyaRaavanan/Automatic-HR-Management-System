@@ -229,13 +229,36 @@ export function AppShell({
             }
           }
 
-          const { data: empProfile } = await (supabase as any)
-            .from("employees")
-            .select(
-              "full_name, timezone, organization_id, onboarding_completed, onboarding_completed_at, departments:department_id(name), job_titles:job_title_id(title_name)"
-            )
-            .eq("id", user.id)
-            .maybeSingle();
+          const isEligibleRole =
+            resolvedRole === "employee" ||
+            resolvedRole === "manager" ||
+            resolvedRole === "hr";
+
+          // Run independent profile, tutorial status, and MFA checks in parallel
+          const [empResult, tutorialStatusResult, aalResult] = await Promise.all([
+            (supabase as any)
+              .from("employees")
+              .select(
+                "full_name, timezone, organization_id, onboarding_completed, onboarding_completed_at, departments:department_id(name), job_titles:job_title_id(title_name)"
+              )
+              .eq("id", user.id)
+              .maybeSingle(),
+            isEligibleRole
+              ? fetch("/api/tutorial/complete", {
+                  headers: session?.access_token
+                    ? { Authorization: `Bearer ${session.access_token}` }
+                    : {},
+                })
+                  .then((res) => (res.ok ? res.json() : null))
+                  .catch(() => null)
+              : Promise.resolve(null),
+            supabase.auth.mfa
+              .getAuthenticatorAssuranceLevel()
+              .then((r) => r.data)
+              .catch(() => null),
+          ]);
+
+          const empProfile = empResult?.data;
 
           if (empProfile) {
             resolvedName = empProfile.full_name || null;
@@ -269,28 +292,15 @@ export function AppShell({
 
           // Strict server-controlled auto-start check:
           // 1. Role is employee, manager, or hr (Admin gets NO tour)
-          const isEligibleRole =
-            resolvedRole === "employee" ||
-            resolvedRole === "manager" ||
-            resolvedRole === "hr";
-
           // 2. profiles.tutorial_completed & version check
           let tutorialCompleted = false;
           let tutorialVersion = 0;
           let onboardingCompleted = false;
-          try {
-            const res = await fetch("/api/tutorial/complete", {
-              headers: session?.access_token
-                ? { Authorization: `Bearer ${session.access_token}` }
-                : {},
-            });
-            if (res.ok) {
-              const statusData = await res.json();
-              tutorialCompleted = statusData.tutorial_completed === true;
-              tutorialVersion = Number(statusData.tutorial_version) || 0;
-              onboardingCompleted = statusData.onboarding_completed === true;
-            }
-          } catch { }
+          if (tutorialStatusResult) {
+            tutorialCompleted = tutorialStatusResult.tutorial_completed === true;
+            tutorialVersion = Number(tutorialStatusResult.tutorial_version) || 0;
+            onboardingCompleted = tutorialStatusResult.onboarding_completed === true;
+          }
 
           if (empProfile?.onboarding_completed === true && (empProfile as any)?.status === "active") {
             onboardingCompleted = true;
@@ -305,15 +315,12 @@ export function AppShell({
 
           // 4. MFA verification finished (session is AAL2 if user has enrolled TOTP)
           let mfaFinished = true;
-          try {
-            const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-            if (aalData) {
-              const hasEnrolledTotp = aalData.nextLevel === "aal2";
-              if (hasEnrolledTotp) {
-                mfaFinished = aalData.currentLevel === "aal2";
-              }
+          if (aalResult) {
+            const hasEnrolledTotp = aalResult.nextLevel === "aal2";
+            if (hasEnrolledTotp) {
+              mfaFinished = aalResult.currentLevel === "aal2";
             }
-          } catch { }
+          }
 
           // If the authoritative server state says tutorial is not completed, clear any stale client flags
           if (!tutorialCompleted && typeof window !== "undefined") {
