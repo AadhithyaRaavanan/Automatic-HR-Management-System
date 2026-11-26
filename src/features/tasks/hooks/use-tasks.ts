@@ -13,6 +13,7 @@ import {
   getStoredTasks,
   getStoredUsers,
   addStoredProject,
+  deleteStoredProject,
   addStoredTask,
   updateStoredTask,
   deleteStoredTask,
@@ -364,9 +365,84 @@ export function useTaskDetails(taskId: string | null) {
   });
 }
 
-export function useTaskMutations() {
+export function useTaskMutations(callerRole?: string | null, callerUserId?: string | null) {
   const supabase = React.useMemo(() => createClient(), []);
   const queryClient = useQueryClient();
+
+  const resolveCallerIdentity = async (): Promise<{
+    role: string | null;
+    userId: string | null;
+  }> => {
+    let resolvedRole = callerRole ?? null;
+    let resolvedUserId = callerUserId ?? null;
+
+    if (isDemoModeEnabled() && typeof window !== "undefined") {
+      try {
+        if (!resolvedRole) {
+          resolvedRole = localStorage.getItem("remotehr_cached_role");
+        }
+        if (!resolvedUserId) {
+          const rawSession = localStorage.getItem("remotehr_cached_session");
+          if (rawSession) {
+            const parsed = JSON.parse(rawSession);
+            resolvedUserId = parsed?.userId ?? null;
+          }
+        }
+      } catch {
+        // Ignore storage errors
+      }
+      return { role: resolvedRole, userId: resolvedUserId };
+    }
+
+    if (!resolvedUserId || !resolvedRole) {
+      const { data: userRes } = await supabase.auth.getUser();
+      if (!resolvedUserId) {
+        resolvedUserId = userRes?.user?.id ?? null;
+      }
+      if (!resolvedRole && resolvedUserId) {
+        const { data: member } = await (supabase as any)
+          .from("organization_members")
+          .select("role")
+          .eq("user_id", resolvedUserId)
+          .eq("status", "active")
+          .maybeSingle();
+        resolvedRole = member?.role ?? null;
+      }
+    }
+
+    return { role: resolvedRole, userId: resolvedUserId };
+  };
+
+  const assertAdminRole = async () => {
+    if (callerRole) {
+      if (callerRole !== "admin") {
+        throw new Error("Only administrators can delete tasks or projects");
+      }
+      return;
+    }
+    if (isDemoModeEnabled()) {
+      if (typeof window !== "undefined") {
+        const cachedRole = localStorage.getItem("remotehr_cached_role");
+        if (cachedRole && cachedRole !== "admin") {
+          throw new Error("Only administrators can delete tasks or projects");
+        }
+      }
+      return;
+    }
+    const { data: userRes } = await supabase.auth.getUser();
+    if (!userRes?.user) {
+      throw new Error("Only administrators can delete tasks or projects");
+    }
+    const { data: member } = await (supabase as any)
+      .from("organization_members")
+      .select("role")
+      .eq("user_id", userRes.user.id)
+      .eq("status", "active")
+      .maybeSingle();
+    if (!member || member.role !== "admin") {
+      throw new Error("Only administrators can delete tasks or projects");
+    }
+  };
 
   const invalidateAll = (taskId?: string) => {
     queryClient.invalidateQueries({ queryKey: ["tasks-workspace"] });
@@ -400,26 +476,116 @@ export function useTaskMutations() {
       departmentId?: string | null;
       description?: string | null;
       code?: string | null;
+      silent?: boolean;
     }) => {
-      addStoredProject({
+      const storedProj = addStoredProject({
         name: input.name,
         department_id: input.departmentId || null,
         description: input.description || null,
         code: input.code || input.name.slice(0, 4).toUpperCase(),
       });
-      return rpcCall("create_project", {
+      const res = (await rpcCall("create_project", {
         p_name: input.name,
         p_department_id: input.departmentId || null,
         p_description: input.description || null,
         p_code: input.code || null,
-      });
+      })) as { success?: boolean; project?: { id?: string } } | null;
+      const projectId = res?.project?.id || storedProj.id;
+      return {
+        ...(res || {}),
+        project: res?.project || storedProj,
+        projectId,
+      };
     },
-    onSuccess: () => {
-      toast.success("Project created");
+    onSuccess: (_, vars) => {
+      if (!vars.silent) {
+        toast.success("Project created");
+      }
       invalidateAll();
     },
-    onError: (err: Error) => {
-      toast.error(err.message || "Failed to create project");
+    onError: (err: Error, vars) => {
+      if (!vars.silent) {
+        toast.error(err.message || "Failed to create project");
+      }
+    },
+  });
+
+  const deleteProject = useMutation({
+    onMutate: async (projectId: string) => {
+      if (callerRole && callerRole !== "admin") {
+        return {};
+      }
+      await queryClient.cancelQueries({ queryKey: ["tasks-workspace"] });
+      const previousData = queryClient.getQueryData(["tasks-workspace"]);
+      queryClient.setQueryData(["tasks-workspace"], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          projects: (old.projects || []).filter((p: any) => p.id !== projectId),
+          tasks: (old.tasks || []).filter((t: any) => t.project_id !== projectId),
+        };
+      });
+      return { previousData };
+    },
+    mutationFn: async (projectId: string) => {
+      await assertAdminRole();
+
+      if (isDemoModeEnabled()) {
+        const deletedTasksCount = getStoredTasks().filter(
+          (t) => t.project_id === projectId
+        ).length;
+        deleteStoredProject(projectId);
+        return {
+          success: true,
+          deleted_project_id: projectId,
+          deleted_tasks_count: deletedTasksCount,
+        };
+      }
+
+      let result: any;
+      try {
+        result = await rpcCall("delete_project", { p_project_id: projectId });
+      } catch (err: any) {
+        const msg = String(err?.message || "");
+        const isMissingRpc =
+          msg.includes("Could not find the function") ||
+          msg.includes("does not exist") ||
+          msg.includes("delete_project");
+        if (!isMissingRpc) {
+          throw err;
+        }
+
+        const res = await fetch(
+          `/api/tasks/projects/${encodeURIComponent(projectId)}`,
+          { method: "DELETE" }
+        );
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(json?.error || "Failed to delete project");
+        }
+        result = json;
+      }
+
+      deleteStoredProject(projectId);
+      return result;
+    },
+    onSuccess: (data: any) => {
+      const deletedCount =
+        typeof data?.deleted_tasks_count === "number" ? data.deleted_tasks_count : null;
+      if (deletedCount !== null) {
+        toast.success(
+          `Project and ${deletedCount} ${deletedCount === 1 ? "task" : "tasks"} permanently deleted`
+        );
+      } else {
+        toast.success("Project and all its tasks permanently deleted");
+      }
+      invalidateAll();
+    },
+    onError: (err: Error, _, context: any) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(["tasks-workspace"], context.previousData);
+      }
+      toast.error(err.message || "Failed to delete project");
     },
   });
 
@@ -438,6 +604,7 @@ export function useTaskMutations() {
       recurrenceId?: string | null;
       autoDueSuggested?: boolean;
       goalId?: string | null;
+      silent?: boolean;
       recurrence?: {
         frequency: "daily" | "weekly" | "monthly" | "every_n_working_days";
         interval_n: number;
@@ -448,6 +615,13 @@ export function useTaskMutations() {
       } | null;
       subtaskTitles?: string[];
     }) => {
+      const caller = await resolveCallerIdentity();
+      if (caller.role === "employee" || caller.role === "team_lead") {
+        if (!caller.userId || !input.assigneeId || input.assigneeId !== caller.userId) {
+          throw new Error("Employees can only assign tasks to themselves");
+        }
+      }
+
       const isSelf = Boolean(input.isSelfAssign);
       const initialStatus: TaskStatus = isSelf ? "in_progress" : "todo";
 
@@ -485,6 +659,7 @@ export function useTaskMutations() {
       addStoredTask({
         title: input.title,
         description: input.description || null,
+        creator_id: caller.userId || undefined,
         assignee_id: input.assigneeId || null,
         priority: input.priority || "medium",
         due_date: input.dueDate || null,
@@ -585,7 +760,9 @@ export function useTaskMutations() {
       return res;
     },
     onSuccess: (res: any, vars: any) => {
-      toast.success("Task created");
+      if (!vars.silent) {
+        toast.success("Task created");
+      }
       invalidateAll();
       if (vars.assigneeId) {
         fetch("/api/tasks/notify", {
@@ -600,15 +777,37 @@ export function useTaskMutations() {
         }).catch(() => {});
       }
     },
-    onError: (err: Error) => {
-      toast.error(err.message || "Failed to create task");
+    onError: (err: Error, vars: any) => {
+      if (!vars?.silent) {
+        toast.error(err.message || "Failed to create task");
+      }
     },
   });
 
   const assignTask = useMutation({
-    mutationFn: async (input: { taskId: string; assigneeId: string | null }) => {
+    mutationFn: async (input: {
+      taskId: string;
+      assigneeId: string | null;
+      silent?: boolean;
+    }) => {
+      const caller = await resolveCallerIdentity();
       const current = getStoredTasks();
       const target = current.find((t) => t.id === input.taskId);
+
+      if (caller.role === "employee" || caller.role === "team_lead") {
+        if (!caller.userId || !input.assigneeId || input.assigneeId !== caller.userId) {
+          throw new Error("Employees can only assign tasks to themselves");
+        }
+        const cachedWorkspace = queryClient.getQueryData(["tasks-workspace"]) as
+          | { tasks?: TaskRecord[] }
+          | undefined;
+        const cachedTask = cachedWorkspace?.tasks?.find((t) => t.id === input.taskId);
+        const currentAssignee = target?.assignee_id ?? cachedTask?.assignee_id ?? null;
+        if (currentAssignee !== null) {
+          throw new Error("Employees cannot reassign assigned tasks");
+        }
+      }
+
       if (target) {
         updateStoredTask({
           ...target,
@@ -621,7 +820,9 @@ export function useTaskMutations() {
       });
     },
     onSuccess: (_, vars) => {
-      toast.success("Task assignment updated");
+      if (!vars.silent) {
+        toast.success("Task assignment updated");
+      }
       invalidateAll(vars.taskId);
       if (vars.assigneeId) {
         fetch("/api/tasks/notify", {
@@ -635,8 +836,10 @@ export function useTaskMutations() {
         }).catch(() => {});
       }
     },
-    onError: (err: Error) => {
-      toast.error(err.message || "Failed to update task assignee");
+    onError: (err: Error, vars) => {
+      if (!vars.silent) {
+        toast.error(err.message || "Failed to update task assignee");
+      }
     },
   });
 
@@ -659,6 +862,7 @@ export function useTaskMutations() {
       taskId: string;
       status: TaskStatus;
       note?: string;
+      silent?: boolean;
     }) => {
       const current = getStoredTasks();
       const target = current.find((t) => t.id === input.taskId);
@@ -689,7 +893,9 @@ export function useTaskMutations() {
       });
     },
     onSuccess: (_, vars) => {
-      toast.success(`Task moved to ${vars.status.replace("_", " ")}`);
+      if (!vars.silent) {
+        toast.success(`Task moved to ${vars.status.replace("_", " ")}`);
+      }
       invalidateAll(vars.taskId);
       fetch("/api/tasks/notify", {
         method: "POST",
@@ -701,37 +907,123 @@ export function useTaskMutations() {
         }),
       }).catch(() => {});
     },
-    onError: (err: Error, _, context: any) => {
+    onError: (err: Error, vars, context: any) => {
       if (context?.previousData) {
         queryClient.setQueryData(["tasks-workspace"], context.previousData);
       }
-      toast.error(err.message || "Failed to update task status");
+      if (!vars.silent) {
+        toast.error(err.message || "Failed to update task status");
+      }
+    },
+  });
+
+  const updateTaskDueDate = useMutation({
+    onMutate: async (vars: { taskId: string; dueDate: string | null; silent?: boolean }) => {
+      await queryClient.cancelQueries({ queryKey: ["tasks-workspace"] });
+      const previousData = queryClient.getQueryData(["tasks-workspace"]);
+      queryClient.setQueryData(["tasks-workspace"], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          tasks: (old.tasks || []).map((t: any) =>
+            t.id === vars.taskId ? { ...t, due_date: vars.dueDate } : t
+          ),
+        };
+      });
+      return { previousData };
+    },
+    mutationFn: async (input: { taskId: string; dueDate: string | null; silent?: boolean }) => {
+      const current = getStoredTasks();
+      const target = current.find((t) => t.id === input.taskId);
+      if (target) {
+        updateStoredTask({
+          ...target,
+          due_date: input.dueDate,
+        });
+      }
+      const { error } = await (supabase as any)
+        .from("tasks")
+        .update({ due_date: input.dueDate })
+        .eq("id", input.taskId);
+      if (error && !isDemoModeEnabled()) {
+        throw new Error(error.message || "Failed to update due date");
+      }
+      return { success: true };
+    },
+    onSuccess: (_, vars) => {
+      if (!vars.silent) {
+        toast.success(vars.dueDate ? "Due date updated" : "Due date cleared");
+      }
+      invalidateAll(vars.taskId);
+    },
+    onError: (err: Error, vars, context: any) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(["tasks-workspace"], context.previousData);
+      }
+      if (!vars.silent) {
+        toast.error(err.message || "Failed to update due date");
+      }
     },
   });
 
   const deleteTask = useMutation({
-    mutationFn: async (taskId: string) => {
-      deleteStoredTask(taskId);
+    mutationFn: async (input: string | { taskId: string; silent?: boolean }) => {
+      await assertAdminRole();
+
+      const taskId = typeof input === "string" ? input : input.taskId;
+      if (isDemoModeEnabled()) {
+        deleteStoredTask(taskId);
+        return { success: true, deleted_task_id: taskId };
+      }
+
+      let result: any;
       try {
-        await supabase.from("tasks").delete().eq("id", taskId);
-      } catch {}
-      return { success: true };
+        result = await rpcCall("delete_task", { p_task_id: taskId });
+      } catch (err: any) {
+        const msg = String(err?.message || "");
+        const isMissingRpc =
+          msg.includes("Could not find the function") ||
+          msg.includes("does not exist") ||
+          msg.includes("delete_task");
+        if (!isMissingRpc) {
+          throw err;
+        }
+
+        const res = await fetch(`/api/tasks/${encodeURIComponent(taskId)}`, {
+          method: "DELETE",
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(json?.error || "Failed to delete task");
+        }
+        result = json;
+      }
+
+      deleteStoredTask(taskId);
+      return result;
     },
-    onSuccess: () => {
-      toast.success("Task deleted", {
-        duration: 6000,
-        action: {
-          label: "Undo",
-          onClick: () => {
-            invalidateAll();
-            toast.info("Task deletion restored");
+    onSuccess: (_, vars) => {
+      const silent = typeof vars === "object" && Boolean(vars.silent);
+      if (!silent) {
+        toast.success("Task deleted", {
+          duration: 6000,
+          action: {
+            label: "Undo",
+            onClick: () => {
+              invalidateAll();
+              toast.info("Task deletion restored");
+            },
           },
-        },
-      });
+        });
+      }
       invalidateAll();
     },
-    onError: (err: Error) => {
-      toast.error(err.message || "Failed to delete task");
+    onError: (err: Error, vars) => {
+      const silent = typeof vars === "object" && Boolean(vars.silent);
+      const isForbidden = err.message.includes("Only administrators");
+      if (!silent || isForbidden) {
+        toast.error(err.message || "Failed to delete task");
+      }
     },
   });
 
@@ -823,9 +1115,11 @@ export function useTaskMutations() {
 
   return {
     createProject,
+    deleteProject,
     createTask,
     assignTask,
     updateTaskStatus,
+    updateTaskDueDate,
     deleteTask,
     addComment,
     logTime,

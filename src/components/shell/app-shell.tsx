@@ -26,6 +26,7 @@ export interface AppSessionState {
   organizationId: string | null;
   userRole: AppUserRole;
   fullName: string | null;
+  userEmail?: string | null;
   timezone: string;
   isLoaded: boolean;
   departmentName?: string | null;
@@ -38,6 +39,7 @@ const AppSessionContext = React.createContext<AppSessionState>({
   organizationId: null,
   userRole: "employee",
   fullName: null,
+  userEmail: null,
   timezone: "Asia/Kolkata",
   isLoaded: false,
   departmentName: null,
@@ -110,6 +112,7 @@ function getInitialSession(propRole?: AppUserRole): AppSessionState {
     organizationId: cached?.organizationId || null,
     userRole: defaultRole,
     fullName: cached?.fullName || null,
+    userEmail: cached?.userEmail || null,
     timezone: cached?.timezone || "Asia/Kolkata",
     isLoaded: Boolean(cached?.fullName),
     departmentName: cached?.departmentName || null,
@@ -179,6 +182,7 @@ export function AppShell({
       let resolvedUserId: string | null = null;
       let resolvedOrgId: string | null = null;
       let resolvedName: string | null = null;
+      let resolvedEmail: string | null = null;
       let resolvedDeptName: string | null = null;
       let resolvedJobTitle: string | null = null;
       let resolvedReqMfa: boolean = true;
@@ -193,6 +197,7 @@ export function AppShell({
 
         if (user) {
           resolvedUserId = user.id;
+          resolvedEmail = user.email ?? null;
 
           if (!propUserRole) {
             const metaRole =
@@ -259,9 +264,15 @@ export function AppShell({
           ]);
 
           const empProfile = empResult?.data;
+          const metaName =
+            (user.user_metadata as any)?.full_name?.trim?.() ||
+            (user.user_metadata as any)?.name?.trim?.() ||
+            null;
+          const emailPrefix = user.email ? user.email.split("@")[0] : null;
+          resolvedName =
+            empProfile?.full_name?.trim?.() || metaName || emailPrefix || null;
 
           if (empProfile) {
-            resolvedName = empProfile.full_name || null;
             resolvedTz = empProfile.timezone || "Asia/Kolkata";
             resolvedOrgId = resolvedOrgId || empProfile.organization_id || null;
             resolvedDeptName = empProfile.departments?.name || null;
@@ -363,6 +374,7 @@ export function AppShell({
         organizationId: resolvedOrgId,
         userRole: finalRole,
         fullName: resolvedName,
+        userEmail: resolvedEmail,
         timezone: resolvedTz,
         departmentName: resolvedDeptName,
         jobTitleName: resolvedJobTitle,

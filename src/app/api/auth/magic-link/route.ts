@@ -93,6 +93,15 @@ export async function POST(request: NextRequest) {
 
         if (linkError) {
           console.warn("[MagicLink Gen Error]:", linkError.message);
+          const isConfigOrAuthError = /invalid api key|unauthorized|jwt|fetch failed/i.test(
+            linkError.message || ""
+          );
+          if (isConfigOrAuthError && process.env.NODE_ENV !== "production") {
+            return NextResponse.json(
+              { error: `Supabase admin generateLink failed: ${linkError.message}` },
+              { status: 500 }
+            );
+          }
         } else if (linkData?.properties) {
           actionLink = linkData.properties.action_link;
           otpCode = linkData.properties.email_otp;
@@ -109,10 +118,11 @@ export async function POST(request: NextRequest) {
         });
         if (!sendResult.success) {
           console.error("[MagicLink Email Error]:", sendResult.error);
-          return NextResponse.json(
-            { error: "Unable to deliver sign-in link email right now. Please try again later." },
-            { status: 502 }
-          );
+          const detail =
+            process.env.NODE_ENV !== "production" && sendResult.error
+              ? `Unable to deliver sign-in link email: ${sendResult.error}`
+              : "Unable to deliver sign-in link email right now. Please try again later.";
+          return NextResponse.json({ error: detail }, { status: 502 });
         }
       }
     } else {

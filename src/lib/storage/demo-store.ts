@@ -669,6 +669,12 @@ export function addStoredProject(proj: Omit<DemoProject, "id"> & { id?: string }
 export function deleteStoredProject(id: string): void {
   const current = getStoredProjects();
   saveStoredProjects(current.filter((p) => p.id !== id));
+
+  const currentTasks = readKey<DemoTask[]>(KEYS.tasks, []);
+  const remainingTasks = currentTasks.filter((t) => t.project_id !== id);
+  if (remainingTasks.length !== currentTasks.length) {
+    saveStoredTasks(remainingTasks);
+  }
 }
 
 // --- TASKS ---

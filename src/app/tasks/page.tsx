@@ -20,6 +20,7 @@ import { TaskType, TaskRecurrence } from "@/features/tasks/types";
 import { calculateWorkingDaysAhead } from "@/lib/date/working-days";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   CheckSquare,
@@ -41,16 +42,25 @@ import {
   Sparkles,
   Layers,
   ArrowRight,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   ChevronDown,
+  ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Check,
   Target,
+  Users,
+  Download,
+  Trash2,
 } from "lucide-react";
 
 const STATUS_COLUMNS: Array<{ key: TaskStatus; label: string; hint: string }> = [
   { key: "todo", label: "To Do", hint: "Queued work" },
   { key: "in_progress", label: "In Progress", hint: "Active execution" },
   { key: "blocked", label: "Blocked", hint: "Needs unblocking" },
-  { key: "done", label: "Done", hint: "Completed" },
+  { key: "done", label: "Completed", hint: "Finished work" },
   { key: "cancelled", label: "Cancelled", hint: "Closed without delivery" },
 ];
 
@@ -69,12 +79,12 @@ function DueBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap",
+        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold max-w-full",
         info.colorClass
       )}
     >
-      <Clock className="w-3 h-3" />
-      <span>{info.label}</span>
+      <Clock className="w-2.5 h-2.5 shrink-0" />
+      <span className="truncate">{info.label}</span>
     </span>
   );
 }
@@ -89,7 +99,8 @@ function TaskTypeBadge({ typeName }: { typeName: string | null | undefined }) {
 }
 
 function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
+  const stripped = name.replace(/^You\s*\(([^)]+)\)$/i, "$1").trim();
+  const parts = stripped.split(/\s+/);
   if (parts.length === 0 || !parts[0]) return "??";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
@@ -200,10 +211,368 @@ function FilterDropdownMenu({
   );
 }
 
+type TableSortColumn = "title" | "assignee" | "status" | "priority" | "due_date";
+
+const STATUS_SORT_ORDER: Record<TaskStatus, number> = {
+  todo: 0,
+  in_progress: 1,
+  blocked: 2,
+  done: 3,
+  cancelled: 4,
+};
+
+const PRIORITY_SORT_ORDER: Record<TaskPriority, number> = {
+  low: 0,
+  medium: 1,
+  high: 2,
+  urgent: 3,
+};
+
+function SortableTableHeader({
+  label,
+  column,
+  activeColumn,
+  direction,
+  onSort,
+}: {
+  label: string;
+  column: TableSortColumn;
+  activeColumn: TableSortColumn | null;
+  direction: "asc" | "desc";
+  onSort: (col: TableSortColumn) => void;
+}) {
+  const isActive = activeColumn === column;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(column)}
+      className={cn(
+        "inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider cursor-pointer select-none transition-colors",
+        isActive ? "text-black" : "text-[#4D4D4D] hover:text-black"
+      )}
+    >
+      <span>{label}</span>
+      {isActive ? (
+        direction === "asc" ? (
+          <ArrowUp className="w-3 h-3 text-black shrink-0" />
+        ) : (
+          <ArrowDown className="w-3 h-3 text-black shrink-0" />
+        )
+      ) : (
+        <ArrowUpDown className="w-3 h-3 text-[#A3A3A3] shrink-0" />
+      )}
+    </button>
+  );
+}
+
+interface TaskTableRowProps {
+  task: TaskRecord;
+  assigneeName: string;
+  initials: string;
+  typeName: string | null | undefined;
+  projectName: string | null | undefined;
+  userId: string | null;
+  canManageProjects: boolean;
+  isSelected: boolean;
+  isStatusPending: boolean;
+  onToggleSelect: (taskId: string) => void;
+  onSelect: (taskId: string) => void;
+  onUpdateStatus: (taskId: string, status: TaskStatus, note?: string) => void;
+  onRejectTask: (task: TaskRecord) => void;
+  onCompleteTask: (task: TaskRecord) => void;
+}
+
+/**
+ * Compact enterprise table row shared across flat and assignee-grouped List views.
+ */
+function TaskTableRow({
+  task,
+  assigneeName,
+  initials,
+  typeName,
+  projectName,
+  userId,
+  canManageProjects,
+  isSelected,
+  isStatusPending,
+  onToggleSelect,
+  onSelect,
+  onUpdateStatus,
+  onRejectTask,
+  onCompleteTask,
+}: TaskTableRowProps) {
+  const canAcceptOrReject =
+    task.status === "todo" && task.assignee_id === userId;
+  const canActInProgress =
+    task.status === "in_progress" &&
+    (task.assignee_id === userId || canManageProjects);
+
+  return (
+    <tr
+      onClick={() => onSelect(task.id)}
+      className={cn(
+        "hover:bg-gray-50 cursor-pointer transition-colors",
+        isSelected && "bg-[#F5F5F5]"
+      )}
+    >
+      <td
+        className="py-2.5 px-3 w-10 align-middle"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <input
+          type="checkbox"
+          checked={isSelected}
+          aria-label={`Select task ${task.title}`}
+          onChange={() => onToggleSelect(task.id)}
+          className="h-3.5 w-3.5 rounded border-[#B3B3B3] accent-black cursor-pointer align-middle"
+        />
+      </td>
+      <td className="py-2.5 px-3 min-w-[220px] max-w-[340px]">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span
+            className={cn(
+              "font-semibold text-xs text-black",
+              task.status === "cancelled" && "line-through text-[#808080]"
+            )}
+          >
+            {task.title}
+          </span>
+          {task.assignee_id && task.creator_id === task.assignee_id && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-[#F5F5F5] text-black border border-[#E6E6E6]">
+              Self
+            </span>
+          )}
+        </div>
+        {projectName && (
+          <div className="mt-0.5 flex items-center gap-1.5">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#F5F5F5] border border-[#E6E6E6] text-[#4D4D4D] truncate max-w-[200px]">
+              {projectName}
+            </span>
+          </div>
+        )}
+      </td>
+      <td className="py-2.5 px-3 whitespace-nowrap">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="w-6 h-6 rounded-full bg-[#E6E6E6] text-black font-semibold text-[10px] flex items-center justify-center shrink-0">
+            {initials}
+          </span>
+          <span className="text-xs font-medium text-black truncate max-w-[160px]">
+            {assigneeName}
+          </span>
+        </div>
+      </td>
+      <td
+        className="py-2.5 px-3 whitespace-nowrap"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-1.5">
+          <StatusPill
+            status={task.status}
+            label={task.status === "done" ? "Completed" : undefined}
+          />
+          {canAcceptOrReject && (
+            <>
+              <button
+                type="button"
+                disabled={isStatusPending}
+                onClick={() => onUpdateStatus(task.id, "in_progress", "Accepted assigned task")}
+                className="px-2 py-1 rounded bg-black hover:bg-[#1A1A1A] text-white text-[10px] font-semibold cursor-pointer shadow-xs disabled:opacity-50"
+              >
+                Accept
+              </button>
+              <button
+                type="button"
+                disabled={isStatusPending}
+                onClick={() => onRejectTask(task)}
+                className="px-2 py-1 rounded border border-[#E6E6E6] bg-white hover:bg-red-50 hover:text-[#FF1493] hover:border-red-200 text-[#4D4D4D] text-[10px] font-semibold cursor-pointer disabled:opacity-50"
+              >
+                Reject
+              </button>
+            </>
+          )}
+          {canActInProgress && (
+            <>
+              <button
+                type="button"
+                aria-pressed="true"
+                disabled={isStatusPending}
+                onClick={() => {
+                  if (task.status !== "in_progress") {
+                    onUpdateStatus(task.id, "in_progress");
+                  }
+                }}
+                className="px-2 py-1 rounded bg-[#B7FF00]/30 border border-[#84CC16] text-black text-[10px] font-semibold cursor-pointer disabled:opacity-50"
+              >
+                In Progress
+              </button>
+              <button
+                type="button"
+                disabled={isStatusPending}
+                onClick={() => onCompleteTask(task)}
+                className="px-2 py-1 rounded bg-black hover:bg-[#1A1A1A] text-white text-[10px] font-semibold cursor-pointer shadow-xs disabled:opacity-50"
+              >
+                Completed
+              </button>
+            </>
+          )}
+        </div>
+      </td>
+      <td className="py-2.5 px-3 whitespace-nowrap">
+        <StatusPill status={task.priority} />
+      </td>
+      <td className="py-2.5 px-3 whitespace-nowrap">
+        <div className="flex items-center gap-1.5">
+          {typeName ? (
+            <TaskTypeBadge typeName={typeName} />
+          ) : (
+            <span className="text-xs text-[#808080]">—</span>
+          )}
+          {task.recurrence_id && (
+            <span
+              title="Recurring Task"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#F5F5F5] border border-[#E6E6E6] text-black"
+            >
+              <Repeat className="w-2.5 h-2.5" />
+              Recurring
+            </span>
+          )}
+        </div>
+      </td>
+      <td className="py-2.5 px-3 whitespace-nowrap">
+        {task.due_date ? (
+          <DueBadge dueDate={task.due_date} status={task.status} />
+        ) : (
+          <span className="text-xs text-[#808080]">—</span>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+interface KanbanTaskCardProps {
+  task: TaskRecord;
+  assigneeName: string;
+  creatorName: string;
+  initials: string;
+  typeName: string | null | undefined;
+  projectName: string | null | undefined;
+  onSelect: (taskId: string) => void;
+}
+
+/**
+ * Always-expanded Kanban task card with priority pill, read-only status pill, due badge, and assignee row.
+ */
+function KanbanTaskCard({
+  task,
+  assigneeName,
+  creatorName,
+  initials,
+  typeName,
+  projectName,
+  onSelect,
+}: KanbanTaskCardProps) {
+  const isCancelled = task.status === "cancelled";
+
+  return (
+    <button
+      type="button"
+      draggable={false}
+      onClick={() => onSelect(task.id)}
+      className={cn(
+        "w-full min-w-0 text-left p-2.5 rounded-[12px] border border-[#E6E6E6] shadow-none transition-all cursor-pointer flex flex-col justify-between gap-2.5 shrink-0 focus-visible:ring-2 focus-visible:ring-black focus-visible:outline-none",
+        isCancelled
+          ? "bg-white/90 hover:bg-white hover:border-black/30 opacity-75 hover:opacity-100"
+          : "bg-white hover:border-black/40"
+      )}
+    >
+      <div className="space-y-2 w-full min-w-0">
+        <div className="flex flex-wrap items-center justify-between gap-1.5 min-h-[22px] w-full min-w-0">
+          <StatusPill
+            status={task.priority}
+            showIcon={true}
+            className="shrink-0 whitespace-nowrap"
+          />
+          <StatusPill
+            status={task.status}
+            label={task.status === "done" ? "Completed" : undefined}
+            className="shrink-0 whitespace-nowrap"
+          />
+        </div>
+
+        {(typeName || task.recurrence_id || projectName) && (
+          <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+            {typeName && <TaskTypeBadge typeName={typeName} />}
+            {task.recurrence_id && (
+              <span title="Recurring Task" className="inline-flex items-center text-xs text-black">
+                <Repeat className="w-3 h-3 text-black" />
+              </span>
+            )}
+            {projectName && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#F5F5F5] border border-[#E6E6E6] text-[#4D4D4D] truncate max-w-full">
+                {projectName}
+              </span>
+            )}
+          </div>
+        )}
+
+        <p
+          className={cn(
+            "block w-full text-xs font-semibold leading-snug line-clamp-2",
+            isCancelled
+              ? "text-[#4D4D4D] line-through decoration-[#B3B3B3]"
+              : "text-black"
+          )}
+          title={task.title}
+        >
+          {task.title}
+        </p>
+
+        <div className="flex items-center flex-wrap gap-1.5 min-h-[22px] text-[11px] w-full min-w-0">
+          {task.due_date ? (
+            <DueBadge dueDate={task.due_date} status={task.status} />
+          ) : (
+            <span className="inline-flex items-center gap-1 text-[10px] text-[#A3A3A3]">
+              <Calendar className="w-2.5 h-2.5" /> No deadline
+            </span>
+          )}
+          {task.assignee_id && task.creator_id === task.assignee_id && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-[#F5F5F5] text-black border border-[#E6E6E6] truncate max-w-full">
+              <UserCheck className="w-2.5 h-2.5" />
+              Self
+            </span>
+          )}
+          {task.assignee_id && task.creator_id !== task.assignee_id && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-normal bg-[#F5F5F5] text-[#808080] truncate max-w-full">
+              From: {creatorName}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="w-full pt-2 border-t border-[#E6E6E6]">
+        <div className="flex items-center gap-1.5 min-h-[22px] min-w-0 w-full">
+          <span className="w-5 h-5 rounded-full bg-[#E6E6E6] text-black font-semibold text-[9px] flex items-center justify-center shrink-0">
+            {initials}
+          </span>
+          <span className="truncate font-medium text-[#4D4D4D] text-[11px] flex-1 min-w-0">
+            {assigneeName}
+          </span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
 function TasksWorkspaceContent() {
-  const { userId, userRole } = useAppSession();
+  const {
+    userId,
+    userRole,
+    fullName: currentUserName,
+    userEmail: currentUserEmail,
+  } = useAppSession();
   const { data, isLoading, refetch } = useTasksData(Boolean(userId));
-  const mutations = useTaskMutations();
+  const mutations = useTaskMutations(userRole, userId);
+  const isRegularEmployee = userRole === "employee" || userRole === "team_lead";
 
   const [viewMode, setViewMode] = React.useState<"board" | "list">("board");
   const [scope, setScope] = React.useState<"mine" | "team">(
@@ -219,8 +588,73 @@ function TasksWorkspaceContent() {
   const [recurringFilter, setRecurringFilter] = React.useState<string>("all");
 
   const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);
+  const [selectedTaskIds, setSelectedTaskIds] = React.useState<Set<string>>(() => new Set());
+  const [tableSortBy, setTableSortBy] = React.useState<TableSortColumn | null>(null);
+  const [tableSortDir, setTableSortDir] = React.useState<"asc" | "desc">("asc");
+  const [groupByAssignee, setGroupByAssignee] = React.useState<boolean>(false);
+  const [groupByProject, setGroupByProject] = React.useState<boolean>(false);
+  const [collapsedAssigneeGroups, setCollapsedAssigneeGroups] = React.useState<Record<string, boolean>>({});
+  const [expandedProjectIds, setExpandedProjectIds] = React.useState<Record<string, boolean>>({});
+  const [tablePage, setTablePage] = React.useState<number>(1);
+  const [isBulkUpdating, setIsBulkUpdating] = React.useState<boolean>(false);
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = React.useState<boolean>(false);
+  const [bulkDueDateOpen, setBulkDueDateOpen] = React.useState<boolean>(false);
+  const [bulkCustomDueDate, setBulkCustomDueDate] = React.useState<string>("");
+  const [expandedColumn, setExpandedColumn] = React.useState<string | null>(null);
+  const boardContainerRef = React.useRef<HTMLDivElement | null>(null);
   const [createTaskOpen, setCreateTaskOpen] = React.useState(false);
   const [createProjectOpen, setCreateProjectOpen] = React.useState(false);
+  const [projectToDelete, setProjectToDelete] = React.useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [taskToDelete, setTaskToDelete] = React.useState<TaskRecord | null>(null);
+  const [rejectingTask, setRejectingTask] = React.useState<TaskRecord | null>(null);
+  const [rejectReason, setRejectReason] = React.useState("");
+  const [dueDateError, setDueDateError] = React.useState("");
+
+  const toggleColumnAccordion = React.useCallback((statusId: string) => {
+    setExpandedColumn((prev) => (prev === statusId ? null : statusId));
+  }, []);
+
+  React.useEffect(() => {
+    if (!expandedColumn) return;
+
+    const handleOutsideMouseDown = (event: MouseEvent) => {
+      if (
+        selectedTaskId ||
+        createTaskOpen ||
+        createProjectOpen ||
+        projectToDelete ||
+        taskToDelete ||
+        rejectingTask
+      ) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (!target || !boardContainerRef.current) return;
+
+      // Keep column open when interacting inside a column or switching between columns
+      if (target.closest("[data-kanban-column='true']")) {
+        return;
+      }
+
+      setExpandedColumn(null);
+    };
+
+    document.addEventListener("mousedown", handleOutsideMouseDown);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideMouseDown);
+    };
+  }, [
+    expandedColumn,
+    selectedTaskId,
+    createTaskOpen,
+    createProjectOpen,
+    projectToDelete,
+    taskToDelete,
+    rejectingTask,
+  ]);
 
   // Active Holidays for working day calculation
   const [holidays, setHolidays] = React.useState<Array<{ date: string }>>([]);
@@ -287,10 +721,6 @@ function TasksWorkspaceContent() {
   const [logTimeMinutes, setLogTimeMinutes] = React.useState<string>("60");
   const [logTimeNote, setLogTimeNote] = React.useState<string>("");
 
-  // Blocked Reason Inline Prompt State
-  const [blockingTaskId, setBlockingTaskId] = React.useState<string | null>(null);
-  const [blockingReason, setBlockingReason] = React.useState<string>("");
-
   React.useEffect(() => {
     if (userId && !newAssigneeId) {
       setNewAssigneeId(userId);
@@ -302,6 +732,32 @@ function TasksWorkspaceContent() {
   const [projCode, setProjCode] = React.useState("");
   const [projDeptId, setProjDeptId] = React.useState("");
   const [projDesc, setProjDesc] = React.useState("");
+  const [projInitialTasks, setProjInitialTasks] = React.useState<
+    Array<{ localId: string; title: string; assigneeId: string | null; dueDate: string }>
+  >([]);
+  const [projTaskDraftTitle, setProjTaskDraftTitle] = React.useState("");
+  const [projTaskDraftAssignee, setProjTaskDraftAssignee] = React.useState("");
+  const [projTaskDraftDueDate, setProjTaskDraftDueDate] = React.useState(() =>
+    getPresetDateIso(0)
+  );
+  const [isCreatingProjectWithTasks, setIsCreatingProjectWithTasks] = React.useState(false);
+
+  const handleAddInitialProjectTask = React.useCallback(() => {
+    const trimmed = projTaskDraftTitle.trim();
+    if (!trimmed || !projTaskDraftDueDate) return;
+    setProjInitialTasks((prev) => [
+      ...prev,
+      {
+        localId: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        title: trimmed,
+        assigneeId: isRegularEmployee ? userId || null : projTaskDraftAssignee || null,
+        dueDate: projTaskDraftDueDate,
+      },
+    ]);
+    setProjTaskDraftTitle("");
+    setProjTaskDraftAssignee("");
+    setProjTaskDraftDueDate(getPresetDateIso(0));
+  }, [projTaskDraftTitle, projTaskDraftAssignee, projTaskDraftDueDate, isRegularEmployee, userId]);
 
   // Drawer interactions state
   const [commentBody, setCommentBody] = React.useState("");
@@ -310,7 +766,6 @@ function TasksWorkspaceContent() {
   );
   const [timeMinutes, setTimeMinutes] = React.useState("30");
   const [timeNote, setTimeNote] = React.useState("");
-  const [cancelReason, setCancelReason] = React.useState("");
 
   // Open ?task=<id> from notification deep link
   React.useEffect(() => {
@@ -361,31 +816,144 @@ function TasksWorkspaceContent() {
     return map;
   }, [projects]);
 
+  const currentUserEmp = React.useMemo(() => {
+    if (!userId && !currentUserName && !currentUserEmail) return undefined;
+    const byId = userId ? employees.find((e) => e.id === userId) : undefined;
+    if (byId) return byId;
+    const targetName = currentUserName?.trim().toLowerCase();
+    if (targetName && targetName !== "you") {
+      const byName = employees.find(
+        (e) => e.full_name?.trim().toLowerCase() === targetName
+      );
+      if (byName) return byName;
+    }
+    const targetEmail = currentUserEmail?.trim().toLowerCase();
+    if (targetEmail) {
+      return employees.find(
+        (e) => e.email?.trim().toLowerCase() === targetEmail
+      );
+    }
+    return undefined;
+  }, [employees, userId, currentUserName, currentUserEmail]);
+
+  const actualCurrentUserName = React.useMemo(() => {
+    const empName = currentUserEmp?.full_name?.trim();
+    if (empName && empName !== "You") return empName;
+    const sessionName = currentUserName?.trim();
+    if (sessionName && sessionName !== "You") return sessionName;
+    const emailSource = currentUserEmp?.email || currentUserEmail || "";
+    if (emailSource.includes("@")) return emailSource.split("@")[0];
+    if (emailSource) return emailSource;
+    return null;
+  }, [currentUserEmp, currentUserName, currentUserEmail]);
+
+  const isCurrentUserEmployee = React.useCallback(
+    (emp: { id: string; full_name?: string | null; email?: string | null }) => {
+      if (userId && emp.id === userId) return true;
+      const empName = emp.full_name?.trim().toLowerCase();
+      if (
+        actualCurrentUserName &&
+        empName &&
+        empName === actualCurrentUserName.trim().toLowerCase()
+      ) {
+        return true;
+      }
+      const empEmail = emp.email?.trim().toLowerCase();
+      if (
+        currentUserEmail &&
+        empEmail &&
+        empEmail === currentUserEmail.trim().toLowerCase()
+      ) {
+        return true;
+      }
+      return false;
+    },
+    [userId, actualCurrentUserName, currentUserEmail]
+  );
+
   const formatPerson = (id: string | null) => {
     if (!id) return "Unassigned";
-    if (id === userId) return employeeNameMap.get(id) || "You";
+    const empMatch = employees.find((e) => e.id === id);
+    if (id === userId || (empMatch && isCurrentUserEmployee(empMatch))) {
+      const mapName = employeeNameMap.get(id)?.trim();
+      const resolved =
+        (mapName && mapName !== "You" ? mapName : null) || actualCurrentUserName;
+      return resolved ? `You (${resolved})` : "You";
+    }
     return employeeNameMap.get(id) || "Team Member";
+  };
+
+  const formatAssigneeOptionLabel = (emp: {
+    id: string;
+    full_name: string | null;
+    email: string;
+  }) => {
+    if (!isCurrentUserEmployee(emp)) {
+      return emp.full_name || emp.email || "Team Member";
+    }
+    const empName = emp.full_name?.trim();
+    const resolved =
+      (empName && empName !== "You" ? empName : null) ||
+      actualCurrentUserName ||
+      (emp.email ? emp.email.split("@")[0] : null);
+    return resolved ? `You (${resolved})` : "You";
   };
 
   // Permitted assignee choices for creating/reassigning tasks according to authority hierarchy
   const assignableEmployees = React.useMemo(() => {
+    let list: typeof employees;
     if (userRole === "admin") {
-      return employees;
-    }
-    if (userRole === "hr") {
-      return employees.filter(
-        (e) => e.id === userId || e.role === "employee" || e.role === "hr" || e.role === "manager"
-      );
-    }
-    if (userRole === "manager") {
-      return employees.filter(
+      list = employees;
+    } else if (userRole === "hr") {
+      list = employees.filter(
         (e) =>
-          e.id === userId ||
+          isCurrentUserEmployee(e) ||
+          e.role === "employee" ||
+          e.role === "hr" ||
+          e.role === "manager"
+      );
+    } else if (userRole === "manager") {
+      list = employees.filter(
+        (e) =>
+          isCurrentUserEmployee(e) ||
           (e.role === "employee" && (!e.manager_id || e.manager_id === userId))
       );
+    } else {
+      list = employees.filter((e) => isCurrentUserEmployee(e));
     }
-    return employees.filter((e) => e.id === userId);
-  }, [employees, userId, userRole]);
+
+    const deduped: typeof employees = [];
+    let seenSelf = false;
+    for (const emp of list) {
+      if (isCurrentUserEmployee(emp)) {
+        if (seenSelf) continue;
+        seenSelf = true;
+      }
+      deduped.push(emp);
+    }
+
+    if (userId && !seenSelf) {
+      const existingSelf = employees.find((e) => isCurrentUserEmployee(e));
+      const selfOption = existingSelf || {
+        id: userId,
+        full_name: actualCurrentUserName || currentUserEmail || "Current User",
+        email: currentUserEmail || "",
+        manager_id: null,
+        status: "active",
+        role: userRole,
+      };
+      return [selfOption, ...deduped];
+    }
+
+    return deduped;
+  }, [
+    employees,
+    userId,
+    userRole,
+    actualCurrentUserName,
+    currentUserEmail,
+    isCurrentUserEmployee,
+  ]);
 
   // Workload calculations: open tasks and due this week
   const isDueThisWeek = React.useCallback((dueDateStr: string | null) => {
@@ -417,7 +985,6 @@ function TasksWorkspaceContent() {
   }, [employees, tasks, isDueThisWeek]);
 
   // Group task types: user's department first, then General, then other departments
-  const currentUserEmp = employees.find((e) => e.id === userId);
   const userDeptId = (currentUserEmp as any)?.department_id || null;
 
   const groupedTaskTypes = React.useMemo(() => {
@@ -556,7 +1123,11 @@ function TasksWorkspaceContent() {
           return false;
         }
       }
-      if (statusFilter !== "all" && t.status !== statusFilter) return false;
+      if (statusFilter === "open") {
+        if (t.status === "done" || t.status === "cancelled") return false;
+      } else if (statusFilter !== "all" && t.status !== statusFilter) {
+        return false;
+      }
       if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
       if (typeFilter !== "all" && t.task_type_id !== typeFilter) return false;
       if (recurringFilter === "recurring" && !t.recurrence_id) return false;
@@ -595,6 +1166,322 @@ function TasksWorkspaceContent() {
     searchQuery,
   ]);
 
+  const handleSortTableColumn = React.useCallback(
+    (column: TableSortColumn) => {
+      if (tableSortBy === column) {
+        setTableSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+      } else {
+        setTableSortBy(column);
+        setTableSortDir("asc");
+      }
+    },
+    [tableSortBy]
+  );
+
+  const toggleTableTaskSelection = React.useCallback((taskId: string) => {
+    setSelectedTaskIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  }, []);
+
+  const toggleAssigneeGroup = React.useCallback((groupKey: string) => {
+    setCollapsedAssigneeGroups((prev) => ({
+      ...prev,
+      [groupKey]: !prev[groupKey],
+    }));
+  }, []);
+
+  const toggleProjectGroup = React.useCallback((projectKey: string) => {
+    setExpandedProjectIds((prev) => ({
+      ...prev,
+      [projectKey]: !(prev[projectKey] ?? true),
+    }));
+  }, []);
+
+  React.useEffect(() => {
+    if (projectFilter !== "all") {
+      const targetKey = projectFilter === "none" ? "__no_project__" : projectFilter;
+      setExpandedProjectIds((prev) =>
+        prev[targetKey] === true ? prev : { ...prev, [targetKey]: true }
+      );
+    }
+  }, [projectFilter]);
+
+  React.useEffect(() => {
+    setTablePage(1);
+  }, [
+    scope,
+    statusFilter,
+    priorityFilter,
+    typeFilter,
+    recurringFilter,
+    dueFilter,
+    assigneeFilter,
+    projectFilter,
+    searchQuery,
+    tableSortBy,
+    tableSortDir,
+    groupByAssignee,
+    groupByProject,
+  ]);
+
+  React.useEffect(() => {
+    setSelectedTaskIds((prev) => {
+      if (prev.size === 0) return prev;
+      const visibleIds = new Set(filteredTasks.map((t) => t.id));
+      let changed = false;
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (visibleIds.has(id)) next.add(id);
+        else changed = true;
+      });
+      return changed ? next : prev;
+    });
+  }, [filteredTasks]);
+
+  const runBulkTaskBatch = React.useCallback(
+    async (
+      runItem: (taskId: string) => Promise<unknown>,
+      formatSuccess: (count: number) => string,
+      errorPrefix: string
+    ) => {
+      const targetIds = Array.from(selectedTaskIds);
+      if (targetIds.length === 0 || isBulkUpdating) return;
+      setIsBulkUpdating(true);
+      try {
+        const results = await Promise.allSettled(targetIds.map((id) => runItem(id)));
+        const failedIds = new Set<string>();
+        results.forEach((res, idx) => {
+          if (res.status === "rejected") failedIds.add(targetIds[idx]);
+        });
+        const succeeded = targetIds.length - failedIds.size;
+        if (failedIds.size === 0) {
+          setSelectedTaskIds(new Set());
+          toast.success(formatSuccess(succeeded));
+        } else {
+          setSelectedTaskIds(failedIds);
+          toast.error(
+            succeeded > 0
+              ? `Updated ${succeeded} tasks, ${failedIds.size} failed`
+              : `${errorPrefix} for ${failedIds.size} ${failedIds.size === 1 ? "task" : "tasks"}`
+          );
+        }
+      } finally {
+        setIsBulkUpdating(false);
+      }
+    },
+    [selectedTaskIds, isBulkUpdating]
+  );
+
+  const handleBulkDueDateChange = React.useCallback(
+    async (dueDate: string | null) => {
+      setBulkDueDateOpen(false);
+      setBulkCustomDueDate("");
+      await runBulkTaskBatch(
+        (taskId) =>
+          mutations.updateTaskDueDate.mutateAsync({
+            taskId,
+            dueDate,
+            silent: true,
+          }),
+        (count) =>
+          dueDate
+            ? `Updated due date for ${count} ${count === 1 ? "task" : "tasks"}`
+            : `Cleared due date for ${count} ${count === 1 ? "task" : "tasks"}`,
+        "Failed to update due date"
+      );
+    },
+    [runBulkTaskBatch, mutations.updateTaskDueDate]
+  );
+
+  const handleBulkAssign = React.useCallback(
+    async (assigneeId: string | null) => {
+      await runBulkTaskBatch(
+        (taskId) =>
+          mutations.assignTask.mutateAsync({
+            taskId,
+            assigneeId,
+            silent: true,
+          }),
+        (count) => `Reassigned ${count} ${count === 1 ? "task" : "tasks"}`,
+        "Failed to reassign"
+      );
+    },
+    [runBulkTaskBatch, mutations.assignTask]
+  );
+
+  const handleBulkDelete = React.useCallback(async () => {
+    setBulkDeleteConfirmOpen(false);
+    await runBulkTaskBatch(
+      (taskId) =>
+        mutations.deleteTask.mutateAsync({
+          taskId,
+          silent: true,
+        }),
+      (count) => `Deleted ${count} ${count === 1 ? "task" : "tasks"}`,
+      "Failed to delete"
+    );
+  }, [runBulkTaskBatch, mutations.deleteTask]);
+
+  const handleBulkExportCsv = React.useCallback(() => {
+    const selectedTasks = filteredTasks.filter((t) => selectedTaskIds.has(t.id));
+    if (selectedTasks.length === 0) return;
+
+    const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
+    const statusLabelMap = new Map(STATUS_COLUMNS.map((c) => [c.key, c.label]));
+    const headers = ["Title", "Assignee", "Status", "Priority", "Project", "Due Date"];
+    const rows = selectedTasks.map((t) => [
+      escapeCsv(t.title),
+      escapeCsv(formatPerson(t.assignee_id)),
+      escapeCsv(statusLabelMap.get(t.status) || t.status),
+      escapeCsv(t.priority),
+      escapeCsv(t.project_id ? projectNameMap.get(t.project_id) || "Project" : ""),
+      escapeCsv(t.due_date || ""),
+    ]);
+    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `tasks-export-${getPresetDateIso(0)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${selectedTasks.length} ${selectedTasks.length === 1 ? "task" : "tasks"} to CSV`);
+  }, [filteredTasks, selectedTaskIds, formatPerson, projectNameMap]);
+
+  const TABLE_PAGE_SIZE = 20;
+
+  const sortedListTasks = React.useMemo(() => {
+    if (!tableSortBy) return filteredTasks;
+    const copy = [...filteredTasks];
+    const dir = tableSortDir === "asc" ? 1 : -1;
+
+    copy.sort((a, b) => {
+      if (tableSortBy === "title") {
+        return a.title.localeCompare(b.title) * dir;
+      }
+      if (tableSortBy === "assignee") {
+        const aName = formatPerson(a.assignee_id);
+        const bName = formatPerson(b.assignee_id);
+        return aName.localeCompare(bName) * dir;
+      }
+      if (tableSortBy === "status") {
+        return (STATUS_SORT_ORDER[a.status] - STATUS_SORT_ORDER[b.status]) * dir;
+      }
+      if (tableSortBy === "priority") {
+        return (PRIORITY_SORT_ORDER[a.priority] - PRIORITY_SORT_ORDER[b.priority]) * dir;
+      }
+      if (tableSortBy === "due_date") {
+        if (!a.due_date && !b.due_date) return 0;
+        if (!a.due_date) return 1;
+        if (!b.due_date) return -1;
+        return a.due_date.localeCompare(b.due_date) * dir;
+      }
+      return 0;
+    });
+
+    return copy;
+  }, [filteredTasks, tableSortBy, tableSortDir, formatPerson]);
+
+  const totalListTasks = sortedListTasks.length;
+  const totalTablePages = Math.max(1, Math.ceil(totalListTasks / TABLE_PAGE_SIZE));
+  const safeTablePage = Math.min(tablePage, totalTablePages);
+  const tableStartIndex = (safeTablePage - 1) * TABLE_PAGE_SIZE;
+  const paginatedListTasks = React.useMemo(
+    () => sortedListTasks.slice(tableStartIndex, tableStartIndex + TABLE_PAGE_SIZE),
+    [sortedListTasks, tableStartIndex]
+  );
+
+  const groupedPaginatedTasks = React.useMemo(() => {
+    const groups = new Map<
+      string,
+      { key: string; name: string; initials: string; tasks: TaskRecord[] }
+    >();
+    for (const task of paginatedListTasks) {
+      const key = task.assignee_id || "__unassigned__";
+      const existing = groups.get(key);
+      if (existing) {
+        existing.tasks.push(task);
+      } else {
+        const name = formatPerson(task.assignee_id);
+        groups.set(key, {
+          key,
+          name,
+          initials: getInitials(name),
+          tasks: [task],
+        });
+      }
+    }
+    return Array.from(groups.values());
+  }, [paginatedListTasks, formatPerson]);
+
+  const groupedByProjectTasks = React.useMemo(() => {
+    const projectLookup = new Map(projects.map((p) => [p.id, p]));
+    const groups = new Map<
+      string,
+      { key: string; code: string | null; label: string; isUnassignedProject: boolean; tasks: TaskRecord[] }
+    >();
+
+    for (const task of paginatedListTasks) {
+      const key = task.project_id || "__no_project__";
+      const existing = groups.get(key);
+      if (existing) {
+        existing.tasks.push(task);
+      } else if (task.project_id) {
+        const proj = projectLookup.get(task.project_id);
+        groups.set(key, {
+          key,
+          code: proj?.code || null,
+          label: proj ? (proj.code ? `${proj.code} · ${proj.name}` : proj.name) : "Project",
+          isUnassignedProject: false,
+          tasks: [task],
+        });
+      } else {
+        groups.set(key, {
+          key,
+          code: null,
+          label: "No Project",
+          isUnassignedProject: true,
+          tasks: [task],
+        });
+      }
+    }
+
+    const allSortedProjectIds = new Set(
+      sortedListTasks.map((t) => t.project_id).filter(Boolean) as string[]
+    );
+
+    if (safeTablePage === totalTablePages) {
+      for (const proj of projects) {
+        if (
+          (projectFilter === "all" || projectFilter === proj.id) &&
+          !allSortedProjectIds.has(proj.id) &&
+          !groups.has(proj.id)
+        ) {
+          groups.set(proj.id, {
+            key: proj.id,
+            code: proj.code || null,
+            label: proj.code ? `${proj.code} · ${proj.name}` : proj.name,
+            isUnassignedProject: false,
+            tasks: [],
+          });
+        }
+      }
+    }
+
+    const list = Array.from(groups.values());
+    // Ensure "No Project" always appears at the bottom
+    return list.sort((a, b) => {
+      if (a.isUnassignedProject === b.isUnassignedProject) return 0;
+      return a.isUnassignedProject ? 1 : -1;
+    });
+  }, [paginatedListTasks, sortedListTasks, projects, projectFilter, safeTablePage, totalTablePages]);
+
   const scopedTasks = React.useMemo(() => {
     return tasks.filter((t) => {
       if (scope === "mine" && userId) {
@@ -626,7 +1513,69 @@ function TasksWorkspaceContent() {
     return { open, overdue, dueSoon, completed };
   }, [scopedTasks]);
 
+  const handleSelectStatusFilter = React.useCallback(
+    (nextStatus: string) => {
+      setExpandedColumn(null);
+      setStatusFilter(nextStatus);
+      if (
+        (nextStatus === "done" || nextStatus === "cancelled") &&
+        (dueFilter === "overdue" || dueFilter === "due_soon")
+      ) {
+        setDueFilter("all");
+      }
+    },
+    [dueFilter]
+  );
+
+  const handleSelectDueFilter = React.useCallback(
+    (nextDue: string) => {
+      setExpandedColumn(null);
+      setDueFilter(nextDue);
+      if (
+        (nextDue === "overdue" || nextDue === "due_soon") &&
+        (statusFilter === "done" || statusFilter === "cancelled")
+      ) {
+        setStatusFilter("all");
+      }
+    },
+    [statusFilter]
+  );
+
+  const handleToggleSummaryMetric = React.useCallback(
+    (metric: "open" | "overdue" | "due_soon" | "completed") => {
+      setExpandedColumn(null);
+      if (metric === "open") {
+        if (statusFilter === "open") {
+          setStatusFilter("all");
+        } else {
+          setStatusFilter("open");
+          setDueFilter("all");
+        }
+        return;
+      }
+      if (metric === "completed") {
+        if (statusFilter === "done") {
+          setStatusFilter("all");
+        } else {
+          setStatusFilter("done");
+          setDueFilter("all");
+        }
+        return;
+      }
+      if (dueFilter === metric) {
+        setDueFilter("all");
+      } else {
+        setDueFilter(metric);
+        if (statusFilter === "done" || statusFilter === "cancelled") {
+          setStatusFilter("all");
+        }
+      }
+    },
+    [statusFilter, dueFilter]
+  );
+
   const handleClearAllFilters = () => {
+    setExpandedColumn(null);
     setStatusFilter("all");
     setPriorityFilter("all");
     setTypeFilter("all");
@@ -684,19 +1633,22 @@ function TasksWorkspaceContent() {
       .catch(() => setDrawerGoals([]));
   }, [selectedTask?.id, selectedTask?.assignee_id, selectedTask?.creator_id]);
 
-  const handleOpenCreateModal = () => {
+  const handleOpenCreateModal = (defaultProjectId?: string | React.MouseEvent) => {
+    const resolvedProjectId =
+      typeof defaultProjectId === "string" ? defaultProjectId : "";
     editedFields.current.clear();
     setSelectedTypeId("");
     setNewTitle("");
     setNewDescription("");
     setNewAssigneeId(userId || "");
     setNewPriority("medium");
-    setNewDueDate("");
+    setNewDueDate(getPresetDateIso(0));
+    setDueDateError("");
     setSuggestedDueText("");
     setAutoDueSuggested(false);
     setEstHours("");
     setEstMinutes("");
-    setNewProjectId("");
+    setNewProjectId(resolvedProjectId);
     setSelectedChecklist([]);
     setIsRepeating(false);
     setRepeatFrequency("weekly");
@@ -711,17 +1663,25 @@ function TasksWorkspaceContent() {
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newTitle.trim().length < 2) return;
+    if (!newDueDate.trim()) {
+      setDueDateError("Due date is required");
+      return;
+    }
+    setDueDateError("");
     const totalMinutes =
       (parseInt(estHours || "0", 10) * 60) + parseInt(estMinutes || "0", 10);
-    const isSelf = Boolean(newAssigneeId && newAssigneeId === userId);
+    const effectiveAssigneeId = isRegularEmployee
+      ? userId || null
+      : newAssigneeId || null;
+    const isSelf = Boolean(effectiveAssigneeId && effectiveAssigneeId === userId);
 
     try {
       await mutations.createTask.mutateAsync({
         title: newTitle.trim(),
         description: newDescription.trim() || null,
-        assigneeId: newAssigneeId || null,
+        assigneeId: effectiveAssigneeId,
         priority: newPriority,
-        dueDate: newDueDate || null,
+        dueDate: newDueDate,
         estimatedMinutes: totalMinutes > 0 ? totalMinutes : null,
         projectId: newProjectId || null,
         isSelfAssign: isSelf,
@@ -749,21 +1709,62 @@ function TasksWorkspaceContent() {
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (projName.trim().length < 2) return;
+    if (projName.trim().length < 2 || isCreatingProjectWithTasks) return;
+
+    const queuedTasks = projInitialTasks;
+    setIsCreatingProjectWithTasks(true);
     try {
-      await mutations.createProject.mutateAsync({
+      const projRes = await mutations.createProject.mutateAsync({
         name: projName.trim(),
         code: projCode.trim() || null,
         departmentId: projDeptId || null,
         description: projDesc.trim() || null,
+        silent: queuedTasks.length > 0,
       });
+
+      const createdProjectId = projRes?.projectId || projRes?.project?.id || null;
+
+      if (queuedTasks.length > 0) {
+        const results = await Promise.allSettled(
+          queuedTasks.map((item) =>
+            mutations.createTask.mutateAsync({
+              title: item.title,
+              assigneeId: item.assigneeId,
+              priority: "medium",
+              dueDate: item.dueDate || getPresetDateIso(0),
+              projectId: createdProjectId,
+              isSelfAssign: false,
+              silent: true,
+            })
+          )
+        );
+        const succeeded = results.filter((r) => r.status === "fulfilled").length;
+        const failed = results.length - succeeded;
+
+        if (failed === 0) {
+          toast.success(
+            `Project created with ${succeeded} ${succeeded === 1 ? "task" : "tasks"}`
+          );
+        } else {
+          toast.error(
+            `Project created, but ${failed} initial ${failed === 1 ? "task" : "tasks"} failed to create`
+          );
+        }
+      }
+
       setProjName("");
       setProjCode("");
       setProjDeptId("");
       setProjDesc("");
+      setProjInitialTasks([]);
+      setProjTaskDraftTitle("");
+      setProjTaskDraftAssignee("");
+      setProjTaskDraftDueDate(getPresetDateIso(0));
       setCreateProjectOpen(false);
     } catch {
       // Toast handled in mutation onError
+    } finally {
+      setIsCreatingProjectWithTasks(false);
     }
   };
 
@@ -798,6 +1799,7 @@ function TasksWorkspaceContent() {
     }
   };
 
+  const isAdmin = userRole === "admin";
   const canManageProjects =
     userRole === "manager" || userRole === "hr" || userRole === "admin";
 
@@ -805,20 +1807,6 @@ function TasksWorkspaceContent() {
     if (task.status === "done" || task.status === "cancelled") return false;
     if (userRole === "admin" || userRole === "hr" || userRole === "manager") return true;
     return false;
-  };
-
-  const canCancelTask = (task: TaskRecord) => {
-    if (task.status === "cancelled" || task.status === "done") return false;
-    if (userRole === "manager" || userRole === "hr" || userRole === "admin") {
-      return true;
-    }
-    return task.creator_id === userId;
-  };
-
-  const canReopenTask = (task: TaskRecord) => {
-    if (task.status !== "done" && task.status !== "cancelled") return false;
-    if (userRole === "admin" || userRole === "hr" || userRole === "manager") return true;
-    return task.creator_id === userId;
   };
 
   const canStopRecurrence = (task: TaskRecord) => {
@@ -833,7 +1821,7 @@ function TasksWorkspaceContent() {
   };
 
   return (
-    <div className="space-y-4 pb-12">
+    <div className="space-y-3 pb-4 w-full min-w-0">
       {/* Header & Controls */}
       <div data-tour="tasks-header" className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-1">
         <div>
@@ -870,62 +1858,120 @@ function TasksWorkspaceContent() {
       </div>
 
       {/* Slim Summary Strip */}
-      <div className="flex items-center gap-3 py-1 text-xs text-[#808080] border-b border-[#E6E6E6]">
-        <div className="flex items-center gap-1.5">
-          <span className={cn("font-bold font-mono", summaryCounts.open > 0 ? "text-black" : "text-[#808080]")}>
-            {summaryCounts.open}
-          </span>
-          <span>Open</span>
-        </div>
-        <span className="h-3 w-px bg-[#E6E6E6]" aria-hidden="true" />
+      <div className="flex flex-wrap items-center gap-2 py-1 text-xs text-[#808080] border-b border-[#E6E6E6]">
         <button
           type="button"
-          onClick={() => setDueFilter(dueFilter === "overdue" ? "all" : "overdue")}
+          aria-pressed={statusFilter === "open"}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => handleToggleSummaryMetric("open")}
           className={cn(
-            "flex items-center gap-1.5 cursor-pointer transition-colors",
-            dueFilter === "overdue" && "underline underline-offset-2"
+            "flex items-center gap-1.5 px-2 py-0.5 rounded-md border font-semibold cursor-pointer transition-colors",
+            statusFilter === "open"
+              ? "bg-white border-black text-black underline underline-offset-2"
+              : "border-transparent hover:bg-[#E6E6E6]/60 hover:text-black"
           )}
         >
           <span
             className={cn(
               "font-bold font-mono",
-              summaryCounts.overdue > 0 ? "text-[#FF1493]" : "text-[#808080]"
+              statusFilter === "open" || summaryCounts.open > 0
+                ? "text-black"
+                : "text-[#808080]"
+            )}
+          >
+            {summaryCounts.open}
+          </span>
+          <span>Open</span>
+        </button>
+        <span className="h-3 w-px bg-[#E6E6E6]" aria-hidden="true" />
+        <button
+          type="button"
+          aria-pressed={dueFilter === "overdue"}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => handleToggleSummaryMetric("overdue")}
+          className={cn(
+            "flex items-center gap-1.5 px-2 py-0.5 rounded-md border font-semibold cursor-pointer transition-colors",
+            dueFilter === "overdue"
+              ? "bg-red-50 border-[#FF1493] text-[#FF1493] underline underline-offset-2"
+              : "border-transparent hover:bg-[#E6E6E6]/60 hover:text-black"
+          )}
+        >
+          <span
+            className={cn(
+              "font-bold font-mono",
+              dueFilter === "overdue" || summaryCounts.overdue > 0
+                ? "text-[#FF1493]"
+                : "text-[#808080]"
             )}
           >
             {summaryCounts.overdue}
           </span>
-          <span className={summaryCounts.overdue > 0 ? "text-[#FF1493] font-semibold" : ""}>
+          <span
+            className={cn(
+              (dueFilter === "overdue" || summaryCounts.overdue > 0) &&
+                "text-[#FF1493]"
+            )}
+          >
             Overdue
           </span>
         </button>
         <span className="h-3 w-px bg-[#E6E6E6]" aria-hidden="true" />
         <button
           type="button"
-          onClick={() => setDueFilter(dueFilter === "due_soon" ? "all" : "due_soon")}
+          aria-pressed={dueFilter === "due_soon"}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => handleToggleSummaryMetric("due_soon")}
           className={cn(
-            "flex items-center gap-1.5 cursor-pointer transition-colors",
-            dueFilter === "due_soon" && "underline underline-offset-2"
+            "flex items-center gap-1.5 px-2 py-0.5 rounded-md border font-semibold cursor-pointer transition-colors",
+            dueFilter === "due_soon"
+              ? "bg-amber-50 border-amber-500 text-[#D97706] underline underline-offset-2"
+              : "border-transparent hover:bg-[#E6E6E6]/60 hover:text-black"
           )}
         >
           <span
             className={cn(
               "font-bold font-mono",
-              summaryCounts.dueSoon > 0 ? "text-[#D97706]" : "text-[#808080]"
+              dueFilter === "due_soon" || summaryCounts.dueSoon > 0
+                ? "text-[#D97706]"
+                : "text-[#808080]"
             )}
           >
             {summaryCounts.dueSoon}
           </span>
-          <span className={summaryCounts.dueSoon > 0 ? "text-[#D97706] font-semibold" : ""}>
+          <span
+            className={cn(
+              (dueFilter === "due_soon" || summaryCounts.dueSoon > 0) &&
+                "text-[#D97706]"
+            )}
+          >
             Due soon
           </span>
         </button>
         <span className="h-3 w-px bg-[#E6E6E6]" aria-hidden="true" />
-        <div className="flex items-center gap-1.5">
-          <span className={cn("font-bold font-mono", summaryCounts.completed > 0 ? "text-black" : "text-[#808080]")}>
+        <button
+          type="button"
+          aria-pressed={statusFilter === "done"}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => handleToggleSummaryMetric("completed")}
+          className={cn(
+            "flex items-center gap-1.5 px-2 py-0.5 rounded-md border font-semibold cursor-pointer transition-colors",
+            statusFilter === "done"
+              ? "bg-white border-black text-black underline underline-offset-2"
+              : "border-transparent hover:bg-[#E6E6E6]/60 hover:text-black"
+          )}
+        >
+          <span
+            className={cn(
+              "font-bold font-mono",
+              statusFilter === "done" || summaryCounts.completed > 0
+                ? "text-black"
+                : "text-[#808080]"
+            )}
+          >
             {summaryCounts.completed}
           </span>
           <span>Completed</span>
-        </div>
+        </button>
       </div>
 
       {/* Scope, View Switcher & Search Toolbar */}
@@ -935,7 +1981,13 @@ function TasksWorkspaceContent() {
           <div className="flex items-center p-0.5 rounded-lg bg-[#E6E6E6] border border-[#E6E6E6]">
             <button
               type="button"
-              onClick={() => setScope("mine")}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setExpandedColumn(null);
+                setSelectedTaskIds(new Set());
+                setBulkDeleteConfirmOpen(false);
+                setScope("mine");
+              }}
               className={cn(
                 "px-3 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer",
                 scope === "mine"
@@ -947,7 +1999,13 @@ function TasksWorkspaceContent() {
             </button>
             <button
               type="button"
-              onClick={() => setScope("team")}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setExpandedColumn(null);
+                setSelectedTaskIds(new Set());
+                setBulkDeleteConfirmOpen(false);
+                setScope("team");
+              }}
               className={cn(
                 "px-3 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer",
                 scope === "team"
@@ -963,7 +2021,13 @@ function TasksWorkspaceContent() {
           <div className="flex items-center p-0.5 rounded-lg bg-[#E6E6E6] border border-[#E6E6E6]">
             <button
               type="button"
-              onClick={() => setViewMode("board")}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setExpandedColumn(null);
+                setSelectedTaskIds(new Set());
+                setBulkDeleteConfirmOpen(false);
+                setViewMode("board");
+              }}
               aria-label="Board view"
               className={cn(
                 "inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer",
@@ -977,7 +2041,13 @@ function TasksWorkspaceContent() {
             </button>
             <button
               type="button"
-              onClick={() => setViewMode("list")}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setExpandedColumn(null);
+                setSelectedTaskIds(new Set());
+                setBulkDeleteConfirmOpen(false);
+                setViewMode("list");
+              }}
               aria-label="List view"
               className={cn(
                 "inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer",
@@ -997,7 +2067,10 @@ function TasksWorkspaceContent() {
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setExpandedColumn(null);
+              setSearchQuery(e.target.value);
+            }}
             placeholder="Search task title or description..."
             className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black placeholder:text-[#808080] focus:outline-none focus:border-black"
           />
@@ -1012,9 +2085,10 @@ function TasksWorkspaceContent() {
           ariaLabel="Filter by status"
           options={[
             { value: "all", label: "All Statuses" },
+            { value: "open", label: "Open (Active)" },
             ...STATUS_COLUMNS.map((c) => ({ value: c.key, label: c.label })),
           ]}
-          onSelect={setStatusFilter}
+          onSelect={handleSelectStatusFilter}
         />
         <FilterDropdownMenu
           label="All Priorities"
@@ -1027,7 +2101,10 @@ function TasksWorkspaceContent() {
               label: `Priority: ${p.charAt(0).toUpperCase() + p.slice(1)}`,
             })),
           ]}
-          onSelect={setPriorityFilter}
+          onSelect={(val) => {
+            setExpandedColumn(null);
+            setPriorityFilter(val);
+          }}
         />
         <FilterDropdownMenu
           label="All Types"
@@ -1037,7 +2114,10 @@ function TasksWorkspaceContent() {
             { value: "all", label: "All Types" },
             ...taskTypes.map((t) => ({ value: t.id, label: `Type: ${t.name}` })),
           ]}
-          onSelect={setTypeFilter}
+          onSelect={(val) => {
+            setExpandedColumn(null);
+            setTypeFilter(val);
+          }}
         />
         <FilterDropdownMenu
           label="All Schedules"
@@ -1045,10 +2125,13 @@ function TasksWorkspaceContent() {
           ariaLabel="Filter by recurring"
           options={[
             { value: "all", label: "All Schedules" },
-            { value: "recurring", label: "🔁 Recurring Only" },
+            { value: "recurring", label: "Recurring Only" },
             { value: "one_time", label: "One-Time Only" },
           ]}
-          onSelect={setRecurringFilter}
+          onSelect={(val) => {
+            setExpandedColumn(null);
+            setRecurringFilter(val);
+          }}
         />
         <FilterDropdownMenu
           label="All Due Dates"
@@ -1061,7 +2144,7 @@ function TasksWorkspaceContent() {
             { value: "upcoming", label: "Upcoming" },
             { value: "none", label: "No Due Date" },
           ]}
-          onSelect={setDueFilter}
+          onSelect={handleSelectDueFilter}
         />
         <FilterDropdownMenu
           label="All Assignees"
@@ -1070,12 +2153,23 @@ function TasksWorkspaceContent() {
           options={[
             { value: "all", label: "All Assignees" },
             { value: "unassigned", label: "Unassigned" },
+            ...(userId && !employees.some((e) => isCurrentUserEmployee(e))
+              ? [
+                  {
+                    value: userId,
+                    label: actualCurrentUserName ? `You (${actualCurrentUserName})` : "You",
+                  },
+                ]
+              : []),
             ...employees.map((emp) => ({
               value: emp.id,
-              label: emp.full_name || emp.email,
+              label: formatAssigneeOptionLabel(emp),
             })),
           ]}
-          onSelect={setAssigneeFilter}
+          onSelect={(val) => {
+            setExpandedColumn(null);
+            setAssigneeFilter(val);
+          }}
         />
         <FilterDropdownMenu
           label="All Projects"
@@ -1089,385 +2183,830 @@ function TasksWorkspaceContent() {
               label: p.code ? `${p.code} · ${p.name}` : p.name,
             })),
           ]}
-          onSelect={setProjectFilter}
+          onSelect={(val) => {
+            setExpandedColumn(null);
+            setProjectFilter(val);
+          }}
         />
-      </div>
-
-      {/* Active Filter Chips & Clear Filters */}
-      {hasActiveFilters && (
-        <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs">
-          <span className="text-[11px] text-[#808080] font-medium mr-1">Active filters:</span>
-          {statusFilter !== "all" && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
-              Status: {STATUS_COLUMNS.find((c) => c.key === statusFilter)?.label}
-              <button
-                type="button"
-                onClick={() => setStatusFilter("all")}
-                className="hover:text-[#FF1493] cursor-pointer"
-                aria-label="Remove status filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-          {priorityFilter !== "all" && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
-              Priority: {priorityFilter.charAt(0).toUpperCase() + priorityFilter.slice(1)}
-              <button
-                type="button"
-                onClick={() => setPriorityFilter("all")}
-                className="hover:text-[#FF1493] cursor-pointer"
-                aria-label="Remove priority filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-          {typeFilter !== "all" && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
-              Type: {taskTypes.find((t) => t.id === typeFilter)?.name || "Selected"}
-              <button
-                type="button"
-                onClick={() => setTypeFilter("all")}
-                className="hover:text-[#FF1493] cursor-pointer"
-                aria-label="Remove type filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-          {recurringFilter !== "all" && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
-              Schedule: {recurringFilter === "recurring" ? "Recurring" : "One-time"}
-              <button
-                type="button"
-                onClick={() => setRecurringFilter("all")}
-                className="hover:text-[#FF1493] cursor-pointer"
-                aria-label="Remove schedule filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-          {dueFilter !== "all" && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
-              Due: {dueFilter.replace("_", " ")}
-              <button
-                type="button"
-                onClick={() => setDueFilter("all")}
-                className="hover:text-[#FF1493] cursor-pointer"
-                aria-label="Remove due filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-          {assigneeFilter !== "all" && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
-              Assignee: {assigneeFilter === "unassigned" ? "Unassigned" : (employees.find((e) => e.id === assigneeFilter)?.full_name || "Assigned")}
-              <button
-                type="button"
-                onClick={() => setAssigneeFilter("all")}
-                className="hover:text-[#FF1493] cursor-pointer"
-                aria-label="Remove assignee filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-          {projectFilter !== "all" && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
-              Project: {projectFilter === "none" ? "No project" : (projects.find((p) => p.id === projectFilter)?.name || "Project")}
-              <button
-                type="button"
-                onClick={() => setProjectFilter("all")}
-                className="hover:text-[#FF1493] cursor-pointer"
-                aria-label="Remove project filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-          {searchQuery.trim() && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
-              Search: "{searchQuery}"
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="hover:text-[#FF1493] cursor-pointer"
-                aria-label="Remove search query"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          )}
+        {isAdmin && projectFilter !== "all" && projectFilter !== "none" && (
           <button
             type="button"
-            onClick={handleClearAllFilters}
-            className="text-[11px] font-semibold text-[#808080] hover:text-black underline ml-1 cursor-pointer"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              const targetProj = projects.find((p) => p.id === projectFilter);
+              if (targetProj) {
+                setProjectToDelete({
+                  id: targetProj.id,
+                  name: targetProj.code
+                    ? `${targetProj.code} · ${targetProj.name}`
+                    : targetProj.name,
+                });
+              }
+            }}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-xs font-semibold text-[#FF1493] cursor-pointer transition-colors"
+            title="Delete selected project"
           >
-            Clear filters
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Delete Project</span>
           </button>
-        </div>
-      )}
+        )}
+      </div>
+
+      {/* Active Filter Chips & Clear Filters (fixed-height slot prevents board shift) */}
+      <div
+        aria-hidden={!hasActiveFilters}
+        className={cn(
+          "min-h-[36px] flex flex-wrap items-center gap-1.5 text-xs",
+          !hasActiveFilters && "invisible pointer-events-none select-none"
+        )}
+      >
+        {hasActiveFilters ? (
+          <>
+            <span className="text-[11px] text-[#808080] font-medium mr-1">Active filters:</span>
+            {statusFilter !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
+                Status:{" "}
+                {statusFilter === "open"
+                  ? "Open (Active)"
+                  : STATUS_COLUMNS.find((c) => c.key === statusFilter)?.label}
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("all")}
+                  className="hover:text-[#FF1493] cursor-pointer"
+                  aria-label="Remove status filter"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {priorityFilter !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
+                Priority: {priorityFilter.charAt(0).toUpperCase() + priorityFilter.slice(1)}
+                <button
+                  type="button"
+                  onClick={() => setPriorityFilter("all")}
+                  className="hover:text-[#FF1493] cursor-pointer"
+                  aria-label="Remove priority filter"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {typeFilter !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
+                Type: {taskTypes.find((t) => t.id === typeFilter)?.name || "Selected"}
+                <button
+                  type="button"
+                  onClick={() => setTypeFilter("all")}
+                  className="hover:text-[#FF1493] cursor-pointer"
+                  aria-label="Remove type filter"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {recurringFilter !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
+                Schedule: {recurringFilter === "recurring" ? "Recurring" : "One-time"}
+                <button
+                  type="button"
+                  onClick={() => setRecurringFilter("all")}
+                  className="hover:text-[#FF1493] cursor-pointer"
+                  aria-label="Remove schedule filter"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {dueFilter !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
+                Due: {dueFilter.replace("_", " ")}
+                <button
+                  type="button"
+                  onClick={() => setDueFilter("all")}
+                  className="hover:text-[#FF1493] cursor-pointer"
+                  aria-label="Remove due filter"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {assigneeFilter !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
+                Assignee: {assigneeFilter === "unassigned" ? "Unassigned" : (employees.find((e) => e.id === assigneeFilter)?.full_name || "Assigned")}
+                <button
+                  type="button"
+                  onClick={() => setAssigneeFilter("all")}
+                  className="hover:text-[#FF1493] cursor-pointer"
+                  aria-label="Remove assignee filter"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {projectFilter !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
+                Project: {projectFilter === "none" ? "No project" : (projects.find((p) => p.id === projectFilter)?.name || "Project")}
+                <button
+                  type="button"
+                  onClick={() => setProjectFilter("all")}
+                  className="hover:text-[#FF1493] cursor-pointer"
+                  aria-label="Remove project filter"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {searchQuery.trim() && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
+                Search: "{searchQuery}"
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="hover:text-[#FF1493] cursor-pointer"
+                  aria-label="Remove search query"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleClearAllFilters}
+              className="text-[11px] font-semibold text-[#808080] hover:text-black underline ml-1 cursor-pointer"
+            >
+              Clear filters
+            </button>
+          </>
+        ) : (
+          <span className="text-[11px] py-0.5">&nbsp;</span>
+        )}
+      </div>
 
       {/* Main Board or List Area */}
+      <div className="w-full min-w-0 h-[calc(100vh-245px)] overflow-hidden">
       {isLoading ? (
-        <div className="p-16 text-center text-xs text-[#808080]">Loading workplace tasks...</div>
-      ) : filteredTasks.length === 0 ? (
-        tasks.length === 0 ? (
-          <EmptyState
-            title="No tasks yet"
-            description="Create your first task to track work and deliverables."
-            action={
-              <button
-                type="button"
-                onClick={handleOpenCreateModal}
-                className="px-4 py-2 text-xs font-semibold bg-black hover:bg-[#1A1A1A] text-white rounded-lg cursor-pointer"
-              >
-                New task
-              </button>
-            }
-          />
-        ) : (
-          <EmptyState
-            title="No tasks match these filters"
-            description="Try clearing or adjusting filters to view existing tasks."
-            action={
-              <button
-                type="button"
-                onClick={handleClearAllFilters}
-                className="px-4 py-2 text-xs font-semibold bg-white border border-[#E6E6E6] hover:bg-[#F5F5F5] text-black rounded-lg cursor-pointer"
-              >
-                Clear filters
-              </button>
-            }
-          />
-        )
+        <div className="w-full h-full flex items-center justify-center text-xs text-[#808080]">
+          Loading workplace tasks...
+        </div>
+      ) : filteredTasks.length === 0 &&
+        !(
+          viewMode === "list" &&
+          groupByProject &&
+          projectFilter === "all" &&
+          !hasActiveFilters &&
+          projects.length > 0
+        ) ? (
+        <div className="w-full h-full flex items-center justify-center">
+          {projectFilter !== "all" && projectFilter !== "none" ? (
+            (() => {
+              const activeProject = projects.find((p) => p.id === projectFilter);
+              const activeProjectName = activeProject?.name || "this project";
+              return (
+                <EmptyState
+                  title={`No tasks in ${activeProjectName} yet`}
+                  description="Add tasks to this project to start tracking progress."
+                  action={
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenCreateModal(projectFilter)}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-black hover:bg-[#1A1A1A] text-white rounded-lg cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add task to {activeProjectName}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={handleClearAllFilters}
+                        className="px-4 py-2 text-xs font-semibold bg-white border border-[#E6E6E6] hover:bg-[#F5F5F5] text-black rounded-lg cursor-pointer"
+                      >
+                        Clear filters
+                      </button>
+                    </div>
+                  }
+                />
+              );
+            })()
+          ) : tasks.length === 0 ? (
+            <EmptyState
+              title="No tasks yet"
+              description="Create your first task to track work and deliverables."
+              action={
+                <button
+                  type="button"
+                  onClick={() => handleOpenCreateModal()}
+                  className="px-4 py-2 text-xs font-semibold bg-black hover:bg-[#1A1A1A] text-white rounded-lg cursor-pointer"
+                >
+                  New task
+                </button>
+              }
+            />
+          ) : (
+            <EmptyState
+              title="No tasks match these filters"
+              description="Try clearing or adjusting filters to view existing tasks."
+              action={
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={handleClearAllFilters}
+                  className="px-4 py-2 text-xs font-semibold bg-white border border-[#E6E6E6] hover:bg-[#F5F5F5] text-black rounded-lg cursor-pointer"
+                >
+                  Clear filters
+                </button>
+              }
+            />
+          )}
+        </div>
       ) : viewMode === "board" ? (
-        <div data-tour="tasks-board" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 items-start">
-          {STATUS_COLUMNS.map((col) => {
-            const colTasks = filteredTasks.filter((t) => t.status === col.key);
-            return (
-              <div
-                key={col.key}
-                className="flex flex-col min-h-[220px] max-h-[calc(100vh-230px)] rounded-[14px] bg-[#E6E6E6] border border-[#E6E6E6] p-3 space-y-2.5"
-              >
-                <div className="flex items-center justify-between px-1 shrink-0">
-                  <div>
-                    <h2 className="text-xs font-bold text-black">{col.label}</h2>
-                    <p className="text-[10px] text-[#808080]">{col.hint}</p>
+        <div
+          ref={boardContainerRef}
+          className="w-full min-w-0 h-full overflow-hidden"
+        >
+          <div
+            data-tour="tasks-board"
+            className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-2.5 w-full min-w-0 h-full items-start overflow-y-auto lg:overflow-hidden pb-1"
+          >
+            {STATUS_COLUMNS.map((col) => {
+              const colTasks = filteredTasks.filter((t) => t.status === col.key);
+              const isCancelledCol = col.key === "cancelled";
+              const isExpanded = expandedColumn === col.key;
+              const isCollapsed = !isExpanded;
+
+              return (
+                <div
+                  key={col.key}
+                  data-kanban-column="true"
+                  className={cn(
+                    "flex flex-col min-w-0 w-full max-h-full rounded-[14px] border overflow-x-hidden transition-colors duration-200 border-[#E6E6E6]",
+                    isExpanded && "min-h-[220px]",
+                    isCancelledCol ? "bg-[#EFEFEF]" : "bg-[#E6E6E6]"
+                  )}
+                >
+                  <div
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => toggleColumnAccordion(col.key)}
+                    className={cn(
+                      "flex items-center justify-between p-2.5 shrink-0 gap-1.5 cursor-pointer select-none transition-colors",
+                      isCollapsed
+                        ? "rounded-[14px] hover:bg-black/[0.04]"
+                        : "pb-1.5 rounded-t-[14px]"
+                    )}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <h2 className="text-sm font-semibold text-black truncate leading-tight" title={col.label}>
+                        {col.label}
+                      </h2>
+                      <p className="truncate text-xs text-gray-500 leading-tight" title={col.hint}>
+                        {col.hint}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-white border border-[#E6E6E6] text-black">
+                        {colTasks.length}
+                      </span>
+                      <button
+                        type="button"
+                        aria-expanded={isExpanded}
+                        aria-label={isExpanded ? `Collapse ${col.label} column` : `Expand ${col.label} column`}
+                        title={isExpanded ? `Collapse ${col.label}` : `Expand ${col.label}`}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleColumnAccordion(col.key);
+                        }}
+                        className="p-1 rounded-lg text-[#4D4D4D] hover:text-black hover:bg-white/80 transition-colors cursor-pointer"
+                      >
+                        {isExpanded ? (
+                          <ChevronUp className="w-4 h-4" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
                   </div>
-                  <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-white border border-[#E6E6E6] text-black">
-                    {colTasks.length}
-                  </span>
-                </div>
 
-                <div className="overflow-y-auto space-y-2 pr-1 max-h-[calc(100vh-310px)] min-h-0">
-                  {colTasks.length > 0 ? (
-                    colTasks.map((task) => {
-                      const assigneeName = formatPerson(task.assignee_id);
-                      const initials = getInitials(assigneeName);
-                      const typeName = task.task_type_id ? typeNameMap.get(task.task_type_id) : null;
-
-                      const hasAcceptAction = task.status === "todo" && task.assignee_id === userId && task.creator_id !== userId;
-
-                      return (
-                        <button
-                          key={task.id}
-                          type="button"
-                          onClick={() => setSelectedTaskId(task.id)}
-                          className="w-full text-left p-3.5 rounded-[12px] bg-white hover:border-black/40 border border-[#E6E6E6] shadow-none transition-all cursor-pointer flex flex-col justify-between h-[160px] min-h-[160px] max-h-[160px] focus-visible:ring-2 focus-visible:ring-black focus-visible:outline-none"
-                        >
-                          <div className="space-y-2 w-full">
-                            <div className="flex items-center justify-between gap-1.5 h-6">
-                              <div className="flex items-center gap-1.5 flex-wrap overflow-hidden">
-                                <StatusPill status={task.priority} showIcon={true} />
-                                {typeName && <TaskTypeBadge typeName={typeName} />}
-                                {task.recurrence_id && (
-                                  <span title="Recurring Task" className="inline-flex items-center text-xs text-black">
-                                    <Repeat className="w-3 h-3 text-black" />
-                                  </span>
-                                )}
-                              </div>
-                              {task.project_id && projectNameMap.has(task.project_id) && (
-                                <span className="text-[10px] font-medium text-[#4D4D4D] truncate max-w-[100px]">
-                                  {projectNameMap.get(task.project_id)}
-                                </span>
-                              )}
-                            </div>
-
-                            <p className="text-xs font-semibold text-black line-clamp-2 leading-snug h-[2.25rem] flex items-start overflow-hidden" title={task.title}>
-                              {task.title}
-                            </p>
-
-                            <div className="flex items-center gap-1.5 h-5 overflow-hidden text-[11px]">
-                              {task.due_date ? (
-                                <DueBadge dueDate={task.due_date} status={task.status} />
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-[10px] text-[#A3A3A3]">
-                                  <Calendar className="w-2.5 h-2.5" /> No deadline
-                                </span>
-                              )}
-                              {task.assignee_id && task.creator_id === task.assignee_id && (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-[#F5F5F5] text-black border border-[#E6E6E6] truncate max-w-[100px]">
-                                  <UserCheck className="w-2.5 h-2.5" />
-                                  Self
-                                </span>
-                              )}
-                              {task.assignee_id && task.creator_id !== task.assignee_id && (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-normal bg-[#F5F5F5] text-[#808080] truncate max-w-[120px]">
-                                  From: {formatPerson(task.creator_id)}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="w-full pt-2 border-t border-[#E6E6E6] mt-auto">
-                            <div className="flex items-center justify-between text-[11px] text-[#808080] gap-2 h-6">
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <span className="w-4 h-4 rounded-full bg-[#E6E6E6] text-black font-semibold text-[8px] flex items-center justify-center shrink-0">
-                                  {initials}
-                                </span>
-                                <span className="truncate font-medium text-[#4D4D4D] text-[11px]">
-                                  {assigneeName}
-                                </span>
-                              </div>
-
-                              {hasAcceptAction && (
-                                <span
-                                  role="button"
-                                  tabIndex={0}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    mutations.updateTaskStatus.mutate({
-                                      taskId: task.id,
-                                      status: "in_progress",
-                                      note: "Accepted assigned task",
-                                    });
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter" || e.key === " ") {
-                                      e.stopPropagation();
-                                      mutations.updateTaskStatus.mutate({
-                                        taskId: task.id,
-                                        status: "in_progress",
-                                        note: "Accepted assigned task",
-                                      });
-                                    }
-                                  }}
-                                  className="px-2 py-0.5 rounded-md bg-black hover:bg-[#1A1A1A] text-white text-[10px] font-semibold transition-all shrink-0 cursor-pointer shadow-xs"
-                                  title="Accept task and move to In Progress"
-                                >
-                                  ✓ Accept
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })
-                  ) : (
-                    <div className="py-6 px-3 text-center rounded-xl border border-dashed border-[#E6E6E6] text-[11px] text-[#808080]">
-                      No tasks in {col.label}
+                  {!isCollapsed && (
+                    <div className="flex flex-col gap-2.5 p-2 pb-3 max-h-full overflow-y-auto overflow-x-hidden min-h-0 min-w-0 flex-1">
+                      {colTasks.length > 0 ? (
+                        colTasks.map((task) => {
+                          const assigneeName = formatPerson(task.assignee_id);
+                          return (
+                            <KanbanTaskCard
+                              key={task.id}
+                              task={task}
+                              assigneeName={assigneeName}
+                              creatorName={formatPerson(task.creator_id)}
+                              initials={getInitials(assigneeName)}
+                              typeName={task.task_type_id ? typeNameMap.get(task.task_type_id) : null}
+                              projectName={task.project_id ? projectNameMap.get(task.project_id) : null}
+                              onSelect={setSelectedTaskId}
+                            />
+                          );
+                        })
+                      ) : (
+                        <div className="py-6 px-2.5 text-center rounded-xl border border-dashed border-[#E6E6E6] text-[11px] text-[#808080]">
+                          No tasks in {col.label}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       ) : (
-        /* List View */
-        <div className="bg-white rounded-xl border border-[#E6E6E6] shadow-sm overflow-x-auto max-h-[calc(100vh-240px)] overflow-y-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead className="sticky top-0 bg-[#F5F5F5] z-10 border-b border-[#E6E6E6]">
-              <tr className="text-[11px] font-bold uppercase tracking-wider text-black">
-                <th className="py-2.5 px-4">Task</th>
-                <th className="py-2.5 px-3">Type</th>
-                <th className="py-2.5 px-3">Project</th>
-                <th className="py-2.5 px-3">Assignee</th>
-                <th className="py-2.5 px-3">Priority</th>
-                <th className="py-2.5 px-3">Status</th>
-                <th className="py-2.5 px-3">Due</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E6E6E6]">
-              {filteredTasks.map((task) => {
-                const typeName = task.task_type_id ? typeNameMap.get(task.task_type_id) : null;
-                return (
-                  <tr
-                    key={task.id}
-                    onClick={() => setSelectedTaskId(task.id)}
-                    className="hover:bg-[#F9F9F9] cursor-pointer transition-colors"
-                  >
-                    <td className="py-2.5 px-4 font-bold text-black">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span>{task.title}</span>
-                        {task.recurrence_id && (
-                          <span title="Recurring Task">
-                            <Repeat className="w-3 h-3 text-black" />
-                          </span>
-                        )}
-                        {task.assignee_id && task.creator_id === task.assignee_id && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-[#F5F5F5] text-black border border-[#E6E6E6]">
-                            Self-Assigned
-                          </span>
-                        )}
-                      </div>
-                      {task.description && (
-                        <div className="text-[11px] font-normal text-[#808080] line-clamp-1 mt-0.5">
-                          {task.description}
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-2.5 px-3">
-                      {typeName ? <TaskTypeBadge typeName={typeName} /> : <span className="text-[#808080]">—</span>}
-                    </td>
-                    <td className="py-2.5 px-3 text-[#4D4D4D]">
-                      {task.project_id ? projectNameMap.get(task.project_id) || "Project" : "—"}
-                    </td>
-                    <td className="py-2.5 px-3 text-black">
-                      <div className="font-semibold">{formatPerson(task.assignee_id)}</div>
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <StatusPill status={task.priority} />
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <div className="flex items-center gap-2">
-                        <StatusPill status={task.status} />
-                        {task.status === "todo" && task.assignee_id === userId && task.creator_id !== userId && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              mutations.updateTaskStatus.mutate({
-                                taskId: task.id,
-                                status: "in_progress",
-                                note: "Accepted assigned task",
-                              });
-                            }}
-                            className="px-2 py-0.5 rounded bg-black hover:bg-[#1A1A1A] text-white text-[10px] font-semibold cursor-pointer shadow-xs"
+        /* Enterprise List / Table View */
+        <div className="w-full min-w-0 h-full bg-white rounded-xl border border-[#E6E6E6] shadow-xs flex flex-col overflow-hidden">
+          {/* Table Controls Toolbar */}
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-[#E6E6E6] bg-[#FAFAFA] shrink-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                aria-pressed={groupByAssignee}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setGroupByAssignee((prev) => {
+                    const next = !prev;
+                    if (next) setGroupByProject(false);
+                    return next;
+                  });
+                }}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold cursor-pointer transition-colors",
+                  groupByAssignee
+                    ? "bg-black text-white border-black"
+                    : "bg-white text-black border-[#E6E6E6] hover:bg-[#F5F5F5]"
+                )}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Group by Assignee</span>
+              </button>
+
+              <button
+                type="button"
+                aria-pressed={groupByProject}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setGroupByProject((prev) => {
+                    const next = !prev;
+                    if (next) setGroupByAssignee(false);
+                    return next;
+                  });
+                }}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold cursor-pointer transition-colors",
+                  groupByProject
+                    ? "bg-black text-white border-black"
+                    : "bg-white text-black border-[#E6E6E6] hover:bg-[#F5F5F5]"
+                )}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Group by Project</span>
+              </button>
+
+              {selectedTaskIds.size > 0 && (
+                <>
+                  <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-[#B7FF00]/25 border border-[#B7FF00]/60 text-xs font-semibold text-black">
+                    <span>{selectedTaskIds.size} selected</span>
+                    <button
+                      type="button"
+                      disabled={isBulkUpdating}
+                      onClick={() => setSelectedTaskIds(new Set())}
+                      className="text-[11px] font-semibold text-[#4D4D4D] hover:text-black underline cursor-pointer disabled:opacity-50"
+                    >
+                      Clear
+                    </button>
+                  </div>
+
+                  {/* Bulk Action Toolbar */}
+                  <div className="flex flex-wrap items-center gap-1.5 pl-1 border-l border-[#E6E6E6]">
+                    {/* Change Due Date */}
+                    <DropdownMenu.Root open={bulkDueDateOpen} onOpenChange={setBulkDueDateOpen}>
+                      <DropdownMenu.Trigger asChild>
+                        <button
+                          type="button"
+                          disabled={isBulkUpdating}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[#E6E6E6] bg-white hover:bg-[#F5F5F5] text-xs font-semibold text-black cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <Calendar className="w-3.5 h-3.5 text-[#4D4D4D]" />
+                          <span>Due Date</span>
+                          <ChevronDown className="w-3 h-3 text-[#808080]" />
+                        </button>
+                      </DropdownMenu.Trigger>
+                      <DropdownMenu.Portal>
+                        <DropdownMenu.Content
+                          align="start"
+                          sideOffset={4}
+                          className="z-50 w-56 rounded-xl bg-white border border-[#E6E6E6] p-1.5 shadow-lg text-xs space-y-1 animate-in fade-in-0 zoom-in-95"
+                        >
+                          <DropdownMenu.Item
+                            onSelect={() => handleBulkDueDateChange(getPresetDateIso(0))}
+                            className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-black hover:bg-[#F5F5F5] cursor-pointer outline-none font-medium"
                           >
-                            Accept
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-2.5 px-3">
-                      {task.due_date ? (
-                        <DueBadge dueDate={task.due_date} status={task.status} />
-                      ) : (
-                        <span className="text-[#808080]">—</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                            <span>Today</span>
+                            <span className="text-[10px] text-[#808080]">{getPresetDateIso(0)}</span>
+                          </DropdownMenu.Item>
+                          <DropdownMenu.Item
+                            onSelect={() => handleBulkDueDateChange(getPresetDateIso(1))}
+                            className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-black hover:bg-[#F5F5F5] cursor-pointer outline-none font-medium"
+                          >
+                            <span>Tomorrow</span>
+                            <span className="text-[10px] text-[#808080]">{getPresetDateIso(1)}</span>
+                          </DropdownMenu.Item>
+                          <DropdownMenu.Item
+                            onSelect={() => handleBulkDueDateChange(getPresetDateIso(7))}
+                            className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-black hover:bg-[#F5F5F5] cursor-pointer outline-none font-medium"
+                          >
+                            <span>Next Week</span>
+                            <span className="text-[10px] text-[#808080]">{getPresetDateIso(7)}</span>
+                          </DropdownMenu.Item>
+                          <div className="pt-1 mt-1 border-t border-[#E6E6E6] px-1.5 pb-1 space-y-1">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-[#808080] block">
+                              Custom Date
+                            </label>
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="date"
+                                aria-label="Bulk custom due date"
+                                value={bulkCustomDueDate}
+                                onChange={(e) => {
+                                  const dateVal = e.target.value;
+                                  setBulkCustomDueDate(dateVal);
+                                  if (dateVal) {
+                                    handleBulkDueDateChange(dateVal);
+                                  }
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex-1 min-w-0 px-2 py-1 rounded border border-[#E6E6E6] text-[11px] text-black focus:outline-none focus:border-black"
+                              />
+                            </div>
+                          </div>
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Portal>
+                    </DropdownMenu.Root>
+
+                    {/* Reassign */}
+                    {!isRegularEmployee && (
+                      <select
+                        aria-label="Bulk assign to employee"
+                        value=""
+                        disabled={isBulkUpdating}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val) {
+                            handleBulkAssign(val === "__unassigned__" ? null : val);
+                          }
+                        }}
+                        className="max-w-[165px] px-2.5 py-1 rounded-lg border border-[#E6E6E6] bg-white hover:bg-[#F5F5F5] text-xs font-semibold text-black cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:border-black"
+                      >
+                        <option value="">Assign to...</option>
+                        <option value="__unassigned__">Unassigned</option>
+                        {assignableEmployees.map((emp) => (
+                          <option key={emp.id} value={emp.id}>
+                            {formatAssigneeOptionLabel(emp)}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    {/* Export CSV */}
+                    <button
+                      type="button"
+                      disabled={isBulkUpdating}
+                      onClick={handleBulkExportCsv}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[#E6E6E6] bg-white hover:bg-[#F5F5F5] text-xs font-semibold text-black cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5 text-[#4D4D4D]" />
+                      <span>Export CSV</span>
+                    </button>
+
+                    {/* Delete (Admin only) */}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        disabled={isBulkUpdating}
+                        onClick={() => setBulkDeleteConfirmOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-xs font-semibold text-[#FF1493] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>{isBulkUpdating ? "Updating..." : "Delete"}</span>
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="text-[11px] font-medium text-[#808080]">
+              Showing {totalListTasks === 0 ? 0 : tableStartIndex + 1}–
+              {Math.min(tableStartIndex + paginatedListTasks.length, totalListTasks)} of{" "}
+              {totalListTasks} {totalListTasks === 1 ? "task" : "tasks"}
+            </div>
+          </div>
+
+          {/* Scrollable Sticky-Header Table */}
+          <div className="flex-1 min-h-0 overflow-auto [scrollbar-gutter:stable]">
+            <table className="w-full text-sm text-left border-collapse">
+              <thead className="sticky top-0 bg-[#F5F5F5] z-10 border-b border-[#E6E6E6]">
+                <tr>
+                  <th className="py-2.5 px-3 w-10">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all visible tasks"
+                      checked={
+                        paginatedListTasks.length > 0 &&
+                        paginatedListTasks.every((t) => selectedTaskIds.has(t.id))
+                      }
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setSelectedTaskIds((prev) => {
+                          const next = new Set(prev);
+                          for (const t of paginatedListTasks) {
+                            if (checked) next.add(t.id);
+                            else next.delete(t.id);
+                          }
+                          return next;
+                        });
+                      }}
+                      className="h-3.5 w-3.5 rounded border-[#B3B3B3] accent-black cursor-pointer align-middle"
+                    />
+                  </th>
+                  <th className="py-2.5 px-3">
+                    <SortableTableHeader
+                      label="Task Title"
+                      column="title"
+                      activeColumn={tableSortBy}
+                      direction={tableSortDir}
+                      onSort={handleSortTableColumn}
+                    />
+                  </th>
+                  <th className="py-2.5 px-3">
+                    <SortableTableHeader
+                      label="Assignee"
+                      column="assignee"
+                      activeColumn={tableSortBy}
+                      direction={tableSortDir}
+                      onSort={handleSortTableColumn}
+                    />
+                  </th>
+                  <th className="py-2.5 px-3">
+                    <SortableTableHeader
+                      label="Status"
+                      column="status"
+                      activeColumn={tableSortBy}
+                      direction={tableSortDir}
+                      onSort={handleSortTableColumn}
+                    />
+                  </th>
+                  <th className="py-2.5 px-3">
+                    <SortableTableHeader
+                      label="Priority"
+                      column="priority"
+                      activeColumn={tableSortBy}
+                      direction={tableSortDir}
+                      onSort={handleSortTableColumn}
+                    />
+                  </th>
+                  <th className="py-2.5 px-3 text-[11px] font-bold uppercase tracking-wider text-[#4D4D4D] whitespace-nowrap">
+                    Type / Schedule
+                  </th>
+                  <th className="py-2.5 px-3">
+                    <SortableTableHeader
+                      label="Due Date"
+                      column="due_date"
+                      activeColumn={tableSortBy}
+                      direction={tableSortDir}
+                      onSort={handleSortTableColumn}
+                    />
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E6E6E6]">
+                {(() => {
+                  const renderTaskTableRow = (task: TaskRecord) => {
+                    const assigneeName = formatPerson(task.assignee_id);
+                    return (
+                      <TaskTableRow
+                        key={task.id}
+                        task={task}
+                        assigneeName={assigneeName}
+                        initials={getInitials(assigneeName)}
+                        typeName={
+                          task.task_type_id ? typeNameMap.get(task.task_type_id) : null
+                        }
+                        projectName={
+                          task.project_id ? projectNameMap.get(task.project_id) : null
+                        }
+                        userId={userId}
+                        canManageProjects={canManageProjects}
+                        isSelected={selectedTaskIds.has(task.id)}
+                        isStatusPending={mutations.updateTaskStatus.isPending}
+                        onToggleSelect={toggleTableTaskSelection}
+                        onSelect={setSelectedTaskId}
+                        onUpdateStatus={(taskId, status, note) =>
+                          mutations.updateTaskStatus.mutate({
+                            taskId,
+                            status,
+                            note,
+                          })
+                        }
+                        onRejectTask={(targetTask) => {
+                          setRejectingTask(targetTask);
+                          setRejectReason("");
+                        }}
+                        onCompleteTask={(targetTask) => {
+                          mutations.updateTaskStatus.mutate({
+                            taskId: targetTask.id,
+                            status: "done",
+                          });
+                          setLogTimePromptTask(targetTask);
+                          setLogTimeMinutes(String(targetTask.estimated_minutes || 60));
+                        }}
+                      />
+                    );
+                  };
+
+                  if (groupByAssignee) {
+                    return groupedPaginatedTasks.map((group) => {
+                      const isGroupCollapsed = Boolean(collapsedAssigneeGroups[group.key]);
+                      return (
+                        <React.Fragment key={group.key}>
+                          <tr
+                            onClick={() => toggleAssigneeGroup(group.key)}
+                            className="bg-[#FAFAFA] hover:bg-[#F2F2F2] cursor-pointer transition-colors"
+                          >
+                            <td colSpan={7} className="py-2 px-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  {isGroupCollapsed ? (
+                                    <ChevronRight className="w-3.5 h-3.5 text-[#4D4D4D]" />
+                                  ) : (
+                                    <ChevronDown className="w-3.5 h-3.5 text-[#4D4D4D]" />
+                                  )}
+                                  <span className="w-5 h-5 rounded-full bg-[#E6E6E6] text-black font-semibold text-[9px] flex items-center justify-center shrink-0">
+                                    {group.initials}
+                                  </span>
+                                  <span className="text-xs font-bold text-black">
+                                    {group.name}
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white border border-[#E6E6E6] text-[#4D4D4D]">
+                                    {group.tasks.length}{" "}
+                                    {group.tasks.length === 1 ? "task" : "tasks"}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                          {!isGroupCollapsed && group.tasks.map(renderTaskTableRow)}
+                        </React.Fragment>
+                      );
+                    });
+                  }
+
+                  if (groupByProject) {
+                    return groupedByProjectTasks.map((group) => {
+                      const isExpanded = expandedProjectIds[group.key] ?? true;
+                      return (
+                        <React.Fragment key={group.key}>
+                          <tr
+                            onClick={() => toggleProjectGroup(group.key)}
+                            className="bg-[#FAFAFA] hover:bg-[#F2F2F2] cursor-pointer transition-colors"
+                          >
+                            <td colSpan={7} className="py-2 px-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  {isExpanded ? (
+                                    <ChevronDown className="w-3.5 h-3.5 text-[#4D4D4D]" />
+                                  ) : (
+                                    <ChevronRight className="w-3.5 h-3.5 text-[#4D4D4D]" />
+                                  )}
+                                  <span className="w-5 h-5 rounded-md bg-[#E6E6E6] text-black flex items-center justify-center shrink-0">
+                                    <Layers className="w-3 h-3" />
+                                  </span>
+                                  <span
+                                    className={cn(
+                                      "text-xs font-bold",
+                                      group.isUnassignedProject ? "text-[#808080]" : "text-black"
+                                    )}
+                                  >
+                                    {group.label}
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white border border-[#E6E6E6] text-[#4D4D4D]">
+                                    {group.tasks.length}{" "}
+                                    {group.tasks.length === 1 ? "task" : "tasks"}
+                                  </span>
+                                </div>
+                                {!group.isUnassignedProject && (
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <button
+                                      type="button"
+                                      aria-label={`Add task to ${group.label}`}
+                                      title={`Add task to ${group.label}`}
+                                      onMouseDown={(e) => e.preventDefault()}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleOpenCreateModal(group.key);
+                                      }}
+                                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-[#E6E6E6] bg-white hover:bg-[#F5F5F5] text-[11px] font-semibold text-black transition-colors cursor-pointer shrink-0"
+                                    >
+                                      <Plus className="w-3 h-3" />
+                                      <span>Add task</span>
+                                    </button>
+                                    {isAdmin && (
+                                      <button
+                                        type="button"
+                                        aria-label={`Delete project ${group.label}`}
+                                        title={`Delete project ${group.label}`}
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setProjectToDelete({
+                                            id: group.key,
+                                            name: group.label,
+                                          });
+                                        }}
+                                        className="p-1 rounded-md text-[#808080] hover:text-[#FF1493] hover:bg-red-50 transition-colors cursor-pointer shrink-0"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                          {isExpanded &&
+                            (group.tasks.length > 0 ? (
+                              group.tasks.map(renderTaskTableRow)
+                            ) : (
+                              <tr className="bg-white">
+                                <td colSpan={7} className="py-3 px-4">
+                                  <div className="flex items-center justify-between gap-3 text-xs text-[#808080]">
+                                    <span>No tasks in this project yet.</span>
+                                    {!group.isUnassignedProject && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenCreateModal(group.key)}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-[#E6E6E6] bg-[#F5F5F5] hover:bg-[#E6E6E6] text-[11px] font-semibold text-black cursor-pointer transition-colors"
+                                      >
+                                        <Plus className="w-3 h-3" />
+                                        <span>Add task</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                        </React.Fragment>
+                      );
+                    });
+                  }
+
+                  return paginatedListTasks.map(renderTaskTableRow);
+                })()}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Client-Side Pagination Footer */}
+          <div className="flex items-center justify-between gap-3 px-3 py-2 border-t border-[#E6E6E6] bg-[#FAFAFA] text-xs shrink-0">
+            <span className="text-[#808080] font-medium">
+              Showing {totalListTasks === 0 ? 0 : tableStartIndex + 1}–
+              {Math.min(tableStartIndex + paginatedListTasks.length, totalListTasks)} of{" "}
+              {totalListTasks} {totalListTasks === 1 ? "task" : "tasks"}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={safeTablePage <= 1}
+                onClick={() => setTablePage((p) => Math.max(1, p - 1))}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-[#E6E6E6] bg-white hover:bg-[#F5F5F5] text-black font-semibold disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>Previous</span>
+              </button>
+              <span className="text-[11px] font-semibold text-[#4D4D4D]">
+                Page {safeTablePage} of {totalTablePages}
+              </span>
+              <button
+                type="button"
+                disabled={safeTablePage >= totalTablePages}
+                onClick={() => setTablePage((p) => Math.min(totalTablePages, p + 1))}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-[#E6E6E6] bg-white hover:bg-[#F5F5F5] text-black font-semibold disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                <span>Next</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
+      </div>
 
       {/* Create Task Modal */}
       {createTaskOpen && (
@@ -1609,45 +3148,61 @@ function TasksWorkspaceContent() {
                 <label className="block text-xs font-bold text-black mb-1">
                   Assignee
                 </label>
-                <select
-                  aria-label="Task Assignee"
-                  value={newAssigneeId}
-                  onChange={(e) => {
-                    setNewAssigneeId(e.target.value);
-                    editedFields.current.add("assignee");
-                  }}
-                  className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black focus:outline-none focus:border-black"
-                >
-                  <option value="">Unassigned</option>
-                  {assignableEmployees.map((emp) => {
-                    const wl = workloadMap.get(emp.id) || { openCount: 0, dueThisWeekCount: 0 };
-                    return (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.full_name || emp.email} {emp.id === userId ? "(You — Self-Assign)" : ""} — {wl.openCount} open ({wl.dueThisWeekCount} due this week)
-                      </option>
-                    );
-                  })}
-                </select>
-
-                {/* Assignee Suggestion Chips */}
-                {suggestedAssignees.length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    <span className="text-[10px] font-bold uppercase text-[#808080]">Suggested:</span>
-                    {suggestedAssignees.map((emp) => (
-                      <button
-                        key={emp.id}
-                        type="button"
-                        onClick={() => {
-                          setNewAssigneeId(emp.id);
-                          editedFields.current.add("assignee");
-                        }}
-                        className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#F5F5F5] border border-[#E6E6E6] hover:bg-[#E6E6E6] text-black cursor-pointer"
-                        title="Fewest open tasks"
-                      >
-                        {emp.full_name?.split(" ")[0] || emp.email} ({emp.openCount} open)
-                      </button>
-                    ))}
+                {isRegularEmployee ? (
+                  <div
+                    aria-label="Task Assignee"
+                    className="w-full px-3 py-2 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] text-xs font-semibold text-black flex items-center justify-between gap-2"
+                  >
+                    <span>
+                      {actualCurrentUserName ? `You (${actualCurrentUserName})` : "You"}
+                    </span>
+                    <span className="text-[10px] font-medium text-[#808080]">
+                      Self-assigned only
+                    </span>
                   </div>
+                ) : (
+                  <>
+                    <select
+                      aria-label="Task Assignee"
+                      value={newAssigneeId}
+                      onChange={(e) => {
+                        setNewAssigneeId(e.target.value);
+                        editedFields.current.add("assignee");
+                      }}
+                      className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black focus:outline-none focus:border-black"
+                    >
+                      <option value="">Unassigned</option>
+                      {assignableEmployees.map((emp) => {
+                        const wl = workloadMap.get(emp.id) || { openCount: 0, dueThisWeekCount: 0 };
+                        return (
+                          <option key={emp.id} value={emp.id}>
+                            {formatAssigneeOptionLabel(emp)} — {wl.openCount} open ({wl.dueThisWeekCount} due this week)
+                          </option>
+                        );
+                      })}
+                    </select>
+
+                    {/* Assignee Suggestion Chips */}
+                    {suggestedAssignees.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] font-bold uppercase text-[#808080]">Suggested:</span>
+                        {suggestedAssignees.map((emp) => (
+                          <button
+                            key={emp.id}
+                            type="button"
+                            onClick={() => {
+                              setNewAssigneeId(emp.id);
+                              editedFields.current.add("assignee");
+                            }}
+                            className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#F5F5F5] border border-[#E6E6E6] hover:bg-[#E6E6E6] text-black cursor-pointer"
+                            title="Fewest open tasks"
+                          >
+                            {emp.full_name?.split(" ")[0] || emp.email} ({emp.openCount} open)
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -1678,14 +3233,14 @@ function TasksWorkspaceContent() {
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-black flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5 text-black" />
-                    Due date
+                    Due date *
                   </label>
                   {newDueDate ? (
                     <span className="text-[11px] font-medium text-black">
                       Deadline: <span className="font-bold underline">{formatDueDateDisplay(newDueDate)}</span> ({newDueDate})
                     </span>
                   ) : (
-                    <span className="text-[11px] text-[#808080]">Optional deadline</span>
+                    <span className="text-[11px] font-semibold text-[#FF1493]">Required</span>
                   )}
                 </div>
 
@@ -1695,6 +3250,7 @@ function TasksWorkspaceContent() {
                     type="button"
                     onClick={() => {
                       setNewDueDate(getPresetDateIso(0));
+                      setDueDateError("");
                       setShowCustomDatePicker(false);
                       setAutoDueSuggested(false);
                       setSuggestedDueText("");
@@ -1714,6 +3270,7 @@ function TasksWorkspaceContent() {
                     type="button"
                     onClick={() => {
                       setNewDueDate(getPresetDateIso(1));
+                      setDueDateError("");
                       setShowCustomDatePicker(false);
                       setAutoDueSuggested(false);
                       setSuggestedDueText("");
@@ -1733,6 +3290,7 @@ function TasksWorkspaceContent() {
                     type="button"
                     onClick={() => {
                       setNewDueDate(getPresetDateIso(2));
+                      setDueDateError("");
                       setShowCustomDatePicker(false);
                       setAutoDueSuggested(false);
                       setSuggestedDueText("");
@@ -1778,22 +3336,6 @@ function TasksWorkspaceContent() {
                         : "Custom date..."}
                     </span>
                   </button>
-
-                  {newDueDate && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewDueDate("");
-                        setShowCustomDatePicker(false);
-                        setAutoDueSuggested(false);
-                        setSuggestedDueText("");
-                        editedFields.current.add("dueDate");
-                      }}
-                      className="px-2 py-1 text-[11px] font-bold text-[#808080] hover:text-black cursor-pointer ml-auto"
-                    >
-                      Clear
-                    </button>
-                  )}
                 </div>
 
                 {/* Custom Date Input */}
@@ -1807,10 +3349,12 @@ function TasksWorkspaceContent() {
                   <div className="pt-1.5 flex items-center gap-2">
                     <input
                       type="date"
+                      required
                       aria-label="Custom Due Date"
                       value={newDueDate}
                       onChange={(e) => {
                         setNewDueDate(e.target.value);
+                        if (e.target.value.trim()) setDueDateError("");
                         setAutoDueSuggested(false);
                         setSuggestedDueText("");
                         editedFields.current.add("dueDate");
@@ -1823,22 +3367,16 @@ function TasksWorkspaceContent() {
                   </div>
                 )}
 
+                {dueDateError && (
+                  <p className="text-[11px] font-semibold text-[#FF1493]">
+                    {dueDateError}
+                  </p>
+                )}
+
                 {/* Suggested Due Date Chip from Type Preset */}
                 {suggestedDueText && newDueDate && autoDueSuggested && (
                   <div className="mt-1 flex items-center justify-between text-[11px] text-[#4D4D4D] bg-white border border-[#E6E6E6] rounded px-2.5 py-1">
                     <span>Preset suggested due date: <strong>{suggestedDueText}</strong></span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewDueDate("");
-                        setSuggestedDueText("");
-                        setAutoDueSuggested(false);
-                        editedFields.current.add("dueDate");
-                      }}
-                      className="text-[10px] font-bold text-[#808080] hover:text-black underline ml-2 cursor-pointer"
-                    >
-                      Clear
-                    </button>
                   </div>
                 )}
               </div>
@@ -1948,26 +3486,24 @@ function TasksWorkspaceContent() {
               </div>
 
               {/* Project Grouping */}
-              {projects.length > 0 && (
-                <div>
-                  <label className="block text-xs font-bold text-black mb-1">
-                    Project (optional)
-                  </label>
-                  <select
-                    aria-label="Task Project"
-                    value={newProjectId}
-                    onChange={(e) => setNewProjectId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
-                  >
-                    <option value="">No Project</option>
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.code ? `${p.code} · ${p.name}` : p.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <div>
+                <label className="block text-xs font-bold text-black mb-1">
+                  Project (optional)
+                </label>
+                <select
+                  aria-label="Task Project"
+                  value={newProjectId}
+                  onChange={(e) => setNewProjectId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
+                >
+                  <option value="">No Project</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.code ? `${p.code} · ${p.name}` : p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               {/* Linked KPI Goal (Phase 5) */}
               {FEATURES.KPI && assigneeGoals.length > 0 && (
@@ -2080,14 +3616,16 @@ function TasksWorkspaceContent() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setCreateProjectOpen(false);
+            if (e.target === e.currentTarget && !isCreatingProjectWithTasks) {
+              setCreateProjectOpen(false);
+            }
           }}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="create-project-title"
-            className="w-full max-w-md bg-white rounded-2xl border border-[#E6E6E6] shadow-xl p-6 space-y-4"
+            className="w-full max-w-lg bg-white rounded-2xl border border-[#E6E6E6] shadow-xl p-6 space-y-4 max-h-[90vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between">
               <h2 id="create-project-title" className="text-base font-bold text-black">
@@ -2096,8 +3634,9 @@ function TasksWorkspaceContent() {
               <button
                 type="button"
                 aria-label="Close project modal"
+                disabled={isCreatingProjectWithTasks}
                 onClick={() => setCreateProjectOpen(false)}
-                className="p-1 rounded text-[#808080] hover:text-black cursor-pointer"
+                className="p-1 rounded text-[#808080] hover:text-black cursor-pointer disabled:opacity-50"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2154,20 +3693,130 @@ function TasksWorkspaceContent() {
                 />
               </div>
 
+              {/* Initial Tasks (Optional) Multi-Task Builder */}
+              <div className="pt-2 border-t border-[#E6E6E6] space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-black">
+                    Initial Tasks (Optional)
+                  </label>
+                  {projInitialTasks.length > 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#F5F5F5] border border-[#E6E6E6] text-black">
+                      {projInitialTasks.length} queued
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <input
+                    type="text"
+                    aria-label="Initial task title"
+                    value={projTaskDraftTitle}
+                    onChange={(e) => setProjTaskDraftTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddInitialProjectTask();
+                      }
+                    }}
+                    placeholder="Task title..."
+                    className="flex-1 min-w-[140px] px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black focus:outline-none focus:border-black"
+                  />
+                  {isRegularEmployee ? (
+                    <span
+                      aria-label="Initial task assignee"
+                      className="max-w-[160px] truncate px-2.5 py-1.5 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] text-xs font-semibold text-black"
+                    >
+                      {actualCurrentUserName ? `You (${actualCurrentUserName})` : "You"}
+                    </span>
+                  ) : (
+                    <select
+                      aria-label="Initial task assignee"
+                      value={projTaskDraftAssignee}
+                      onChange={(e) => setProjTaskDraftAssignee(e.target.value)}
+                      className="max-w-[130px] px-2 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black focus:outline-none focus:border-black"
+                    >
+                      <option value="">Unassigned</option>
+                      {assignableEmployees.map((emp) => (
+                        <option key={emp.id} value={emp.id}>
+                          {formatAssigneeOptionLabel(emp)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <input
+                    type="date"
+                    aria-label="Initial task due date"
+                    required
+                    value={projTaskDraftDueDate}
+                    onChange={(e) => setProjTaskDraftDueDate(e.target.value)}
+                    className="px-2 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black focus:outline-none focus:border-black"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddInitialProjectTask}
+                    disabled={
+                      !projTaskDraftTitle.trim() ||
+                      !projTaskDraftDueDate ||
+                      isCreatingProjectWithTasks
+                    }
+                    className="px-2.5 py-1.5 rounded-lg border border-[#E6E6E6] bg-[#F5F5F5] hover:bg-[#E6E6E6] text-xs font-semibold text-black cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0 transition-colors"
+                  >
+                    + Add
+                  </button>
+                </div>
+
+                {projInitialTasks.length > 0 && (
+                  <div className="max-h-36 overflow-y-auto space-y-1.5 pr-0.5">
+                    {projInitialTasks.map((item) => (
+                      <div
+                        key={item.localId}
+                        className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] text-xs"
+                      >
+                        <span className="truncate font-medium text-black flex-1" title={item.title}>
+                          {item.title}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full bg-white border border-[#E6E6E6] text-[10px] font-medium text-[#4D4D4D] shrink-0">
+                          {item.dueDate}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full bg-white border border-[#E6E6E6] text-[10px] font-medium text-[#4D4D4D] shrink-0 max-w-[120px] truncate">
+                          {item.assigneeId ? formatPerson(item.assigneeId) : "Unassigned"}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={`Remove ${item.title}`}
+                          disabled={isCreatingProjectWithTasks}
+                          onClick={() =>
+                            setProjInitialTasks((prev) =>
+                              prev.filter((t) => t.localId !== item.localId)
+                            )
+                          }
+                          className="p-0.5 rounded text-[#808080] hover:text-[#FF1493] cursor-pointer shrink-0 disabled:opacity-40"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="flex justify-end gap-2 pt-2 border-t border-[#E6E6E6]">
                 <button
                   type="button"
+                  disabled={isCreatingProjectWithTasks}
                   onClick={() => setCreateProjectOpen(false)}
-                  className="px-4 py-2 rounded-lg bg-white border border-[#E6E6E6] hover:bg-[#F5F5F5] text-xs font-semibold text-black cursor-pointer shadow-xs"
+                  className="px-4 py-2 rounded-lg bg-white border border-[#E6E6E6] hover:bg-[#F5F5F5] text-xs font-semibold text-black cursor-pointer shadow-xs disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={mutations.createProject.isPending}
+                  disabled={isCreatingProjectWithTasks || mutations.createProject.isPending}
                   className="px-5 py-2 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer disabled:opacity-60 shadow-xs"
                 >
-                  {mutations.createProject.isPending ? "Creating..." : "Create Project"}
+                  {isCreatingProjectWithTasks || mutations.createProject.isPending
+                    ? "Creating..."
+                    : "Create Project"}
                 </button>
               </div>
             </form>
@@ -2193,7 +3842,10 @@ function TasksWorkspaceContent() {
             <div className="flex items-start justify-between gap-3 pb-4 border-b border-[#E6E6E6]">
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <StatusPill status={selectedTask.status} />
+                  <StatusPill
+                    status={selectedTask.status}
+                    label={selectedTask.status === "done" ? "Completed" : undefined}
+                  />
                   <StatusPill status={selectedTask.priority} />
                   {selectedTask.task_type_id && (
                     <TaskTypeBadge typeName={typeNameMap.get(selectedTask.task_type_id)} />
@@ -2230,7 +3882,7 @@ function TasksWorkspaceContent() {
             </div>
 
             {/* Parent Task Completion Gentle Banner (Phase 4) */}
-            {parentSubtasks.length > 0 && allSubtasksDone && selectedTask.status !== "done" && (
+            {parentSubtasks.length > 0 && allSubtasksDone && selectedTask.status === "in_progress" && (
               <div className="p-3 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-black shrink-0" />
@@ -2297,152 +3949,72 @@ function TasksWorkspaceContent() {
             {/* Status & Assignment Controls */}
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                {selectedTask.status === "todo" && (
-                  <button
-                    type="button"
-                    disabled={mutations.updateTaskStatus.isPending}
-                    onClick={() =>
-                      mutations.updateTaskStatus.mutate({
-                        taskId: selectedTask.id,
-                        status: "in_progress",
-                        note: selectedTask.assignee_id === userId && selectedTask.creator_id !== userId ? "Accepted assigned task" : undefined,
-                      })
-                    }
-                    className="px-3.5 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer shadow-xs"
-                  >
-                    {selectedTask.assignee_id === userId && selectedTask.creator_id !== userId
-                      ? "✓ Accept Task & Start Progress"
-                      : "Start Progress"}
-                  </button>
-                )}
-
-                {selectedTask.status === "in_progress" && (
+                {selectedTask.status === "todo" && selectedTask.assignee_id === userId && (
                   <>
                     <button
                       type="button"
                       disabled={mutations.updateTaskStatus.isPending}
-                      onClick={() => {
+                      onClick={() =>
                         mutations.updateTaskStatus.mutate({
                           taskId: selectedTask.id,
-                          status: "done",
-                        });
-                        setLogTimePromptTask(selectedTask);
-                        setLogTimeMinutes(String(selectedTask.estimated_minutes || 60));
-                      }}
+                          status: "in_progress",
+                          note: "Accepted assigned task",
+                        })
+                      }
                       className="px-3.5 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer shadow-xs"
                     >
-                      Mark complete
+                      Accept
                     </button>
-
-                    {/* Blocked Reason Prompt (Phase 4) */}
-                    {blockingTaskId === selectedTask.id ? (
-                      <div className="w-full mt-2 p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
-                        <label className="text-xs font-bold text-amber-900 block">
-                          Reason for blocking (Optional)
-                        </label>
-                        <input
-                          type="text"
-                          value={blockingReason}
-                          onChange={(e) => setBlockingReason(e.target.value)}
-                          placeholder="e.g. Waiting on API credentials or customer response..."
-                          className="w-full px-3 py-1.5 text-xs bg-white border border-amber-300 rounded focus:outline-none"
-                        />
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setBlockingTaskId(null);
-                              setBlockingReason("");
-                            }}
-                            className="px-2.5 py-1 text-xs text-amber-800 hover:text-black cursor-pointer"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              await mutations.updateTaskStatus.mutateAsync({
-                                taskId: selectedTask.id,
-                                status: "blocked",
-                                note: blockingReason.trim() || undefined,
-                              });
-                              if (blockingReason.trim()) {
-                                await mutations.addComment.mutateAsync({
-                                  taskId: selectedTask.id,
-                                  body: `Blocked: ${blockingReason.trim()}`,
-                                });
-                              }
-                              setBlockingTaskId(null);
-                              setBlockingReason("");
-                            }}
-                            className="px-3 py-1 text-xs font-bold bg-amber-800 text-white rounded hover:bg-amber-900 cursor-pointer"
-                          >
-                            Confirm Blocked
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setBlockingTaskId(selectedTask.id)}
-                        className="px-3.5 py-1.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-xs font-semibold cursor-pointer"
-                      >
-                        Mark Blocked
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      disabled={mutations.updateTaskStatus.isPending}
+                      onClick={() => {
+                        setRejectingTask(selectedTask);
+                        setRejectReason("");
+                      }}
+                      className="px-3.5 py-1.5 rounded-lg border border-[#E6E6E6] bg-white hover:bg-red-50 hover:text-[#FF1493] hover:border-red-200 text-xs font-semibold text-[#4D4D4D] cursor-pointer"
+                    >
+                      Reject
+                    </button>
                   </>
                 )}
 
-                {selectedTask.status === "blocked" && (
-                  <button
-                    type="button"
-                    disabled={mutations.updateTaskStatus.isPending}
-                    onClick={() =>
-                      mutations.updateTaskStatus.mutate({
-                        taskId: selectedTask.id,
-                        status: "in_progress",
-                      })
-                    }
-                    className="px-3.5 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer shadow-xs"
-                  >
-                    Resume Progress
-                  </button>
-                )}
-
-                {selectedTask.status === "todo" && (
-                  <button
-                    type="button"
-                    disabled={mutations.updateTaskStatus.isPending}
-                    onClick={() => {
-                      mutations.updateTaskStatus.mutate({
-                        taskId: selectedTask.id,
-                        status: "done",
-                      });
-                      setLogTimePromptTask(selectedTask);
-                      setLogTimeMinutes(String(selectedTask.estimated_minutes || 60));
-                    }}
-                    className="px-3.5 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer shadow-xs"
-                  >
-                    Complete task
-                  </button>
-                )}
-
-                {canReopenTask(selectedTask) && (
-                  <button
-                    type="button"
-                    disabled={mutations.updateTaskStatus.isPending}
-                    onClick={() =>
-                      mutations.updateTaskStatus.mutate({
-                        taskId: selectedTask.id,
-                        status: "in_progress",
-                        note: "Reopened from drawer",
-                      })
-                    }
-                    className="px-3.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] hover:bg-[#F5F5F5] text-xs font-semibold text-black cursor-pointer shadow-xs"
-                  >
-                    Reopen
-                  </button>
-                )}
+                {selectedTask.status === "in_progress" &&
+                  (selectedTask.assignee_id === userId || canManageProjects) && (
+                    <>
+                      <button
+                        type="button"
+                        aria-pressed="true"
+                        disabled={mutations.updateTaskStatus.isPending}
+                        onClick={() => {
+                          if (selectedTask.status !== "in_progress") {
+                            mutations.updateTaskStatus.mutate({
+                              taskId: selectedTask.id,
+                              status: "in_progress",
+                            });
+                          }
+                        }}
+                        className="px-3.5 py-1.5 rounded-lg bg-[#B7FF00]/30 border border-[#84CC16] text-black text-xs font-semibold cursor-pointer"
+                      >
+                        In Progress
+                      </button>
+                      <button
+                        type="button"
+                        disabled={mutations.updateTaskStatus.isPending}
+                        onClick={() => {
+                          mutations.updateTaskStatus.mutate({
+                            taskId: selectedTask.id,
+                            status: "done",
+                          });
+                          setLogTimePromptTask(selectedTask);
+                          setLogTimeMinutes(String(selectedTask.estimated_minutes || 60));
+                        }}
+                        className="px-3.5 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer shadow-xs"
+                      >
+                        Completed
+                      </button>
+                    </>
+                  )}
               </div>
 
               {/* Assignee Control */}
@@ -2460,14 +4032,16 @@ function TasksWorkspaceContent() {
                       • Self-Assigned
                     </span>
                   )}
-                  {selectedTask.assignee_id && selectedTask.creator_id !== selectedTask.assignee_id && (
-                    <span className="text-[10px] text-[#808080] ml-6">
-                      • Assigned by {formatPerson(selectedTask.creator_id)}
-                    </span>
-                  )}
+                  {selectedTask.assignee_id &&
+                    selectedTask.creator_id &&
+                    selectedTask.creator_id !== selectedTask.assignee_id && (
+                      <span className="text-[10px] text-[#808080] ml-6">
+                        • Assigned by {formatPerson(selectedTask.creator_id)}
+                      </span>
+                    )}
                 </div>
 
-                {canReassignTask(selectedTask) && (
+                {!isRegularEmployee && canReassignTask(selectedTask) ? (
                   <select
                     aria-label="Reassign task"
                     value={selectedTask.assignee_id || ""}
@@ -2482,10 +4056,30 @@ function TasksWorkspaceContent() {
                     <option value="">Unassigned</option>
                     {assignableEmployees.map((emp) => (
                       <option key={emp.id} value={emp.id}>
-                        {emp.full_name || emp.email}
+                        {formatAssigneeOptionLabel(emp)}
                       </option>
                     ))}
                   </select>
+                ) : (
+                  isRegularEmployee &&
+                  !selectedTask.assignee_id &&
+                  selectedTask.status !== "done" &&
+                  selectedTask.status !== "cancelled" &&
+                  userId && (
+                    <button
+                      type="button"
+                      disabled={mutations.assignTask.isPending}
+                      onClick={() =>
+                        mutations.assignTask.mutate({
+                          taskId: selectedTask.id,
+                          assigneeId: userId,
+                        })
+                      }
+                      className="px-3 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
+                    >
+                      Assign to me
+                    </button>
+                  )
                 )}
               </div>
 
@@ -2521,29 +4115,16 @@ function TasksWorkspaceContent() {
                 </div>
               )}
 
-              {canCancelTask(selectedTask) && (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={cancelReason}
-                    onChange={(e) => setCancelReason(e.target.value)}
-                    placeholder="Optional cancellation reason..."
-                    className="flex-1 px-3 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
-                  />
+              {isAdmin && (
+                <div className="flex items-center justify-end pt-1">
                   <button
                     type="button"
-                    disabled={mutations.updateTaskStatus.isPending}
-                    onClick={async () => {
-                      await mutations.updateTaskStatus.mutateAsync({
-                        taskId: selectedTask.id,
-                        status: "cancelled",
-                        note: cancelReason.trim() || undefined,
-                      });
-                      setCancelReason("");
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-red-50 text-[#FF1493] border border-red-200 text-xs font-bold cursor-pointer"
+                    disabled={mutations.deleteTask.isPending}
+                    onClick={() => setTaskToDelete(selectedTask)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-[#FF1493] border border-red-200 text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors"
                   >
-                    Cancel Task
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Task</span>
                   </button>
                 </div>
               )}
@@ -2727,6 +4308,281 @@ function TasksWorkspaceContent() {
               )}
             </section>
           </aside>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal (Admin only) */}
+      {isAdmin && bulkDeleteConfirmOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isBulkUpdating) {
+              setBulkDeleteConfirmOpen(false);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bulk-delete-title"
+            className="w-full max-w-md bg-white rounded-2xl border border-[#E6E6E6] shadow-xl p-6 space-y-4 animate-in fade-in duration-150"
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-red-50 border border-red-200 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-4 h-4 text-[#FF1493]" />
+              </div>
+              <div className="space-y-1">
+                <h2 id="bulk-delete-title" className="text-sm font-bold text-black">
+                  Delete {selectedTaskIds.size} selected{" "}
+                  {selectedTaskIds.size === 1 ? "task" : "tasks"}? This cannot be undone.
+                </h2>
+                <p className="text-xs text-[#4D4D4D] leading-relaxed">
+                  Selected tasks and their board entries will be permanently removed.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={isBulkUpdating}
+                onClick={() => setBulkDeleteConfirmOpen(false)}
+                className="px-3.5 py-1.5 rounded-lg border border-[#E6E6E6] bg-white hover:bg-[#F5F5F5] text-xs font-semibold text-black cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isBulkUpdating}
+                onClick={handleBulkDelete}
+                className="px-3.5 py-1.5 rounded-lg bg-[#FF1493] hover:bg-[#E01182] text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
+              >
+                {isBulkUpdating ? "Deleting..." : "Delete Tasks"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Single Task Delete Confirmation Modal (Admin only) */}
+      {isAdmin && taskToDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !mutations.deleteTask.isPending) {
+              setTaskToDelete(null);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-single-task-title"
+            className="w-full max-w-md bg-white rounded-2xl border border-[#E6E6E6] shadow-xl p-6 space-y-4 animate-in fade-in duration-150"
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-red-50 border border-red-200 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-4 h-4 text-[#FF1493]" />
+              </div>
+              <div className="space-y-1">
+                <h2 id="delete-single-task-title" className="text-sm font-bold text-black">
+                  Delete task &apos;{taskToDelete.title}&apos;?
+                </h2>
+                <p className="text-xs text-[#4D4D4D] leading-relaxed">
+                  This task will be permanently removed. This cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={mutations.deleteTask.isPending}
+                onClick={() => setTaskToDelete(null)}
+                className="px-3.5 py-1.5 rounded-lg border border-[#E6E6E6] bg-white hover:bg-[#F5F5F5] text-xs font-semibold text-black cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={mutations.deleteTask.isPending}
+                onClick={async () => {
+                  const deletingTaskId = taskToDelete.id;
+                  try {
+                    await mutations.deleteTask.mutateAsync({ taskId: deletingTaskId });
+                    if (selectedTaskId === deletingTaskId) {
+                      setSelectedTaskId(null);
+                    }
+                    setTaskToDelete(null);
+                  } catch {
+                    // Error toast handled by deleteTask mutation
+                  }
+                }}
+                className="px-3.5 py-1.5 rounded-lg bg-[#FF1493] hover:bg-[#E01182] text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
+              >
+                {mutations.deleteTask.isPending ? "Deleting..." : "Delete Task"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Project Confirmation Modal (Admin only) */}
+      {isAdmin && projectToDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !mutations.deleteProject.isPending) {
+              setProjectToDelete(null);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-project-title"
+            className="w-full max-w-md bg-white rounded-2xl border border-[#E6E6E6] shadow-xl p-6 space-y-4 animate-in fade-in duration-150"
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-red-50 border border-red-200 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-4 h-4 text-[#FF1493]" />
+              </div>
+              <div className="space-y-1">
+                <h2 id="delete-project-title" className="text-sm font-bold text-black">
+                  Are you sure?
+                </h2>
+                <p className="text-xs text-[#4D4D4D] leading-relaxed">
+                  {(() => {
+                    const projectTaskCount = tasks.filter(
+                      (t) => t.project_id === projectToDelete.id
+                    ).length;
+                    return (
+                      <>
+                        Are you sure? Deleting &apos;{projectToDelete.name}&apos; will also permanently delete all{" "}
+                        {projectTaskCount} {projectTaskCount === 1 ? "task" : "tasks"} inside it. This action cannot be undone.
+                      </>
+                    );
+                  })()}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={mutations.deleteProject.isPending}
+                onClick={() => setProjectToDelete(null)}
+                className="px-3.5 py-1.5 rounded-lg border border-[#E6E6E6] bg-white hover:bg-[#F5F5F5] text-xs font-semibold text-black cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={mutations.deleteProject.isPending}
+                onClick={async () => {
+                  const deletingId = projectToDelete.id;
+                  const deletedTaskIds = new Set(
+                    tasks
+                      .filter((t) => t.project_id === deletingId)
+                      .map((t) => t.id)
+                  );
+                  try {
+                    await mutations.deleteProject.mutateAsync(deletingId);
+                    if (projectFilter === deletingId) {
+                      setProjectFilter("all");
+                    }
+                    if (newProjectId === deletingId) {
+                      setNewProjectId("");
+                    }
+                    if (selectedTaskId && deletedTaskIds.has(selectedTaskId)) {
+                      setSelectedTaskId(null);
+                    }
+                    if (deletedTaskIds.size > 0) {
+                      setSelectedTaskIds((prev) => {
+                        const next = new Set(prev);
+                        deletedTaskIds.forEach((tid) => next.delete(tid));
+                        return next;
+                      });
+                    }
+                    setProjectToDelete(null);
+                  } catch {
+                    // Error toast handled by deleteProject mutation
+                  }
+                }}
+                className="px-3.5 py-1.5 rounded-lg bg-[#FF1493] hover:bg-[#E01182] text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
+              >
+                {mutations.deleteProject.isPending ? "Deleting..." : "Delete Project"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Assigned Task Confirmation Modal */}
+      {rejectingTask && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !mutations.updateTaskStatus.isPending) {
+              setRejectingTask(null);
+              setRejectReason("");
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reject-task-title"
+            className="w-full max-w-md bg-white rounded-2xl border border-[#E6E6E6] shadow-xl p-6 space-y-4 animate-in fade-in duration-150"
+          >
+            <div className="space-y-1">
+              <h2 id="reject-task-title" className="text-sm font-bold text-black">
+                Reject &apos;{rejectingTask.title}&apos;?
+              </h2>
+              <p className="text-xs text-[#4D4D4D] leading-relaxed">
+                This will move the task to Cancelled. You can optionally include a brief reason for your manager.
+              </p>
+            </div>
+
+            <input
+              type="text"
+              aria-label="Rejection reason"
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Reason for rejecting (optional)..."
+              className="w-full px-3 py-2 rounded-lg border border-[#E6E6E6] text-xs text-black focus:outline-none focus:border-black"
+            />
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={mutations.updateTaskStatus.isPending}
+                onClick={() => {
+                  setRejectingTask(null);
+                  setRejectReason("");
+                }}
+                className="px-3.5 py-1.5 rounded-lg border border-[#E6E6E6] bg-white hover:bg-[#F5F5F5] text-xs font-semibold text-black cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={mutations.updateTaskStatus.isPending}
+                onClick={async () => {
+                  await mutations.updateTaskStatus.mutateAsync({
+                    taskId: rejectingTask.id,
+                    status: "cancelled",
+                    note: rejectReason.trim() || "Rejected assigned task",
+                  });
+                  setRejectingTask(null);
+                  setRejectReason("");
+                }}
+                className="px-3.5 py-1.5 rounded-lg bg-[#FF1493] hover:bg-[#E01182] text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
+              >
+                {mutations.updateTaskStatus.isPending ? "Rejecting..." : "Confirm Reject"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

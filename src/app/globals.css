@@ -76,6 +76,11 @@
   }
 }
 
+html {
+  scrollbar-gutter: stable;
+  overflow-y: scroll;
+}
+
 body {
   background-color: var(--shell-bg);
   color: var(--text-primary);

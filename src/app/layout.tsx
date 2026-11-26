@@ -1,12 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
-import { ThemeProvider } from "@/components/theme-provider";
-import { QueryProvider } from "@/components/query-provider";
-import { AttendanceProvider } from "@/features/attendance/context/attendance-context";
-import { SidebarProvider } from "@/components/shell/sidebar-context";
-import { Toaster } from "sonner";
-import { DesktopOnlyGatekeeper } from "@/components/shared/desktop-only-gatekeeper";
-import { PwaRegister } from "@/components/pwa/pwa-register";
+import { Providers } from "@/components/providers";
 import "./globals.css";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -61,29 +55,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#000000" />
       </head>
       <body className="font-sans antialiased bg-canvas min-h-screen text-text-primary selection:bg-lime selection:text-black">
-        <PwaRegister />
-        <ThemeProvider>
-          <QueryProvider>
-            <DesktopOnlyGatekeeper>
-              <AttendanceProvider>
-                <SidebarProvider>
-                  {children}
-                </SidebarProvider>
-              </AttendanceProvider>
-            </DesktopOnlyGatekeeper>
-            <Toaster
-              position="top-right"
-              toastOptions={{
-                style: {
-                  background: "#000000",
-                  color: "#FFFFFF",
-                  border: "1px solid #1A1A1A",
-                  borderRadius: "10px",
-                },
-              }}
-            />
-          </QueryProvider>
-        </ThemeProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
