@@ -39,11 +39,15 @@ import {
   UserCheck,
   Repeat,
   Sparkles,
-  Layers,
   ArrowRight,
   ChevronDown,
   Check,
   Target,
+  SlidersHorizontal,
+  Filter,
+  CheckCircle2,
+  Play,
+  RotateCcw,
 } from "lucide-react";
 
 const STATUS_COLUMNS: Array<{ key: TaskStatus; label: string; hint: string }> = [
@@ -155,13 +159,13 @@ function FilterDropdownMenu({
           type="button"
           aria-label={ariaLabel}
           className={cn(
-            "inline-flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer select-none",
+            "inline-flex items-center justify-between gap-1.5 w-full px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer select-none",
             isFiltered
-              ? "bg-black text-white border-black"
+              ? "bg-black text-white border-black font-semibold"
               : "bg-white text-black border-[#E6E6E6] hover:bg-[#F5F5F5]"
           )}
         >
-          <span className="truncate max-w-[125px]">{displayLabel}</span>
+          <span className="truncate">{displayLabel}</span>
           <ChevronDown
             className={cn(
               "w-3 h-3 shrink-0",
@@ -218,9 +222,21 @@ function TasksWorkspaceContent() {
   const [typeFilter, setTypeFilter] = React.useState<string>("all");
   const [recurringFilter, setRecurringFilter] = React.useState<string>("all");
 
+  // Filters Panel open state
+  const [filtersOpen, setFiltersOpen] = React.useState(false);
+  const filtersTriggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const filtersPanelRef = React.useRef<HTMLDivElement | null>(null);
+
+  // Focus tracking for drawer & modals
+  const lastFocusedCardRef = React.useRef<HTMLElement | null>(null);
+  const createTaskTriggerRef = React.useRef<HTMLButtonElement | null>(null);
+
   const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);
   const [createTaskOpen, setCreateTaskOpen] = React.useState(false);
   const [createProjectOpen, setCreateProjectOpen] = React.useState(false);
+
+  // Optional settings accordion in Create Task dialog
+  const [showAdvancedOptions, setShowAdvancedOptions] = React.useState<boolean>(false);
 
   // Active Holidays for working day calculation
   const [holidays, setHolidays] = React.useState<Array<{ date: string }>>([]);
@@ -637,15 +653,28 @@ function TasksWorkspaceContent() {
     setSearchQuery("");
   };
 
+  const activePanelFilterCount = React.useMemo(() => {
+    let count = 0;
+    if (statusFilter !== "all") count++;
+    if (priorityFilter !== "all") count++;
+    if (typeFilter !== "all") count++;
+    if (recurringFilter !== "all") count++;
+    if (dueFilter !== "all") count++;
+    if (assigneeFilter !== "all") count++;
+    if (projectFilter !== "all") count++;
+    return count;
+  }, [
+    statusFilter,
+    priorityFilter,
+    typeFilter,
+    recurringFilter,
+    dueFilter,
+    assigneeFilter,
+    projectFilter,
+  ]);
+
   const hasActiveFilters =
-    statusFilter !== "all" ||
-    priorityFilter !== "all" ||
-    typeFilter !== "all" ||
-    recurringFilter !== "all" ||
-    dueFilter !== "all" ||
-    assigneeFilter !== "all" ||
-    projectFilter !== "all" ||
-    searchQuery.trim().length > 0;
+    activePanelFilterCount > 0 || searchQuery.trim().length > 0;
 
   const selectedTask = React.useMemo(() => {
     if (!selectedTaskId) return null;
@@ -671,6 +700,41 @@ function TasksWorkspaceContent() {
     );
   }, [detailsQuery.data?.timeLogs]);
 
+  // Extract blocker reason from events / comments for blocked tasks
+  const blockerReason = React.useMemo(() => {
+    if (selectedTask?.status !== "blocked") return null;
+    const events = detailsQuery.data?.events || [];
+    for (let i = events.length - 1; i >= 0; i--) {
+      const ev = events[i];
+      if (ev.to_status === "blocked") {
+        const note = (ev.metadata as any)?.note;
+        if (note && typeof note === "string" && note.trim()) return note.trim();
+      }
+    }
+    const comments = detailsQuery.data?.comments || [];
+    for (let i = comments.length - 1; i >= 0; i--) {
+      const c = comments[i];
+      if (c.body && c.body.toLowerCase().startsWith("blocked:")) {
+        return c.body.replace(/^blocked:\s*/i, "").trim();
+      }
+    }
+    return null;
+  }, [selectedTask?.status, detailsQuery.data?.events, detailsQuery.data?.comments]);
+
+  // Recurrence schedule display label
+  const recurrenceScheduleLabel = React.useMemo(() => {
+    if (!selectedTask?.recurrence_id) return null;
+    const rec = recurrences.find((r) => r.id === selectedTask.recurrence_id);
+    if (!rec) return "Recurring schedule active";
+    if (rec.frequency === "daily") return "Repeats every working day";
+    if (rec.frequency === "weekly") {
+      const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      return `Repeats weekly on ${rec.weekday !== null ? days[rec.weekday] : "scheduled day"}`;
+    }
+    if (rec.frequency === "monthly") return `Repeats monthly on day ${rec.day_of_month || 1}`;
+    return `Repeats every ${rec.interval_n} working days`;
+  }, [selectedTask?.recurrence_id, recurrences]);
+
   // Fetch active goals for drawer task assignee or creator
   React.useEffect(() => {
     const empId = selectedTask?.assignee_id || selectedTask?.creator_id;
@@ -684,7 +748,20 @@ function TasksWorkspaceContent() {
       .catch(() => setDrawerGoals([]));
   }, [selectedTask?.id, selectedTask?.assignee_id, selectedTask?.creator_id]);
 
+  const handleOpenTask = (taskId: string) => {
+    lastFocusedCardRef.current = document.activeElement as HTMLElement;
+    setSelectedTaskId(taskId);
+  };
+
+  const handleCloseDrawer = () => {
+    setSelectedTaskId(null);
+    setTimeout(() => {
+      lastFocusedCardRef.current?.focus();
+    }, 0);
+  };
+
   const handleOpenCreateModal = () => {
+    createTaskTriggerRef.current = document.activeElement as HTMLButtonElement;
     editedFields.current.clear();
     setSelectedTypeId("");
     setNewTitle("");
@@ -705,7 +782,15 @@ function TasksWorkspaceContent() {
     setRepeatDayOfMonth(1);
     setRepeatEndDate("");
     setNewGoalId("");
+    setShowAdvancedOptions(false);
     setCreateTaskOpen(true);
+  };
+
+  const handleCloseCreateModal = () => {
+    setCreateTaskOpen(false);
+    setTimeout(() => {
+      createTaskTriggerRef.current?.focus();
+    }, 0);
   };
 
   const handleCreateTask = async (e: React.FormEvent) => {
@@ -741,7 +826,7 @@ function TasksWorkspaceContent() {
           : null,
       });
 
-      setCreateTaskOpen(false);
+      handleCloseCreateModal();
     } catch {
       // Toast handled in mutation onError
     }
@@ -834,11 +919,11 @@ function TasksWorkspaceContent() {
 
   return (
     <div className="space-y-4 pb-12">
-      {/* Header & Controls */}
+      {/* Header & Primary Actions */}
       <div data-tour="tasks-header" className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-1">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-black tracking-tight flex items-center gap-2">
-            <span>Tasks</span>
+            <span>Tasks & Team Work</span>
             <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black">
               {filteredTasks.length} {filteredTasks.length === 1 ? "task" : "tasks"}
             </span>
@@ -858,10 +943,12 @@ function TasksWorkspaceContent() {
           )}
 
           <button
+            ref={createTaskTriggerRef}
             type="button"
             data-tour="create-task-btn"
+            aria-label="New Task"
             onClick={handleOpenCreateModal}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-xs font-semibold text-white cursor-pointer shadow-xs transition-colors"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-xs font-semibold text-white cursor-pointer shadow-xs transition-colors focus-visible:ring-2 focus-visible:ring-black"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Create task</span>
@@ -869,58 +956,76 @@ function TasksWorkspaceContent() {
         </div>
       </div>
 
-      {/* Slim Summary Strip */}
-      <div className="flex items-center gap-3 py-1 text-xs text-[#808080] border-b border-[#E6E6E6]">
-        <div className="flex items-center gap-1.5">
+      {/* Slim Summary Strip with Keyboard-Accessible Quick Filters */}
+      <div className="flex items-center gap-3 py-1 text-xs text-[#808080] border-b border-[#E6E6E6] flex-wrap">
+        <div className="flex items-center gap-1.5 px-1 py-0.5">
           <span className={cn("font-bold font-mono", summaryCounts.open > 0 ? "text-black" : "text-[#808080]")}>
             {summaryCounts.open}
           </span>
           <span>Open</span>
         </div>
+
         <span className="h-3 w-px bg-[#E6E6E6]" aria-hidden="true" />
+
+        {/* Overdue Quick Filter */}
         <button
           type="button"
+          role="button"
+          aria-pressed={dueFilter === "overdue"}
+          aria-label="Filter overdue tasks"
           onClick={() => setDueFilter(dueFilter === "overdue" ? "all" : "overdue")}
           className={cn(
-            "flex items-center gap-1.5 cursor-pointer transition-colors",
-            dueFilter === "overdue" && "underline underline-offset-2"
+            "flex items-center gap-1.5 px-2 py-0.5 rounded-md cursor-pointer transition-all border focus-visible:ring-2 focus-visible:ring-black focus-visible:outline-none",
+            dueFilter === "overdue"
+              ? "bg-[#FF1493]/15 text-[#FF1493] border-[#FF1493]/40 shadow-xs font-bold ring-1 ring-[#FF1493]/30"
+              : "border-transparent hover:bg-[#F5F5F5] text-[#808080]"
           )}
         >
           <span
             className={cn(
-              "font-bold font-mono",
+              "font-bold font-mono text-xs",
               summaryCounts.overdue > 0 ? "text-[#FF1493]" : "text-[#808080]"
             )}
           >
             {summaryCounts.overdue}
           </span>
-          <span className={summaryCounts.overdue > 0 ? "text-[#FF1493] font-semibold" : ""}>
+          <span className={cn("text-xs", summaryCounts.overdue > 0 ? "text-[#FF1493] font-semibold" : "")}>
             Overdue
           </span>
         </button>
+
         <span className="h-3 w-px bg-[#E6E6E6]" aria-hidden="true" />
+
+        {/* Due Soon Quick Filter */}
         <button
           type="button"
+          role="button"
+          aria-pressed={dueFilter === "due_soon"}
+          aria-label="Filter due soon tasks"
           onClick={() => setDueFilter(dueFilter === "due_soon" ? "all" : "due_soon")}
           className={cn(
-            "flex items-center gap-1.5 cursor-pointer transition-colors",
-            dueFilter === "due_soon" && "underline underline-offset-2"
+            "flex items-center gap-1.5 px-2 py-0.5 rounded-md cursor-pointer transition-all border focus-visible:ring-2 focus-visible:ring-black focus-visible:outline-none",
+            dueFilter === "due_soon"
+              ? "bg-[#D97706]/15 text-[#D97706] border-[#D97706]/40 shadow-xs font-bold ring-1 ring-[#D97706]/30"
+              : "border-transparent hover:bg-[#F5F5F5] text-[#808080]"
           )}
         >
           <span
             className={cn(
-              "font-bold font-mono",
+              "font-bold font-mono text-xs",
               summaryCounts.dueSoon > 0 ? "text-[#D97706]" : "text-[#808080]"
             )}
           >
             {summaryCounts.dueSoon}
           </span>
-          <span className={summaryCounts.dueSoon > 0 ? "text-[#D97706] font-semibold" : ""}>
+          <span className={cn("text-xs", summaryCounts.dueSoon > 0 ? "text-[#D97706] font-semibold" : "")}>
             Due soon
           </span>
         </button>
+
         <span className="h-3 w-px bg-[#E6E6E6]" aria-hidden="true" />
-        <div className="flex items-center gap-1.5">
+
+        <div className="flex items-center gap-1.5 px-1 py-0.5">
           <span className={cn("font-bold font-mono", summaryCounts.completed > 0 ? "text-black" : "text-[#808080]")}>
             {summaryCounts.completed}
           </span>
@@ -928,7 +1033,7 @@ function TasksWorkspaceContent() {
         </div>
       </div>
 
-      {/* Scope, View Switcher & Search Toolbar */}
+      {/* Simplified Workspace Toolbar: Scope, View Switcher, Single Filters Panel Trigger & Search */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-1.5 rounded-xl bg-card border border-[#E6E6E6]">
         <div className="flex flex-wrap items-center gap-2">
           {/* Scope Filter */}
@@ -955,7 +1060,7 @@ function TasksWorkspaceContent() {
                   : "text-[#808080] hover:text-black"
               )}
             >
-              All Team Tasks
+              {userRole === "admin" ? "All Org Tasks" : "Team Tasks"}
             </button>
           </div>
 
@@ -990,8 +1095,45 @@ function TasksWorkspaceContent() {
               <span>List</span>
             </button>
           </div>
+
+          {/* Labeled Filters Panel Toggle */}
+          <button
+            ref={filtersTriggerRef}
+            type="button"
+            aria-expanded={filtersOpen}
+            aria-controls="tasks-filters-panel"
+            onClick={() => setFiltersOpen((prev) => !prev)}
+            className={cn(
+              "inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer border focus-visible:ring-2 focus-visible:ring-black focus-visible:outline-none select-none",
+              filtersOpen || activePanelFilterCount > 0
+                ? "bg-black text-white border-black shadow-xs"
+                : "bg-white text-black border-[#E6E6E6] hover:bg-[#F5F5F5]"
+            )}
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            <span>Filters</span>
+            {activePanelFilterCount > 0 && (
+              <span
+                className={cn(
+                  "px-1.5 py-0.2 rounded-full text-[10px] font-bold font-mono",
+                  filtersOpen || activePanelFilterCount > 0
+                    ? "bg-white text-black"
+                    : "bg-black text-white"
+                )}
+              >
+                {activePanelFilterCount}
+              </span>
+            )}
+            <ChevronDown
+              className={cn(
+                "w-3 h-3 transition-transform duration-150",
+                filtersOpen && "rotate-180"
+              )}
+            />
+          </button>
         </div>
 
+        {/* Immediate Search Input */}
         <div className="relative w-full lg:w-72">
           <Search className="w-4 h-4 text-[#808080] absolute left-3 top-1/2 -translate-y-1/2" />
           <input
@@ -999,103 +1141,232 @@ function TasksWorkspaceContent() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search task title or description..."
-            className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black placeholder:text-[#808080] focus:outline-none focus:border-black"
+            className="w-full pl-9 pr-8 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black placeholder:text-[#808080] focus:outline-none focus:border-black"
           />
+          {searchQuery && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#808080] hover:text-black cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Filter Menus Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 pt-0.5 text-xs">
-        <FilterDropdownMenu
-          label="All Statuses"
-          value={statusFilter}
-          ariaLabel="Filter by status"
-          options={[
-            { value: "all", label: "All Statuses" },
-            ...STATUS_COLUMNS.map((c) => ({ value: c.key, label: c.label })),
-          ]}
-          onSelect={setStatusFilter}
-        />
-        <FilterDropdownMenu
-          label="All Priorities"
-          value={priorityFilter}
-          ariaLabel="Filter by priority"
-          options={[
-            { value: "all", label: "All Priorities" },
-            ...PRIORITY_OPTIONS.map((p) => ({
-              value: p,
-              label: `Priority: ${p.charAt(0).toUpperCase() + p.slice(1)}`,
-            })),
-          ]}
-          onSelect={setPriorityFilter}
-        />
-        <FilterDropdownMenu
-          label="All Types"
-          value={typeFilter}
-          ariaLabel="Filter by type"
-          options={[
-            { value: "all", label: "All Types" },
-            ...taskTypes.map((t) => ({ value: t.id, label: `Type: ${t.name}` })),
-          ]}
-          onSelect={setTypeFilter}
-        />
-        <FilterDropdownMenu
-          label="All Schedules"
-          value={recurringFilter}
-          ariaLabel="Filter by recurring"
-          options={[
-            { value: "all", label: "All Schedules" },
-            { value: "recurring", label: "🔁 Recurring Only" },
-            { value: "one_time", label: "One-Time Only" },
-          ]}
-          onSelect={setRecurringFilter}
-        />
-        <FilterDropdownMenu
-          label="All Due Dates"
-          value={dueFilter}
-          ariaLabel="Filter by due state"
-          options={[
-            { value: "all", label: "All Due Dates" },
-            { value: "overdue", label: "Overdue Only" },
-            { value: "due_soon", label: "Due Soon" },
-            { value: "upcoming", label: "Upcoming" },
-            { value: "none", label: "No Due Date" },
-          ]}
-          onSelect={setDueFilter}
-        />
-        <FilterDropdownMenu
-          label="All Assignees"
-          value={assigneeFilter}
-          ariaLabel="Filter by assignee"
-          options={[
-            { value: "all", label: "All Assignees" },
-            { value: "unassigned", label: "Unassigned" },
-            ...employees.map((emp) => ({
-              value: emp.id,
-              label: emp.full_name || emp.email,
-            })),
-          ]}
-          onSelect={setAssigneeFilter}
-        />
-        <FilterDropdownMenu
-          label="All Projects"
-          value={projectFilter}
-          ariaLabel="Filter by project"
-          options={[
-            { value: "all", label: "All Projects" },
-            { value: "none", label: "No Project" },
-            ...projects.map((p) => ({
-              value: p.id,
-              label: p.code ? `${p.code} · ${p.name}` : p.name,
-            })),
-          ]}
-          onSelect={setProjectFilter}
-        />
-      </div>
+      {/* Labeled Filters Panel (Houses the 7 Filter Categories Cleanly) */}
+      {filtersOpen && (
+        <div
+          id="tasks-filters-panel"
+          ref={filtersPanelRef}
+          role="region"
+          aria-label="Task Filters"
+          tabIndex={-1}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setFiltersOpen(false);
+              filtersTriggerRef.current?.focus();
+            }
+          }}
+          className="p-4 rounded-xl bg-[#FAFAFA] border border-[#E6E6E6] space-y-3.5 animate-in fade-in-0 duration-150 focus:outline-none"
+        >
+          <div className="flex items-center justify-between pb-2.5 border-b border-[#E6E6E6]">
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-black" />
+              <h2 className="text-xs font-bold text-black uppercase tracking-wider">
+                Filters
+              </h2>
+              {activePanelFilterCount > 0 && (
+                <span className="text-[11px] font-semibold text-[#808080]">
+                  ({activePanelFilterCount} active)
+                </span>
+              )}
+            </div>
 
-      {/* Active Filter Chips & Clear Filters */}
+            <div className="flex items-center gap-2">
+              {activePanelFilterCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearAllFilters}
+                  className="text-xs font-semibold text-[#808080] hover:text-black underline cursor-pointer"
+                >
+                  Clear all
+                </button>
+              )}
+              <button
+                type="button"
+                aria-label="Close filters panel"
+                onClick={() => {
+                  setFiltersOpen(false);
+                  filtersTriggerRef.current?.focus();
+                }}
+                className="p-1 rounded-md text-[#808080] hover:text-black cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* 7 Filter Categories inside the Panel */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
+            {/* 1. Status */}
+            <div className="space-y-1">
+              <label className="block text-[11px] font-bold text-[#4D4D4D]">
+                Status
+              </label>
+              <FilterDropdownMenu
+                label="All Statuses"
+                value={statusFilter}
+                ariaLabel="Filter by status"
+                options={[
+                  { value: "all", label: "All Statuses" },
+                  ...STATUS_COLUMNS.map((c) => ({ value: c.key, label: c.label })),
+                ]}
+                onSelect={setStatusFilter}
+              />
+            </div>
+
+            {/* 2. Priority */}
+            <div className="space-y-1">
+              <label className="block text-[11px] font-bold text-[#4D4D4D]">
+                Priority
+              </label>
+              <FilterDropdownMenu
+                label="All Priorities"
+                value={priorityFilter}
+                ariaLabel="Filter by priority"
+                options={[
+                  { value: "all", label: "All Priorities" },
+                  ...PRIORITY_OPTIONS.map((p) => ({
+                    value: p,
+                    label: `Priority: ${p.charAt(0).toUpperCase() + p.slice(1)}`,
+                  })),
+                ]}
+                onSelect={setPriorityFilter}
+              />
+            </div>
+
+            {/* 3. Task Type */}
+            <div className="space-y-1">
+              <label className="block text-[11px] font-bold text-[#4D4D4D]">
+                Task Type
+              </label>
+              <FilterDropdownMenu
+                label="All Types"
+                value={typeFilter}
+                ariaLabel="Filter by type"
+                options={[
+                  { value: "all", label: "All Types" },
+                  ...taskTypes.map((t) => ({ value: t.id, label: `Type: ${t.name}` })),
+                ]}
+                onSelect={setTypeFilter}
+              />
+            </div>
+
+            {/* 4. Schedule (Recurring vs One-time) */}
+            <div className="space-y-1">
+              <label className="block text-[11px] font-bold text-[#4D4D4D]">
+                Schedule
+              </label>
+              <FilterDropdownMenu
+                label="All Schedules"
+                value={recurringFilter}
+                ariaLabel="Filter by recurring"
+                options={[
+                  { value: "all", label: "All Schedules" },
+                  { value: "recurring", label: "🔁 Recurring Only" },
+                  { value: "one_time", label: "One-Time Only" },
+                ]}
+                onSelect={setRecurringFilter}
+              />
+            </div>
+
+            {/* 5. Due Date */}
+            <div className="space-y-1">
+              <label className="block text-[11px] font-bold text-[#4D4D4D]">
+                Due Date
+              </label>
+              <FilterDropdownMenu
+                label="All Due Dates"
+                value={dueFilter}
+                ariaLabel="Filter by due state"
+                options={[
+                  { value: "all", label: "All Due Dates" },
+                  { value: "overdue", label: "Overdue Only" },
+                  { value: "due_soon", label: "Due Soon" },
+                  { value: "upcoming", label: "Upcoming" },
+                  { value: "none", label: "No Due Date" },
+                ]}
+                onSelect={setDueFilter}
+              />
+            </div>
+
+            {/* 6. Assignee */}
+            <div className="space-y-1">
+              <label className="block text-[11px] font-bold text-[#4D4D4D]">
+                Assignee
+              </label>
+              <FilterDropdownMenu
+                label="All Assignees"
+                value={assigneeFilter}
+                ariaLabel="Filter by assignee"
+                options={[
+                  { value: "all", label: "All Assignees" },
+                  { value: "unassigned", label: "Unassigned" },
+                  ...employees.map((emp) => ({
+                    value: emp.id,
+                    label: emp.full_name || emp.email,
+                  })),
+                ]}
+                onSelect={setAssigneeFilter}
+              />
+            </div>
+
+            {/* 7. Project */}
+            <div className="space-y-1">
+              <label className="block text-[11px] font-bold text-[#4D4D4D]">
+                Project
+              </label>
+              <FilterDropdownMenu
+                label="All Projects"
+                value={projectFilter}
+                ariaLabel="Filter by project"
+                options={[
+                  { value: "all", label: "All Projects" },
+                  { value: "none", label: "No Project" },
+                  ...projects.map((p) => ({
+                    value: p.id,
+                    label: p.code ? `${p.code} · ${p.name}` : p.name,
+                  })),
+                ]}
+                onSelect={setProjectFilter}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-2 border-t border-[#E6E6E6]">
+            <span className="text-[11px] text-[#808080]">
+              Showing {filteredTasks.length} matching tasks
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setFiltersOpen(false);
+                filtersTriggerRef.current?.focus();
+              }}
+              className="px-4 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer shadow-xs"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Active Filter Chips & Clear Filters Action */}
       {hasActiveFilters && (
-        <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs">
+        <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-xs">
           <span className="text-[11px] text-[#808080] font-medium mr-1">Active filters:</span>
           {statusFilter !== "all" && (
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E6E6E6] text-black text-[11px] font-medium">
@@ -1276,7 +1547,7 @@ function TasksWorkspaceContent() {
                         <button
                           key={task.id}
                           type="button"
-                          onClick={() => setSelectedTaskId(task.id)}
+                          onClick={() => handleOpenTask(task.id)}
                           className="w-full text-left p-3.5 rounded-[12px] bg-white hover:border-black/40 border border-[#E6E6E6] shadow-none transition-all cursor-pointer flex flex-col justify-between h-[160px] min-h-[160px] max-h-[160px] focus-visible:ring-2 focus-visible:ring-black focus-visible:outline-none"
                         >
                           <div className="space-y-2 w-full">
@@ -1398,7 +1669,7 @@ function TasksWorkspaceContent() {
                 return (
                   <tr
                     key={task.id}
-                    onClick={() => setSelectedTaskId(task.id)}
+                    onClick={() => handleOpenTask(task.id)}
                     className="hover:bg-[#F9F9F9] cursor-pointer transition-colors"
                   >
                     <td className="py-2.5 px-4 font-bold text-black">
@@ -1474,13 +1745,16 @@ function TasksWorkspaceContent() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setCreateTaskOpen(false);
+            if (e.target === e.currentTarget) handleCloseCreateModal();
           }}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="create-task-title"
+            onKeyDown={(e) => {
+              if (e.key === "Escape") handleCloseCreateModal();
+            }}
             className="w-full max-w-xl bg-white rounded-2xl border border-[#E6E6E6] shadow-xl p-6 space-y-4 max-h-[92vh] overflow-y-auto animate-in fade-in duration-150"
           >
             <div className="flex items-center justify-between pb-2 border-b border-[#E6E6E6]">
@@ -1490,7 +1764,7 @@ function TasksWorkspaceContent() {
               <button
                 type="button"
                 aria-label="Close create task dialog"
-                onClick={() => setCreateTaskOpen(false)}
+                onClick={handleCloseCreateModal}
                 className="p-1 rounded text-[#808080] hover:text-black cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -1556,7 +1830,7 @@ function TasksWorkspaceContent() {
                     setNewTitle(e.target.value);
                     editedFields.current.add("title");
                   }}
-                  placeholder="e.g. Audit Q4 payroll shifts, Fix login redirect..."
+                  placeholder="e.g., Audit Q4 payroll shifts, Fix login redirect..."
                   className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black focus:outline-none focus:border-black"
                 />
               </div>
@@ -1651,26 +1925,79 @@ function TasksWorkspaceContent() {
                 )}
               </div>
 
-              {/* Priority */}
-              <div>
-                <label className="block text-xs font-bold text-black mb-1">
-                  Priority
-                </label>
-                <select
-                  aria-label="Task Priority"
-                  value={newPriority}
-                  onChange={(e) => {
-                    setNewPriority(e.target.value as TaskPriority);
-                    editedFields.current.add("priority");
-                  }}
-                  className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black focus:outline-none focus:border-black"
-                >
-                  {PRIORITY_OPTIONS.map((p) => (
-                    <option key={p} value={p}>
-                      {p.charAt(0).toUpperCase() + p.slice(1)}
-                    </option>
-                  ))}
-                </select>
+              {/* Priority & Estimated Duration Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-black mb-1">
+                    Priority
+                  </label>
+                  <select
+                    aria-label="Task Priority"
+                    value={newPriority}
+                    onChange={(e) => {
+                      setNewPriority(e.target.value as TaskPriority);
+                      editedFields.current.add("priority");
+                    }}
+                    className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black focus:outline-none focus:border-black"
+                  >
+                    {PRIORITY_OPTIONS.map((p) => (
+                      <option key={p} value={p}>
+                        {p.charAt(0).toUpperCase() + p.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-black mb-1">
+                    Estimated Duration
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        placeholder="Hours"
+                        value={estHours}
+                        onChange={(e) => {
+                          setEstHours(e.target.value);
+                          editedFields.current.add("estimate");
+                        }}
+                        className="w-full px-2.5 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
+                      />
+                      <span className="text-xs text-[#808080]">h</span>
+                    </div>
+                    <div className="flex-1 flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={0}
+                        max={59}
+                        placeholder="Mins"
+                        value={estMinutes}
+                        onChange={(e) => {
+                          setEstMinutes(e.target.value);
+                          editedFields.current.add("estimate");
+                        }}
+                        className="w-full px-2.5 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
+                      />
+                      <span className="text-xs text-[#808080]">m</span>
+                    </div>
+                  </div>
+                  {historicalMedianEstimate && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEstHours(historicalMedianEstimate.h);
+                        setEstMinutes(historicalMedianEstimate.m);
+                        editedFields.current.add("estimate");
+                      }}
+                      className="mt-1 text-[10px] text-[#4D4D4D] hover:text-black underline cursor-pointer"
+                    >
+                      History suggests ~{historicalMedianEstimate.label}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Due Date Presets: Today, Tomorrow, Day After Tomorrow, Custom Date */}
@@ -1807,7 +2134,7 @@ function TasksWorkspaceContent() {
                   <div className="pt-1.5 flex items-center gap-2">
                     <input
                       type="date"
-                      aria-label="Custom Due Date"
+                      aria-label="Due Date"
                       value={newDueDate}
                       onChange={(e) => {
                         setNewDueDate(e.target.value);
@@ -1843,159 +2170,188 @@ function TasksWorkspaceContent() {
                 )}
               </div>
 
-              {/* Repeat Schedule Section (Phase 3) */}
-              <div className="pt-2 border-t border-[#E6E6E6] space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-black flex items-center gap-1.5">
-                    <Repeat className="w-3.5 h-3.5 text-black" />
-                    Repeat schedule (optional)
-                  </label>
-                  <label className="flex items-center gap-1.5 text-xs text-[#4D4D4D] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isRepeating}
-                      onChange={(e) => setIsRepeating(e.target.checked)}
-                      className="rounded text-black"
-                    />
-                    <span>Repeating task</span>
-                  </label>
-                </div>
+              {/* Grouped Optional Settings Accordion: Recurrence, Projects & KPI Goals */}
+              <div className="pt-1 border-t border-[#E6E6E6]">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+                  className="flex items-center justify-between w-full py-2 text-xs font-bold text-[#4D4D4D] hover:text-black cursor-pointer"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Repeat className="w-3.5 h-3.5 text-[#808080]" />
+                    <span>Additional options (Schedule, Project, Performance Goal)</span>
+                    {(isRepeating || newProjectId || newGoalId) && (
+                      <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black text-white ml-1">
+                        Active
+                      </span>
+                    )}
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      "w-4 h-4 transition-transform duration-150 text-[#808080]",
+                      (showAdvancedOptions || isRepeating || newProjectId || newGoalId) && "rotate-180"
+                    )}
+                  />
+                </button>
 
-                {isRepeating && (
-                  <div className="p-3 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] space-y-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {(showAdvancedOptions || isRepeating || newProjectId || newGoalId) && (
+                  <div className="p-3.5 rounded-xl bg-[#FAFAFA] border border-[#E6E6E6] space-y-3.5 mt-1 animate-in fade-in-0 duration-150">
+                    {/* Repeat Schedule */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-black flex items-center gap-1.5">
+                          <Repeat className="w-3.5 h-3.5 text-black" />
+                          Repeat schedule
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs text-[#4D4D4D] cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={isRepeating}
+                            onChange={(e) => setIsRepeating(e.target.checked)}
+                            className="rounded text-black"
+                          />
+                          <span>Repeating task</span>
+                        </label>
+                      </div>
+
+                      {isRepeating && (
+                        <div className="p-3 rounded-xl bg-white border border-[#E6E6E6] space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase text-[#808080] mb-1">
+                                Frequency
+                              </label>
+                              <select
+                                value={repeatFrequency}
+                                onChange={(e) => setRepeatFrequency(e.target.value as any)}
+                                className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black"
+                              >
+                                <option value="daily">Daily (Working days only)</option>
+                                <option value="weekly">Weekly (Pick weekday)</option>
+                                <option value="monthly">Monthly (Pick day of month)</option>
+                                <option value="every_n_working_days">Every N Working Days</option>
+                              </select>
+                            </div>
+
+                            {repeatFrequency === "weekly" && (
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase text-[#808080] mb-1">
+                                  Day of week
+                                </label>
+                                <select
+                                  value={repeatWeekday}
+                                  onChange={(e) => setRepeatWeekday(Number(e.target.value))}
+                                  className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black"
+                                >
+                                  <option value={1}>Monday</option>
+                                  <option value={2}>Tuesday</option>
+                                  <option value={3}>Wednesday</option>
+                                  <option value={4}>Thursday</option>
+                                  <option value={5}>Friday</option>
+                                </select>
+                              </div>
+                            )}
+
+                            {repeatFrequency === "monthly" && (
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase text-[#808080] mb-1">
+                                  Day of month (clamped)
+                                </label>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={31}
+                                  value={repeatDayOfMonth}
+                                  onChange={(e) => setRepeatDayOfMonth(Math.max(1, Math.min(31, Number(e.target.value) || 1)))}
+                                  className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black"
+                                />
+                              </div>
+                            )}
+
+                            {repeatFrequency === "every_n_working_days" && (
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase text-[#808080] mb-1">
+                                  Interval (N working days)
+                                </label>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={30}
+                                  value={repeatInterval}
+                                  onChange={(e) => setRepeatInterval(Math.max(1, Number(e.target.value) || 1))}
+                                  className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black"
+                                />
+                              </div>
+                            )}
+
+                            <div className="sm:col-span-2">
+                              <label className="block text-[10px] font-bold uppercase text-[#808080] mb-1">
+                                End date (optional)
+                              </label>
+                              <input
+                                type="date"
+                                value={repeatEndDate}
+                                onChange={(e) => setRepeatEndDate(e.target.value)}
+                                className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Project Grouping */}
+                    {projects.length > 0 && (
                       <div>
-                        <label className="block text-[10px] font-bold uppercase text-[#808080] mb-1">
-                          Frequency
+                        <label className="block text-xs font-bold text-black mb-1">
+                          Project
                         </label>
                         <select
-                          value={repeatFrequency}
-                          onChange={(e) => setRepeatFrequency(e.target.value as any)}
-                          className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black"
+                          aria-label="Task Project"
+                          value={newProjectId}
+                          onChange={(e) => setNewProjectId(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
                         >
-                          <option value="daily">Daily (Working days only)</option>
-                          <option value="weekly">Weekly (Pick weekday)</option>
-                          <option value="monthly">Monthly (Pick day of month)</option>
-                          <option value="every_n_working_days">Every N Working Days</option>
+                          <option value="">No Project</option>
+                          {projects.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.code ? `${p.code} · ${p.name}` : p.name}
+                            </option>
+                          ))}
                         </select>
                       </div>
+                    )}
 
-                      {repeatFrequency === "weekly" && (
-                        <div>
-                          <label className="block text-[10px] font-bold uppercase text-[#808080] mb-1">
-                            Day of week
-                          </label>
-                          <select
-                            value={repeatWeekday}
-                            onChange={(e) => setRepeatWeekday(Number(e.target.value))}
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black"
-                          >
-                            <option value={1}>Monday</option>
-                            <option value={2}>Tuesday</option>
-                            <option value={3}>Wednesday</option>
-                            <option value={4}>Thursday</option>
-                            <option value={5}>Friday</option>
-                          </select>
-                        </div>
-                      )}
-
-                      {repeatFrequency === "monthly" && (
-                        <div>
-                          <label className="block text-[10px] font-bold uppercase text-[#808080] mb-1">
-                            Day of month (clamped)
-                          </label>
-                          <input
-                            type="number"
-                            min={1}
-                            max={31}
-                            value={repeatDayOfMonth}
-                            onChange={(e) => setRepeatDayOfMonth(Math.max(1, Math.min(31, Number(e.target.value) || 1)))}
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black"
-                          />
-                        </div>
-                      )}
-
-                      {repeatFrequency === "every_n_working_days" && (
-                        <div>
-                          <label className="block text-[10px] font-bold uppercase text-[#808080] mb-1">
-                            Interval (N working days)
-                          </label>
-                          <input
-                            type="number"
-                            min={1}
-                            max={30}
-                            value={repeatInterval}
-                            onChange={(e) => setRepeatInterval(Math.max(1, Number(e.target.value) || 1))}
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black"
-                          />
-                        </div>
-                      )}
-
-                      <div className="sm:col-span-2">
-                        <label className="block text-[10px] font-bold uppercase text-[#808080] mb-1">
-                          End date (optional)
+                    {/* Linked KPI Goal (Phase 5) */}
+                    {FEATURES.KPI && assigneeGoals.length > 0 && (
+                      <div>
+                        <label className="block text-xs font-bold text-black mb-1">
+                          Performance goal
                         </label>
-                        <input
-                          type="date"
-                          value={repeatEndDate}
-                          onChange={(e) => setRepeatEndDate(e.target.value)}
-                          className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black"
-                        />
+                        <select
+                          aria-label="Link to KPI Goal"
+                          value={newGoalId}
+                          onChange={(e) => setNewGoalId(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black focus:outline-none focus:border-black"
+                        >
+                          <option value="">No Goal Linked</option>
+                          {assigneeGoals.map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.title} ({g.status.replace("_", " ")})
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                    </div>
+                    )}
                   </div>
                 )}
               </div>
-
-              {/* Project Grouping */}
-              {projects.length > 0 && (
-                <div>
-                  <label className="block text-xs font-bold text-black mb-1">
-                    Project (optional)
-                  </label>
-                  <select
-                    aria-label="Task Project"
-                    value={newProjectId}
-                    onChange={(e) => setNewProjectId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
-                  >
-                    <option value="">No Project</option>
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.code ? `${p.code} · ${p.name}` : p.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Linked KPI Goal (Phase 5) */}
-              {FEATURES.KPI && assigneeGoals.length > 0 && (
-                <div>
-                  <label className="block text-xs font-bold text-black mb-1">
-                    Performance goal (optional)
-                  </label>
-                  <select
-                    aria-label="Link to KPI Goal"
-                    value={newGoalId}
-                    onChange={(e) => setNewGoalId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black focus:outline-none focus:border-black"
-                  >
-                    <option value="">No Goal Linked</option>
-                    {assigneeGoals.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.title} ({g.status.replace("_", " ")})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
 
               {/* Modal Footer */}
               <div className="flex justify-end gap-2 pt-3 border-t border-[#E6E6E6]">
                 <button
                   type="button"
-                  onClick={() => setCreateTaskOpen(false)}
+                  onClick={handleCloseCreateModal}
                   className="px-4 py-2 rounded-lg bg-white border border-[#E6E6E6] hover:bg-[#F5F5F5] text-xs font-semibold text-black cursor-pointer shadow-xs"
                 >
                   Cancel
@@ -2005,7 +2361,7 @@ function TasksWorkspaceContent() {
                   disabled={mutations.createTask.isPending}
                   className="px-5 py-2 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer disabled:opacity-60 shadow-xs"
                 >
-                  {mutations.createTask.isPending ? "Creating..." : "Create task"}
+                  {mutations.createTask.isPending ? "Creating..." : "Create Task"}
                 </button>
               </div>
             </form>
@@ -2013,7 +2369,7 @@ function TasksWorkspaceContent() {
         </div>
       )}
 
-      {/* Log Time Prompt Modal (Phase 2 Inline Prompt on Completion) */}
+      {/* Log Time Prompt Modal */}
       {logTimePromptTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
           <div className="w-full max-w-sm bg-white rounded-2xl border border-[#E6E6E6] shadow-xl p-5 space-y-3 animate-in fade-in duration-150">
@@ -2167,7 +2523,7 @@ function TasksWorkspaceContent() {
                   disabled={mutations.createProject.isPending}
                   className="px-5 py-2 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer disabled:opacity-60 shadow-xs"
                 >
-                  {mutations.createProject.isPending ? "Creating..." : "Create Project"}
+                  {mutations.createProject.isPending ? "Creating..." : "Save Project"}
                 </button>
               </div>
             </form>
@@ -2175,147 +2531,199 @@ function TasksWorkspaceContent() {
         </div>
       )}
 
-      {/* Task Slide-Over Drawer */}
+      {/* Task Slide-Over Drawer: Clarified with Title, Status, Assignee & Due Date First */}
       {selectedTask && (
         <div
           className="fixed inset-0 z-50 flex justify-end bg-black/35 backdrop-blur-xs"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setSelectedTaskId(null);
+            if (e.target === e.currentTarget) handleCloseDrawer();
           }}
         >
           <aside
             role="dialog"
             aria-modal="true"
             aria-label="Task Details"
-            className="w-full max-w-xl bg-white h-full overflow-y-auto border-l border-[#E6E6E6] shadow-xl p-6 space-y-5 animate-in slide-in-from-right duration-200"
+            onKeyDown={(e) => {
+              if (e.key === "Escape") handleCloseDrawer();
+            }}
+            className="w-full max-w-xl bg-white h-full overflow-y-auto border-l border-[#E6E6E6] shadow-xl p-6 space-y-4 animate-in slide-in-from-right duration-200 focus:outline-none"
           >
-            {/* Header */}
-            <div className="flex items-start justify-between gap-3 pb-4 border-b border-[#E6E6E6]">
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <StatusPill status={selectedTask.status} />
-                  <StatusPill status={selectedTask.priority} />
-                  {selectedTask.task_type_id && (
-                    <TaskTypeBadge typeName={typeNameMap.get(selectedTask.task_type_id)} />
-                  )}
-                  <DueBadge
-                    dueDate={selectedTask.due_date}
-                    status={selectedTask.status}
-                  />
-                  {selectedTask.recurrence_id && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#F5F5F5] border border-[#E6E6E6] text-black">
-                      <Repeat className="w-3 h-3 text-black" />
-                      Recurring
-                    </span>
-                  )}
-                </div>
-                <h2 className="text-lg font-bold text-black">
+            {/* Header: Title, Close Button & Badges First */}
+            <div className="space-y-3 pb-3 border-b border-[#E6E6E6]">
+              <div className="flex items-start justify-between gap-3">
+                <h2 className="text-xl font-extrabold text-black tracking-tight leading-snug">
                   {selectedTask.title}
                 </h2>
-                {selectedTask.project_id && (
-                  <p className="text-xs font-semibold text-black">
-                    Project: {projectNameMap.get(selectedTask.project_id) || "Assigned Project"}
-                  </p>
-                )}
-              </div>
-
-              <button
-                type="button"
-                aria-label="Close task drawer"
-                onClick={() => setSelectedTaskId(null)}
-                className="p-1 rounded text-[#808080] hover:text-black cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Parent Task Completion Gentle Banner (Phase 4) */}
-            {parentSubtasks.length > 0 && allSubtasksDone && selectedTask.status !== "done" && (
-              <div className="p-3 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-black shrink-0" />
-                  <span className="text-xs font-semibold text-black">
-                    All {parentSubtasks.length} sub-tasks are done. Mark this task as done?
-                  </span>
-                </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    mutations.updateTaskStatus.mutate({
-                      taskId: selectedTask.id,
-                      status: "done",
-                      note: "Completed all sub-tasks",
-                    });
-                    setLogTimePromptTask(selectedTask);
-                    setLogTimeMinutes(String(selectedTask.estimated_minutes || 60));
-                  }}
-                  className="px-3 py-1 text-xs font-semibold bg-black hover:bg-[#1A1A1A] text-white rounded-lg whitespace-nowrap cursor-pointer"
+                  aria-label="Close task drawer"
+                  onClick={handleCloseDrawer}
+                  className="p-1.5 rounded-lg text-[#808080] hover:text-black hover:bg-[#F5F5F5] cursor-pointer shrink-0 transition-colors"
                 >
-                  Mark done
+                  <X className="w-4 h-4" />
                 </button>
               </div>
-            )}
 
-            {/* Recurring Task Status Banner & Stop Repeating (Phase 3) */}
-            {selectedTask.recurrence_id && (
-              <div className="p-3 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-xs text-black">
-                  <Repeat className="w-4 h-4 text-black shrink-0" />
-                  <span>
-                    {(() => {
-                      const rec = recurrences.find((r) => r.id === selectedTask.recurrence_id);
-                      if (!rec) return "Recurring schedule active";
-                      if (rec.frequency === "daily") return "Repeats every working day";
-                      if (rec.frequency === "weekly") {
-                        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-                        return `Repeats every ${rec.weekday !== null ? days[rec.weekday] : "week"}`;
-                      }
-                      if (rec.frequency === "monthly") return `Repeats monthly (day ${rec.day_of_month || 1})`;
-                      return `Repeats every ${rec.interval_n} working days`;
-                    })()}
+              {/* Status and Category Badges */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <StatusPill status={selectedTask.status} />
+                <StatusPill status={selectedTask.priority} />
+                {selectedTask.task_type_id && (
+                  <TaskTypeBadge typeName={typeNameMap.get(selectedTask.task_type_id)} />
+                )}
+                {selectedTask.project_id && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#F5F5F5] border border-[#E6E6E6] text-[#4D4D4D]">
+                    Project: {projectNameMap.get(selectedTask.project_id) || "Assigned Project"}
                   </span>
+                )}
+                {selectedTask.recurrence_id && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#F5F5F5] border border-[#E6E6E6] text-black">
+                    <Repeat className="w-3 h-3 text-black" />
+                    Recurring
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Primary Attributes Card: Assignee & Due Date First */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl bg-[#FAFAFA] border border-[#E6E6E6] text-xs">
+              {/* Assignee Details & Quick Reassignment */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#808080] flex items-center gap-1">
+                  <UserCheck className="w-3 h-3 text-black" />
+                  Assignee
+                </span>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-black text-white text-[9px] font-bold flex items-center justify-center shrink-0">
+                    {getInitials(formatPerson(selectedTask.assignee_id))}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-black truncate">
+                      {formatPerson(selectedTask.assignee_id)}
+                    </p>
+                    <p className="text-[10px] text-[#808080]">
+                      {selectedTask.assignee_id && selectedTask.creator_id === selectedTask.assignee_id
+                        ? "Self-Assigned"
+                        : `Assigned by ${formatPerson(selectedTask.creator_id)}`}
+                    </p>
+                  </div>
                 </div>
-                {canStopRecurrence(selectedTask) && (
-                  <button
-                    type="button"
-                    onClick={() => mutations.stopRecurrence.mutate(selectedTask.recurrence_id!)}
-                    className="px-2.5 py-1 text-[11px] font-semibold text-red-600 border border-red-200 rounded hover:bg-red-50 cursor-pointer"
-                  >
-                    Stop repeating
-                  </button>
+
+                {canReassignTask(selectedTask) && (
+                  <div className="pt-1">
+                    <select
+                      aria-label="Reassign task"
+                      value={selectedTask.assignee_id || ""}
+                      onChange={(e) =>
+                        mutations.assignTask.mutate({
+                          taskId: selectedTask.id,
+                          assigneeId: e.target.value || null,
+                        })
+                      }
+                      className="w-full px-2 py-1 rounded-md bg-white border border-[#E6E6E6] text-[11px] font-semibold text-black"
+                    >
+                      <option value="">Unassigned</option>
+                      {assignableEmployees.map((emp) => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.full_name || emp.email}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 )}
               </div>
-            )}
 
-            {/* Description */}
-            {selectedTask.description && (
-              <div className="p-3.5 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] text-xs text-black leading-relaxed whitespace-pre-wrap">
-                {selectedTask.description}
+              {/* Due Date Details */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#808080] flex items-center gap-1">
+                  <Calendar className="w-3 h-3 text-black" />
+                  Due Date
+                </span>
+                <div>
+                  {selectedTask.due_date ? (
+                    <div className="space-y-1">
+                      <DueBadge dueDate={selectedTask.due_date} status={selectedTask.status} />
+                      <p className="font-semibold text-black text-xs">
+                        {formatDueDateDisplay(selectedTask.due_date)} ({selectedTask.due_date})
+                      </p>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-[#808080] italic">No deadline set</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Surface Blocker Reason prominently when task is blocked */}
+            {selectedTask.status === "blocked" && (
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs space-y-1.5 animate-in fade-in-0 duration-150">
+                <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                  <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>Task is currently blocked</span>
+                </div>
+                <p className="text-amber-800 leading-relaxed font-medium pl-5.5">
+                  {blockerReason ? (
+                    <>
+                      <strong className="text-amber-950 font-bold">Reason:</strong> {blockerReason}
+                    </>
+                  ) : (
+                    "This task is marked as blocked and waiting for resolution before execution can resume."
+                  )}
+                </p>
               </div>
             )}
 
-            {/* Status & Assignment Controls */}
-            <div className="space-y-3">
+            {/* Permitted Next Action Toolbar with Clear Context-Specific Labels */}
+            <div className="space-y-2 pt-1 pb-1">
               <div className="flex flex-wrap items-center gap-2">
+                {/* 1. To Do State Next Actions */}
                 {selectedTask.status === "todo" && (
-                  <button
-                    type="button"
-                    disabled={mutations.updateTaskStatus.isPending}
-                    onClick={() =>
-                      mutations.updateTaskStatus.mutate({
-                        taskId: selectedTask.id,
-                        status: "in_progress",
-                        note: selectedTask.assignee_id === userId && selectedTask.creator_id !== userId ? "Accepted assigned task" : undefined,
-                      })
-                    }
-                    className="px-3.5 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer shadow-xs"
-                  >
-                    {selectedTask.assignee_id === userId && selectedTask.creator_id !== userId
-                      ? "✓ Accept Task & Start Progress"
-                      : "Start Progress"}
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      disabled={mutations.updateTaskStatus.isPending}
+                      onClick={() =>
+                        mutations.updateTaskStatus.mutate({
+                          taskId: selectedTask.id,
+                          status: "in_progress",
+                          note:
+                            selectedTask.assignee_id === userId &&
+                            selectedTask.creator_id !== userId
+                              ? "Accepted assigned task"
+                              : undefined,
+                        })
+                      }
+                      className="px-3.5 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer shadow-xs inline-flex items-center gap-1.5"
+                    >
+                      <Play className="w-3 h-3 fill-white" />
+                      <span>
+                        {selectedTask.assignee_id === userId &&
+                        selectedTask.creator_id !== userId
+                          ? "Accept task"
+                          : "Start progress"}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={mutations.updateTaskStatus.isPending}
+                      onClick={() => {
+                        mutations.updateTaskStatus.mutate({
+                          taskId: selectedTask.id,
+                          status: "done",
+                        });
+                        setLogTimePromptTask(selectedTask);
+                        setLogTimeMinutes(String(selectedTask.estimated_minutes || 60));
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-white border border-[#E6E6E6] hover:bg-[#F5F5F5] text-xs font-semibold text-black cursor-pointer shadow-xs inline-flex items-center gap-1"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Complete task</span>
+                    </button>
+                  </>
                 )}
 
+                {/* 2. In Progress State Next Actions */}
                 {selectedTask.status === "in_progress" && (
                   <>
                     <button
@@ -2329,12 +2737,17 @@ function TasksWorkspaceContent() {
                         setLogTimePromptTask(selectedTask);
                         setLogTimeMinutes(String(selectedTask.estimated_minutes || 60));
                       }}
-                      className="px-3.5 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer shadow-xs"
+                      className="px-3.5 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer shadow-xs inline-flex items-center gap-1.5"
                     >
-                      Mark complete
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>
+                        {selectedTask.recurrence_id
+                          ? "Complete this occurrence"
+                          : "Mark complete"}
+                      </span>
                     </button>
 
-                    {/* Blocked Reason Prompt (Phase 4) */}
+                    {/* Blocked Reason Prompt */}
                     {blockingTaskId === selectedTask.id ? (
                       <div className="w-full mt-2 p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
                         <label className="text-xs font-bold text-amber-900 block">
@@ -2344,7 +2757,7 @@ function TasksWorkspaceContent() {
                           type="text"
                           value={blockingReason}
                           onChange={(e) => setBlockingReason(e.target.value)}
-                          placeholder="e.g. Waiting on API credentials or customer response..."
+                          placeholder="e.g. Waiting on API credentials, customer sign-off..."
                           className="w-full px-3 py-1.5 text-xs bg-white border border-amber-300 rounded focus:outline-none"
                         />
                         <div className="flex justify-end gap-2">
@@ -2385,7 +2798,7 @@ function TasksWorkspaceContent() {
                       <button
                         type="button"
                         onClick={() => setBlockingTaskId(selectedTask.id)}
-                        className="px-3.5 py-1.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-xs font-semibold cursor-pointer"
+                        className="px-3 py-1.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-xs font-semibold cursor-pointer hover:bg-amber-100"
                       >
                         Mark Blocked
                       </button>
@@ -2393,6 +2806,7 @@ function TasksWorkspaceContent() {
                   </>
                 )}
 
+                {/* 3. Blocked State Next Actions */}
                 {selectedTask.status === "blocked" && (
                   <button
                     type="button"
@@ -2401,32 +2815,17 @@ function TasksWorkspaceContent() {
                       mutations.updateTaskStatus.mutate({
                         taskId: selectedTask.id,
                         status: "in_progress",
+                        note: "Resumed progress from blocked status",
                       })
                     }
-                    className="px-3.5 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer shadow-xs"
+                    className="px-4 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer shadow-xs inline-flex items-center gap-1.5"
                   >
-                    Resume Progress
+                    <Play className="w-3 h-3 fill-white" />
+                    <span>Resume progress</span>
                   </button>
                 )}
 
-                {selectedTask.status === "todo" && (
-                  <button
-                    type="button"
-                    disabled={mutations.updateTaskStatus.isPending}
-                    onClick={() => {
-                      mutations.updateTaskStatus.mutate({
-                        taskId: selectedTask.id,
-                        status: "done",
-                      });
-                      setLogTimePromptTask(selectedTask);
-                      setLogTimeMinutes(String(selectedTask.estimated_minutes || 60));
-                    }}
-                    className="px-3.5 py-1.5 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer shadow-xs"
-                  >
-                    Complete task
-                  </button>
-                )}
-
+                {/* 4. Done / Cancelled State: Reopen */}
                 {canReopenTask(selectedTask) && (
                   <button
                     type="button"
@@ -2435,119 +2834,135 @@ function TasksWorkspaceContent() {
                       mutations.updateTaskStatus.mutate({
                         taskId: selectedTask.id,
                         status: "in_progress",
-                        note: "Reopened from drawer",
+                        note: "Reopened task",
                       })
                     }
-                    className="px-3.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] hover:bg-[#F5F5F5] text-xs font-semibold text-black cursor-pointer shadow-xs"
+                    className="px-3.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] hover:bg-[#F5F5F5] text-xs font-semibold text-black cursor-pointer shadow-xs inline-flex items-center gap-1.5"
                   >
-                    Reopen
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reopen task</span>
                   </button>
                 )}
               </div>
-
-              {/* Assignee Control */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3.5 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6]">
-                <div className="flex flex-col gap-1 text-xs">
-                  <div className="flex items-center gap-2">
-                    <UserCheck className="w-4 h-4 text-black" />
-                    <span className="font-semibold text-[#808080]">Assignee:</span>
-                    <span className="font-bold text-black">
-                      {formatPerson(selectedTask.assignee_id)}
-                    </span>
-                  </div>
-                  {selectedTask.assignee_id && selectedTask.creator_id === selectedTask.assignee_id && (
-                    <span className="text-[10px] font-semibold text-black ml-6">
-                      • Self-Assigned
-                    </span>
-                  )}
-                  {selectedTask.assignee_id && selectedTask.creator_id !== selectedTask.assignee_id && (
-                    <span className="text-[10px] text-[#808080] ml-6">
-                      • Assigned by {formatPerson(selectedTask.creator_id)}
-                    </span>
-                  )}
-                </div>
-
-                {canReassignTask(selectedTask) && (
-                  <select
-                    aria-label="Reassign task"
-                    value={selectedTask.assignee_id || ""}
-                    onChange={(e) =>
-                      mutations.assignTask.mutate({
-                        taskId: selectedTask.id,
-                        assigneeId: e.target.value || null,
-                      })
-                    }
-                    className="px-3 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black"
-                  >
-                    <option value="">Unassigned</option>
-                    {assignableEmployees.map((emp) => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.full_name || emp.email}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              {/* Linked KPI Goal (Phase 5) */}
-              {FEATURES.KPI && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3.5 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6]">
-                  <div className="flex items-center gap-2 text-xs">
-                    <Target className="w-4 h-4 text-black" />
-                    <span className="font-semibold text-[#808080]">Linked goal:</span>
-                    <span className="font-bold text-black truncate max-w-[180px]">
-                      {drawerGoals.find((g) => g.id === selectedTask.goal_id)?.title || (selectedTask.goal_id ? "Active goal" : "None")}
-                    </span>
-                  </div>
-
-                  <select
-                    aria-label="Link task to KPI goal"
-                    value={selectedTask.goal_id || ""}
-                    onChange={(e) =>
-                      mutations.linkTaskGoal.mutate({
-                        taskId: selectedTask.id,
-                        goalId: e.target.value || null,
-                      })
-                    }
-                    className="px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black max-w-[220px]"
-                  >
-                    <option value="">No goal linked</option>
-                    {drawerGoals.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {canCancelTask(selectedTask) && (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={cancelReason}
-                    onChange={(e) => setCancelReason(e.target.value)}
-                    placeholder="Optional cancellation reason..."
-                    className="flex-1 px-3 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
-                  />
-                  <button
-                    type="button"
-                    disabled={mutations.updateTaskStatus.isPending}
-                    onClick={async () => {
-                      await mutations.updateTaskStatus.mutateAsync({
-                        taskId: selectedTask.id,
-                        status: "cancelled",
-                        note: cancelReason.trim() || undefined,
-                      });
-                      setCancelReason("");
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-red-50 text-[#FF1493] border border-red-200 text-xs font-bold cursor-pointer"
-                  >
-                    Cancel Task
-                  </button>
-                </div>
-              )}
             </div>
+
+            {/* Recurring Task Distinction: Distinguish single occurrence vs stopping series */}
+            {selectedTask.recurrence_id && (
+              <div className="p-3.5 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-black">
+                    <Repeat className="w-4 h-4 text-black shrink-0" />
+                    <span>{recurrenceScheduleLabel}</span>
+                  </div>
+                  {canStopRecurrence(selectedTask) && (
+                    <button
+                      type="button"
+                      onClick={() => mutations.stopRecurrence.mutate(selectedTask.recurrence_id!)}
+                      className="px-2.5 py-1 text-[11px] font-semibold text-red-600 border border-red-200 rounded hover:bg-red-50 cursor-pointer"
+                    >
+                      Stop series permanently
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-[#808080]">
+                  Completing this task finishes only the current occurrence. Future occurrences will continue according to schedule unless the series is stopped.
+                </p>
+              </div>
+            )}
+
+            {/* Parent Task Gentle Completion Banner */}
+            {parentSubtasks.length > 0 && allSubtasksDone && selectedTask.status !== "done" && (
+              <div className="p-3 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-black shrink-0" />
+                  <span className="text-xs font-semibold text-black">
+                    All {parentSubtasks.length} sub-tasks are done. Mark this task as done?
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    mutations.updateTaskStatus.mutate({
+                      taskId: selectedTask.id,
+                      status: "done",
+                      note: "Completed all sub-tasks",
+                    });
+                    setLogTimePromptTask(selectedTask);
+                    setLogTimeMinutes(String(selectedTask.estimated_minutes || 60));
+                  }}
+                  className="px-3 py-1 text-xs font-semibold bg-black hover:bg-[#1A1A1A] text-white rounded-lg whitespace-nowrap cursor-pointer"
+                >
+                  Mark done
+                </button>
+              </div>
+            )}
+
+            {/* Description */}
+            {selectedTask.description && (
+              <div className="p-3.5 rounded-xl bg-[#F9F9F9] border border-[#E6E6E6] text-xs text-black leading-relaxed whitespace-pre-wrap">
+                {selectedTask.description}
+              </div>
+            )}
+
+            {/* Linked KPI Goal (Phase 5) */}
+            {FEATURES.KPI && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6]">
+                <div className="flex items-center gap-2 text-xs">
+                  <Target className="w-4 h-4 text-black" />
+                  <span className="font-semibold text-[#808080]">Linked goal:</span>
+                  <span className="font-bold text-black truncate max-w-[180px]">
+                    {drawerGoals.find((g) => g.id === selectedTask.goal_id)?.title || (selectedTask.goal_id ? "Active goal" : "None")}
+                  </span>
+                </div>
+
+                <select
+                  aria-label="Link task to KPI goal"
+                  value={selectedTask.goal_id || ""}
+                  onChange={(e) =>
+                    mutations.linkTaskGoal.mutate({
+                      taskId: selectedTask.id,
+                      goalId: e.target.value || null,
+                    })
+                  }
+                  className="px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black max-w-[220px]"
+                >
+                  <option value="">No goal linked</option>
+                  {drawerGoals.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Cancellation Option */}
+            {canCancelTask(selectedTask) && (
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="text"
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Optional cancellation reason..."
+                  className="flex-1 px-3 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
+                />
+                <button
+                  type="button"
+                  disabled={mutations.updateTaskStatus.isPending}
+                  onClick={async () => {
+                    await mutations.updateTaskStatus.mutateAsync({
+                      taskId: selectedTask.id,
+                      status: "cancelled",
+                      note: cancelReason.trim() || undefined,
+                    });
+                    setCancelReason("");
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-red-50 text-[#FF1493] border border-red-200 text-xs font-bold cursor-pointer"
+                >
+                  Cancel Task
+                </button>
+              </div>
+            )}
 
             {/* Subtasks Section */}
             {parentSubtasks.length > 0 && (
@@ -2711,6 +3126,7 @@ function TasksWorkspaceContent() {
                 <form onSubmit={handleAddComment} className="flex gap-2">
                   <input
                     type="text"
+                    aria-label="Task comment"
                     value={commentBody}
                     onChange={(e) => setCommentBody(e.target.value)}
                     placeholder="Leave an update or blocker note..."
@@ -2718,6 +3134,7 @@ function TasksWorkspaceContent() {
                   />
                   <button
                     type="submit"
+                    aria-label="Send comment"
                     disabled={mutations.addComment.isPending || !commentBody.trim()}
                     className="px-3.5 py-2 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
                   >
