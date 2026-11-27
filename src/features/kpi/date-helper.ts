@@ -118,29 +118,65 @@ export function formatKpiPeriodLabel(
 
   const [y, m, d] = from.split("-").map(Number);
   const [toY, toM, toD] = to.split("-").map(Number);
+  const todayIso = getKolkataToday();
 
   if (preset === "month") {
     const monthName = MONTH_NAMES[m - 1] || "Month";
     const lastDay = new Date(y, m, 0).getDate();
-    if (toD < lastDay) {
-      return `${monthName} ${y} (to ${toD} ${MONTH_SHORT[toM - 1] || ""})`;
+    if (y === toY && m === toM && toD < lastDay) {
+      return `${d}–${toD} ${monthName} · Month to date`;
     }
-    return `${monthName} ${y}`;
+    if (y === toY && m === toM && d === 1 && toD === lastDay) {
+      return `${monthName} ${y}`;
+    }
+    return `${d} ${MONTH_SHORT[m - 1]} – ${toD} ${MONTH_SHORT[toM - 1]} ${toY}`;
   }
 
   if (preset === "week") {
-    return `${d} ${MONTH_SHORT[m - 1]} – ${toD} ${MONTH_SHORT[toM - 1]} ${toY}`;
+    const suffix = to === todayIso ? " · Last 7 days" : ` ${toY}`;
+    if (y === toY && m === toM) {
+      return `${d}–${toD} ${MONTH_NAMES[m - 1]}${suffix}`;
+    }
+    return `${d} ${MONTH_SHORT[m - 1]} – ${toD} ${MONTH_SHORT[toM - 1]}${suffix}`;
   }
 
   if (preset === "quarter") {
     const q = Math.floor((m - 1) / 3) + 1;
     const qEndMonth = q * 3;
     const lastDay = new Date(y, qEndMonth, 0).getDate();
-    if (toM < qEndMonth || toD < lastDay) {
-      return `Q${q} ${y} (to ${toD} ${MONTH_SHORT[toM - 1]})`;
+    if (toY === y && (toM < qEndMonth || toD < lastDay)) {
+      return `Q${q} ${y} · Quarter to date`;
     }
     return `Q${q} ${y}`;
   }
 
-  return `${from} to ${to}`;
+  if (y === toY && m === toM) {
+    return `${d}–${toD} ${MONTH_NAMES[m - 1]} ${toY} · Custom`;
+  }
+  return `${d} ${MONTH_SHORT[m - 1]} – ${toD} ${MONTH_SHORT[toM - 1]} ${toY} · Custom`;
+}
+
+/**
+ * Compact label used in period navigation stepper button.
+ */
+export function formatKpiStepperLabel(
+  preset: KpiPeriodPreset,
+  from: string,
+  to: string
+): string {
+  if (!from || !to) return "";
+  const [y, m, d] = from.split("-").map(Number);
+  const [toY, toM, toD] = to.split("-").map(Number);
+
+  if (preset === "month") {
+    return `${MONTH_NAMES[m - 1] || "Month"} ${y}`;
+  }
+  if (preset === "quarter") {
+    const q = Math.floor((m - 1) / 3) + 1;
+    return `Q${q} ${y}`;
+  }
+  if (y === toY && m === toM) {
+    return `${d}–${toD} ${MONTH_SHORT[m - 1]} ${y}`;
+  }
+  return `${d} ${MONTH_SHORT[m - 1]} – ${toD} ${MONTH_SHORT[toM - 1]} ${toY}`;
 }

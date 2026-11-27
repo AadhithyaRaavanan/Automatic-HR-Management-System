@@ -2,11 +2,9 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import {
-  getStatusDisplay,
-  getAttendanceReasonSentence,
-  getTasksReasonSentence,
-} from "@/features/kpi/plain-language";
+import { ChevronRight } from "lucide-react";
+import { KPI_CONFIG, getCategoryWeights } from "@/features/kpi/config";
+import { formatScoredMetricRow, getStatusDisplay } from "@/features/kpi/plain-language";
 
 export interface MetricItemData {
   key: string;
@@ -24,36 +22,6 @@ export interface MetricItemData {
   originalValue?: number | null;
 }
 
-interface CategorySparklineProps {
-  data: (number | null)[];
-}
-
-function MiniSparkline({ data }: CategorySparklineProps) {
-  const valid = data.filter((v): v is number => typeof v === "number");
-  if (valid.length < 2) return null;
-
-  const w = 54;
-  const h = 18;
-  const pts = data.map((val, idx) => {
-    const x = (idx / (data.length - 1)) * w;
-    const y = val != null ? h - (Math.min(100, Math.max(0, val)) / 100) * (h - 4) - 2 : h / 2;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-
-  return (
-    <svg width={w} height={h} className="shrink-0 overflow-visible" aria-hidden="true">
-      <polyline
-        fill="none"
-        stroke="#808080"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        points={pts.join(" ")}
-      />
-    </svg>
-  );
-}
-
 interface KpiSimplifiedCardsProps {
   currentMetrics: {
     on_time_check_in_rate: MetricItemData;
@@ -67,6 +35,7 @@ interface KpiSimplifiedCardsProps {
     task_average_cycle_time?: MetricItemData;
     task_overdue_count?: MetricItemData;
   };
+  customWeights?: Record<string, number>;
   attendanceHistory?: (number | null)[];
   tasksHistory?: (number | null)[];
   onOpenMetric: (key: string, label: string) => void;
@@ -75,237 +44,203 @@ interface KpiSimplifiedCardsProps {
 
 export function KpiCategorySection({
   currentMetrics,
-  attendanceHistory = [],
-  tasksHistory = [],
+  customWeights,
   onOpenMetric,
   className,
 }: KpiSimplifiedCardsProps) {
-  // 1. Attendance card lines & status
-  const attOnTime = currentMetrics?.on_time_check_in_rate;
-  const attDays = currentMetrics?.days_worked_vs_expected;
-  const attHours = currentMetrics?.worked_hours_vs_target;
+  const weights = getCategoryWeights(customWeights || KPI_CONFIG.weights);
 
-  // Weakest line determines Attendance card status
-  const attLinesStatus = [
-    attOnTime?.status || "no_data",
-    attDays?.status || "no_data",
-    attHours?.status || "no_data",
+  const attendanceRows = [
+    formatScoredMetricRow("on_time_check_in_rate", currentMetrics?.on_time_check_in_rate, currentMetrics),
+    formatScoredMetricRow("days_worked_vs_expected", currentMetrics?.days_worked_vs_expected, currentMetrics),
+    formatScoredMetricRow("worked_hours_vs_target", currentMetrics?.worked_hours_vs_target, currentMetrics),
   ];
-  const attCardStatusKey =
-    attLinesStatus.includes("behind")
-      ? "behind"
-      : attLinesStatus.includes("at_risk")
-      ? "at_risk"
-      : attLinesStatus.every((s) => s === "on_track")
-      ? "on_track"
-      : "no_data";
 
-  const attStatus = getStatusDisplay(attCardStatusKey);
-  const attReason = getAttendanceReasonSentence(attDays, attOnTime);
+  const taskRows = [
+    formatScoredMetricRow("tasks_completed_vs_assigned", currentMetrics?.tasks_completed_vs_assigned, currentMetrics),
+    formatScoredMetricRow("task_on_time_rate", currentMetrics?.task_on_time_rate, currentMetrics),
+  ];
 
-  // Status displays for the 3 individual attendance lines
-  const onTimeStatus = getStatusDisplay(attOnTime?.status);
-  const daysStatus = getStatusDisplay(attDays?.status);
-  const hoursStatus = getStatusDisplay(attHours?.status);
+  const contextMeasures = [
+    {
+      key: "early_check_outs",
+      label: "Early check-outs",
+      metric: currentMetrics?.early_check_outs,
+    },
+    {
+      key: "auto_closed_check_outs",
+      label: "Forgot to check out",
+      metric: currentMetrics?.auto_closed_check_outs,
+    },
+    {
+      key: "regularization_requests",
+      label: "Correction requests",
+      metric: currentMetrics?.regularization_requests,
+    },
+    {
+      key: "task_average_cycle_time",
+      label: "Avg task cycle time",
+      metric: currentMetrics?.task_average_cycle_time,
+    },
+    {
+      key: "task_overdue_count",
+      label: "Overdue tasks",
+      metric: currentMetrics?.task_overdue_count,
+    },
+  ];
 
-  // Formatted values for 3 lines matching requirement:
-  // "On-time check-ins 100%", "Days present 13 of 15 (87%)", "Hours logged 104.0h of 120.0h (87%)"
-  const onTimeText =
-    attOnTime?.value != null ? `${attOnTime.value}%` : "No data";
+  const renderMetricRow = (row: ReturnType<typeof formatScoredMetricRow>) => (
+    <button
+      key={row.key}
+      type="button"
+      onClick={() => onOpenMetric(row.key, row.label)}
+      className="w-full px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-left hover:bg-card-subtle/70 transition-colors cursor-pointer group focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-black"
+    >
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-text-primary group-hover:text-black">
+            {row.label}
+          </span>
+          {row.adjusted && (
+            <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 text-[10px] font-bold">
+              Adjusted
+            </span>
+          )}
+        </div>
+        <p className="text-xs font-medium text-text-secondary tabular-nums">
+          {row.actualText}
+        </p>
+      </div>
 
-  let daysText = "No data";
-  if (attDays?.value != null) {
-    const raw = attDays.displayValue || "";
-    const m = raw.match(/(\d+)\s+of\s+(\d+)/);
-    daysText = m ? `${m[1]} of ${m[2]} (${attDays.value}%)` : raw;
-  }
+      <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+        <span className="text-[11px] font-semibold text-text-tertiary tabular-nums">
+          {row.targetText}
+        </span>
 
-  let hoursText = "No data";
-  if (attHours?.value != null) {
-    const raw = attHours.displayValue || "";
-    const m = raw.match(/([\d.]+)h\s*\/\s*([\d.]+)h/);
-    hoursText = m ? `${m[1]}h of ${m[2]}h (${attHours.value}%)` : raw;
-  }
+        <span
+          className={cn(
+            "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] min-w-[96px] justify-center",
+            row.status.badgeBg
+          )}
+        >
+          <span
+            className={cn("w-1.5 h-1.5 rounded-full shrink-0", row.status.dotColor)}
+            aria-hidden="true"
+          />
+          <span className={row.status.textColor}>{row.status.label}</span>
+        </span>
 
-  // 2. Tasks card numbers & status
-  const tasksComp = currentMetrics?.tasks_completed_vs_assigned;
-  const tasksOnTime = currentMetrics?.task_on_time_rate;
-
-  const hasNoTasks =
-    !tasksComp ||
-    tasksComp.value == null ||
-    tasksComp.status === "no_data" ||
-    tasksComp.displayValue === "0 / 0" ||
-    tasksComp.displayValue === "No data";
-
-  const taskValues = [tasksComp?.value, tasksOnTime?.value].filter(
-    (v): v is number => typeof v === "number"
+        <ChevronRight
+          className="w-4 h-4 text-text-tertiary group-hover:text-black transition-colors shrink-0"
+          aria-hidden="true"
+        />
+      </div>
+    </button>
   );
-  const compositeTasksScore =
-    taskValues.length > 0 ? Math.round(taskValues.reduce((a, b) => a + b, 0) / taskValues.length) : null;
-
-  const tasksStatusKey =
-    !hasNoTasks && tasksComp?.value != null
-      ? compositeTasksScore != null && compositeTasksScore >= 85
-        ? "on_track"
-        : compositeTasksScore != null && compositeTasksScore >= 70
-        ? "at_risk"
-        : "behind"
-      : "no_data";
-
-  const tasksStatus = getStatusDisplay(tasksStatusKey);
-  const tasksReason = getTasksReasonSentence(tasksComp, tasksOnTime);
 
   return (
-    <div
-      data-tour="kpi-metrics-grid"
-      className={cn("grid grid-cols-1 md:grid-cols-2 gap-4", className)}
-    >
-      {/* CARD 1: Attendance (Three distinct lines, card status reflects weakest line, no blended number) */}
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => onOpenMetric("days_worked_vs_expected", "Attendance & Working Hours")}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onOpenMetric("days_worked_vs_expected", "Attendance & Working Hours");
-          }
-        }}
-        className="p-5 rounded-2xl bg-card border border-border-light shadow-card hover:border-black/30 hover:shadow-card-hover transition-all cursor-pointer flex flex-col justify-between space-y-4 group select-none"
-      >
-        <div className="space-y-2">
-          {/* Top row: Weakest status Dot + Text and subtle Sparkline */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="inline-flex items-center gap-1.5 text-xs font-bold">
-              <span className={cn("w-2 h-2 rounded-full", attStatus.dotColor)} aria-hidden="true" />
-              <span className={attStatus.textColor}>{attStatus.label}</span>
-            </div>
-
-            <MiniSparkline data={attendanceHistory} />
-          </div>
-
-          {/* Title */}
-          <div className="pt-1">
-            <h3 className="text-base font-bold text-text-primary group-hover:text-black transition-colors">
-              Attendance
-            </h3>
-          </div>
-
-          {/* ONE short reason sentence */}
-          <p className="text-xs text-text-secondary leading-relaxed font-medium">
-            {attReason}
-          </p>
-        </div>
-
-        {/* Three lines: On-time check-ins, Days present, Hours logged */}
-        <div className="pt-3 border-t border-border-light/70 space-y-2 text-xs">
-          {/* Line 1: On-time check-ins */}
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-text-secondary">On-time check-ins</span>
-            <div className="flex items-center gap-1.5 tabular-nums">
-              <span className="font-semibold text-text-primary">{onTimeText}</span>
-              <span className={cn("w-1.5 h-1.5 rounded-full", onTimeStatus.dotColor)} aria-hidden="true" />
-              <span className={cn("text-[11px]", onTimeStatus.textColor)}>{onTimeStatus.label}</span>
-            </div>
-          </div>
-
-          {/* Line 2: Days present */}
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-text-secondary">Days present</span>
-            <div className="flex items-center gap-1.5 tabular-nums">
-              <span className="font-semibold text-text-primary">{daysText}</span>
-              <span className={cn("w-1.5 h-1.5 rounded-full", daysStatus.dotColor)} aria-hidden="true" />
-              <span className={cn("text-[11px]", daysStatus.textColor)}>{daysStatus.label}</span>
-            </div>
-          </div>
-
-          {/* Line 3: Hours logged */}
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-text-secondary">Hours logged</span>
-            <div className="flex items-center gap-1.5 tabular-nums">
-              <span className="font-semibold text-text-primary">{hoursText}</span>
-              <span className={cn("w-1.5 h-1.5 rounded-full", hoursStatus.dotColor)} aria-hidden="true" />
-              <span className={cn("text-[11px]", hoursStatus.textColor)}>{hoursStatus.label}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* CARD 2: Tasks Delivery */}
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => onOpenMetric("tasks_completed_vs_assigned", "Task Delivery & Execution")}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onOpenMetric("tasks_completed_vs_assigned", "Task Delivery & Execution");
-          }
-        }}
-        className="p-5 rounded-2xl bg-card border border-border-light shadow-card hover:border-black/30 hover:shadow-card-hover transition-all cursor-pointer flex flex-col justify-between space-y-4 group select-none"
-      >
-        {hasNoTasks ? (
-          /* When no tasks: one compact row, no dash lines */
-          <div className="space-y-2 py-2">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-base font-bold text-text-primary group-hover:text-black transition-colors">
-                Tasks
-              </h3>
-              <span className="text-xs text-text-tertiary font-medium">Not counted</span>
-            </div>
-            <p className="text-xs text-text-secondary leading-relaxed font-medium">
-              No tasks assigned this period, so they&apos;re not counted.
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="space-y-2">
-              {/* Top row: Status Dot + Text and subtle Sparkline */}
-              <div className="flex items-center justify-between gap-2">
-                <div className="inline-flex items-center gap-1.5 text-xs font-bold">
-                  <span className={cn("w-2 h-2 rounded-full", tasksStatus.dotColor)} aria-hidden="true" />
-                  <span className={tasksStatus.textColor}>{tasksStatus.label}</span>
-                </div>
-
-                <MiniSparkline data={tasksHistory} />
-              </div>
-
-              {/* Title & Big Number */}
-              <div className="flex items-baseline justify-between gap-2 pt-1">
-                <h3 className="text-base font-bold text-text-primary group-hover:text-black transition-colors">
-                  Tasks
-                </h3>
-                <span className="text-2xl font-black tabular-nums text-text-primary">
-                  {compositeTasksScore != null ? `${compositeTasksScore}%` : "—"}
-                </span>
-              </div>
-
-              {/* ONE short reason sentence */}
-              <p className="text-xs text-text-secondary leading-relaxed font-medium">
-                {tasksReason}
+    <div data-tour="kpi-metrics-grid" className={cn("space-y-4", className)}>
+      {/* Scored Breakdown Groups */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Group 1: Attendance & hours */}
+        <section
+          aria-label="Attendance and hours breakdown"
+          className="rounded-2xl bg-card border border-border-light shadow-card overflow-hidden flex flex-col"
+        >
+          <div className="px-4 py-3 border-b border-border-light bg-card-subtle/40 flex items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-extrabold text-text-primary tracking-tight">
+                Attendance &amp; hours
+              </h2>
+              <p className="text-[11px] text-text-secondary">
+                Affects your score · {weights.attendance + weights.hours}% combined weight
               </p>
             </div>
+            <span className="text-[11px] font-semibold text-text-tertiary">
+              Click a row for dates
+            </span>
+          </div>
 
-            {/* Two clean lines: Tasks completed and On-time delivery */}
-            <div className="pt-3 border-t border-border-light/70 space-y-1.5 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-text-secondary">Tasks completed</span>
-                <span className="font-semibold text-text-primary tabular-nums">
-                  {tasksComp?.displayValue || "None assigned"}
-                </span>
-              </div>
+          <div className="divide-y divide-border-light">
+            {attendanceRows.map(renderMetricRow)}
+          </div>
+        </section>
 
-              <div className="flex items-center justify-between">
-                <span className="text-text-secondary">On-time delivery</span>
-                <span className="font-semibold text-text-primary tabular-nums">
-                  {tasksOnTime?.displayValue || "None delivered"}
-                </span>
-              </div>
+        {/* Group 2: Task delivery */}
+        <section
+          aria-label="Task delivery breakdown"
+          className="rounded-2xl bg-card border border-border-light shadow-card overflow-hidden flex flex-col"
+        >
+          <div className="px-4 py-3 border-b border-border-light bg-card-subtle/40 flex items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-extrabold text-text-primary tracking-tight">
+                Task delivery
+              </h2>
+              <p className="text-[11px] text-text-secondary">
+                {taskRows[0].hasData
+                  ? `Affects your score · ${weights.tasks}% combined weight`
+                  : "Not counted in score until tasks are assigned"}
+              </p>
             </div>
-          </>
-        )}
+            <span className="text-[11px] font-semibold text-text-tertiary">
+              Click a row for tasks
+            </span>
+          </div>
+
+          <div className="divide-y divide-border-light">
+            {taskRows.map(renderMetricRow)}
+          </div>
+        </section>
       </div>
+
+      {/* Tracked for context (0% weight - clearly distinguished from scored measures) */}
+      <section
+        aria-label="Measures tracked for context"
+        className="rounded-2xl bg-card border border-border-light shadow-xs p-3.5 space-y-2.5"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <h3 className="text-xs font-bold text-text-primary">
+              Tracked for context
+            </h3>
+            <span className="px-2 py-0.5 rounded-full bg-card-subtle border border-border-light text-[10px] font-semibold text-text-secondary">
+              Does not reduce your score
+            </span>
+          </div>
+          <span className="text-[11px] text-text-tertiary">
+            Select any item to inspect records
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+          {contextMeasures.map(({ key, label, metric }) => {
+            const valText = metric?.displayValue || "No data";
+            const st = getStatusDisplay(metric?.status);
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => onOpenMetric(key, label)}
+                className="p-2.5 rounded-xl bg-card-subtle/60 hover:bg-card-subtle border border-border-light/80 text-left transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-black"
+              >
+                <span className="text-[11px] font-semibold text-text-secondary block truncate">
+                  {label}
+                </span>
+                <div className="flex items-center justify-between gap-1 mt-1">
+                  <span className="text-xs font-bold text-text-primary tabular-nums">
+                    {valText}
+                  </span>
+                  <span
+                    className={cn("w-2 h-2 rounded-full shrink-0", st.dotColor)}
+                    title={st.label}
+                    aria-label={st.label}
+                  />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }

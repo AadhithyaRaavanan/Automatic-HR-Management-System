@@ -17,7 +17,6 @@ export function KpiCompactSummaryLines({
   onOpenReviewsAndGoals,
   className,
 }: KpiCompactSummaryLinesProps) {
-  // Format Review summary line
   let reviewText = "No performance reviews recorded for this period.";
   if (latestReview) {
     const ratings = latestReview.ratings ? Object.values(latestReview.ratings).map(Number) : [];
@@ -31,7 +30,6 @@ export function KpiCompactSummaryLines({
       : `Reviewed by ${reviewer} on ${dateStr}${noteSnippet}`;
   }
 
-  // Format Goals summary line
   let goalsText = "No goals set for this period.";
   if (goals.length > 0) {
     const total = goals.length;
@@ -43,46 +41,38 @@ export function KpiCompactSummaryLines({
   }
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
+    <button
+      type="button"
       onClick={onOpenReviewsAndGoals}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onOpenReviewsAndGoals();
-        }
-      }}
       className={cn(
-        "p-3.5 rounded-2xl bg-card border border-border-light shadow-card hover:border-black/30 transition-all cursor-pointer space-y-2 select-none group",
+        "w-full p-3.5 rounded-2xl bg-card border border-border-light shadow-card hover:border-black/30 transition-all cursor-pointer space-y-2 text-left group",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black",
         className
       )}
     >
-      {/* Line 1: Latest Review */}
       <div className="flex items-center justify-between text-xs gap-3">
         <div className="flex items-center gap-2 min-w-0">
-          <MessageSquare className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
+          <MessageSquare className="w-3.5 h-3.5 text-text-tertiary shrink-0" aria-hidden="true" />
           <span className="font-semibold text-text-secondary shrink-0">Latest review:</span>
           <span className="text-text-primary truncate font-medium">
             {reviewText}
           </span>
         </div>
 
-        <ChevronRight className="w-3.5 h-3.5 text-text-tertiary group-hover:text-black transition-colors shrink-0" />
+        <ChevronRight className="w-3.5 h-3.5 text-text-tertiary group-hover:text-black transition-colors shrink-0" aria-hidden="true" />
       </div>
 
-      {/* Line 2: Goals */}
       <div className="flex items-center justify-between text-xs gap-3 pt-2 border-t border-border-light/60">
         <div className="flex items-center gap-2 min-w-0">
-          <Target className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
+          <Target className="w-3.5 h-3.5 text-text-tertiary shrink-0" aria-hidden="true" />
           <span className="font-semibold text-text-secondary shrink-0">Goals:</span>
           <span className="text-text-primary truncate font-medium">
             {goalsText}
           </span>
         </div>
 
-        <ChevronRight className="w-3.5 h-3.5 text-text-tertiary group-hover:text-black transition-colors shrink-0" />
+        <ChevronRight className="w-3.5 h-3.5 text-text-tertiary group-hover:text-black transition-colors shrink-0" aria-hidden="true" />
       </div>
-    </div>
+    </button>
   );
 }

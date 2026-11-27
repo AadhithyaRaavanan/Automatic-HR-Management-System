@@ -15,10 +15,8 @@ import {
   Plus,
   X,
   Target,
-  MessageSquare,
   ArrowLeft,
   Edit3,
-  Trash2,
 } from "lucide-react";
 
 import { KpiToolbar, KpiTab, PeriodPreset } from "@/features/kpi/components/kpi-toolbar";
@@ -33,6 +31,7 @@ import { getNextActionSuggestions } from "@/features/kpi/plain-language";
 import {
   getKolkataPresetDates,
   formatKpiPeriodLabel,
+  formatKpiStepperLabel,
 } from "@/features/kpi/date-helper";
 
 function KpiContent() {
@@ -52,9 +51,27 @@ function KpiContent() {
   const [preset, setPreset] = React.useState<PeriodPreset>("month");
   const [dateRange, setDateRange] = React.useState(() => getKolkataPresetDates("month"));
   const [selectedEmpId, setSelectedEmpId] = React.useState<string>("");
+  const [cameFromTeam, setCameFromTeam] = React.useState(false);
   const [empType, setEmpType] = React.useState<string>("full_time");
-  const [deptFilter, setDeptFilter] = React.useState<string>("");
+  const [deptFilter, setDeptFilter] = React.useState<string>("all");
   const [departmentsList, setDepartmentsList] = React.useState<Array<{ id: string; name: string }>>([]);
+
+  // Track last synced URL param so returning from ?employee_id= works without fighting state
+  const lastParamRef = React.useRef<string | null>(null);
+  const modalOpenerRef = React.useRef<HTMLElement | null>(null);
+
+  const openModalWithFocusSave = (setter: React.Dispatch<React.SetStateAction<boolean>>) => {
+    modalOpenerRef.current = document.activeElement as HTMLElement | null;
+    setter(true);
+  };
+  const closeModalWithFocusRestore = (setter: React.Dispatch<React.SetStateAction<boolean>>) => {
+    setter(false);
+    const opener = modalOpenerRef.current;
+    modalOpenerRef.current = null;
+    requestAnimationFrame(() => {
+      if (opener && opener.isConnected) opener.focus();
+    });
+  };
 
   // Modals state
   const [breakdownOpen, setBreakdownOpen] = React.useState(false);
@@ -89,14 +106,30 @@ function KpiContent() {
   const [goalAssigneeId, setGoalAssigneeId] = React.useState<string>("");
   const [missingCheckInDates, setMissingCheckInDates] = React.useState<string[]>([]);
 
-  // Default target employee to param or current user
+  // Default target employee to param (only when param changes) or current user
   React.useEffect(() => {
-    if (targetFromParam) {
+    if (targetFromParam && targetFromParam !== lastParamRef.current) {
+      lastParamRef.current = targetFromParam;
       setSelectedEmpId(targetFromParam);
-    } else if (userId && !selectedEmpId) {
+    } else if (!targetFromParam && userId && !selectedEmpId) {
       setSelectedEmpId(userId);
     }
   }, [targetFromParam, userId, selectedEmpId]);
+
+  const anyModalOpen = Boolean(adjustMetric || createReviewOpen || selfReviewOpen || createGoalOpen);
+  React.useEffect(() => {
+    if (!anyModalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      if (adjustMetric) setAdjustMetric(null);
+      else if (createReviewOpen) closeModalWithFocusRestore(setCreateReviewOpen);
+      else if (selfReviewOpen) closeModalWithFocusRestore(setSelfReviewOpen);
+      else if (createGoalOpen) closeModalWithFocusRestore(setCreateGoalOpen);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [anyModalOpen, adjustMetric, createReviewOpen, selfReviewOpen, createGoalOpen]);
 
   const effectiveEmpId = selectedEmpId || userId || "";
   const isManagerOrAdmin = userRole === "manager" || userRole === "hr" || userRole === "admin";
@@ -452,10 +485,21 @@ function KpiContent() {
 
   const currentMetrics = kpiData?.current?.metrics;
   const previousMetrics = kpiData?.previous?.metrics;
-  const overallScore = kpiData?.current?.overallScore;
-  const trend = kpiData?.trend?.overallScore;
+  const overallScore = kpiData?.current?.overallScore ?? null;
+  const trend = kpiData?.trend?.overallScore ?? null;
+  const previousPeriodComparable = Boolean(
+    kpiData?.previous?.overallScore != null &&
+      (kpiData?.previous?.dataPointsCount ?? 0) >= 2 &&
+      overallScore != null
+  );
   const scopedEmployees = kpiData?.scopedEmployees || [];
   const periodLabel = formatKpiPeriodLabel(preset, dateRange.from, dateRange.to);
+  const stepperLabel = formatKpiStepperLabel(preset, dateRange.from, dateRange.to);
+  const adjustedMetricsList = React.useMemo(
+    () =>
+      Object.values(currentMetrics || {}).filter((m: any) => Boolean(m?.adjusted)) as any[],
+    [currentMetrics]
+  );
 
   if (!FEATURES.KPI) {
     return null;
@@ -501,15 +545,7 @@ function KpiContent() {
     };
   }, [unloggedCount, effectiveEmpId, dateRange.from, dateRange.to]);
 
-  const nextActions = getNextActionSuggestions({
-    unloggedCount,
-    missingDates: missingCheckInDates,
-    hasPendingSelfReview: !selfReviewData?.selfReview,
-    atRiskGoals: goalsList.filter((g: any) => g.status === "at_risk"),
-    overdueTasksCount: currentMetrics?.task_overdue_count?.value || 0,
-  });
-
-  // Target employee name for manager view banner
+  // Target employee name for manager view & heading
   const targetEmployeeName =
     kpiData?.employee?.full_name ||
     scopedEmployees.find((e: any) => e.id === effectiveEmpId)?.full_name ||
@@ -518,6 +554,19 @@ function KpiContent() {
     kpiData?.employee?.email ||
     scopedEmployees.find((e: any) => e.id === effectiveEmpId)?.email ||
     "";
+
+  const nextActions = getNextActionSuggestions({
+    isSelfView,
+    isManagerOrAdmin,
+    employeeName: targetEmployeeName,
+    unloggedCount,
+    missingDates: missingCheckInDates,
+    hasPendingSelfReview: !selfReviewData?.selfReview,
+    hasSubmittedSelfReview: Boolean(selfReviewData?.selfReview),
+    hasManagerReview: (reviewsData?.reviews || []).length > 0,
+    atRiskGoals: goalsList.filter((g: any) => g.status === "at_risk"),
+    overdueTasksCount: currentMetrics?.task_overdue_count?.value || 0,
+  });
 
   // Delayed skeleton loader
   if (isInitialLoading) {
@@ -547,40 +596,68 @@ function KpiContent() {
   const isReviewsAndGoals = activeTab === "reviews_and_goals" || activeTab === "reviews" || activeTab === "goals";
   const isTeamTab = activeTab === "team";
 
+  const handleBackToTeam = () => {
+    setSelectedEmpId(userId || "");
+    setCameFromTeam(false);
+    setActiveTab("team");
+    if (targetFromParam) {
+      lastParamRef.current = null;
+      router.replace("/kpi", { scroll: false });
+    }
+  };
+
   return (
-    <div className="w-full space-y-4.5 pb-20">
-      {/* 1. Page Header: Plain "Performance" title and short subtitle */}
-      <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-1 mb-2">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight">
-            Performance
-          </h1>
-          <p className="text-xs sm:text-sm text-text-secondary mt-1">
-            Attendance, hours, and task results for this period.
-          </p>
+    <div className="w-full space-y-4 pb-20">
+      {/* 1. Page Header: Whose performance, readable period, optional Back to team & Export CSV */}
+      <section className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-1">
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight">
+              {isSelfView ? "My performance" : targetEmployeeName}
+            </h1>
+            <span className="text-xs sm:text-sm font-semibold text-text-secondary tabular-nums">
+              {periodLabel}
+            </span>
+          </div>
+          {!isSelfView && (
+            <p className="text-xs text-text-tertiary truncate">
+              {targetEmployeeEmail ? `${targetEmployeeEmail} · ` : ""}Viewing team member performance
+            </p>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {isManagerOrAdmin && (!isSelfView || cameFromTeam) && !isTeamTab && (
+            <button
+              type="button"
+              onClick={handleBackToTeam}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-card border border-border-light text-xs font-bold text-text-primary hover:bg-card-subtle transition-colors shadow-xs cursor-pointer focus-visible:outline-2 focus-visible:outline-black"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Back to team</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handleExportCsv}
             disabled={kpiLoading || !kpiData}
             aria-label="Export performance CSV"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-border-light text-xs font-bold text-text-primary hover:bg-card-subtle transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-card border border-border-light text-xs font-bold text-text-primary hover:bg-card-subtle transition-colors shadow-xs cursor-pointer disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-black"
           >
-            <Download className="w-4 h-4 text-black" />
+            <Download className="w-3.5 h-3.5 text-black" aria-hidden="true" />
             <span>Export CSV</span>
           </button>
         </div>
       </section>
 
-      {/* 2. Unified Toolbar (3 Tabs: Overview | Reviews and goals | Team) */}
+      {/* 2. Distinct Navigation Row + All 4 Period Presets (Week, Month, Quarter, Custom) */}
       <KpiToolbar
         activeTab={activeTab}
         onTabChange={(t) => setActiveTab(t)}
         reviewCount={reviewsData?.reviews?.length || 0}
         goalCount={goalsList.length}
-        periodLabel={periodLabel}
+        stepperLabel={stepperLabel}
         preset={preset}
         onPresetChange={handlePresetChange}
         onPrevPeriod={handlePrevPeriod}
@@ -590,68 +667,63 @@ function KpiContent() {
         isManagerOrAdmin={isManagerOrAdmin}
         scopedEmployees={scopedEmployees}
         selectedEmpId={effectiveEmpId}
-        onSelectEmployee={setSelectedEmpId}
+        onSelectEmployee={(empId) => {
+          setSelectedEmpId(empId);
+          setCameFromTeam(false);
+        }}
         currentUserId={userId}
-        empType={empType}
-        onEmpTypeChange={setEmpType}
-        deptFilter={deptFilter}
-        onDeptFilterChange={setDeptFilter}
-        departments={departmentsList}
       />
 
       {/* 3. TAB 1: OVERVIEW */}
       {isOverview && (
-        <div className="space-y-4">
-          {/* Manager/HR Viewing Banner (Part 2, rule 3) */}
-          {isManagerOrAdmin && !isSelfView && (
-            <div className="p-3.5 rounded-2xl bg-card border border-border-light shadow-xs flex items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#B7FF00] shrink-0" aria-hidden="true" />
-                <span className="font-bold text-text-primary truncate">
-                  Viewing {targetEmployeeName}
-                </span>
-                {targetEmployeeEmail && (
-                  <span className="text-text-tertiary hidden sm:inline truncate">
-                    ({targetEmployeeEmail})
-                  </span>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedEmpId(userId || "");
-                  setActiveTab("team");
-                }}
-                className="inline-flex items-center gap-1 font-bold text-black hover:underline cursor-pointer shrink-0"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Back to team</span>
-              </button>
-            </div>
-          )}
-
-          {/* Headline Card (Plain sentence, score, change vs last period, small gauge) */}
+        <div
+          role="tabpanel"
+          aria-labelledby="kpi-tab-overview"
+          className="space-y-4"
+        >
+          {/* Order 2: Compact Score Summary + Factual Explanation */}
           <KpiHeroCard
             overallScore={overallScore}
             trend={trend}
+            previousPeriodComparable={previousPeriodComparable}
             target={KPI_CONFIG.overallTarget || 90}
             currentMetrics={currentMetrics}
             previousMetrics={previousMetrics}
             customWeights={kpiData?.current?.weights}
-            onOpenBreakdown={() => setBreakdownOpen(true)}
             isSelfView={isSelfView}
+            subjectName={targetEmployeeName}
             userRole={userRole}
-            previousPeriodLabel={preset === "month" ? "last month" : "previous period"}
+            previousPeriodLabel={preset === "month" ? "last month" : preset === "quarter" ? "last quarter" : "previous period"}
             periodType={preset}
           />
 
-          {/* Two Simplified Cards: Attendance & Working Hours + Tasks */}
+          {/* Order 3: Next Actions Directly Below Score Summary */}
+          <KpiNextActionsCard
+            actions={nextActions}
+            onTriggerAction={(trigger) => {
+              if (trigger === "self_review") {
+                setSelfReviewReflection(selfReviewData?.selfReview?.reflection || "");
+                openModalWithFocusSave(setSelfReviewOpen);
+              } else if (trigger === "write_review") {
+                openModalWithFocusSave(setCreateReviewOpen);
+              } else if (trigger === "inspect_days") {
+                setSelectedMetricKey("days_worked_vs_expected");
+                setSelectedMetricLabel("Days present");
+                setDetailDrawerOpen(true);
+              } else if (trigger === "inspect_overdue_tasks") {
+                setSelectedMetricKey("task_overdue_count");
+                setSelectedMetricLabel("Overdue tasks");
+                setDetailDrawerOpen(true);
+              }
+            }}
+            onNavigateTab={(tab) => setActiveTab(tab)}
+          />
+
+          {/* Order 4: Readable Breakdown Grouped Under Attendance & hours and Task delivery */}
           {currentMetrics && (
             <KpiCategorySection
               currentMetrics={currentMetrics}
-              attendanceHistory={(historyData?.history || []).map((h: any) => h.attendanceScore)}
-              tasksHistory={(historyData?.history || []).map((h: any) => h.tasksScore)}
+              customWeights={kpiData?.current?.weights}
               onOpenMetric={(key, label) => {
                 setSelectedMetricKey(key);
                 setSelectedMetricLabel(label);
@@ -660,36 +732,47 @@ function KpiContent() {
             />
           )}
 
-          {/* "What to do next" Card */}
-          <KpiNextActionsCard
-            actions={nextActions}
-            onTriggerAction={(trigger) => {
-              if (trigger === "self_review") {
-                setSelfReviewReflection(selfReviewData?.selfReview?.reflection || "");
-                setSelfReviewOpen(true);
-              }
-            }}
-            onNavigateTab={(tab) => setActiveTab(tab)}
-          />
-
-          {/* Compact Latest Review & Goals Lines */}
+          {/* Concise Reviews & Goals Link Bar */}
           <KpiCompactSummaryLines
             latestReview={reviewsData?.reviews?.[0] || null}
             goals={goalsList}
             onOpenReviewsAndGoals={() => setActiveTab("reviews_and_goals")}
           />
 
-          {/* Collapsible "How this is calculated" Section (closed by default) */}
+          {/* Order 4 footer: Expandable "How my score is calculated" */}
           <KpiCalculationFooter
             employeeType={empType}
-            onOpenBreakdown={() => setBreakdownOpen(true)}
+            configEffectiveDate={kpiData?.current?.configEffectiveDate}
+            configVersionReason={kpiData?.current?.configVersionReason}
+            customWeights={kpiData?.current?.weights}
+            currentMetrics={currentMetrics}
+            adjustedMetrics={adjustedMetricsList}
           />
         </div>
       )}
 
-      {/* 4. TAB 2: REVIEWS AND GOALS (Merged with two clear sections) */}
+      {/* 4. TAB 2: REVIEWS & GOALS */}
       {isReviewsAndGoals && (
-        <div data-tour="kpi-reviews-tab" className="space-y-6">
+        <div
+          role="tabpanel"
+          aria-labelledby="kpi-tab-reviews_and_goals"
+          data-tour="kpi-reviews-tab"
+          className="space-y-6"
+        >
+          {/* Current Cycle Summary Bar */}
+          <div className="px-4 py-3 rounded-2xl bg-card border border-border-light shadow-xs flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-bold text-text-primary">Current cycle:</span>
+              <span className="text-text-secondary font-medium">{periodLabel}</span>
+              <span className="px-2 py-0.5 rounded-full bg-card-subtle border border-border-light text-[11px] font-semibold text-text-primary">
+                {selfReviewData?.selfReview ? "Self-review submitted" : "Self-review open"}
+              </span>
+            </div>
+            <span className="text-[11px] text-text-tertiary tabular-nums">
+              {reviewsData?.reviews?.length || 0} manager review{(reviewsData?.reviews?.length || 0) === 1 ? "" : "s"} · {goalsList.length} active goal{goalsList.length === 1 ? "" : "s"}
+            </span>
+          </div>
+
           {/* SECTION 1: Performance Reviews */}
           <section className="p-5 rounded-2xl bg-card border border-border-light shadow-card space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border-light pb-3">
@@ -698,24 +781,23 @@ function KpiContent() {
                   Performance reviews
                 </h2>
                 <p className="text-xs text-text-secondary">
-                  Evaluations and feedback for this cycle.
+                  Self-reflection and manager evaluations for {periodLabel}.
                 </p>
               </div>
 
               <div className="flex items-center gap-2">
-                {/* Employee Self-Review Button */}
                 {isSelfView && (
                   <button
                     type="button"
                     data-tour="kpi-self-review"
                     onClick={() => {
                       setSelfReviewReflection(selfReviewData?.selfReview?.reflection || "");
-                      setSelfReviewOpen(true);
+                      openModalWithFocusSave(setSelfReviewOpen);
                     }}
                     disabled={selfReviewData?.hasManagerReview}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#B7FF00] hover:bg-[#a6eb00] text-black text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-black"
                   >
-                    <Edit3 className="w-3.5 h-3.5" />
+                    <Edit3 className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>
                       {selfReviewData?.selfReview
                         ? selfReviewData.canEdit
@@ -726,22 +808,20 @@ function KpiContent() {
                   </button>
                 )}
 
-                {/* Manager Write Review Button */}
                 {isManagerOrAdmin && !isSelfView && (
                   <button
                     type="button"
                     data-tour="kpi-add-review"
-                    onClick={() => setCreateReviewOpen(true)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                    onClick={() => openModalWithFocusSave(setCreateReviewOpen)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold transition-all shadow-xs cursor-pointer focus-visible:outline-2 focus-visible:outline-black"
                   >
-                    <Plus className="w-3.5 h-3.5" />
+                    <Plus className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>Write review</span>
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Employee Self-Review Reflection Card */}
             {selfReviewData?.selfReview && (
               <div className="p-4 rounded-xl bg-card-subtle border border-border-light space-y-2">
                 <div className="flex items-center justify-between">
@@ -761,7 +841,6 @@ function KpiContent() {
               </div>
             )}
 
-            {/* List of Reviews */}
             <div className="space-y-3">
               {(reviewsData?.reviews || []).length > 0 ? (
                 reviewsData!.reviews.map((rev: any) => (
@@ -778,7 +857,6 @@ function KpiContent() {
                       </span>
                     </div>
 
-                    {/* Ratings */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-border-light/60 text-xs">
                       {Object.entries(rev.ratings || {}).map(([key, val]) => (
                         <div key={key} className="flex justify-between p-2 rounded-lg bg-card">
@@ -788,7 +866,6 @@ function KpiContent() {
                       ))}
                     </div>
 
-                    {/* Note */}
                     {rev.note && (
                       <p className="text-xs text-text-secondary leading-relaxed bg-card p-3 rounded-lg border border-border-light">
                         {rev.note}
@@ -797,9 +874,38 @@ function KpiContent() {
                   </div>
                 ))
               ) : (
-                <p className="text-xs text-text-tertiary text-center py-4">
-                  No performance reviews recorded for this period.
-                </p>
+                <div className="p-5 rounded-xl bg-card-subtle/50 border border-dashed border-border-light text-center space-y-2.5">
+                  <p className="text-xs text-text-secondary font-medium">
+                    {isSelfView
+                      ? selfReviewData?.selfReview
+                        ? "Your self-review is saved. Your manager has not submitted an evaluation for this cycle yet."
+                        : "No manager evaluation yet. Start this cycle by submitting your self-review reflection."
+                      : `No review submitted yet for ${targetEmployeeName} in this cycle.`}
+                  </p>
+                  {isSelfView && !selfReviewData?.selfReview && !selfReviewData?.hasManagerReview && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelfReviewReflection("");
+                        openModalWithFocusSave(setSelfReviewOpen);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold cursor-pointer focus-visible:outline-2 focus-visible:outline-black"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" aria-hidden="true" />
+                      <span>Write self-review</span>
+                    </button>
+                  )}
+                  {isManagerOrAdmin && !isSelfView && (
+                    <button
+                      type="button"
+                      onClick={() => openModalWithFocusSave(setCreateReviewOpen)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#B7FF00] hover:bg-[#a6eb00] text-black text-xs font-bold cursor-pointer focus-visible:outline-2 focus-visible:outline-black"
+                    >
+                      <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                      <span>Write review for {targetEmployeeName}</span>
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </section>
@@ -809,44 +915,45 @@ function KpiContent() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border-light pb-3">
               <div>
                 <h2 className="text-sm font-extrabold text-text-primary tracking-tight">
-                  Goals & strategic milestones
+                  Goals &amp; milestones
                 </h2>
                 <p className="text-xs text-text-secondary">
-                  Track deliverable milestones and professional objectives.
+                  Track deliverable milestones and objectives for {periodLabel}.
                 </p>
               </div>
 
               {isManagerOrAdmin && (
                 <button
                   type="button"
-                  onClick={() => setCreateGoalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold transition-all shadow-xs cursor-pointer self-start sm:self-auto"
+                  onClick={() => {
+                    setGoalAssigneeId(effectiveEmpId);
+                    openModalWithFocusSave(setCreateGoalOpen);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold transition-all shadow-xs cursor-pointer self-start sm:self-auto focus-visible:outline-2 focus-visible:outline-black"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <Plus className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>Add goal</span>
                 </button>
               )}
             </div>
 
-            {/* Goal status summary pills (hidden until at least one goal exists) */}
             {goalsList.length > 0 && (
               <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="px-3 py-1 rounded-full bg-card-subtle border border-border-light font-medium">
+                <span className="px-3 py-1 rounded-full bg-card-subtle border border-border-light font-medium tabular-nums">
                   Not started: <strong>{notStartedGoals}</strong>
                 </span>
-                <span className="px-3 py-1 rounded-full bg-card-subtle border border-border-light font-medium">
+                <span className="px-3 py-1 rounded-full bg-card-subtle border border-border-light font-medium tabular-nums">
                   On track: <strong>{onTrackGoals}</strong>
                 </span>
-                <span className="px-3 py-1 rounded-full bg-card-subtle border border-border-light font-medium">
+                <span className="px-3 py-1 rounded-full bg-card-subtle border border-border-light font-medium tabular-nums">
                   At risk: <strong>{atRiskGoals}</strong>
                 </span>
-                <span className="px-3 py-1 rounded-full bg-card-subtle border border-border-light font-medium">
+                <span className="px-3 py-1 rounded-full bg-card-subtle border border-border-light font-medium tabular-nums">
                   Completed: <strong>{doneGoals}</strong>
                 </span>
               </div>
             )}
 
-            {/* List of Goals */}
             <div className="space-y-3 pt-1">
               {goalsList.length > 0 ? (
                 goalsList.map((g: any) => (
@@ -856,10 +963,10 @@ function KpiContent() {
                   >
                     <div className="space-y-1 min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <Target className="w-4 h-4 text-black shrink-0" />
-                        <h4 className="text-xs font-bold text-text-primary leading-snug truncate">
+                        <Target className="w-4 h-4 text-black shrink-0" aria-hidden="true" />
+                        <h3 className="text-xs font-bold text-text-primary leading-snug truncate">
                           {g.title}
-                        </h4>
+                        </h3>
                       </div>
                       {g.note && (
                         <p className="text-xs text-text-secondary line-clamp-2 pl-6">
@@ -870,10 +977,10 @@ function KpiContent() {
 
                     <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
                       <select
-                        aria-label="Update goal status"
+                        aria-label={`Update goal status for ${g.title}`}
                         value={g.status}
                         onChange={(e) => updateGoalStatus.mutate({ id: g.id, status: e.target.value })}
-                        className="px-2.5 py-1.5 rounded-lg bg-card border border-border-light text-xs font-bold text-text-primary cursor-pointer"
+                        className="px-2.5 py-1.5 rounded-lg bg-card border border-border-light text-xs font-bold text-text-primary cursor-pointer focus-visible:outline-2 focus-visible:outline-black"
                       >
                         <option value="not_started">Not started</option>
                         <option value="on_track">On track</option>
@@ -884,9 +991,26 @@ function KpiContent() {
                   </div>
                 ))
               ) : (
-                <p className="text-xs text-text-tertiary text-center py-4">
-                  No goals set for this period.
-                </p>
+                <div className="p-5 rounded-xl bg-card-subtle/50 border border-dashed border-border-light text-center space-y-2.5">
+                  <p className="text-xs text-text-secondary font-medium">
+                    {isManagerOrAdmin
+                      ? `No goals assigned to ${isSelfView ? "you" : targetEmployeeName} for this period yet.`
+                      : "No goals assigned for this period yet. Goals created by your manager or linked from Tasks appear here."}
+                  </p>
+                  {isManagerOrAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGoalAssigneeId(effectiveEmpId);
+                        openModalWithFocusSave(setCreateGoalOpen);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold cursor-pointer focus-visible:outline-2 focus-visible:outline-black"
+                    >
+                      <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                      <span>Set first goal</span>
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </section>
@@ -895,14 +1019,23 @@ function KpiContent() {
 
       {/* 5. TAB 3: TEAM (Managers and HR only) */}
       {isTeamTab && isManagerOrAdmin && (
-        <div data-tour="kpi-team-tab" className="space-y-4">
+        <div
+          role="tabpanel"
+          aria-labelledby="kpi-tab-team"
+          data-tour="kpi-team-tab"
+          className="space-y-4"
+        >
           <KpiTeamOverview
             from={dateRange.from}
             to={dateRange.to}
             departmentFilter={deptFilter}
+            onDepartmentFilterChange={setDeptFilter}
+            departments={departmentsList}
             employeeTypeFilter={empType}
+            onEmployeeTypeFilterChange={setEmpType}
             onSelectEmployee={(empId) => {
               setSelectedEmpId(empId);
+              setCameFromTeam(true);
               setActiveTab("overview");
             }}
             onClearFilters={() => {
@@ -933,6 +1066,9 @@ function KpiContent() {
       {/* MODAL: Score Adjustment (Triggered from Detail Drawer) */}
       {adjustMetric && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="adjust-metric-modal-title"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
           onClick={(e) => {
             if (e.target === e.currentTarget) setAdjustMetric(null);
@@ -940,7 +1076,7 @@ function KpiContent() {
         >
           <div className="w-full max-w-md bg-card rounded-2xl border border-border-light shadow-shell p-6 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-border-light">
-              <h3 className="text-sm font-bold text-text-primary">
+              <h3 id="adjust-metric-modal-title" className="text-sm font-bold text-text-primary">
                 Adjust score override
               </h3>
               <button
@@ -1023,15 +1159,18 @@ function KpiContent() {
       {/* MODAL: Guided Manager Review (Part 2, rule 4: Guided form + Self-review shown beside) */}
       {createReviewOpen && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-review-modal-title"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setCreateReviewOpen(false);
+            if (e.target === e.currentTarget) closeModalWithFocusRestore(setCreateReviewOpen);
           }}
         >
           <div className="w-full max-w-3xl bg-card rounded-2xl border border-border-light shadow-shell p-6 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-border-light">
               <div>
-                <h3 className="text-sm font-extrabold text-text-primary">
+                <h3 id="create-review-modal-title" className="text-sm font-extrabold text-text-primary">
                   Performance review for {targetEmployeeName}
                 </h3>
                 <p className="text-xs text-text-secondary">
@@ -1040,8 +1179,9 @@ function KpiContent() {
               </div>
               <button
                 type="button"
-                onClick={() => setCreateReviewOpen(false)}
-                className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-card-subtle cursor-pointer"
+                aria-label="Close review modal"
+                onClick={() => closeModalWithFocusRestore(setCreateReviewOpen)}
+                className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-card-subtle cursor-pointer focus-visible:outline-2 focus-visible:outline-black"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1204,20 +1344,24 @@ function KpiContent() {
       {/* MODAL: Employee Self-Review Reflection */}
       {selfReviewOpen && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="self-review-modal-title"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setSelfReviewOpen(false);
+            if (e.target === e.currentTarget) closeModalWithFocusRestore(setSelfReviewOpen);
           }}
         >
           <div className="w-full max-w-lg bg-card rounded-2xl border border-border-light shadow-shell p-6 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-border-light">
-              <h3 className="text-sm font-extrabold text-text-primary">
+              <h3 id="self-review-modal-title" className="text-sm font-extrabold text-text-primary">
                 Write self-review reflection
               </h3>
               <button
                 type="button"
-                onClick={() => setSelfReviewOpen(false)}
-                className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-card-subtle cursor-pointer"
+                aria-label="Close self-review modal"
+                onClick={() => closeModalWithFocusRestore(setSelfReviewOpen)}
+                className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-card-subtle cursor-pointer focus-visible:outline-2 focus-visible:outline-black"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1276,20 +1420,24 @@ function KpiContent() {
       {/* MODAL: Create Goal */}
       {createGoalOpen && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-goal-modal-title"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setCreateGoalOpen(false);
+            if (e.target === e.currentTarget) closeModalWithFocusRestore(setCreateGoalOpen);
           }}
         >
           <div className="w-full max-w-md bg-card rounded-2xl border border-border-light shadow-shell p-6 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-border-light">
-              <h3 className="text-sm font-extrabold text-text-primary">
+              <h3 id="create-goal-modal-title" className="text-sm font-extrabold text-text-primary">
                 {(goalAssigneeId || effectiveEmpId) === userId ? "Add goal" : "Assign performance goal"}
               </h3>
               <button
                 type="button"
-                onClick={() => setCreateGoalOpen(false)}
-                className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-card-subtle cursor-pointer"
+                aria-label="Close add goal modal"
+                onClick={() => closeModalWithFocusRestore(setCreateGoalOpen)}
+                className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-card-subtle cursor-pointer focus-visible:outline-2 focus-visible:outline-black"
               >
                 <X className="w-4 h-4" />
               </button>

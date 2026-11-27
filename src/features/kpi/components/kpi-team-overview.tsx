@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Search, Download, ChevronDown, ChevronRight, AlertCircle, User } from "lucide-react";
+import { Search, Download, ChevronDown, ChevronRight, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getStatusDisplay } from "@/features/kpi/plain-language";
@@ -34,7 +34,10 @@ interface KpiTeamOverviewProps {
   from: string;
   to: string;
   departmentFilter: string;
+  onDepartmentFilterChange?: (dept: string) => void;
+  departments?: Array<{ id: string; name: string }>;
   employeeTypeFilter: string;
+  onEmployeeTypeFilterChange?: (empType: string) => void;
   onSelectEmployee: (employeeId: string) => void;
   onClearFilters?: () => void;
   className?: string;
@@ -44,7 +47,10 @@ export function KpiTeamOverview({
   from,
   to,
   departmentFilter,
+  onDepartmentFilterChange,
+  departments = [],
   employeeTypeFilter,
+  onEmployeeTypeFilterChange,
   onSelectEmployee,
   onClearFilters,
   className,
@@ -81,7 +87,6 @@ export function KpiTeamOverview({
     };
   }, [from, to, departmentFilter, employeeTypeFilter]);
 
-  // Search filtering
   const searchFiltered = React.useMemo(() => {
     return team.filter((m) => {
       if (!search.trim()) return true;
@@ -94,7 +99,6 @@ export function KpiTeamOverview({
     });
   }, [team, search]);
 
-  // Helper for single reason sentence in Needs Attention
   const getNeedsAttentionReason = (m: TeamMemberRecord): string => {
     if (m.overallScore == null) {
       if (m.tasksScore == null && m.attendanceScore == null) return "No activity recorded yet";
@@ -111,7 +115,6 @@ export function KpiTeamOverview({
     return "Check-ins or deliverables need attention";
   };
 
-  // Group into "Needs attention" vs All
   const needsAttentionList = React.useMemo(() => {
     return searchFiltered.filter((m) => {
       const isBehind =
@@ -125,7 +128,6 @@ export function KpiTeamOverview({
     });
   }, [searchFiltered]);
 
-  // Everyone sorted alphabetically by name
   const everyoneAlphabetical = React.useMemo(() => {
     return [...searchFiltered].sort((a, b) => a.fullName.localeCompare(b.fullName));
   }, [searchFiltered]);
@@ -173,31 +175,92 @@ export function KpiTeamOverview({
 
   const hasFilters =
     Boolean(search.trim()) ||
-    (departmentFilter && departmentFilter !== "all") ||
-    (employeeTypeFilter && employeeTypeFilter !== "all");
+    Boolean(departmentFilter && departmentFilter !== "all") ||
+    Boolean(employeeTypeFilter && employeeTypeFilter !== "all" && employeeTypeFilter !== "full_time");
 
   return (
     <div className={cn("space-y-5", className)}>
-      {/* Search Bar + Export Button */}
-      <div className="p-3 rounded-2xl bg-card border border-border-light shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="relative flex-1 w-full max-w-sm">
-          <Search className="w-4 h-4 text-text-tertiary absolute left-3 top-2.5" />
-          <input
-            type="text"
-            placeholder="Search team member or department..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary focus:ring-1 focus:ring-black outline-none"
-          />
+      {/* Visible Team Filter Bar: Employee Search + Department + Employment Type + CSV Export */}
+      <div className="p-3.5 rounded-2xl bg-card border border-border-light shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-0">
+          <div className="relative w-full sm:w-64">
+            <label htmlFor="team-member-search" className="sr-only">
+              Search team member or department
+            </label>
+            <Search className="w-4 h-4 text-text-tertiary absolute left-3 top-2.5" aria-hidden="true" />
+            <input
+              id="team-member-search"
+              type="text"
+              placeholder="Search team member..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 min-h-[34px] rounded-xl bg-card-subtle border border-border-light text-xs text-text-primary focus-visible:outline-2 focus-visible:outline-black"
+            />
+          </div>
+
+          {onDepartmentFilterChange && (
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="team-department-select" className="text-[11px] font-bold text-text-secondary">
+                Department
+              </label>
+              <select
+                id="team-department-select"
+                aria-label="Department"
+                value={departmentFilter || "all"}
+                onChange={(e) => onDepartmentFilterChange(e.target.value)}
+                className="min-h-[34px] px-2.5 py-1 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary cursor-pointer focus-visible:outline-2 focus-visible:outline-black"
+              >
+                <option value="all">All Departments</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {onEmployeeTypeFilterChange && (
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="team-type-select" className="text-[11px] font-bold text-text-secondary">
+                Type
+              </label>
+              <select
+                id="team-type-select"
+                aria-label="Employment type"
+                value={employeeTypeFilter || "full_time"}
+                onChange={(e) => onEmployeeTypeFilterChange(e.target.value)}
+                className="min-h-[34px] px-2.5 py-1 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary cursor-pointer focus-visible:outline-2 focus-visible:outline-black"
+              >
+                <option value="full_time">Full-Time (8h)</option>
+                <option value="part_time">Part-Time (4h)</option>
+                <option value="intern">Intern (8h)</option>
+                <option value="contract">Contract (8h)</option>
+              </select>
+            </div>
+          )}
+
+          {hasFilters && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch("");
+                onClearFilters?.();
+              }}
+              className="px-2.5 py-1 min-h-[32px] rounded-xl text-xs font-semibold text-text-secondary hover:text-black hover:bg-card-subtle cursor-pointer"
+            >
+              Reset
+            </button>
+          )}
         </div>
 
         <button
           type="button"
           onClick={handleExportTeamCsv}
           disabled={loading || everyoneAlphabetical.length === 0}
-          className="px-3.5 py-1.5 rounded-xl bg-card border border-border-light hover:bg-card-subtle text-xs font-bold text-text-primary transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+          className="px-3.5 py-1.5 min-h-[34px] rounded-xl bg-card border border-border-light hover:bg-card-subtle text-xs font-bold text-text-primary transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-black"
         >
-          <Download className="w-3.5 h-3.5 text-black" />
+          <Download className="w-3.5 h-3.5 text-black" aria-hidden="true" />
           <span>Export team CSV</span>
         </button>
       </div>
@@ -209,17 +272,16 @@ export function KpiTeamOverview({
         </div>
       ) : (
         <div className="space-y-6">
-          {/* SECTION 1: Needs Attention (Hidden when 0 total team members; "Nobody needs attention right now." when none need attention) */}
           {team.length > 0 && (
             <section className="space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-600" />
-                  <h3 className="text-sm font-extrabold text-text-primary tracking-tight">
+                  <AlertCircle className="w-4 h-4 text-amber-600" aria-hidden="true" />
+                  <h2 className="text-sm font-extrabold text-text-primary tracking-tight">
                     Needs attention
-                  </h3>
+                  </h2>
                 </div>
-                <span className="text-xs text-text-tertiary font-semibold">
+                <span className="text-xs text-text-tertiary font-semibold tabular-nums">
                   {needsAttentionList.length} people
                 </span>
               </div>
@@ -239,26 +301,19 @@ export function KpiTeamOverview({
                     const status = getStatusDisplay(statusKey);
 
                     return (
-                      <div
+                      <button
                         key={m.id}
-                        role="button"
-                        tabIndex={0}
+                        type="button"
                         onClick={() => onSelectEmployee(m.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            onSelectEmployee(m.id);
-                          }
-                        }}
-                        className="p-4 rounded-2xl bg-card border border-border-light shadow-card hover:border-black/30 hover:shadow-card-hover transition-all cursor-pointer flex flex-col justify-between space-y-3 group select-none"
+                        className="p-4 rounded-2xl bg-card border border-border-light shadow-card hover:border-black/30 hover:shadow-card-hover transition-all cursor-pointer flex flex-col justify-between space-y-3 group text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
                       >
-                        <div className="space-y-1">
+                        <div className="space-y-1 w-full">
                           <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <span className="text-xs font-bold text-text-primary group-hover:text-black block leading-snug">
+                            <div className="min-w-0">
+                              <span className="text-xs font-bold text-text-primary group-hover:text-black block leading-snug truncate">
                                 {m.fullName}
                               </span>
-                              <span className="text-[11px] text-text-tertiary">
+                              <span className="text-[11px] text-text-tertiary block truncate">
                                 {m.department || "General"}
                               </span>
                             </div>
@@ -269,19 +324,18 @@ export function KpiTeamOverview({
                             </div>
                           </div>
 
-                          {/* ONE plain reason sentence */}
                           <p className="text-xs text-amber-900 font-semibold pt-1">
                             {reason}
                           </p>
                         </div>
 
-                        <div className="flex items-center justify-between text-[11px] text-text-tertiary pt-2 border-t border-border-light/60">
+                        <div className="w-full flex items-center justify-between text-[11px] text-text-tertiary pt-2 border-t border-border-light/60 tabular-nums">
                           <span>Score: {m.overallScore != null ? `${m.overallScore}%` : "—"}</span>
                           <span className="text-black font-bold group-hover:underline inline-flex items-center gap-0.5">
-                            View details <ChevronRight className="w-3 h-3" />
+                            View details <ChevronRight className="w-3 h-3" aria-hidden="true" />
                           </span>
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -297,8 +351,9 @@ export function KpiTeamOverview({
           <section className="space-y-2.5">
             <button
               type="button"
+              aria-expanded={everyoneOpen}
               onClick={() => setEveryoneOpen((prev) => !prev)}
-              className="w-full flex items-center justify-between p-2 text-left hover:bg-card-subtle/40 rounded-xl transition-colors cursor-pointer"
+              className="w-full flex items-center justify-between p-2 text-left hover:bg-card-subtle/40 rounded-xl transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-black"
             >
               <div className="flex items-center gap-2">
                 <ChevronDown
@@ -306,12 +361,13 @@ export function KpiTeamOverview({
                     "w-4 h-4 text-text-tertiary transition-transform duration-200",
                     !everyoneOpen && "-rotate-90"
                   )}
+                  aria-hidden="true"
                 />
-                <h3 className="text-sm font-extrabold text-text-primary tracking-tight">
+                <h2 className="text-sm font-extrabold text-text-primary tracking-tight">
                   Everyone
-                </h3>
+                </h2>
               </div>
-              <span className="text-xs text-text-tertiary font-semibold">
+              <span className="text-xs text-text-tertiary font-semibold tabular-nums">
                 {everyoneAlphabetical.length} people
               </span>
             </button>
@@ -331,18 +387,11 @@ export function KpiTeamOverview({
                     const status = getStatusDisplay(statusKey);
 
                     return (
-                      <div
+                      <button
                         key={m.id}
-                        role="button"
-                        tabIndex={0}
+                        type="button"
                         onClick={() => onSelectEmployee(m.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            onSelectEmployee(m.id);
-                          }
-                        }}
-                        className="p-3.5 flex items-center justify-between gap-3 text-xs hover:bg-card-subtle transition-colors cursor-pointer group select-none"
+                        className="w-full p-3.5 flex items-center justify-between gap-3 text-xs hover:bg-card-subtle transition-colors cursor-pointer group text-left focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-black"
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="w-8 h-8 rounded-full bg-card-subtle border border-border-light text-text-secondary flex items-center justify-center font-bold text-xs shrink-0">
@@ -359,15 +408,18 @@ export function KpiTeamOverview({
                         </div>
 
                         <div className="flex items-center gap-4 shrink-0">
-                          {/* One status word with dot */}
-                          <div className="inline-flex items-center gap-1.5 text-xs">
+                          <span className="text-xs font-bold text-text-primary tabular-nums">
+                            {m.overallScore != null ? `${m.overallScore}%` : "—"}
+                          </span>
+
+                          <div className="inline-flex items-center gap-1.5 text-xs min-w-[96px]">
                             <span className={cn("w-2 h-2 rounded-full", status.dotColor)} aria-hidden="true" />
                             <span className={status.textColor}>{status.label}</span>
                           </div>
 
-                          <ChevronRight className="w-4 h-4 text-text-tertiary group-hover:text-black transition-colors" />
+                          <ChevronRight className="w-4 h-4 text-text-tertiary group-hover:text-black transition-colors" aria-hidden="true" />
                         </div>
-                      </div>
+                      </button>
                     );
                   })
                 ) : hasFilters ? (
@@ -381,7 +433,7 @@ export function KpiTeamOverview({
                         setSearch("");
                         onClearFilters?.();
                       }}
-                      className="px-3.5 py-1.5 rounded-xl bg-card border border-border-light hover:bg-card-subtle text-xs font-bold text-text-primary transition-colors cursor-pointer"
+                      className="px-3.5 py-1.5 rounded-xl bg-card border border-border-light hover:bg-card-subtle text-xs font-bold text-text-primary transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-black"
                     >
                       Clear filters
                     </button>

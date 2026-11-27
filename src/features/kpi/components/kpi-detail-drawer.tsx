@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { X, AlertCircle, CheckCircle2, HelpCircle, ExternalLink, SlidersHorizontal } from "lucide-react";
+import { X, AlertCircle, HelpCircle, ExternalLink, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface KpiDetailDrawerProps {
@@ -36,10 +36,36 @@ export function KpiDetailDrawer({
   const [loading, setLoading] = React.useState(false);
   const [showSkeleton, setShowSkeleton] = React.useState(false);
 
-  // Keyboard accessibility: ESC closes drawer
+  const closeBtnRef = React.useRef<HTMLButtonElement>(null);
+  const previousActiveRef = React.useRef<HTMLElement | null>(null);
+  const wasOpenRef = React.useRef(false);
+
+  // Focus initialization on open & restoration on close
   React.useEffect(() => {
+    if (isOpen && !wasOpenRef.current) {
+      wasOpenRef.current = true;
+      previousActiveRef.current = document.activeElement as HTMLElement | null;
+      requestAnimationFrame(() => {
+        closeBtnRef.current?.focus();
+      });
+    } else if (!isOpen && wasOpenRef.current) {
+      wasOpenRef.current = false;
+      const opener = previousActiveRef.current;
+      previousActiveRef.current = null;
+      requestAnimationFrame(() => {
+        if (opener && opener.isConnected) {
+          opener.focus();
+        }
+      });
+    }
+  }, [isOpen]);
+
+  // Escape dismiss
+  React.useEffect(() => {
+    if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen) {
+      if (e.key === "Escape") {
+        e.preventDefault();
         onClose();
       }
     };
@@ -47,7 +73,7 @@ export function KpiDetailDrawer({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
-  // Delayed skeleton loader (shows skeleton after 300ms if fetch takes longer)
+  // Fetch drilldown detail with delayed skeleton (>300ms)
   React.useEffect(() => {
     if (!isOpen || !metricKey || !employeeId) {
       setData(null);
@@ -86,7 +112,12 @@ export function KpiDetailDrawer({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true">
+    <div
+      className="fixed inset-0 z-50 overflow-hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="kpi-detail-drawer-title"
+    >
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity duration-200"
@@ -96,23 +127,25 @@ export function KpiDetailDrawer({
 
       {/* Drawer Panel */}
       <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-        <div className="w-screen max-w-md bg-card border-l border-border-light shadow-2xl flex flex-col justify-between animate-in slide-in-from-right duration-200">
+        <div className="w-screen max-w-md bg-card border-l border-border-light shadow-2xl flex flex-col justify-between overscroll-contain animate-in slide-in-from-right duration-200">
           {/* Header */}
           <div className="p-5 border-b border-border-light flex items-start justify-between gap-3">
             <div>
               <span className="text-[11px] font-bold text-text-tertiary">
                 Calculation detail
               </span>
-              <h2 className="text-lg font-bold text-text-primary tracking-tight mt-0.5">
+              <h2
+                id="kpi-detail-drawer-title"
+                className="text-lg font-bold text-text-primary tracking-tight mt-0.5"
+              >
                 {metricLabel || metricKey}
               </h2>
-              <p className="text-xs text-text-tertiary font-medium mt-0.5">
+              <p className="text-xs text-text-tertiary font-medium mt-0.5 tabular-nums">
                 {from} – {to}
               </p>
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Manager/HR: Adjust Score button in drawer */}
               {isManagerOrAdmin && !isSelfView && onAdjustMetric && (
                 <button
                   type="button"
@@ -120,27 +153,28 @@ export function KpiDetailDrawer({
                     onAdjustMetric(metricData || { key: metricKey, label: metricLabel });
                     onClose();
                   }}
-                  className="px-2.5 py-1.5 rounded-lg bg-card-subtle border border-border-light text-xs font-bold text-text-primary hover:bg-black hover:text-white transition-colors flex items-center gap-1 cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-lg bg-card-subtle border border-border-light text-xs font-bold text-text-primary hover:bg-black hover:text-white transition-colors flex items-center gap-1 cursor-pointer focus-visible:outline-2 focus-visible:outline-black"
                   title="Adjust score for this metric"
                 >
-                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  <SlidersHorizontal className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>Adjust</span>
                 </button>
               )}
 
               <button
+                ref={closeBtnRef}
                 type="button"
                 onClick={onClose}
-                aria-label="Close panel"
-                className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors cursor-pointer"
+                aria-label="Close detail drawer"
+                className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-black"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5" aria-hidden="true" />
               </button>
             </div>
           </div>
 
           {/* Drawer Body */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          <div className="flex-1 overflow-y-auto overscroll-contain p-5 space-y-4">
             {loading && showSkeleton ? (
               <div className="space-y-3">
                 <div className="h-16 rounded-xl bg-card-subtle animate-pulse" />
@@ -153,11 +187,10 @@ export function KpiDetailDrawer({
               </div>
             ) : data ? (
               <>
-                {/* 1. Adjusted Note if applicable */}
                 {data.adjustment?.isAdjusted && (
                   <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 space-y-1">
                     <div className="flex items-center gap-1.5 font-bold text-xs">
-                      <AlertCircle className="w-4 h-4 text-amber-700" />
+                      <AlertCircle className="w-4 h-4 text-amber-700" aria-hidden="true" />
                       <span>Adjusted by supervisor</span>
                     </div>
                     <p className="text-xs">
@@ -166,10 +199,9 @@ export function KpiDetailDrawer({
                   </div>
                 )}
 
-                {/* 2. Plain Explanation */}
                 <div className="p-3.5 rounded-xl bg-card-subtle border border-border-light space-y-2">
                   <div className="flex items-center gap-1.5 text-text-primary font-bold text-xs">
-                    <HelpCircle className="w-4 h-4 text-black" />
+                    <HelpCircle className="w-4 h-4 text-black" aria-hidden="true" />
                     <span>How it is evaluated</span>
                   </div>
                   <p className="text-xs text-text-secondary leading-relaxed">
@@ -177,19 +209,17 @@ export function KpiDetailDrawer({
                   </p>
                 </div>
 
-                {/* 3. Formula with real numbers */}
                 {data.formula && (
                   <div className="p-3 rounded-xl bg-card border border-border-light space-y-1">
                     <span className="text-[10px] font-bold text-text-tertiary block">
                       Formula calculation
                     </span>
-                    <span className="font-semibold text-xs text-text-primary block">
+                    <span className="font-semibold text-xs text-text-primary block tabular-nums">
                       {data.formula}
                     </span>
                   </div>
                 )}
 
-                {/* 4. Underlying Activity Records Table */}
                 <div className="space-y-2">
                   <span className="text-[11px] font-bold text-text-primary block">
                     Underlying activity records ({data.rows?.length || 0})
@@ -208,11 +238,11 @@ export function KpiDetailDrawer({
                           >
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
-                                <span className="font-bold text-text-primary">
+                                <span className="font-bold text-text-primary tabular-nums">
                                   {row.date}
                                 </span>
                                 {row.checkIn && (
-                                  <span className="text-[11px] text-text-tertiary">
+                                  <span className="text-[11px] text-text-tertiary tabular-nums">
                                     {row.checkIn}
                                   </span>
                                 )}
@@ -222,7 +252,6 @@ export function KpiDetailDrawer({
                               </p>
                             </div>
 
-                            {/* Status label with text + dot (never color alone) */}
                             <div className="flex items-center gap-1.5 shrink-0">
                               <span
                                 className={cn(
@@ -258,18 +287,6 @@ export function KpiDetailDrawer({
                     </div>
                   )}
                 </div>
-
-                {/* 5. Also Tracked Section (formerly Diagnostics) */}
-                <div className="p-3.5 rounded-xl bg-card-subtle/80 border border-border-light space-y-2">
-                  <span className="text-[11px] font-bold text-text-primary block">
-                    Also tracked
-                  </span>
-                  <div className="space-y-1 text-xs text-text-secondary">
-                    <p>• <strong>Forgot to check out:</strong> Forgotten punches auto-closed at midnight.</p>
-                    <p>• <strong>Correction requests:</strong> Submitted punch adjustment requests.</p>
-                    <p>• <strong>Early check-outs:</strong> Departures before shift completion.</p>
-                  </div>
-                </div>
               </>
             ) : (
               <div className="p-8 text-center text-xs text-text-tertiary">
@@ -278,7 +295,6 @@ export function KpiDetailDrawer({
             )}
           </div>
 
-          {/* Footer note for employees */}
           {isSelfView && (
             <div className="p-4 border-t border-border-light bg-card-subtle text-xs text-text-secondary space-y-1">
               <p>
@@ -286,10 +302,10 @@ export function KpiDetailDrawer({
               </p>
               <Link
                 href="/requests"
-                className="text-black font-bold hover:underline inline-flex items-center gap-1 mt-0.5 cursor-pointer"
+                className="text-black font-bold hover:underline inline-flex items-center gap-1 mt-0.5 cursor-pointer focus-visible:outline-2 focus-visible:outline-black rounded"
               >
                 <span>Go to requests</span>
-                <ExternalLink className="w-3 h-3" />
+                <ExternalLink className="w-3 h-3" aria-hidden="true" />
               </Link>
             </div>
           )}
