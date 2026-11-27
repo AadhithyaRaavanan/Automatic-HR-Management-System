@@ -22,8 +22,8 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const employeeId = searchParams.get("employee_id") || caller.userId;
-  const periodStart = searchParams.get("period_start");
-  const periodEnd = searchParams.get("period_end");
+  const periodStart = searchParams.get("period_start") || searchParams.get("from");
+  const periodEnd = searchParams.get("period_end") || searchParams.get("to");
   const periodType = searchParams.get("period_type") || "monthly";
 
   const isAllowed = await verifyEmployeeAccess(caller, employeeId);
@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
     let query = (supabaseAdmin as any)
       .from("kpi_self_reviews")
       .select("id, employee_id, period_type, period_start, period_end, reflection, created_at, updated_at")
+      .eq("organization_id", caller.organizationId)
       .eq("employee_id", employeeId);
 
     if (periodStart && periodEnd) {
@@ -99,6 +100,12 @@ export async function POST(request: NextRequest) {
     if (!period_start || !period_end) {
       return NextResponse.json({ error: "period_start and period_end are required" }, { status: 400 });
     }
+    if (period_start > period_end) {
+      return NextResponse.json({ error: "period_start must be on or before period_end" }, { status: 400 });
+    }
+    if (!caller.organizationId) {
+      return NextResponse.json({ error: "Organization context is missing" }, { status: 403 });
+    }
 
     const trimmed = (reflection || "").trim();
     if (!trimmed || trimmed.length < 20) {
@@ -130,7 +137,7 @@ export async function POST(request: NextRequest) {
       .from("kpi_self_reviews")
       .upsert(
         {
-          organization_id: caller.organizationId || "00000000-0000-0000-0000-000000000000",
+          organization_id: caller.organizationId,
           employee_id: caller.userId,
           period_type,
           period_start,

@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { FEATURES } from "@/lib/features";
 import { getKpiCallerContext, verifyEmployeeAccess } from "@/features/kpi/auth-helper";
 import { computeKpi } from "@/features/kpi/compute";
+import { getKolkataPresetDates } from "@/features/kpi/date-helper";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -28,17 +29,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const today = new Date().toISOString().slice(0, 10);
-  const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-    .toISOString()
-    .slice(0, 10);
-
-  const kpiResult = await computeKpi(targetEmployeeId, startOfMonth, today);
+  const { from, to } = getKolkataPresetDates("month");
+  const kpiResult = await computeKpi(targetEmployeeId, from, to, undefined, caller.organizationId);
 
   return NextResponse.json({
     overallScore: kpiResult.overallScore ?? 0,
+    overallTarget: kpiResult.overallTarget,
     hasActivity: kpiResult.dataPointsCount > 0,
     overallScoreRaw: kpiResult.overallScore,
     dataPointsCount: kpiResult.dataPointsCount,
+    dataStatus: kpiResult.dataStatus,
   });
 }

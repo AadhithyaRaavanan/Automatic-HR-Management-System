@@ -7,6 +7,7 @@ import { FEATURES } from "@/lib/features";
 import { getKpiCallerContext } from "@/features/kpi/auth-helper";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { KPI_CONFIG } from "@/features/kpi/config";
+import { getKolkataToday } from "@/features/kpi/date-helper";
 import { notify } from "@/features/notifications/notify";
 import { getHrUsers } from "@/features/notifications/recipients";
 
@@ -20,20 +21,24 @@ export async function GET(request: NextRequest) {
   const { caller, errorResponse } = await getKpiCallerContext(request);
   if (errorResponse) return errorResponse;
   if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!caller.organizationId) {
+    return NextResponse.json({ error: "Organization context is missing" }, { status: 403 });
+  }
 
   try {
-    // 1. Fetch versions history
+    // 1. Fetch org-scoped versions history
     const { data: versions, error } = await (supabaseAdmin as any)
       .from("kpi_config_versions")
       .select("id, config, effective_from, reason, created_at, created_by, employees(full_name)")
+      .eq("organization_id", caller.organizationId)
       .order("effective_from", { ascending: false });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Active config is the latest effective as of today
-    const todayIso = new Date().toISOString().slice(0, 10);
+    // Active config is the latest effective as of today in workspace timezone
+    const todayIso = getKolkataToday();
     const activeVersion = (versions || []).find((v: any) => v.effective_from <= todayIso) || null;
     const activeConfig = activeVersion?.config || KPI_CONFIG;
 
@@ -65,6 +70,9 @@ export async function POST(request: NextRequest) {
       { status: 403 }
     );
   }
+  if (!caller.organizationId) {
+    return NextResponse.json({ error: "Organization context is missing" }, { status: 403 });
+  }
 
   try {
     const body = await request.json();
@@ -83,7 +91,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Effective date cannot be in the past
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayIso = getKolkataToday();
     if (effective_from < todayIso) {
       return NextResponse.json(
         { error: "Effective date cannot be in the past. Past periods must retain historical benchmarks." },
@@ -110,6 +118,10 @@ export async function POST(request: NextRequest) {
     }
 
     const fullConfig = {
+      overallTarget:
+        config.overallTarget != null && Number.isFinite(Number(config.overallTarget))
+          ? Number(config.overallTarget)
+          : KPI_CONFIG.overallTarget,
       ...config,
       weights: normalizedWeights,
     };
@@ -117,7 +129,7 @@ export async function POST(request: NextRequest) {
     const { data: newVersion, error } = await (supabaseAdmin as any)
       .from("kpi_config_versions")
       .insert({
-        organization_id: caller.organizationId || "00000000-0000-0000-0000-000000000000",
+        organization_id: caller.organizationId,
         config: fullConfig,
         effective_from,
         reason: trimmedReason,

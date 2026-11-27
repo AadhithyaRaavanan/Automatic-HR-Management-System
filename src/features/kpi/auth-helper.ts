@@ -64,7 +64,7 @@ export async function getKpiCallerContext(
     // Fetch caller employee & organization member details
     const [empRes, memberRes] = await Promise.all([
       (supabaseAdmin.from("employees") as any)
-        .select("id, email, department_id, organization_id")
+        .select("id, email, status, department_id, organization_id")
         .eq("id", user.id)
         .maybeSingle(),
       (supabaseAdmin.from("organization_members") as any)
@@ -76,6 +76,16 @@ export async function getKpiCallerContext(
 
     const role = (memberRes.data?.role || "employee").toLowerCase() as CallerContext["role"];
     const orgId = memberRes.data?.organization_id || empRes.data?.organization_id || "";
+
+    if (!orgId) {
+      return {
+        caller: null,
+        errorResponse: NextResponse.json(
+          { error: "Organization context is missing for this account." },
+          { status: 403 }
+        ),
+      };
+    }
 
     // Onboarding Gate: Non-admin/HR users must have approved onboarding
     if (role !== "admin" && role !== "hr") {
@@ -126,30 +136,37 @@ export async function verifyEmployeeAccess(
   caller: CallerContext,
   targetEmployeeId: string
 ): Promise<boolean> {
-  // Employee can only access themselves
-  if (caller.role === "employee") {
-    return caller.userId === targetEmployeeId;
+  if (!caller.organizationId || !targetEmployeeId) {
+    return false;
   }
 
-  // Admin and HR have org-wide access
+  // Employee can only access themselves
+  if (caller.userId === targetEmployeeId) {
+    return true;
+  }
+
+  if (caller.role === "employee") {
+    return false;
+  }
+
+  // Enforce organization isolation for every non-self access (including admin & HR)
+  const { data: targetEmp } = await (supabaseAdmin.from("employees") as any)
+    .select("id, manager_id, department_id, organization_id")
+    .eq("id", targetEmployeeId)
+    .maybeSingle();
+
+  if (!targetEmp || targetEmp.organization_id !== caller.organizationId) {
+    return false;
+  }
+
   if (caller.role === "admin" || caller.role === "hr") {
     return true;
   }
 
-  // Manager: self, direct reports, or same department
+  // Manager: direct reports or same department within same organization
   if (caller.role === "manager") {
-    if (caller.userId === targetEmployeeId) return true;
-
-    const { data: targetEmp } = await (supabaseAdmin.from("employees") as any)
-      .select("id, manager_id, department_id")
-      .eq("id", targetEmployeeId)
-      .maybeSingle();
-
-    if (!targetEmp) return false;
-
     if (targetEmp.manager_id === caller.userId) return true;
     if (caller.departmentId && targetEmp.department_id === caller.departmentId) return true;
-
     return false;
   }
 

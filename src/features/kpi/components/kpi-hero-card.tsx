@@ -59,11 +59,11 @@ export function KpiHeroCard({
       ? getScoreTrendSentence(trend, previousPeriodLabel)
       : "";
 
-  // Extract Attendance and Task snapshot counts without fabricating data
+  // Extract Attendance and Task snapshot counts supporting decimal half-day scheduled units
   const daysMetric = currentMetrics?.days_worked_vs_expected;
-  const daysMatch = daysMetric?.displayValue?.match(/(\d+)\s+of\s+(\d+)/);
-  const workedDays = daysMatch ? parseInt(daysMatch[1], 10) : null;
-  const expectedDays = daysMatch ? parseInt(daysMatch[2], 10) : null;
+  const daysMatch = daysMetric?.displayValue?.match(/([\d.]+)\s+of\s+([\d.]+)/);
+  const workedDays = daysMatch ? parseFloat(daysMatch[1]) : null;
+  const expectedDays = daysMatch ? parseFloat(daysMatch[2]) : null;
 
   const taskMetric = currentMetrics?.tasks_completed_vs_assigned;
   const taskMatch = taskMetric?.displayValue?.match(/(\d+)\s*\/\s*(\d+)/);

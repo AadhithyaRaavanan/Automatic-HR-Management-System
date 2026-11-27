@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useSearchParams } from "next/navigation";
 import { AppShell, useAppSession } from "@/components/shell/app-shell";
 import { RequestCard } from "@/features/requests/components/request-card";
 import { RequestModal } from "@/features/requests/components/request-modal";
@@ -60,9 +61,17 @@ interface ColleagueOption {
 
 function RequestsPageContent() {
   const { userId, userRole } = useAppSession();
+  const searchParams = useSearchParams();
   const isManagerOrAbove = userRole === "manager" || userRole === "hr" || userRole === "admin";
   const isHrOrAdmin = userRole === "hr" || userRole === "admin";
   const supabase = React.useMemo(() => createClient(), []);
+
+  const requestedDateParam = searchParams.get("date");
+  const requestedEmpParam = searchParams.get("employee_id");
+  const initialWorkDate =
+    requestedDateParam && /^\d{4}-\d{2}-\d{2}$/.test(requestedDateParam)
+      ? requestedDateParam
+      : undefined;
 
   const [inboxModule, setInboxModule] = React.useState<"regularization" | "leave" | "delegations">(
     "regularization"
@@ -98,6 +107,23 @@ function RequestsPageContent() {
 
   const [modalOpen, setModalOpen] = React.useState(false);
   const [statusFilter, setStatusFilter] = React.useState<"all" | RegularizationStatus>("all");
+
+  // Auto-open punch correction modal when arriving from KPI with ?date=YYYY-MM-DD (for self)
+  const autoOpenedDateRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!initialWorkDate) return;
+    if (autoOpenedDateRef.current === initialWorkDate) return;
+    const isTargetingOtherEmp = Boolean(requestedEmpParam && userId && requestedEmpParam !== userId);
+    if (!isTargetingOtherEmp) {
+      autoOpenedDateRef.current = initialWorkDate;
+      setInboxModule("regularization");
+      setModalOpen(true);
+    } else {
+      autoOpenedDateRef.current = initialWorkDate;
+      setInboxModule("regularization");
+      setStatusFilter("pending");
+    }
+  }, [initialWorkDate, requestedEmpParam, userId]);
 
   // Mandatory Decision Note Modal State
   const [reviewTarget, setReviewTarget] = React.useState<{
@@ -183,8 +209,14 @@ function RequestsPageContent() {
   }, [loadDelegations]);
 
   const filteredRequests = (requests || []).filter((req) => {
-    if (statusFilter === "all") return true;
-    return req.status === statusFilter;
+    if (statusFilter !== "all" && req.status !== statusFilter) return false;
+    if (requestedEmpParam && isManagerOrAbove && req.employee_id !== requestedEmpParam) {
+      return false;
+    }
+    if (initialWorkDate && requestedEmpParam && req.work_date !== initialWorkDate) {
+      return false;
+    }
+    return true;
   });
 
   const filteredLeaves = leaveRequests.filter((l) => {
@@ -717,6 +749,7 @@ function RequestsPageContent() {
       <RequestModal
         open={modalOpen}
         onOpenChange={setModalOpen}
+        initialDate={initialWorkDate}
         onSubmitRequest={async (data) => {
           await submitMutation.mutateAsync(data);
         }}
@@ -899,7 +932,9 @@ function RequestsPageContent() {
 export default function RequestsPage() {
   return (
     <AppShell>
-      <RequestsPageContent />
+      <React.Suspense fallback={<div className="p-6 text-xs text-text-secondary">Loading requests...</div>}>
+        <RequestsPageContent />
+      </React.Suspense>
     </AppShell>
   );
 }

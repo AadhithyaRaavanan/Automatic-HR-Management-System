@@ -28,6 +28,7 @@ export function RequestModal({
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<RegularizationFormData>({
     resolver: zodResolver(regularizationFormSchema),
@@ -38,6 +39,12 @@ export function RequestModal({
       reason: "",
     },
   });
+
+  React.useEffect(() => {
+    if (open && initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate)) {
+      setValue("workDate", initialDate, { shouldValidate: true });
+    }
+  }, [open, initialDate, setValue]);
 
   if (!open) return null;
 

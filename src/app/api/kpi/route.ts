@@ -51,17 +51,28 @@ export async function GET(request: NextRequest) {
   const prevFrom = `${prevFromDate.getUTCFullYear()}-${pad2(prevFromDate.getUTCMonth() + 1)}-${pad2(prevFromDate.getUTCDate())}`;
 
   // Target employee info
-  const { data: targetEmp } = await (supabaseAdmin.from("employees") as any)
-    .select("id, full_name, email, department_id, job_title_id, status")
+  let targetEmp: any = null;
+  const empSelectRes = await (supabaseAdmin.from("employees") as any)
+    .select("id, full_name, email, department_id, job_title_id, status, employment_category, organization_id")
     .eq("id", targetEmployeeId)
     .maybeSingle();
+  if (empSelectRes.error && /column .* does not exist/i.test(empSelectRes.error.message || "")) {
+    const fallbackEmp = await (supabaseAdmin.from("employees") as any)
+      .select("id, full_name, email, department_id, job_title_id, status, organization_id")
+      .eq("id", targetEmployeeId)
+      .maybeSingle();
+    targetEmp = fallbackEmp.data;
+  } else {
+    targetEmp = empSelectRes.data;
+  }
 
-  const effectiveEmpType = employeeType || "full_time";
+  const effectiveOrgId = targetEmp?.organization_id || caller.organizationId || undefined;
+  const effectiveEmpType = employeeType || targetEmp?.employment_category || "full_time";
 
   // Compute current and previous period KPI
   const [currentKpi, previousKpi] = await Promise.all([
-    computeKpi(targetEmployeeId, from, to, effectiveEmpType),
-    computeKpi(targetEmployeeId, prevFrom, prevTo, effectiveEmpType),
+    computeKpi(targetEmployeeId, from, to, effectiveEmpType, effectiveOrgId),
+    computeKpi(targetEmployeeId, prevFrom, prevTo, effectiveEmpType, effectiveOrgId),
   ]);
 
   // If manager/HR/admin: calculate scoped employees and team average
@@ -70,8 +81,12 @@ export async function GET(request: NextRequest) {
 
   if (caller.role !== "employee") {
     let empQuery = (supabaseAdmin.from("employees") as any)
-      .select("id, full_name, email, department_id, manager_id")
+      .select("id, full_name, email, department_id, manager_id, employment_category")
       .eq("status", "active");
+
+    if (caller.organizationId) {
+      empQuery = empQuery.eq("organization_id", caller.organizationId);
+    }
 
     if (caller.role === "manager") {
       if (caller.departmentId) {
@@ -81,7 +96,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    if (deptFilter && (caller.role === "admin" || caller.role === "hr")) {
+    if (deptFilter && deptFilter !== "all" && (caller.role === "admin" || caller.role === "hr")) {
       empQuery = empQuery.eq("department_id", deptFilter);
     }
 
@@ -92,7 +107,7 @@ export async function GET(request: NextRequest) {
     const samplePeers = scopedEmployees.slice(0, 10);
     if (samplePeers.length > 0) {
       const peerKpis = await Promise.all(
-        samplePeers.map((p) => computeKpi(p.id, from, to))
+        samplePeers.map((p: any) => computeKpi(p.id, from, to, p.employment_category || undefined, caller.organizationId))
       );
       const validScores = peerKpis.map((k) => k.overallScore).filter((s): s is number => s != null);
       const validOnTime = peerKpis.map((k) => k.metrics.on_time_check_in_rate.value).filter((s): s is number => s != null);
@@ -106,10 +121,13 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Trend vs previous period
+  // Trend vs previous period (only when both periods have data & comparable non-unavailable status)
   const trend = {
     overallScore:
-      currentKpi.overallScore != null && previousKpi.overallScore != null
+      currentKpi.dataStatus === "ok" &&
+      previousKpi.dataStatus === "ok" &&
+      currentKpi.overallScore != null &&
+      previousKpi.overallScore != null
         ? currentKpi.overallScore - previousKpi.overallScore
         : null,
   };

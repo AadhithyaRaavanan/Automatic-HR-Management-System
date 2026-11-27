@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { FEATURES } from "@/lib/features";
 import { notify } from "@/features/notifications/notify";
 import { getKpiCallerContext, verifyEmployeeAccess } from "@/features/kpi/auth-helper";
+import { getKolkataToday } from "@/features/kpi/date-helper";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -21,28 +22,44 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const targetEmployeeId = searchParams.get("employee_id") || caller.userId;
+  const from = searchParams.get("from");
+  const to = searchParams.get("to");
+  const scope = searchParams.get("scope");
 
   const isAllowed = await verifyEmployeeAccess(caller, targetEmployeeId);
   if (!isAllowed) {
     return NextResponse.json({ error: "Forbidden: Access denied to target employee reviews" }, { status: 403 });
   }
 
-  const { data: reviews, error } = await (supabaseAdmin as any)
+  let reviewsQuery = (supabaseAdmin as any)
     .from("kpi_reviews")
     .select("id, employee_id, reviewer_id, period_type, period_start, period_end, ratings, note, created_at")
     .eq("employee_id", targetEmployeeId)
     .order("created_at", { ascending: false });
 
+  if (scope !== "all" && from && to) {
+    reviewsQuery = reviewsQuery.lte("period_start", to).gte("period_end", from);
+  }
+
+  const [{ data: reviews, error }, allCountRes] = await Promise.all([
+    reviewsQuery,
+    (supabaseAdmin as any)
+      .from("kpi_reviews")
+      .select("id", { count: "exact", head: true })
+      .eq("employee_id", targetEmployeeId),
+  ]);
+
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Fetch reviewer names
+  // Fetch org-scoped reviewer names
   const reviewerIds = Array.from(new Set((reviews || []).map((r: any) => r.reviewer_id).filter(Boolean)));
-  let reviewerNameMap = new Map<string, string>();
+  const reviewerNameMap = new Map<string, string>();
   if (reviewerIds.length > 0) {
     const { data: reviewers } = await (supabaseAdmin.from("employees") as any)
       .select("id, full_name, email")
+      .eq("organization_id", caller.organizationId)
       .in("id", reviewerIds);
     for (const rev of reviewers || []) {
       reviewerNameMap.set(rev.id, rev.full_name || rev.email);
@@ -54,7 +71,10 @@ export async function GET(request: NextRequest) {
     reviewer_name: reviewerNameMap.get(r.reviewer_id) || "Manager / HR",
   }));
 
-  return NextResponse.json({ reviews: enrichedReviews });
+  return NextResponse.json({
+    reviews: enrichedReviews,
+    allTimeCount: allCountRes?.count ?? enrichedReviews.length,
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -112,14 +132,15 @@ export async function POST(request: NextRequest) {
       teamwork: Math.min(5, Math.max(1, Number(teamwork) || 3)),
     };
 
+    const todayIso = getKolkataToday();
     const { data: newReview, error: insertErr } = await (supabaseAdmin as any)
       .from("kpi_reviews")
       .insert({
         employee_id,
         reviewer_id: caller.userId,
         period_type: validPeriodType,
-        period_start: period_start || new Date().toISOString().slice(0, 10),
-        period_end: period_end || new Date().toISOString().slice(0, 10),
+        period_start: period_start || todayIso,
+        period_end: period_end || todayIso,
         ratings: cleanRatings,
         note: trimmedNote,
       })

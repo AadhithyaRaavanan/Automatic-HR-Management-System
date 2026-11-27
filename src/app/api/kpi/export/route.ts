@@ -1,5 +1,6 @@
 // ============================================================================
-// GET /api/kpi/export: Export Current KPI Metrics to CSV
+// GET /api/kpi/export: Export Current KPI Metrics & Hours Breakdown to CSV
+// Uses the same authoritative computeKpi engine as Overview & Detail Drawer.
 // ============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
@@ -33,32 +34,43 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden: Access denied" }, { status: 403 });
   }
 
-  const [empRes, kpiResult] = await Promise.all([
-    (supabaseAdmin.from("employees") as any)
-      .select("full_name, email")
-      .eq("id", targetEmployeeId)
-      .maybeSingle(),
-    computeKpi(targetEmployeeId, from, to, employeeType),
-  ]);
+  const empRes = await (supabaseAdmin.from("employees") as any)
+    .select("full_name, email, organization_id, employment_category")
+    .eq("id", targetEmployeeId)
+    .maybeSingle();
+
+  const kpiResult = await computeKpi(
+    targetEmployeeId,
+    from,
+    to,
+    employeeType || empRes.data?.employment_category || undefined,
+    empRes.data?.organization_id || caller.organizationId
+  );
 
   const empName = empRes.data?.full_name || empRes.data?.email || "Employee";
+  const hb = kpiResult.hoursBreakdown;
 
   const rows: string[] = [
     `"Employee","${sanitizeSpreadsheetCell(empName)}"`,
+    `"Employment Category","${sanitizeSpreadsheetCell(kpiResult.employeeType)}"`,
     `"Period","${from} to ${to}"`,
-    `"Overall Score","${kpiResult.overallScore != null ? kpiResult.overallScore + "%" : "No data"}"`,
+    `"Data Status","${kpiResult.dataStatus}"`,
+    `"Overall Score","${kpiResult.overallScore != null ? kpiResult.overallScore + "%" : kpiResult.dataStatus === "unavailable" ? "Unavailable" : "No data"}"`,
+    `"Target Score","${kpiResult.overallTarget}%"`,
+    `"Policy Effective From","${kpiResult.configEffectiveDate || "Default"}"`,
+    `"Hours Breakdown","Worked ${(hb.workedMinutes / 60).toFixed(1)}h + Leave Credit ${(hb.leaveCreditMinutes / 60).toFixed(1)}h + Holiday Credit ${(hb.holidayCreditMinutes / 60).toFixed(1)}h = Effective ${(hb.effectiveMinutes / 60).toFixed(1)}h / Target ${(hb.targetMinutes / 60).toFixed(1)}h"`,
     "",
     `"Metric","Category","Value","Target","Status","Adjusted","Adjustment Reason"`,
   ];
 
   for (const m of kpiResult.metricsList) {
-    const val = m.value != null ? `${m.value}${m.unit ? " " + m.unit : ""}` : "No data";
-    const tgt = m.target != null ? `${m.target}${m.unit ? " " + m.unit : ""}` : "—";
+    const val = m.value != null ? `${m.value}${m.unit && m.unit !== "count" ? (m.unit === "%" ? "%" : " " + m.unit) : ""}` : m.displayValue || "No data";
+    const tgt = m.target != null ? `${m.target}${m.unit && m.unit !== "count" ? (m.unit === "%" ? "%" : " " + m.unit) : ""}` : "—";
     const adj = m.adjusted ? "Yes" : "No";
-    const reason = m.adjustmentReason ? m.adjustmentReason.replace(/"/g, '""') : "";
+    const reason = m.adjustmentReason ? sanitizeSpreadsheetCell(m.adjustmentReason.replace(/"/g, '""')) : "";
 
     rows.push(
-      `"${sanitizeSpreadsheetCell(m.label)}","${m.category}","${val}","${tgt}","${m.status}","${adj}","${reason}"`
+      `"${sanitizeSpreadsheetCell(m.label)}","${m.category}","${sanitizeSpreadsheetCell(val)}","${sanitizeSpreadsheetCell(tgt)}","${m.status}","${adj}","${reason}"`
     );
   }
 

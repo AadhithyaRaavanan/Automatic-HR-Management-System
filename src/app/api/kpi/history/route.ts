@@ -7,6 +7,7 @@ import { FEATURES } from "@/lib/features";
 import { getKpiCallerContext, verifyEmployeeAccess } from "@/features/kpi/auth-helper";
 import { computeKpi } from "@/features/kpi/compute";
 import { getKolkataToday, getKolkataTodayParts, pad2 } from "@/features/kpi/date-helper";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -102,13 +103,24 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const { data: empMeta } = await (supabaseAdmin.from("employees") as any)
+      .select("organization_id, employment_category")
+      .eq("id", employeeId)
+      .maybeSingle();
+
     const slices = calculateHistoricalPeriods(count, periodType);
 
-    // Compute KPI for each period concurrently
+    // Compute KPI for each period concurrently using org & employment category
     const results = await Promise.all(
       slices.map(async (slice) => {
         try {
-          const res = await computeKpi(employeeId, slice.from, slice.to);
+          const res = await computeKpi(
+            employeeId,
+            slice.from,
+            slice.to,
+            empMeta?.employment_category || undefined,
+            empMeta?.organization_id || caller.organizationId
+          );
           const att1 = res.metrics.on_time_check_in_rate.value;
           const att2 = res.metrics.days_worked_vs_expected.value;
           const attendanceScore =

@@ -5,7 +5,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FEATURES } from "@/lib/features";
 import { getKpiCallerContext, verifyEmployeeAccess } from "@/features/kpi/auth-helper";
+import { getKolkataToday } from "@/features/kpi/date-helper";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+
+const ALLOWED_ADJUSTMENT_METRICS = new Set([
+  "on_time_check_in_rate",
+  "days_worked_vs_expected",
+  "early_check_outs",
+  "auto_closed_check_outs",
+  "regularization_requests",
+  "worked_hours_vs_target",
+  "tasks_completed_vs_assigned",
+  "task_on_time_rate",
+  "task_average_cycle_time",
+  "task_overdue_count",
+]);
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +47,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!ALLOWED_ADJUSTMENT_METRICS.has(metric)) {
+      return NextResponse.json({ error: "Unknown KPI metric key" }, { status: 400 });
+    }
+
+    const numericOverride = Number(override_value);
+    if (!Number.isFinite(numericOverride) || numericOverride < 0) {
+      return NextResponse.json({ error: "override_value must be a non-negative number" }, { status: 400 });
+    }
+
     if (caller.userId === employee_id) {
       return NextResponse.json(
         { error: "Forbidden: You cannot adjust your own KPI metrics." },
@@ -53,14 +76,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const todayIso = getKolkataToday();
     const { data: newAdj, error } = await (supabaseAdmin as any)
       .from("kpi_adjustments")
       .insert({
         employee_id,
         metric,
-        period_start: period_start || new Date().toISOString().slice(0, 10),
-        period_end: period_end || new Date().toISOString().slice(0, 10),
-        override_value: Number(override_value),
+        period_start: period_start || todayIso,
+        period_end: period_end || todayIso,
+        override_value: numericOverride,
         reason: trimmedReason,
         created_by: caller.userId,
       })

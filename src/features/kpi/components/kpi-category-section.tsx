@@ -2,9 +2,10 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Clock } from "lucide-react";
 import { KPI_CONFIG, getCategoryWeights } from "@/features/kpi/config";
 import { formatScoredMetricRow, getStatusDisplay } from "@/features/kpi/plain-language";
+import type { KpiHoursBreakdown } from "@/features/kpi/compute";
 
 export interface MetricItemData {
   key: string;
@@ -36,6 +37,8 @@ interface KpiSimplifiedCardsProps {
     task_overdue_count?: MetricItemData;
   };
   customWeights?: Record<string, number>;
+  hoursBreakdown?: KpiHoursBreakdown;
+  taskPopulationNote?: string;
   attendanceHistory?: (number | null)[];
   tasksHistory?: (number | null)[];
   onOpenMetric: (key: string, label: string) => void;
@@ -45,6 +48,8 @@ interface KpiSimplifiedCardsProps {
 export function KpiCategorySection({
   currentMetrics,
   customWeights,
+  hoursBreakdown,
+  taskPopulationNote,
   onOpenMetric,
   className,
 }: KpiSimplifiedCardsProps) {
@@ -89,59 +94,81 @@ export function KpiCategorySection({
     },
   ];
 
-  const renderMetricRow = (row: ReturnType<typeof formatScoredMetricRow>) => (
-    <button
-      key={row.key}
-      type="button"
-      onClick={() => onOpenMetric(row.key, row.label)}
-      className="w-full px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-left hover:bg-card-subtle/70 transition-colors cursor-pointer group focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-black"
-    >
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-text-primary group-hover:text-black">
-            {row.label}
-          </span>
-          {row.adjusted && (
-            <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 text-[10px] font-bold">
-              Adjusted
+  const renderMetricRow = (row: ReturnType<typeof formatScoredMetricRow>) => {
+    const rawMetric = (currentMetrics as Record<string, any>)?.[row.key];
+    const numericVal = typeof rawMetric?.value === "number" ? Math.min(100, Math.max(0, rawMetric.value)) : 0;
+    const targetPct = typeof rawMetric?.target === "number" ? Math.min(99, Math.max(1, rawMetric.target)) : 90;
+
+    return (
+      <button
+        key={row.key}
+        type="button"
+        onClick={() => onOpenMetric(row.key, row.label)}
+        className="w-full px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-left hover:bg-card-subtle/70 transition-colors cursor-pointer group focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-black"
+      >
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-text-primary group-hover:text-black">
+              {row.label}
             </span>
-          )}
+            {row.adjusted && (
+              <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 text-[10px] font-bold">
+                Adjusted
+              </span>
+            )}
+          </div>
+          <p className="text-xs font-medium text-text-secondary tabular-nums">
+            {row.actualText}
+          </p>
         </div>
-        <p className="text-xs font-medium text-text-secondary tabular-nums">
-          {row.actualText}
-        </p>
-      </div>
 
-      <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
-        <span className="text-[11px] font-semibold text-text-tertiary tabular-nums">
-          {row.targetText}
-        </span>
+        {/* Visual Progress Bar with Lime Target Tick (reference bento style) */}
+        <div className="hidden md:flex items-center gap-2.5 w-32 shrink-0" aria-hidden="true">
+          <div className="relative h-2 flex-1 rounded-full bg-[#EFEFEF] overflow-visible">
+            {row.hasData && (
+              <div
+                className="h-full rounded-full bg-black transition-all duration-300"
+                style={{ width: `${numericVal}%` }}
+              />
+            )}
+            <div
+              className="absolute -top-1 -bottom-1 w-0.5 bg-[#86C300] rounded-full"
+              style={{ left: `${targetPct}%` }}
+            />
+          </div>
+        </div>
 
-        <span
-          className={cn(
-            "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] min-w-[96px] justify-center",
-            row.status.badgeBg
-          )}
-        >
+        <div className="flex items-center justify-between sm:justify-end gap-2.5 shrink-0">
+          <span className="text-[11px] font-semibold text-text-tertiary tabular-nums">
+            {row.targetText}
+          </span>
+
           <span
-            className={cn("w-1.5 h-1.5 rounded-full shrink-0", row.status.dotColor)}
+            className={cn(
+              "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] min-w-[96px] justify-center",
+              row.status.badgeBg
+            )}
+          >
+            <span
+              className={cn("w-1.5 h-1.5 rounded-full shrink-0", row.status.dotColor)}
+              aria-hidden="true"
+            />
+            <span className={row.status.textColor}>{row.status.label}</span>
+          </span>
+
+          <ChevronRight
+            className="w-4 h-4 text-text-tertiary group-hover:text-black transition-colors shrink-0"
             aria-hidden="true"
           />
-          <span className={row.status.textColor}>{row.status.label}</span>
-        </span>
-
-        <ChevronRight
-          className="w-4 h-4 text-text-tertiary group-hover:text-black transition-colors shrink-0"
-          aria-hidden="true"
-        />
-      </div>
-    </button>
-  );
+        </div>
+      </button>
+    );
+  };
 
   return (
     <div data-tour="kpi-metrics-grid" className={cn("space-y-4", className)}>
-      {/* Scored Breakdown Groups */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Scored Breakdown Groups (full-width stacked inside bento column so rows stay on one clean horizontal line) */}
+      <div className="grid grid-cols-1 gap-4">
         {/* Group 1: Attendance & hours */}
         <section
           aria-label="Attendance and hours breakdown"
@@ -164,6 +191,32 @@ export function KpiCategorySection({
           <div className="divide-y divide-border-light">
             {attendanceRows.map(renderMetricRow)}
           </div>
+
+          {hoursBreakdown && (
+            <div className="px-4 py-2.5 border-t border-border-light bg-card-subtle/30 flex flex-wrap items-center justify-between gap-2 text-[11px] text-text-secondary">
+              <div className="flex flex-wrap items-center gap-1.5 tabular-nums">
+                <Clock className="w-3.5 h-3.5 text-black shrink-0" aria-hidden="true" />
+                <span className="font-bold text-text-primary">
+                  {(hoursBreakdown.effectiveMinutes / 60).toFixed(1)}h of {(hoursBreakdown.targetMinutes / 60).toFixed(1)}h target
+                </span>
+                <span>
+                  ({(hoursBreakdown.workedMinutes / 60).toFixed(1)}h worked
+                  {hoursBreakdown.leaveCreditMinutes > 0
+                    ? ` + ${(hoursBreakdown.leaveCreditMinutes / 60).toFixed(1)}h leave credit`
+                    : ""}
+                  {hoursBreakdown.holidayCreditMinutes > 0
+                    ? ` + ${(hoursBreakdown.holidayCreditMinutes / 60).toFixed(1)}h holiday`
+                    : ""}
+                  )
+                </span>
+              </div>
+              {hoursBreakdown.hasLiveSession && (
+                <span className="px-2 py-0.5 rounded-full bg-[#B7FF00] text-black text-[10px] font-bold">
+                  Live shift active
+                </span>
+              )}
+            </div>
+          )}
         </section>
 
         {/* Group 2: Task delivery */}
@@ -190,6 +243,12 @@ export function KpiCategorySection({
           <div className="divide-y divide-border-light">
             {taskRows.map(renderMetricRow)}
           </div>
+
+          {taskPopulationNote && (
+            <div className="px-4 py-2.5 border-t border-border-light bg-card-subtle/30 text-[11px] text-text-secondary mt-auto">
+              {taskPopulationNote}
+            </div>
+          )}
         </section>
       </div>
 

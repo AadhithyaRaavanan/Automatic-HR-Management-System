@@ -261,7 +261,7 @@ export function getScoreSummaryInfo(params: {
       if (m) return `${actor} delivered ${m[1]} of ${m[2]} completed tasks on time this period.`;
     }
     if (key === "days_worked_vs_expected") {
-      const m = metric.displayValue?.match(/(\d+)\s+of\s+(\d+)/);
+      const m = metric.displayValue?.match(/([\d.]+)\s+of\s+([\d.]+)/);
       if (m) return `${actor} checked in on ${m[1]} of ${m[2]} scheduled workdays this period.`;
     }
     if (key === "worked_hours_vs_target") {
@@ -270,7 +270,7 @@ export function getScoreSummaryInfo(params: {
     }
     if (key === "on_time_check_in_rate") {
       const m = (metric.breakdown || metric.displayValue || "").match(/(\d+)\s*(?:on-time\s*)?\/\s*(\d+)/);
-      if (m) return `${actor} arrived on time on ${m[1]} of ${m[2]} attended workdays this period.`;
+      if (m) return `${actor} arrived on time on ${m[1]} of ${m[2]} finalized workdays this period.`;
     }
     return `${metric.label} is at ${metric.value}% against a ${metric.target ?? target}% target.`;
   };
@@ -288,7 +288,7 @@ export function getScoreSummaryInfo(params: {
       topDrag.key === "days_worked_vs_expected" &&
       secondDrag.key === "worked_hours_vs_target"
     ) {
-      const daysMatch = topDrag.item.displayValue?.match(/(\d+)\s+of\s+(\d+)/);
+      const daysMatch = topDrag.item.displayValue?.match(/([\d.]+)\s+of\s+([\d.]+)/);
       const hrsMatch = secondDrag.item.displayValue?.match(/([\d.]+)h\s*\/\s*([\d.]+)h/);
       explanationLine =
         daysMatch && hrsMatch
@@ -362,7 +362,7 @@ export function formatScoredMetricRow(
     if (metric?.adjusted && metric?.value != null) {
       actualText = `${metric.value}% (adjusted)`;
     } else if (hasData) {
-      const m = (metric.displayValue || "").match(/(\d+)\s+of\s+(\d+)/);
+      const m = (metric.displayValue || "").match(/([\d.]+)\s+of\s+([\d.]+)/);
       actualText = m
         ? `${m[1]} of ${m[2]} scheduled days · ${metric.value}%`
         : metric.displayValue;

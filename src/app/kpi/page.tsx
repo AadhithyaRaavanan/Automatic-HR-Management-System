@@ -17,12 +17,17 @@ import {
   Target,
   ArrowLeft,
   Edit3,
+  AlertTriangle,
+  RefreshCw,
+  ArrowRight,
+  MessageSquare,
 } from "lucide-react";
 
 import { KpiToolbar, KpiTab, PeriodPreset } from "@/features/kpi/components/kpi-toolbar";
 import { KpiHeroCard } from "@/features/kpi/components/kpi-hero-card";
 import { KpiCategorySection, MetricItemData } from "@/features/kpi/components/kpi-category-section";
 import { KpiNextActionsCard } from "@/features/kpi/components/kpi-next-actions-card";
+import { KpiAttendanceCalendar } from "@/features/kpi/components/kpi-attendance-calendar";
 import { KpiCompactSummaryLines } from "@/features/kpi/components/kpi-compact-summary-lines";
 import { KpiDetailDrawer } from "@/features/kpi/components/kpi-detail-drawer";
 import { KpiTeamOverview } from "@/features/kpi/components/kpi-team-overview";
@@ -53,6 +58,7 @@ function KpiContent() {
   const [selectedEmpId, setSelectedEmpId] = React.useState<string>("");
   const [cameFromTeam, setCameFromTeam] = React.useState(false);
   const [empType, setEmpType] = React.useState<string>("full_time");
+  const [teamEmpTypeFilter, setTeamEmpTypeFilter] = React.useState<string>("all");
   const [deptFilter, setDeptFilter] = React.useState<string>("all");
   const [departmentsList, setDepartmentsList] = React.useState<Array<{ id: string; name: string }>>([]);
 
@@ -104,7 +110,8 @@ function KpiContent() {
   const [goalTitle, setGoalTitle] = React.useState("");
   const [goalNote, setGoalNote] = React.useState("");
   const [goalAssigneeId, setGoalAssigneeId] = React.useState<string>("");
-  const [missingCheckInDates, setMissingCheckInDates] = React.useState<string[]>([]);
+  const [calcOpen, setCalcOpen] = React.useState<boolean>(false);
+  const [showAllTimeHistory, setShowAllTimeHistory] = React.useState<boolean>(false);
 
   // Default target employee to param (only when param changes) or current user
   React.useEffect(() => {
@@ -219,34 +226,42 @@ function KpiContent() {
     }
   }, [kpiData?.employee?.employment_category]);
 
-  // 2. Fetch Reviews Data
+  // 2. Fetch Period-Overlapping Reviews Data (or all-time when toggled)
   const {
     data: reviewsData,
     refetch: refetchReviews,
   } = useQuery({
-    queryKey: ["kpi-reviews", effectiveEmpId],
+    queryKey: ["kpi-reviews", effectiveEmpId, dateRange.from, dateRange.to, showAllTimeHistory],
     queryFn: async () => {
       if (!effectiveEmpId) return null;
-      const res = await fetch(
-        `/api/kpi/reviews?employee_id=${encodeURIComponent(effectiveEmpId)}`
-      );
+      const params = new URLSearchParams({
+        employee_id: effectiveEmpId,
+        from: dateRange.from,
+        to: dateRange.to,
+      });
+      if (showAllTimeHistory) params.set("scope", "all");
+      const res = await fetch(`/api/kpi/reviews?${params.toString()}`);
       if (!res.ok) return null;
       return res.json();
     },
     enabled: Boolean(effectiveEmpId && FEATURES.KPI),
   });
 
-  // 3. Fetch Goals Data
+  // 3. Fetch Period-Overlapping Goals Data (or all-time when toggled)
   const {
     data: goalsData,
     refetch: refetchGoals,
   } = useQuery({
-    queryKey: ["kpi-goals", effectiveEmpId],
+    queryKey: ["kpi-goals", effectiveEmpId, dateRange.from, dateRange.to, showAllTimeHistory],
     queryFn: async () => {
       if (!effectiveEmpId) return null;
-      const res = await fetch(
-        `/api/kpi/goals?employee_id=${encodeURIComponent(effectiveEmpId)}`
-      );
+      const params = new URLSearchParams({
+        employee_id: effectiveEmpId,
+        from: dateRange.from,
+        to: dateRange.to,
+      });
+      if (showAllTimeHistory) params.set("scope", "all");
+      const res = await fetch(`/api/kpi/goals?${params.toString()}`);
       if (!res.ok) return null;
       return res.json();
     },
@@ -486,9 +501,14 @@ function KpiContent() {
   const currentMetrics = kpiData?.current?.metrics;
   const previousMetrics = kpiData?.previous?.metrics;
   const overallScore = kpiData?.current?.overallScore ?? null;
+  const overallTarget = kpiData?.current?.overallTarget ?? KPI_CONFIG.overallTarget ?? 90;
+  const dataStatus: "ok" | "unavailable" = kpiData?.current?.dataStatus || "ok";
+  const sourceErrors: string[] = kpiData?.current?.sourceErrors || [];
   const trend = kpiData?.trend?.overallScore ?? null;
   const previousPeriodComparable = Boolean(
-    kpiData?.previous?.overallScore != null &&
+    kpiData?.current?.dataStatus !== "unavailable" &&
+      kpiData?.previous?.dataStatus !== "unavailable" &&
+      kpiData?.previous?.overallScore != null &&
       (kpiData?.previous?.dataPointsCount ?? 0) >= 2 &&
       overallScore != null
   );
@@ -512,38 +532,10 @@ function KpiContent() {
   const atRiskGoals = goalsList.filter((g: any) => g.status === "at_risk").length;
   const doneGoals = goalsList.filter((g: any) => g.status === "done").length;
 
-  // Next actions suggestions builder
-  const daysWorkedDisplay = currentMetrics?.days_worked_vs_expected?.displayValue || "";
-  const matchWorked = daysWorkedDisplay.match(/(\d+)\s+of\s+(\d+)/);
-  const unloggedCount =
-    matchWorked && parseInt(matchWorked[2], 10) > parseInt(matchWorked[1], 10)
-      ? parseInt(matchWorked[2], 10) - parseInt(matchWorked[1], 10)
-      : 0;
-
-  React.useEffect(() => {
-    let active = true;
-    if (unloggedCount > 0 && effectiveEmpId) {
-      fetch(
-        `/api/kpi/detail?employee_id=${encodeURIComponent(effectiveEmpId)}&metric=days_worked_vs_expected&from=${dateRange.from}&to=${dateRange.to}`
-      )
-        .then((res) => (res.ok ? res.json() : null))
-        .then((d) => {
-          if (!active || !d?.rows) return;
-          const miss = d.rows
-            .filter((r: any) => r.statusType === "missing")
-            .map((r: any) => r.date);
-          setMissingCheckInDates(miss);
-        })
-        .catch(() => {
-          if (active) setMissingCheckInDates([]);
-        });
-    } else {
-      setMissingCheckInDates([]);
-    }
-    return () => {
-      active = false;
-    };
-  }, [unloggedCount, effectiveEmpId, dateRange.from, dateRange.to]);
+  // Next actions suggestions powered directly by authoritative server computation
+  const missingCheckInDates: string[] = kpiData?.current?.actionableMissingDates || [];
+  const pendingCorrectionDates: string[] = kpiData?.current?.pendingCorrectionDates || [];
+  const unloggedCount = missingCheckInDates.length;
 
   // Target employee name for manager view & heading
   const targetEmployeeName =
@@ -681,12 +673,37 @@ function KpiContent() {
           aria-labelledby="kpi-tab-overview"
           className="space-y-4"
         >
-          {/* Order 2: Compact Score Summary + Factual Explanation */}
+          {dataStatus === "unavailable" && (
+            <div
+              role="alert"
+              className="p-4 rounded-2xl bg-rose-50 border border-rose-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-rose-950"
+            >
+              <div className="flex items-start sm:items-center gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-[#FF007A] shrink-0 mt-0.5 sm:mt-0" aria-hidden="true" />
+                <div>
+                  <p className="font-bold">Some source tables were unavailable for this view.</p>
+                  <p className="text-rose-800">
+                    Affected data: {sourceErrors.join(", ") || "attendance/tasks"}. Scores using unavailable sources are held back rather than shown as zero.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => refetchKpi()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black text-white font-bold text-xs hover:bg-[#1A1A1A] cursor-pointer shrink-0"
+              >
+                <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Retry</span>
+              </button>
+            </div>
+          )}
+
+          {/* Top Row: Compact Score Summary + Attendance & Task Completion Snapshot Tiles */}
           <KpiHeroCard
             overallScore={overallScore}
             trend={trend}
             previousPeriodComparable={previousPeriodComparable}
-            target={KPI_CONFIG.overallTarget || 90}
+            target={overallTarget}
             currentMetrics={currentMetrics}
             previousMetrics={previousMetrics}
             customWeights={kpiData?.current?.weights}
@@ -697,7 +714,7 @@ function KpiContent() {
             periodType={preset}
           />
 
-          {/* Order 3: Next Actions Directly Below Score Summary */}
+          {/* First-screen Next Actions */}
           <KpiNextActionsCard
             actions={nextActions}
             onTriggerAction={(trigger) => {
@@ -719,29 +736,146 @@ function KpiContent() {
             onNavigateTab={(tab) => setActiveTab(tab)}
           />
 
-          {/* Order 4: Readable Breakdown Grouped Under Attendance & hours and Task delivery */}
+          {/* Bento Split Row 1: Performance Breakdown + Attendance Calendar */}
           {currentMetrics && (
-            <KpiCategorySection
-              currentMetrics={currentMetrics}
-              customWeights={kpiData?.current?.weights}
-              onOpenMetric={(key, label) => {
-                setSelectedMetricKey(key);
-                setSelectedMetricLabel(label);
-                setDetailDrawerOpen(true);
-              }}
-            />
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">
+              <div className="xl:col-span-7 flex flex-col">
+                <KpiCategorySection
+                  currentMetrics={currentMetrics}
+                  customWeights={kpiData?.current?.weights}
+                  hoursBreakdown={kpiData?.current?.hoursBreakdown}
+                  taskPopulationNote={kpiData?.current?.taskPopulationNote}
+                  onOpenMetric={(key, label) => {
+                    setSelectedMetricKey(key);
+                    setSelectedMetricLabel(label);
+                    setDetailDrawerOpen(true);
+                  }}
+                />
+              </div>
+
+              <div className="xl:col-span-5 flex flex-col">
+                <KpiAttendanceCalendar
+                  className="h-full"
+                  calendarDays={kpiData?.current?.calendarDays || []}
+                  periodLabel={stepperLabel}
+                  actionableMissingDates={missingCheckInDates}
+                  pendingCorrectionDates={pendingCorrectionDates}
+                  isSelfView={isSelfView}
+                  employeeId={effectiveEmpId}
+                  onInspectAttendanceDays={() => {
+                    setSelectedMetricKey("days_worked_vs_expected");
+                    setSelectedMetricLabel("Days present");
+                    setDetailDrawerOpen(true);
+                  }}
+                />
+              </div>
+            </div>
           )}
 
-          {/* Concise Reviews & Goals Link Bar */}
-          <KpiCompactSummaryLines
-            latestReview={reviewsData?.reviews?.[0] || null}
-            goals={goalsList}
-            onOpenReviewsAndGoals={() => setActiveTab("reviews_and_goals")}
-          />
+          {/* Bento Split Row 2: Self-Review / Reviews & Goals Summary + Score Details Card */}
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">
+            <div className="xl:col-span-7 flex flex-col justify-between gap-3">
+              {isSelfView && !selfReviewData?.selfReview && !selfReviewData?.hasManagerReview && (
+                <div className="p-5 rounded-2xl bg-[#141414] text-white shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-start gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-[#B7FF00] text-black flex items-center justify-center shrink-0">
+                      <MessageSquare className="w-5 h-5" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-extrabold tracking-tight text-white">
+                        Your self-review is open
+                      </h2>
+                      <p className="text-xs text-white/75 mt-0.5">
+                        Reflect on your attendance and project work for {periodLabel}.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelfReviewReflection("");
+                      openModalWithFocusSave(setSelfReviewOpen);
+                    }}
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[#B7FF00] hover:bg-[#a6eb00] text-black text-xs font-bold transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-white"
+                  >
+                    <span>Write reflection</span>
+                    <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                  </button>
+                </div>
+              )}
 
-          {/* Order 4 footer: Expandable "How my score is calculated" */}
+              <KpiCompactSummaryLines
+                latestReview={reviewsData?.reviews?.[0] || null}
+                goals={goalsList}
+                onOpenReviewsAndGoals={() => setActiveTab("reviews_and_goals")}
+              />
+            </div>
+
+            {/* Score Details Summary Card (reference bento corner card) */}
+            <div className="xl:col-span-5 p-5 rounded-2xl bg-card border border-border-light shadow-card flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="relative w-16 h-16 shrink-0" aria-hidden="true">
+                  <svg viewBox="0 0 36 36" className="w-16 h-16 -rotate-90">
+                    <circle
+                      cx="18"
+                      cy="18"
+                      r="15.5"
+                      fill="none"
+                      stroke="#EFEFEF"
+                      strokeWidth="3.5"
+                    />
+                    {overallScore != null && (
+                      <circle
+                        cx="18"
+                        cy="18"
+                        r="15.5"
+                        fill="none"
+                        stroke="#B7FF00"
+                        strokeWidth="3.5"
+                        strokeDasharray={`${Math.min(100, Math.max(0, overallScore))}, 100`}
+                        strokeLinecap="round"
+                      />
+                    )}
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center text-sm font-black text-text-primary tabular-nums">
+                    {overallScore != null ? `${overallScore}%` : "—"}
+                  </span>
+                </div>
+                <div>
+                  <h2 className="text-sm font-extrabold text-text-primary tracking-tight">
+                    Score details
+                  </h2>
+                  <p className="text-xs text-text-secondary tabular-nums mt-0.5">
+                    Target {overallTarget}%
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setCalcOpen(true);
+                  requestAnimationFrame(() => {
+                    document
+                      .getElementById("kpi-calculation-details")
+                      ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                  });
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-black hover:bg-[#1A1A1A] text-white text-xs font-bold transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-black"
+              >
+                <span>View calculation</span>
+                <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+
+          {/* Expandable "How my score is calculated" */}
           <KpiCalculationFooter
+            id="kpi-calculation-details"
+            open={calcOpen}
+            onToggleOpen={setCalcOpen}
             employeeType={empType}
+            overallTarget={overallTarget}
             configEffectiveDate={kpiData?.current?.configEffectiveDate}
             configVersionReason={kpiData?.current?.configVersionReason}
             customWeights={kpiData?.current?.weights}
@@ -763,14 +897,31 @@ function KpiContent() {
           <div className="px-4 py-3 rounded-2xl bg-card border border-border-light shadow-xs flex flex-wrap items-center justify-between gap-2 text-xs">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold text-text-primary">Current cycle:</span>
-              <span className="text-text-secondary font-medium">{periodLabel}</span>
+              <span className="text-text-secondary font-medium">
+                {showAllTimeHistory ? "All-time history" : periodLabel}
+              </span>
               <span className="px-2 py-0.5 rounded-full bg-card-subtle border border-border-light text-[11px] font-semibold text-text-primary">
                 {selfReviewData?.selfReview ? "Self-review submitted" : "Self-review open"}
               </span>
             </div>
-            <span className="text-[11px] text-text-tertiary tabular-nums">
-              {reviewsData?.reviews?.length || 0} manager review{(reviewsData?.reviews?.length || 0) === 1 ? "" : "s"} · {goalsList.length} active goal{goalsList.length === 1 ? "" : "s"}
-            </span>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-[11px] text-text-tertiary tabular-nums">
+                {reviewsData?.reviews?.length || 0} manager review{(reviewsData?.reviews?.length || 0) === 1 ? "" : "s"} · {goalsList.length} goal{goalsList.length === 1 ? "" : "s"}
+              </span>
+              {((reviewsData?.allTimeCount || 0) > (reviewsData?.reviews?.length || 0) ||
+                (goalsData?.allTimeCount || 0) > goalsList.length ||
+                showAllTimeHistory) && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllTimeHistory((v) => !v)}
+                  className="px-2.5 py-1 rounded-lg bg-card-subtle hover:bg-border-light border border-border-light text-[11px] font-bold text-text-primary cursor-pointer"
+                >
+                  {showAllTimeHistory
+                    ? "Show period only"
+                    : `View all-time (${(reviewsData?.allTimeCount || 0) + (goalsData?.allTimeCount || 0)})`}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* SECTION 1: Performance Reviews */}
@@ -1031,8 +1182,8 @@ function KpiContent() {
             departmentFilter={deptFilter}
             onDepartmentFilterChange={setDeptFilter}
             departments={departmentsList}
-            employeeTypeFilter={empType}
-            onEmployeeTypeFilterChange={setEmpType}
+            employeeTypeFilter={teamEmpTypeFilter}
+            onEmployeeTypeFilterChange={setTeamEmpTypeFilter}
             onSelectEmployee={(empId) => {
               setSelectedEmpId(empId);
               setCameFromTeam(true);
@@ -1040,7 +1191,7 @@ function KpiContent() {
             }}
             onClearFilters={() => {
               setDeptFilter("all");
-              setEmpType("full_time");
+              setTeamEmpTypeFilter("all");
             }}
           />
         </div>

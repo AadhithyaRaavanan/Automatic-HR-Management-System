@@ -228,10 +228,11 @@ export function KpiTeamOverview({
               <select
                 id="team-type-select"
                 aria-label="Employment type"
-                value={employeeTypeFilter || "full_time"}
+                value={employeeTypeFilter || "all"}
                 onChange={(e) => onEmployeeTypeFilterChange(e.target.value)}
                 className="min-h-[34px] px-2.5 py-1 rounded-xl bg-card-subtle border border-border-light text-xs font-semibold text-text-primary cursor-pointer focus-visible:outline-2 focus-visible:outline-black"
               >
+                <option value="all">All Types</option>
                 <option value="full_time">Full-Time (8h)</option>
                 <option value="part_time">Part-Time (4h)</option>
                 <option value="intern">Intern (8h)</option>

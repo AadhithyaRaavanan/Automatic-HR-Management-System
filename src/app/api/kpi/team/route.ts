@@ -36,44 +36,69 @@ export async function GET(request: NextRequest) {
   const employeeTypeFilter = searchParams.get("employee_type");
 
   try {
-    // 2. Fetch scoped employees
-    let query = (supabaseAdmin as any)
-      .from("employees")
-      .select("id, full_name, email, department_id, departments:department_id(id, name)")
-      .eq("status", "active")
-      .order("full_name", { ascending: true });
-
-    // Organization filter
-    if (caller.organizationId) {
-      query = query.eq("organization_id", caller.organizationId);
+    if (!caller.organizationId) {
+      return NextResponse.json({ error: "Organization context is missing" }, { status: 403 });
     }
 
-    // Role-based scoping: Manager only sees direct reports or same department
-    if (caller.role === "manager") {
-      if (caller.departmentId) {
-        query = query.or(`manager_id.eq.${caller.userId},department_id.eq.${caller.departmentId}`);
-      } else {
-        query = query.eq("manager_id", caller.userId);
+    // 2. Fetch org-scoped employees (with fallback if employment_category column is not migrated yet)
+    const buildTeamQuery = (withEmpCat: boolean) => {
+      const cols = withEmpCat
+        ? "id, full_name, email, department_id, employment_category, departments:department_id(id, name)"
+        : "id, full_name, email, department_id, departments:department_id(id, name)";
+
+      let q = (supabaseAdmin as any)
+        .from("employees")
+        .select(cols)
+        .eq("status", "active")
+        .eq("organization_id", caller.organizationId)
+        .order("full_name", { ascending: true });
+
+      if (withEmpCat && employeeTypeFilter && employeeTypeFilter !== "all") {
+        q = q.eq("employment_category", employeeTypeFilter);
       }
-    }
 
+      // Role-based scoping: Manager only sees direct reports or same department
+      if (caller.role === "manager") {
+        if (caller.departmentId) {
+          q = q.or(`manager_id.eq.${caller.userId},department_id.eq.${caller.departmentId}`);
+        } else {
+          q = q.eq("manager_id", caller.userId);
+        }
+      }
+
+      return q;
+    };
+
+    let deptResolvedId: string | null = null;
     if (departmentFilter && departmentFilter !== "all") {
       const isUuid = /^[0-9a-fA-F-]{36}$/.test(departmentFilter);
       if (isUuid) {
-        query = query.eq("department_id", departmentFilter);
+        deptResolvedId = departmentFilter;
       } else {
         const { data: dRow } = await (supabaseAdmin as any)
           .from("departments")
           .select("id")
+          .eq("organization_id", caller.organizationId)
           .ilike("name", departmentFilter)
           .maybeSingle();
-        if (dRow?.id) {
-          query = query.eq("department_id", dRow.id);
+        if (!dRow?.id) {
+          return NextResponse.json({ period: { from, to }, team: [] });
         }
+        deptResolvedId = dRow.id;
       }
     }
 
-    const { data: employees, error: empErr } = await query;
+    let q1 = buildTeamQuery(true);
+    if (deptResolvedId) q1 = q1.eq("department_id", deptResolvedId);
+    let { data: employees, error: empErr } = await q1;
+
+    if (empErr && /column .* does not exist|schema cache/i.test(String(empErr.message || ""))) {
+      let q2 = buildTeamQuery(false);
+      if (deptResolvedId) q2 = q2.eq("department_id", deptResolvedId);
+      const fallback = await q2;
+      employees = fallback.data;
+      empErr = fallback.error;
+    }
     if (empErr) {
       return NextResponse.json({ error: empErr.message }, { status: 500 });
     }
@@ -83,13 +108,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ team: [] });
     }
 
-    // 3. Fetch latest reviews & goals for all target employees in period
+    // 3. Fetch period-overlapping reviews & goals for all target employees
     const empIds = empList.map((e: any) => e.id);
     const [reviewsRes, goalsRes] = await Promise.all([
       (supabaseAdmin as any)
         .from("kpi_reviews")
-        .select("employee_id, created_at, ratings, note")
+        .select("employee_id, created_at, period_start, period_end, ratings, note")
         .in("employee_id", empIds)
+        .lte("period_start", to)
+        .gte("period_end", from)
         .order("created_at", { ascending: false }),
       (supabaseAdmin as any)
         .from("kpi_goals")
@@ -130,7 +157,8 @@ export async function GET(request: NextRequest) {
               emp.id,
               from,
               to,
-              emp.employment_category || "full_time"
+              emp.employment_category || "full_time",
+              caller.organizationId
             );
 
             const att1 = kpi.metrics.on_time_check_in_rate.value;
@@ -164,6 +192,8 @@ export async function GET(request: NextRequest) {
               departmentId: emp.department_id,
               employmentCategory: emp.employment_category || "full_time",
               overallScore: kpi.overallScore,
+              overallTarget: kpi.overallTarget,
+              dataStatus: kpi.dataStatus,
               attendanceScore,
               hoursScore,
               tasksScore,

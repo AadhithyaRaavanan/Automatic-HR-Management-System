@@ -7,6 +7,7 @@ import { FEATURES } from "@/lib/features";
 import { notify } from "@/features/notifications/notify";
 import { getManagersOf } from "@/features/notifications/recipients";
 import { getKpiCallerContext, verifyEmployeeAccess } from "@/features/kpi/auth-helper";
+import { getKolkataToday } from "@/features/kpi/date-helper";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -22,32 +23,50 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const targetEmployeeId = searchParams.get("employee_id") || caller.userId;
+  const from = searchParams.get("from");
+  const to = searchParams.get("to");
+  const scope = searchParams.get("scope");
 
   const isAllowed = await verifyEmployeeAccess(caller, targetEmployeeId);
   if (!isAllowed) {
     return NextResponse.json({ error: "Forbidden: Access denied to target employee goals" }, { status: 403 });
   }
 
-  const { data: goals, error } = await (supabaseAdmin as any)
+  let goalsQuery = (supabaseAdmin as any)
     .from("kpi_goals")
     .select("id, employee_id, set_by, period_start, period_end, title, status, note, updated_at")
     .eq("employee_id", targetEmployeeId)
     .order("period_start", { ascending: false });
+
+  if (scope !== "all" && from && to) {
+    goalsQuery = goalsQuery.lte("period_start", to).gte("period_end", from);
+  }
+
+  const [{ data: goals, error }, allCountRes] = await Promise.all([
+    goalsQuery,
+    (supabaseAdmin as any)
+      .from("kpi_goals")
+      .select("id", { count: "exact", head: true })
+      .eq("employee_id", targetEmployeeId),
+  ]);
+
+  const allTimeCount = allCountRes?.count ?? (goals?.length || 0);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   if (!goals || goals.length === 0) {
-    return NextResponse.json({ goals: [] });
+    return NextResponse.json({ goals: [], allTimeCount });
   }
 
-  // Count linked tasks from tasks table for each goal
+  // Count linked tasks from tasks table for each goal (org-scoped)
   try {
     const goalIds = goals.map((g: any) => g.id);
     const { data: linkedTasks } = await (supabaseAdmin as any)
       .from("tasks")
       .select("id, goal_id, status")
+      .eq("organization_id", caller.organizationId)
       .in("goal_id", goalIds);
 
     const countsByGoal: Record<string, { total: number; done: number }> = {};
@@ -66,9 +85,9 @@ export async function GET(request: NextRequest) {
       linked_tasks_done: countsByGoal[g.id]?.done || 0,
     }));
 
-    return NextResponse.json({ goals: enhancedGoals });
+    return NextResponse.json({ goals: enhancedGoals, allTimeCount });
   } catch {
-    return NextResponse.json({ goals });
+    return NextResponse.json({ goals, allTimeCount });
   }
 }
 
@@ -98,13 +117,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden: Employee is outside your management scope" }, { status: 403 });
     }
 
+    const todayIso = getKolkataToday();
     const { data: newGoal, error } = await (supabaseAdmin as any)
       .from("kpi_goals")
       .insert({
         employee_id,
         set_by: caller.userId,
-        period_start: period_start || new Date().toISOString().slice(0, 10),
-        period_end: period_end || new Date().toISOString().slice(0, 10),
+        period_start: period_start || todayIso,
+        period_end: period_end || todayIso,
         title: title.trim(),
         status: "not_started",
         note: note ? note.trim() : null,

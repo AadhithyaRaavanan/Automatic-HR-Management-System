@@ -209,6 +209,12 @@ export function KpiDetailDrawer({
                   </p>
                 </div>
 
+                {data.limitationNote && (
+                  <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200 text-amber-950 text-xs">
+                    <strong>Historical note:</strong> {data.limitationNote}
+                  </div>
+                )}
+
                 {data.formula && (
                   <div className="p-3 rounded-xl bg-card border border-border-light space-y-1">
                     <span className="text-[10px] font-bold text-text-tertiary block">
@@ -245,6 +251,14 @@ export function KpiDetailDrawer({
                                   <span className="text-[11px] text-text-tertiary tabular-nums">
                                     {row.checkIn}
                                   </span>
+                                )}
+                                {row.actionUrl && isSelfView && (
+                                  <Link
+                                    href={row.actionUrl}
+                                    className="text-[11px] font-bold text-black underline hover:no-underline"
+                                  >
+                                    Request fix
+                                  </Link>
                                 )}
                               </div>
                               <p className="text-[11px] text-text-secondary truncate mt-0.5">

@@ -16,11 +16,15 @@ interface AdjustedMetricNote {
 
 interface KpiCalculationFooterProps {
   employeeType?: string;
+  overallTarget?: number;
   configEffectiveDate?: string | null;
   configVersionReason?: string | null;
   customWeights?: Record<string, number> | null;
   currentMetrics?: Record<string, any> | null;
   adjustedMetrics?: AdjustedMetricNote[];
+  id?: string;
+  open?: boolean;
+  onToggleOpen?: (open: boolean) => void;
   onOpenBreakdown?: () => void;
   className?: string;
 }
@@ -35,11 +39,15 @@ const PLAIN_WEIGHT_LABELS: Record<string, string> = {
 
 export function KpiCalculationFooter({
   employeeType = "full_time",
+  overallTarget = KPI_CONFIG.overallTarget,
   configEffectiveDate,
   configVersionReason,
   customWeights,
   currentMetrics,
   adjustedMetrics = [],
+  id,
+  open,
+  onToggleOpen,
   className,
 }: KpiCalculationFooterProps) {
   const normType = (employeeType || KPI_CONFIG.defaultType).toLowerCase();
@@ -59,6 +67,9 @@ export function KpiCalculationFooter({
 
   return (
     <details
+      id={id}
+      open={open}
+      onToggle={(e) => onToggleOpen?.((e.currentTarget as HTMLDetailsElement).open)}
       className={cn(
         "group rounded-2xl bg-card border border-border-light shadow-xs overflow-hidden",
         className
@@ -198,7 +209,7 @@ export function KpiCalculationFooter({
             </span>
             <ul className="space-y-1.5 text-[11px] text-text-secondary leading-relaxed list-disc pl-4">
               <li>
-                Overall score is the weighted average of active scored measures (capped at 100% per metric), compared against the {KPI_CONFIG.overallTarget}% target.
+                Overall score is the weighted average of active scored measures (capped at 100% per metric), compared against the {overallTarget}% target.
               </li>
               <li>
                 Missing data (such as zero assigned tasks or zero completed tasks) is excluded and re-normalized instead of forced to 0%.
