@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { SECURITY_HEADERS } from "@/lib/security/headers";
-import nextConfig from "@/next.config.mjs";
+import nextConfig from "../../next.config.mjs";
 
 describe("Section 3.7: Production Security Headers", () => {
   it("1. exports all required OWASP/CIS security headers", () => {

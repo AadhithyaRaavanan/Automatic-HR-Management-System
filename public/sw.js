@@ -1,4 +1,6 @@
-const CACHE_NAME = 'pulse-pwa-v1';
+const CACHE_NAME = 'pulse-pwa-v2';
+const IS_LOCALHOST =
+  self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
 
 // Static assets to pre-cache for offline shell
 const PRECACHE_ASSETS = [
@@ -11,32 +13,45 @@ const PRECACHE_ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_ASSETS).catch((err) => {
-        console.warn('[PWA SW] Pre-cache partial failure:', err);
-      });
-    })
-  );
+  if (!IS_LOCALHOST) {
+    event.waitUntil(
+      caches.open(CACHE_NAME).then((cache) => {
+        return cache.addAll(PRECACHE_ASSETS).catch((err) => {
+          console.warn('[PWA SW] Pre-cache partial failure:', err);
+        });
+      })
+    );
+  }
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cache) => {
-          if (cache !== CACHE_NAME) {
-            return caches.delete(cache);
-          }
-        })
-      );
-    })
+    caches
+      .keys()
+      .then((cacheNames) =>
+        Promise.all(
+          cacheNames.map((cache) => {
+            if (IS_LOCALHOST || cache !== CACHE_NAME) {
+              return caches.delete(cache);
+            }
+          })
+        )
+      )
+      .then(() => {
+        if (IS_LOCALHOST) {
+          return self.registration.unregister();
+        }
+      })
   );
   self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
+  if (IS_LOCALHOST) {
+    return;
+  }
+
   const url = new URL(event.request.url);
 
   // 1. Skip non-GET requests

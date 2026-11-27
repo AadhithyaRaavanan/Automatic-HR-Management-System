@@ -4,7 +4,7 @@ import {
   createRecoveryProof,
   verifyRecoveryProof,
   clearRecoveryCode,
-} from "@/lib/auth/mfa-recovery-store";
+} from "@/features/auth/mfa-recovery-store";
 import { buildMfaResetEmailHtml } from "@/lib/email/resend";
 
 describe("MFA Lost Device Recovery Unit Tests", () => {

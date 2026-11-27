@@ -3,6 +3,12 @@
 > [!NOTE]
 > This guide is the authoritative reference for the **Pulse by Zen Xea** Task Management module (`/tasks`). It documents the full task execution lifecycle, Kanban board, list view, smart template engine, workload balancing, recurrence engine, subtask checklists, time tracking, audit logs, and direct integration with the Performance & KPI module (`/kpi`).
 
+## Finding and updating a task
+
+Open **Tasks** in the sidebar or command palette. Choose **My Tasks** for your assignments. Select **Overdue** or **Due soon** for a quick filter, or open **Filters** for project, assignee and other criteria. Active filter chips show what is narrowing the results. Use **Board** to browse by status or **List** to sort and select rows.
+
+Open a task title to see its details and permitted actions. Press Escape to return to your results. When creating a task, expand **Additional options** for recurrence, project and performance goal. Collapsing that section retains its values. Completing a recurring occurrence and stopping future occurrences are separate actions.
+
 ---
 
 ## 1. System Architecture & Core Philosophy
@@ -359,7 +365,7 @@ Projects provide high-level organizational buckets for grouping tasks by client,
 
 ## 10. Deep Integration: How Tasks Power the KPI Module
 
-The Tasks module is directly coupled to the automated KPI engine (`lib/kpi/compute.ts`). Daily task activity dynamically impacts an employee's performance score:
+The Tasks module is directly coupled to the automated KPI engine (`src/features/kpi/compute.ts`). Daily task activity dynamically impacts an employee's performance score:
 
 ```mermaid
 flowchart LR

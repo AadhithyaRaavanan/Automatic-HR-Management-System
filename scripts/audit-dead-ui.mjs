@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 
 const rootDir = process.cwd();
-const scanDirs = ["app", "components", "features"];
+const scanDirs = ["src/app", "src/components", "src/features"];
 
 const knownRoutes = new Set([
   "/",

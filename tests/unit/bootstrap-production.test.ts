@@ -17,7 +17,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   },
 }));
 
-import { bootstrapProduction, STANDARD_LEAVE_TYPES, DEFAULT_ATTENDANCE_POLICY } from "@/scripts/bootstrap-production";
+import { bootstrapProduction, STANDARD_LEAVE_TYPES, DEFAULT_ATTENDANCE_POLICY } from "../../scripts/bootstrap-production";
 
 describe("Section 2.1 & 2.2: Production Bootstrap & Demo Hygiene Suite", () => {
   beforeEach(() => {

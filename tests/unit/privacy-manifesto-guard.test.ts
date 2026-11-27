@@ -22,9 +22,9 @@ function getAllSourceFiles(dir: string, fileList: string[] = []): string[] {
 describe("Section 2.3: Privacy Manifesto & Invasive Tracking Static Analysis Guard", () => {
   const rootDir = process.cwd();
   const targetDirs = [
-    path.join(rootDir, "app"),
-    path.join(rootDir, "components"),
-    path.join(rootDir, "features"),
+    path.join(rootDir, "src/app"),
+    path.join(rootDir, "src/components"),
+    path.join(rootDir, "src/features"),
   ];
 
   const sourceFiles = targetDirs.flatMap((d) => getAllSourceFiles(d));

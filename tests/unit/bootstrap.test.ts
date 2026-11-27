@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 describe("Production Bootstrap Security & Single-Use Invite Safeguards", () => {
   it("enforces that no persistent emergency tokens exist and redacts invite links in CI/non-interactive stdout", async () => {
     // 1. Assert no persistent token exists in bootstrap output interface
-    const bootstrapModule = await import("@/scripts/bootstrap-production");
+    const bootstrapModule = await import("../../scripts/bootstrap-production");
     expect(bootstrapModule.bootstrapProduction).toBeDefined();
 
     // 2. Test redact behavior logic

@@ -221,7 +221,7 @@ A **single automated trigger path** inside Supabase (`pg_cron` -> `pg_net` + Vau
    - **Automated Test Suite (`tests/database/section2-retention.test.ts`)**:
      - *In unit/integration tests*, Docker containers stop the Supabase Edge Runtime container during database resets. Therefore, test 5 verifies the end-to-end `pg_cron` + `pg_net` + Vault path by testing `cron_trigger_retention_archive()` against an in-test HTTP mock server, verifying the bearer token exchange and Vault secret resolution.
      - Test 6 verifies the `retention-archiver` request handler directly: enforcing POST-only (GET -> 405), fail-closed without `RETENTION_CRON_SECRET` (503), missing token (401), invalid token (403), and valid secret (200).
-     - Test 5 also directly invokes `archiveAndRunRetentionCleanup(orgId)` from `lib/retention/archiver.ts` to test gzip file compression, upload to `retention-archives` bucket, and manifest registration in `public.retention_archives`.
+     - Test 5 also directly invokes `archiveAndRunRetentionCleanup(orgId)` from `src/features/retention/archiver.ts` to test gzip file compression, upload to `retention-archives` bucket, and manifest registration in `public.retention_archives`.
    - **Manual Live Production Verification**:
      Trigger the deployed Edge Function directly with a test payload:
      ```bash

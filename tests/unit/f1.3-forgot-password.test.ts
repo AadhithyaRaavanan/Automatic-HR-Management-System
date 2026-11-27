@@ -24,7 +24,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 
 // Mock Turnstile
-vi.mock("@/lib/auth/turnstile", () => ({
+vi.mock("@/features/auth/turnstile", () => ({
   checkTurnstileRequirements: vi.fn().mockReturnValue({ valid: true }),
 }));
 
@@ -35,7 +35,7 @@ const mockRateLimit = vi.hoisted(() => ({
   clearRateLimit: vi.fn(),
 }));
 
-vi.mock("@/lib/auth/rate-limiter", () => ({
+vi.mock("@/features/auth/rate-limiter", () => ({
   getRateLimitKey: (p: string, id: string) => `${p}:ip:${id}`,
   getEmailRateLimitKey: (p: string, em: string) => `${p}:email:${em}`,
   checkRateLimit: mockRateLimit.checkRateLimit,

@@ -25,8 +25,8 @@ vi.mock("server-only", () => ({}));
 import { createClient } from "@supabase/supabase-js";
 import { Client } from "pg";
 import { getTestEnv } from "../helpers/test-env";
-import { inviteSingleEmployee } from "@/lib/admin/invite-employee";
-import { AuthenticatedCallerContext } from "@/lib/auth/admin-guard";
+import { inviteSingleEmployee } from "@/features/admin/invite-employee";
+import { AuthenticatedCallerContext } from "@/features/auth/admin-guard";
 
 const ORG_1_ID = "00000000-0000-0000-0000-000000000001";
 

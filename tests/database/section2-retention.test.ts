@@ -81,7 +81,7 @@ vi.mock("server-only", () => ({}));
 
 import { POST as runRetentionRoute } from "@/app/api/admin/retention/run/route";
 import { GET as archiveUrlRoute } from "@/app/api/admin/retention/archive-url/route";
-import { archiveAndRunRetentionCleanup } from "@/lib/retention/archiver";
+import { archiveAndRunRetentionCleanup } from "@/features/retention/archiver";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 const ORG_1_ID = "00000000-0000-0000-0000-000000000001";
@@ -671,7 +671,7 @@ describe("Section 2: Retention, Archival & Admin System Health", () => {
   it("5. Automates retention archival via single pg_cron + pg_net + Vault -> retention-archiver Edge Function path", async () => {
     // 5a. Confirm duplicate Vercel cron files do not exist and Supabase Edge Function exists
     expect(fs.existsSync(path.resolve(process.cwd(), "vercel.json"))).toBe(false);
-    expect(fs.existsSync(path.resolve(process.cwd(), "app/api/cron/retention/route.ts"))).toBe(false);
+    expect(fs.existsSync(path.resolve(process.cwd(), "src/app/api/cron/retention/route.ts"))).toBe(false);
     expect(fs.existsSync(path.resolve(process.cwd(), "supabase/functions/retention-archiver/index.ts"))).toBe(true);
 
     // 5b. Verify pg_cron schedules: weekly-retention-archive runs at 02:00 UTC Sunday; old cleanup is unscheduled

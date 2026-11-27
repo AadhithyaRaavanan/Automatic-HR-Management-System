@@ -47,7 +47,37 @@ vi.mock("@/features/notifications/hooks/use-notifications", () => ({
 
 describe("Sidebar Collapse & Expand with Command Support", () => {
   beforeEach(() => {
-    localStorage.clear();
+    if (typeof localStorage === "undefined" || typeof localStorage.clear !== "function") {
+      const store = new Map<string, string>();
+      const memoryStorage = {
+        getItem: (key: string) => (store.has(key) ? store.get(key)! : null),
+        setItem: (key: string, value: string) => {
+          store.set(key, String(value));
+        },
+        removeItem: (key: string) => {
+          store.delete(key);
+        },
+        clear: () => store.clear(),
+        key: (index: number) => Array.from(store.keys())[index] ?? null,
+        get length() {
+          return store.size;
+        },
+      };
+      Object.defineProperty(globalThis, "localStorage", {
+        configurable: true,
+        writable: true,
+        value: memoryStorage,
+      });
+      if (typeof window !== "undefined") {
+        Object.defineProperty(window, "localStorage", {
+          configurable: true,
+          writable: true,
+          value: memoryStorage,
+        });
+      }
+    } else {
+      localStorage.clear();
+    }
     vi.clearAllMocks();
     if (typeof window !== "undefined") {
       (window as any).ResizeObserver = class ResizeObserver {
@@ -224,6 +254,60 @@ describe("Sidebar Collapse & Expand with Command Support", () => {
       expect(screen.getByTestId("sidebar-state")).toHaveTextContent("collapsed");
       fireEvent.click(screen.getByRole("option", { name: /expand sidebar/i }));
       expect(screen.getByTestId("sidebar-state")).toHaveTextContent("expanded");
+    });
+  });
+
+  describe("Collapsed State Persistence Across Remounts", () => {
+    it("keeps CurvedSidebar collapsed on first render when nested SidebarProvider remounts", async () => {
+      const renderStates: boolean[] = [];
+
+      function RouteWrapper({ pageKey }: { pageKey: string }) {
+        const { isCollapsed } = useSidebar();
+        renderStates.push(isCollapsed);
+        return (
+          <SidebarProvider key={pageKey}>
+            <CurvedSidebar />
+          </SidebarProvider>
+        );
+      }
+
+      function Harness() {
+        const [page, setPage] = React.useState("attendance");
+        const { setCollapsed } = useSidebar();
+        return (
+          <div>
+            <button data-testid="collapse-action" onClick={() => setCollapsed(true)}>
+              Collapse
+            </button>
+            <button data-testid="switch-page" onClick={() => setPage("leave")}>
+              Switch Page
+            </button>
+            <RouteWrapper pageKey={page} />
+          </div>
+        );
+      }
+
+      await act(async () => {
+        render(
+          <SidebarProvider>
+            <Harness />
+          </SidebarProvider>
+        );
+      });
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("collapse-action"));
+      });
+      expect(screen.getByTestId("sidebar")).toHaveAttribute("data-collapsed", "true");
+
+      renderStates.length = 0;
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("switch-page"));
+      });
+
+      expect(renderStates.every((collapsed) => collapsed === true)).toBe(true);
+      expect(screen.getByTestId("sidebar")).toHaveAttribute("data-collapsed", "true");
     });
   });
 });

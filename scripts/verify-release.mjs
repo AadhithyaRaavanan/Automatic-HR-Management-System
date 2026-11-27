@@ -302,13 +302,13 @@ Attendance recording is limited exclusively to explicit, user-initiated check-in
 
 ## 6. Upstream Dependency Audit Notes
 
-As documented in [\`BLOCKERS.md\`](file:///${path.resolve(rootDir, "BLOCKERS.md").replace(/\\/g, "/")}):
+As documented in [\`BLOCKERS.md\`](BLOCKERS.md):
 - \`npm audit --omit=dev --audit-level=high\` reports upstream GitHub security advisories for \`next < 16.3.0\` and \`zod < 4.6.6\`.
 - Upgrading to Next 16 or Zod 4 would introduce breaking major-version API changes that violate the prompt constraint to remain on Next.js 14 App Router.
 - All application inputs are strictly sanitized and protected by Row Level Security, CSP headers, rate limiters, and Turnstile bot protection.
 `;
 
-  fs.writeFileSync(path.join(rootDir, "RELEASE_REPORT.md"), report, "utf8");
+  fs.writeFileSync(path.join(rootDir, "docs/history/RELEASE_REPORT.md"), report, "utf8");
 }
 
 async function main() {
@@ -346,7 +346,7 @@ async function main() {
     process.exit(1);
   } else {
     console.log("\n🎉 All release verification gates PASSED successfully!");
-    console.log("📄 Updated RELEASE_REPORT.md with complete test totals and manifest.");
+    console.log("📄 Updated docs/history/RELEASE_REPORT.md with complete test totals and manifest.");
     process.exit(0);
   }
 }

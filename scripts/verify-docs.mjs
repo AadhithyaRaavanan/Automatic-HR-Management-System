@@ -4,44 +4,28 @@ import path from "node:path";
 
 const rootDir = process.cwd();
 
-// Documentation files to verify
-const DOC_FILES = [
-  "FEATURES.md",
-  "MANUAL_TESTING_GUIDE.md",
+// Resolve links in the short guides that direct contributors into the repository.
+const navigationDocs = new Set([
+  "AGENTS.md",
   "README.md",
+  "docs/INDEX.md",
+  "docs/MODULES.md",
+  "docs/STATUS.md",
+]);
+
+const DOC_FILES = [
+  ...navigationDocs,
+  "docs/FEATURES.md",
+  "docs/MANUAL_TESTING_GUIDE.md",
   "docs/ARCHITECTURE.md",
   "docs/PRODUCTION_RUNBOOK.md",
   "docs/ADMIN_RECOVERY.md",
   "docs/OPERATIONS.md",
   "docs/ROADMAP.md",
   "docs/GO_LIVE_CHECKLIST.md",
-].map((f) => path.resolve(rootDir, f)).filter((f) => fs.existsSync(f));
+].map((f) => path.resolve(rootDir, f));
 
-// 1. Gather all SQL routines and tables from migrations
-const migrationsDir = path.resolve(rootDir, "supabase/migrations");
-const migrationFiles = fs.readdirSync(migrationsDir).filter((f) => f.endsWith(".sql"));
-
-const definedTables = new Set();
-const definedRoutines = new Set();
-
-for (const file of migrationFiles) {
-  const content = fs.readFileSync(path.join(migrationsDir, file), "utf8");
-
-  // Tables
-  const tableMatches = content.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?([a-zA-Z0-9_]+)/gi);
-  for (const m of tableMatches) {
-    definedTables.add(m[1].toLowerCase());
-  }
-
-  // Routines / Functions
-  const funcMatches = content.matchAll(/CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:public\.)?([a-zA-Z0-9_]+)/gi);
-  for (const m of funcMatches) {
-    definedRoutines.add(m[1].toLowerCase());
-  }
-}
-
-// 2. Gather all API routes from app/api
-const apiDir = path.resolve(rootDir, "app/api");
+const apiDir = path.resolve(rootDir, "src/app/api");
 const existingApiRoutes = new Set();
 
 function scanApiRoutes(dir, routePrefix = "/api") {
@@ -56,7 +40,7 @@ function scanApiRoutes(dir, routePrefix = "/api") {
 }
 scanApiRoutes(apiDir);
 
-// 2b. Gather all Application routes (pages & route handlers) from app/
+// Gather all Application routes (pages & route handlers) from src/app/
 const allAppRoutes = new Set(existingApiRoutes);
 
 function scanPageRoutes(dir, currentPath = "") {
@@ -76,31 +60,28 @@ function scanPageRoutes(dir, currentPath = "") {
     }
   }
 }
-scanPageRoutes(path.resolve(rootDir, "app"));
+scanPageRoutes(path.resolve(rootDir, "src/app"));
 
-// 3. Gather all Environment Variables from .env.example
-const envExampleContent = fs.readFileSync(path.resolve(rootDir, ".env.example"), "utf8");
-const documentedEnvVars = new Set();
-for (const line of envExampleContent.split("\n")) {
-  const match = line.match(/^([A-Z0-9_]+)=/);
-  if (match) {
-    documentedEnvVars.add(match[1]);
-  }
-}
-documentedEnvVars.add("NODE_ENV");
-documentedEnvVars.add("CI");
-documentedEnvVars.add("RETENTION_CRON_SECRET");
-
-// 4. Verify Docs
 console.log("📚 Verifying documentation truth against codebase implementation...");
 
 let errors = 0;
 
 for (const docFile of DOC_FILES) {
-  const relativeName = path.relative(rootDir, docFile);
+  const relativeName = path.relative(rootDir, docFile).split(path.sep).join("/");
   const content = fs.readFileSync(docFile, "utf8");
 
-  // Check API Routes (exclude file paths that start with app/api/)
+  if (navigationDocs.has(relativeName)) {
+    for (const [, link] of content.matchAll(/\]\(([^\s)]+)\)/g)) {
+      if (/^(?:[a-z]+:|#)/i.test(link)) continue;
+      const target = decodeURIComponent(link.split("#")[0]);
+      if (!fs.existsSync(path.resolve(path.dirname(docFile), target))) {
+        console.error(`[${relativeName}] Missing link target ${target}`);
+        errors++;
+      }
+    }
+  }
+
+  // Check API Routes (exclude file paths that start with src/app/api/)
   const routeRegex = /(?<!app)\/api\/[a-zA-Z0-9_\-\/*]+/g;
   const foundRoutes = content.match(routeRegex) || [];
   for (let route of foundRoutes) {
@@ -109,7 +90,7 @@ for (const docFile of DOC_FILES) {
       const prefix = route.replace(/\/\*$/, "").replace(/\*$/, "");
       const matchesAny = Array.from(existingApiRoutes).some((r) => r.startsWith(prefix));
       if (!matchesAny) {
-        console.error(`❌ [${relativeName}] API route prefix "${route}" has no matching routes under app/api/`);
+        console.error(`❌ [${relativeName}] API route prefix "${route}" has no matching routes under src/app/api/`);
         errors++;
       }
       continue;
@@ -119,7 +100,7 @@ for (const docFile of DOC_FILES) {
     if (cleanRoute.endsWith(".ts") || cleanRoute.endsWith(".js")) continue;
 
     if (!existingApiRoutes.has(cleanRoute)) {
-      console.error(`❌ [${relativeName}] API route "${cleanRoute}" mentioned in doc does not exist under app/api/`);
+      console.error(`❌ [${relativeName}] API route "${cleanRoute}" mentioned in doc does not exist under src/app/api/`);
       errors++;
     }
   }
@@ -133,7 +114,7 @@ for (const docFile of DOC_FILES) {
         const urlObj = new URL(url);
         const redirectPath = urlObj.pathname.replace(/\/$/, "");
         if (!allAppRoutes.has(redirectPath)) {
-          console.error(`❌ [${relativeName}] Documented redirect URL path "${redirectPath}" does not exist as an application route under app/`);
+          console.error(`❌ [${relativeName}] Documented redirect URL path "${redirectPath}" does not exist as an application route under src/app/`);
           errors++;
         }
       }
@@ -145,6 +126,6 @@ if (errors > 0) {
   console.error(`\n🚨 Documentation verification failed with ${errors} discrepancy/discrepancies.`);
   process.exit(1);
 } else {
-  console.log(`✅ Documentation truth verified: All documented API routes, routines, tables, and environment variables match code reality.`);
+  console.log(`✅ Documentation truth verified: navigation links, documented API route references, and checklist redirect paths resolve.`);
   process.exit(0);
 }

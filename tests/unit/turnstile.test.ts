@@ -4,7 +4,7 @@ import {
   TURNSTILE_TEST_SECRET_KEY,
   TURNSTILE_ALWAYS_FAILS_KEY,
   isTurnstileTokenPresent,
-} from "@/lib/auth/turnstile";
+} from "@/features/auth/turnstile";
 
 describe("Turnstile Single-Verification-Path Architecture", () => {
   it("1. exposes Cloudflare's published always-pass and fail keys for testing", () => {

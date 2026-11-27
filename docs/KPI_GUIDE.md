@@ -20,7 +20,7 @@ flowchart TD
     end
 
     subgraph Automatic Computation Engine
-        COMP[lib/kpi/compute.ts]
+        COMP[src/features/kpi/compute.ts]
         ATT --> COMP
         LOGS --> COMP
         TASKS --> COMP

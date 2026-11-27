@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { getStorageStatePath, loginAndGetSession, loadEnvTest, getRoleCredentials } from "../helpers/auth";
 import { createClient } from "@supabase/supabase-js";
-import { ROLE_TUTORIAL_STEPS } from "../../lib/tutorial/tutorial-config";
+import { ROLE_TUTORIAL_STEPS } from "../../src/features/tutorial/tutorial-config";
 
 const env = loadEnvTest();
 const supabaseAdmin = createClient(

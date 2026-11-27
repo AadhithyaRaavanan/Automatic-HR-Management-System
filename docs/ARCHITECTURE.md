@@ -2,6 +2,8 @@
 
 This document details the architecture, cryptographic security controls, tenant isolation boundaries, and infrastructure integration of RemoteHR.
 
+The web application is a modular monolith. Its pages and API handlers share one Next.js build and use feature-owned code in `src/features/`. The [module map](MODULES.md) connects each workflow to its source and tests.
+
 ---
 
 ## 1. High-Level Architectural Overview

@@ -7,7 +7,7 @@ import {
   getKpiBandLabel,
   getKpiMetricMeta,
   KpiPeriodRecord,
-} from "@/lib/kpi/helpers";
+} from "@/features/kpi/helpers";
 
 describe("Section 4 KPI Helper & Weighting Formulas", () => {
   it("exposes all 8 canonical KPI source metrics", () => {
