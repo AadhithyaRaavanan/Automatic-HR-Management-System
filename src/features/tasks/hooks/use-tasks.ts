@@ -13,6 +13,7 @@ import {
   getHeadedDepartmentIds,
   isProjectAssignedToUser,
   resolveDepartmentInchargeLock,
+  resolveTaskSettingsFromProject,
 } from "@/features/tasks/project-access";
 import {
   getStoredDepartments,
@@ -44,6 +45,9 @@ export interface TaskRecord {
   id: string;
   organization_id: string;
   project_id: string | null;
+  department_id?: string | null;
+  department_ids?: string[];
+  assignment_type?: ProjectAssignmentType;
   parent_task_id: string | null;
   title: string;
   description: string | null;
@@ -447,6 +451,13 @@ export function useTasksData(enabled = true) {
                 id: t.id,
                 organization_id: "",
                 project_id: t.project_id || null,
+                department_id: t.department_id || null,
+                department_ids: Array.isArray(t.department_ids)
+                  ? t.department_ids
+                  : t.department_id
+                  ? [t.department_id]
+                  : [],
+                assignment_type: t.assignment_type || (t.department_id ? "department" : "company"),
                 parent_task_id: t.parent_task_id || null,
                 title: t.title,
                 description: t.description || null,
@@ -806,6 +817,8 @@ export function useTaskMutations(
       dueDate?: string | null;
       estimatedMinutes?: number | null;
       projectId?: string | null;
+      assignmentType?: ProjectAssignmentType;
+      departmentIds?: string[];
       parentTaskId?: string | null;
       isSelfAssign?: boolean;
       taskTypeId?: string | null;
@@ -825,25 +838,51 @@ export function useTaskMutations(
     }) => {
       const caller = await resolveCallerIdentity();
       const cachedWorkspace = queryClient.getQueryData<any>(["tasks-workspace"]);
-      const headedDeptIds = getHeadedDepartmentIds(
-        caller.userId,
-        cachedWorkspace?.departments || []
-      );
+      const cachedDepts = cachedWorkspace?.departments || [];
+      const cachedProjects = cachedWorkspace?.projects || [];
+      const headedDeptIds = getHeadedDepartmentIds(caller.userId, cachedDepts);
       const isRestrictedDeptHead =
         headedDeptIds.length > 0 && caller.role !== "admin" && caller.role !== "hr";
+      const isPureEmployee =
+        (caller.role === "employee" || caller.role === "team_lead") &&
+        headedDeptIds.length === 0;
+
+      const targetProj = input.projectId
+        ? cachedProjects.find((p: any) => p.id === input.projectId)
+        : null;
+
+      let resolvedAssignmentType: ProjectAssignmentType =
+        input.assignmentType || "company";
+      let resolvedDeptIds: string[] = Array.isArray(input.departmentIds)
+        ? Array.from(new Set(input.departmentIds.filter(Boolean)))
+        : [];
+      let resolvedAssigneeId: string | null = input.assigneeId || null;
+
+      if (targetProj) {
+        const inherited = resolveTaskSettingsFromProject(targetProj, cachedDepts);
+        if (inherited) {
+          resolvedAssignmentType = inherited.assignmentType;
+          resolvedDeptIds = inherited.departmentIds;
+          if (!isRestrictedDeptHead && !isPureEmployee && inherited.isAssigneeLocked && inherited.inchargeId) {
+            resolvedAssigneeId = inherited.inchargeId;
+          }
+        }
+      } else if (resolvedAssignmentType === "department" && resolvedDeptIds.length > 0) {
+        const lock = resolveDepartmentInchargeLock(resolvedDeptIds, cachedDepts);
+        if (lock.isLocked && lock.lockedInchargeId) {
+          resolvedAssigneeId = lock.lockedInchargeId;
+        }
+      }
 
       if (isRestrictedDeptHead) {
-        const targetProj = (cachedWorkspace?.projects || []).find(
-          (p: any) => p.id === input.projectId
-        );
         if (!input.projectId || (targetProj && !isProjectAssignedToUser(targetProj, caller.userId, headedDeptIds))) {
           throw new Error(
             "Department heads can only create tasks inside projects assigned to them"
           );
         }
-        if (input.assigneeId && input.assigneeId !== caller.userId) {
+        if (resolvedAssigneeId && resolvedAssigneeId !== caller.userId) {
           const targetEmp = (cachedWorkspace?.employees || []).find(
-            (e: any) => e.id === input.assigneeId
+            (e: any) => e.id === resolvedAssigneeId
           );
           if (
             targetEmp &&
@@ -854,13 +893,15 @@ export function useTaskMutations(
             );
           }
         }
-      } else if (caller.role === "employee" || caller.role === "team_lead") {
-        if (input.assigneeId && (!caller.userId || input.assigneeId !== caller.userId)) {
+      } else if (isPureEmployee) {
+        if (resolvedAssigneeId && (!caller.userId || resolvedAssigneeId !== caller.userId)) {
           throw new Error("Employees cannot assign tasks to other employees");
         }
       }
 
-      const isSelf = Boolean(input.isSelfAssign);
+      const isSelf = Boolean(
+        input.isSelfAssign || (resolvedAssigneeId && resolvedAssigneeId === caller.userId)
+      );
       const initialStatus: TaskStatus = isSelf ? "in_progress" : "todo";
 
       // 1. If recurring task requested, create recurrence record first
@@ -876,7 +917,7 @@ export function useTaskMutations(
               description: input.description || null,
               priority: input.priority || "medium",
               estimate_minutes: input.estimatedMinutes || null,
-              assignee_id: input.assigneeId || null,
+              assignee_id: resolvedAssigneeId,
               frequency: input.recurrence.frequency,
               interval_n: input.recurrence.interval_n || 1,
               weekday: input.recurrence.weekday ?? null,
@@ -898,12 +939,15 @@ export function useTaskMutations(
         title: input.title,
         description: input.description || null,
         creator_id: caller.userId || undefined,
-        assignee_id: input.assigneeId || null,
+        assignee_id: resolvedAssigneeId,
         priority: input.priority || "medium",
         due_date: input.dueDate || null,
         estimated_minutes:
           typeof input.estimatedMinutes === "number" ? input.estimatedMinutes : null,
         project_id: input.projectId || null,
+        department_id: resolvedDeptIds[0] || null,
+        department_ids: resolvedDeptIds,
+        assignment_type: resolvedAssignmentType,
         parent_task_id: input.parentTaskId || null,
         status: initialStatus,
       });
@@ -924,12 +968,14 @@ export function useTaskMutations(
             body: JSON.stringify({
               title: input.title,
               description: input.description || null,
-              assigneeId: input.assigneeId || null,
+              assigneeId: resolvedAssigneeId,
               priority: input.priority || "medium",
               dueDate: input.dueDate || null,
               estimatedMinutes:
                 typeof input.estimatedMinutes === "number" ? input.estimatedMinutes : null,
               projectId: input.projectId || null,
+              assignmentType: resolvedAssignmentType,
+              departmentIds: resolvedDeptIds,
               parentTaskId: input.parentTaskId || null,
               taskTypeId: input.taskTypeId || null,
               recurrenceId: activeRecurrenceId,
@@ -953,7 +999,7 @@ export function useTaskMutations(
           res = (await rpcCall("create_task", {
             p_title: input.title,
             p_description: input.description || null,
-            p_assignee_id: input.assigneeId || null,
+            p_assignee_id: resolvedAssigneeId,
             p_priority: input.priority || "medium",
             p_due_date: input.dueDate || null,
             p_estimated_minutes:
@@ -969,7 +1015,7 @@ export function useTaskMutations(
           res = (await rpcCall("create_task", {
             p_title: input.title,
             p_description: input.description || null,
-            p_assignee_id: input.assigneeId || null,
+            p_assignee_id: resolvedAssigneeId,
             p_priority: input.priority || "medium",
             p_due_date: input.dueDate || null,
             p_estimated_minutes:
@@ -1010,11 +1056,13 @@ export function useTaskMutations(
                 body: JSON.stringify({
                   title: subTitle.trim(),
                   description: null,
-                  assigneeId: input.assigneeId || null,
+                  assigneeId: resolvedAssigneeId,
                   priority: input.priority || "medium",
                   dueDate: input.dueDate || null,
                   estimatedMinutes: null,
                   projectId: input.projectId || null,
+                  assignmentType: resolvedAssignmentType,
+                  departmentIds: resolvedDeptIds,
                   parentTaskId: createdTaskId,
                 }),
               });
@@ -1022,7 +1070,7 @@ export function useTaskMutations(
               await rpcCall("create_task", {
                 p_title: subTitle.trim(),
                 p_description: null,
-                p_assignee_id: input.assigneeId || null,
+                p_assignee_id: resolvedAssigneeId,
                 p_priority: input.priority || "medium",
                 p_due_date: input.dueDate || null,
                 p_estimated_minutes: null,

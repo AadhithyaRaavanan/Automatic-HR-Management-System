@@ -100,6 +100,9 @@ export interface DemoTask {
   creator_id?: string | null;
   assignee_id?: string | null;
   project_id?: string | null;
+  department_id?: string | null;
+  department_ids?: string[];
+  assignment_type?: "company" | "department" | "individual";
   parent_task_id?: string | null;
   status: "todo" | "in_progress" | "blocked" | "done" | "cancelled";
   priority: "low" | "medium" | "high" | "urgent";

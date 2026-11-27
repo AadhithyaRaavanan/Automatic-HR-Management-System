@@ -5,6 +5,7 @@ import {
   getHeadedDepartmentIds,
   isProjectAssignedToUser,
   resolveDepartmentInchargeLock,
+  resolveTaskSettingsFromProject,
   type DepartmentHeadShape,
   type ProjectAccessShape,
 } from "@/features/tasks/project-access";
@@ -151,5 +152,123 @@ describe("Department/Individual Project Assignment & Department Head Scoping", (
 
     const deptPeople = filterDepartmentPeople(employees, headedDepts, "emp-head-eng");
     expect(deptPeople.map((e) => e.id)).toEqual(["emp-head-eng", "emp-eng-1", "emp-eng-2"]);
+
+    // Standalone task scoped directly to Engineering department (unassigned) -> Dept Head can manage
+    expect(
+      canDepartmentHeadManageTask(
+        {
+          id: "t-standalone-dept",
+          project_id: null,
+          creator_id: "emp-admin",
+          assignee_id: null,
+          assignment_type: "department",
+          department_id: "dept-eng",
+          department_ids: ["dept-eng"],
+        },
+        "emp-head-eng",
+        headedDepts,
+        projectsById,
+        empDeptById
+      )
+    ).toBe(true);
+
+    // Standalone task scoped to HR department -> Engineering Dept Head cannot manage
+    expect(
+      canDepartmentHeadManageTask(
+        {
+          id: "t-standalone-hr",
+          project_id: null,
+          creator_id: "emp-admin",
+          assignee_id: null,
+          assignment_type: "department",
+          department_id: "dept-hr",
+          department_ids: ["dept-hr"],
+        },
+        "emp-head-eng",
+        headedDepts,
+        projectsById,
+        empDeptById
+      )
+    ).toBe(false);
+  });
+
+  it("overrides standalone task scope and assignee when a Project is selected", () => {
+    expect(resolveTaskSettingsFromProject(null, departments)).toBeNull();
+
+    // Department project -> inherits department scope, department IDs, and locks incharge to head
+    const deptProjSettings = resolveTaskSettingsFromProject(
+      {
+        id: "proj-eng",
+        assignment_type: "department",
+        department_id: "dept-eng",
+        department_ids: ["dept-eng"],
+        incharge_id: null,
+      },
+      departments
+    );
+    expect(deptProjSettings).toEqual({
+      assignmentType: "department",
+      departmentIds: ["dept-eng"],
+      inchargeId: "emp-head-eng",
+      isScopeLocked: true,
+      isAssigneeLocked: true,
+    });
+
+    // Individual project -> inherits individual scope and locks assignee to project's individual
+    const indivProjSettings = resolveTaskSettingsFromProject(
+      {
+        id: "proj-indiv",
+        assignment_type: "individual",
+        department_id: null,
+        department_ids: [],
+        incharge_id: "emp-eng-1",
+      },
+      departments
+    );
+    expect(indivProjSettings).toEqual({
+      assignmentType: "individual",
+      departmentIds: [],
+      inchargeId: "emp-eng-1",
+      isScopeLocked: true,
+      isAssigneeLocked: true,
+    });
+
+    // Company-wide project without incharge -> locks scope to company-wide, leaves assignee selectable
+    const companyOpenSettings = resolveTaskSettingsFromProject(
+      {
+        id: "proj-co-open",
+        assignment_type: "company",
+        department_id: null,
+        department_ids: [],
+        incharge_id: null,
+      },
+      departments
+    );
+    expect(companyOpenSettings).toEqual({
+      assignmentType: "company",
+      departmentIds: [],
+      inchargeId: null,
+      isScopeLocked: true,
+      isAssigneeLocked: false,
+    });
+
+    // Company-wide project with explicit incharge -> keeps company-wide scope AND locks assignee
+    const companyInchargeSettings = resolveTaskSettingsFromProject(
+      {
+        id: "proj-co-lead",
+        assignment_type: "company",
+        department_id: null,
+        department_ids: [],
+        incharge_id: "emp-head-hr",
+      },
+      departments
+    );
+    expect(companyInchargeSettings).toEqual({
+      assignmentType: "company",
+      departmentIds: [],
+      inchargeId: "emp-head-hr",
+      isScopeLocked: true,
+      isAssigneeLocked: true,
+    });
   });
 });

@@ -98,7 +98,27 @@ export async function PATCH(
       if (p.id) projectMap.set(p.id, p);
     }
 
-    const empIdsToCheck = [existingTask.assignee_id, existingTask.creator_id].filter(
+    let hydratedTask = existingTask;
+    if (!existingTask.department_id && !Array.isArray(existingTask.department_ids)) {
+      try {
+        const { data: logRow } = await dbClient
+          .from("audit_logs")
+          .select("new_data")
+          .eq("table_name", "tasks")
+          .eq("action", "TASK_CREATED")
+          .eq("record_id", taskId)
+          .maybeSingle();
+        if (logRow?.new_data) {
+          hydratedTask = {
+            ...existingTask,
+            department_id: logRow.new_data.department_id ?? null,
+            department_ids: logRow.new_data.department_ids ?? [],
+          };
+        }
+      } catch {}
+    }
+
+    const empIdsToCheck = [hydratedTask.assignee_id, hydratedTask.creator_id].filter(
       Boolean
     ) as string[];
     const empDeptMap = new Map<string, string | null>();
@@ -115,7 +135,7 @@ export async function PATCH(
     }
 
     const canManage = canDepartmentHeadManageTask(
-      existingTask,
+      hydratedTask,
       userId,
       headedDeptIds,
       projectMap,

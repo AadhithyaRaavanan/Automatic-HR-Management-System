@@ -26,6 +26,9 @@ export interface TaskAccessShape {
   project_id?: string | null;
   creator_id?: string | null;
   assignee_id?: string | null;
+  department_id?: string | null;
+  department_ids?: string[] | null;
+  assignment_type?: ProjectAssignmentType | string | null;
 }
 
 export interface DepartmentInchargeResolution {
@@ -39,35 +42,51 @@ export interface DepartmentInchargeResolution {
   }>;
 }
 
+export interface ProjectInheritedTaskSettings {
+  assignmentType: ProjectAssignmentType;
+  departmentIds: string[];
+  inchargeId: string | null;
+  isScopeLocked: boolean;
+  isAssigneeLocked: boolean;
+}
+
 /**
- * Returns deduplicated department UUIDs linked to a project from both legacy
- * single-department `department_id` and multi-department `department_ids`.
+ * Returns deduplicated department UUIDs linked to a project or task from both
+ * legacy single-department `department_id` and multi-department `department_ids`.
  */
-export function getProjectDepartmentIds(
-  project: Pick<ProjectAccessShape, "department_id" | "department_ids"> | null | undefined
+export function getEntityDepartmentIds(
+  entity:
+    | { department_id?: string | null; department_ids?: string[] | null }
+    | null
+    | undefined
 ): string[] {
-  if (!project) return [];
+  if (!entity) return [];
   const seen = new Set<string>();
   const result: string[] = [];
 
-  if (Array.isArray(project.department_ids)) {
-    for (const id of project.department_ids) {
+  if (Array.isArray(entity.department_ids)) {
+    for (const id of entity.department_ids) {
       if (id && !seen.has(id)) {
         seen.add(id);
         result.push(id);
       }
     }
   }
-  if (project.department_id && !seen.has(project.department_id)) {
-    seen.add(project.department_id);
-    result.push(project.department_id);
+  if (entity.department_id && !seen.has(entity.department_id)) {
+    seen.add(entity.department_id);
+    result.push(entity.department_id);
   }
   return result;
 }
 
 /**
- * Resolves whether selecting one or more departments for a project must
- * automatically lock the project Incharge to the department head.
+ * Alias for projects.
+ */
+export const getProjectDepartmentIds = getEntityDepartmentIds;
+
+/**
+ * Resolves whether selecting one or more departments for a project or task must
+ * automatically lock the Incharge / Assignee to the department head.
  *
  * When a selected department already has an assigned `department_head_id`
  * (and all selected departments with heads agree on one head), `isLocked`
@@ -129,6 +148,48 @@ export function resolveDepartmentInchargeLock(
 }
 
 /**
+ * Resolves the inherited scope, department(s), and locked Incharge/Assignee
+ * when creating a task inside an existing Project.
+ */
+export function resolveTaskSettingsFromProject(
+  project: ProjectAccessShape | null | undefined,
+  departments: DepartmentHeadShape[]
+): ProjectInheritedTaskSettings | null {
+  if (!project) return null;
+
+  const deptIds = getEntityDepartmentIds(project);
+  const rawType = String(project.assignment_type || "").toLowerCase();
+  const assignmentType: ProjectAssignmentType =
+    rawType === "individual"
+      ? "individual"
+      : rawType === "department" || deptIds.length > 0
+      ? "department"
+      : rawType === "company"
+      ? "company"
+      : project.incharge_id
+      ? "individual"
+      : "company";
+
+  const deptLock =
+    assignmentType === "department"
+      ? resolveDepartmentInchargeLock(deptIds, departments)
+      : { isLocked: false, lockedInchargeId: null };
+
+  const inchargeId =
+    project.incharge_id ||
+    (deptLock.isLocked ? deptLock.lockedInchargeId : null) ||
+    null;
+
+  return {
+    assignmentType,
+    departmentIds: assignmentType === "department" ? deptIds : [],
+    inchargeId,
+    isScopeLocked: true,
+    isAssigneeLocked: Boolean(inchargeId),
+  };
+}
+
+/**
  * Returns the department IDs where the given employee ID is the assigned head.
  */
 export function getHeadedDepartmentIds(
@@ -158,7 +219,7 @@ export function isProjectAssignedToUser(
     return true;
   }
 
-  const deptIds = getProjectDepartmentIds(project);
+  const deptIds = getEntityDepartmentIds(project);
   if (deptIds.length === 0 || headedDepartmentIds.length === 0) {
     return false;
   }
@@ -176,8 +237,8 @@ export function isProjectAssignedToUser(
 
 /**
  * Checks whether a department head can view and reassign an existing task.
- * Covers tasks in their assigned project(s) as well as tasks whose assignee or
- * creator belongs to their department(s).
+ * Covers tasks in their assigned project(s), tasks assigned directly to their
+ * department(s), and tasks whose assignee or creator belongs to their department(s).
  */
 export function canDepartmentHeadManageTask(
   task: TaskAccessShape | null | undefined,
@@ -200,6 +261,11 @@ export function canDepartmentHeadManageTask(
 
   if (headedDepartmentIds.length === 0) return false;
   const headedSet = new Set(headedDepartmentIds);
+
+  const taskDeptIds = getEntityDepartmentIds(task);
+  if (taskDeptIds.some((d) => headedSet.has(d))) {
+    return true;
+  }
 
   if (task.assignee_id) {
     const assigneeDept = employeeDeptById.get(task.assignee_id);

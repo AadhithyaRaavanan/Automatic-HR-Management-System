@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isProjectAssignedToUser } from "@/features/tasks/project-access";
+import {
+  ProjectAssignmentType,
+  isProjectAssignedToUser,
+  resolveDepartmentInchargeLock,
+  resolveTaskSettingsFromProject,
+} from "@/features/tasks/project-access";
 import {
   fetchProjectsResilient,
   isMissingColumnOrRelationError,
@@ -26,6 +31,7 @@ export async function POST(request: NextRequest) {
     orgId,
     dbClient,
     callerSupabase,
+    departments,
     headedDeptIds,
     isDepartmentHead,
   } = ctx;
@@ -56,7 +62,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid priority value." }, { status: 400 });
   }
 
-  const assigneeId: string | null = body?.assigneeId ? String(body.assigneeId).trim() || null : null;
+  let assigneeId: string | null = body?.assigneeId ? String(body.assigneeId).trim() || null : null;
   const projectId: string | null = body?.projectId ? String(body.projectId).trim() || null : null;
   const parentTaskId: string | null = body?.parentTaskId ? String(body.parentTaskId).trim() || null : null;
   const dueDate: string | null = body?.dueDate ? String(body.dueDate).trim() || null : null;
@@ -71,13 +77,7 @@ export async function POST(request: NextRequest) {
 
   const isPrivileged = role === "admin" || role === "hr";
   const isRestrictedDeptHead = isDepartmentHead && !isPrivileged;
-
-  if (role === "employee" && !isDepartmentHead && assigneeId && assigneeId !== userId) {
-    return NextResponse.json(
-      { error: "Forbidden: Employees cannot assign tasks to other employees." },
-      { status: 403 }
-    );
-  }
+  const isPureEmployee = (role === "employee" || role === "team_lead") && !isDepartmentHead;
 
   const projects = await fetchProjectsResilient(dbClient, orgId);
   const targetProject = projectId ? projects.find((p) => p.id === projectId) : null;
@@ -96,6 +96,78 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       );
     }
+  }
+
+  // Resolve assignmentType, departmentIds, and locked assignee/incharge
+  const rawType = String(body?.assignmentType || "").toLowerCase();
+  const rawDeptIds: string[] = Array.isArray(body?.departmentIds)
+    ? Array.from(new Set(body.departmentIds.map((d: any) => String(d || "").trim()).filter(Boolean)))
+    : body?.departmentId
+    ? [String(body.departmentId).trim()]
+    : [];
+
+  let resolvedAssignmentType: ProjectAssignmentType = "company";
+  let resolvedDeptIds: string[] = [];
+  let resolvedPrimaryDeptId: string | null = null;
+  let assigneeFromProjectSetting = false;
+
+  if (targetProject) {
+    // Choosing a project automatically applies the project's settings rather than caller overrides
+    const inherited = resolveTaskSettingsFromProject(targetProject, departments)!;
+    resolvedAssignmentType = inherited.assignmentType;
+    resolvedDeptIds = inherited.departmentIds;
+    resolvedPrimaryDeptId = resolvedDeptIds[0] || null;
+    if (!isRestrictedDeptHead && !isPureEmployee && inherited.isAssigneeLocked && inherited.inchargeId) {
+      assigneeId = inherited.inchargeId;
+      assigneeFromProjectSetting = true;
+    }
+  } else if (isPureEmployee) {
+    resolvedAssignmentType = "individual";
+  } else {
+    resolvedAssignmentType =
+      rawType === "individual"
+        ? "individual"
+        : rawType === "department" || rawDeptIds.length > 0
+        ? "department"
+        : "company";
+
+    if (resolvedAssignmentType === "department") {
+      if (rawDeptIds.length === 0) {
+        return NextResponse.json(
+          { error: "Select at least one department for a department task." },
+          { status: 400 }
+        );
+      }
+      const deptSet = new Set(departments.map((d) => d.id));
+      for (const id of rawDeptIds) {
+        if (!deptSet.has(id)) {
+          return NextResponse.json(
+            { error: "Selected department does not belong to your organization." },
+            { status: 403 }
+          );
+        }
+      }
+      resolvedDeptIds = rawDeptIds;
+      resolvedPrimaryDeptId = rawDeptIds[0];
+
+      const lockInfo = resolveDepartmentInchargeLock(resolvedDeptIds, departments);
+      if (lockInfo.isLocked && lockInfo.lockedInchargeId) {
+        assigneeId = lockInfo.lockedInchargeId;
+        assigneeFromProjectSetting = true;
+      } else if (lockInfo.headIds.length > 1) {
+        if (!assigneeId || !lockInfo.headIds.includes(assigneeId)) {
+          assigneeId = lockInfo.headIds[0];
+        }
+        assigneeFromProjectSetting = true;
+      }
+    }
+  }
+
+  if (isPureEmployee && assigneeId && assigneeId !== userId) {
+    return NextResponse.json(
+      { error: "Forbidden: Employees cannot assign tasks to other employees." },
+      { status: 403 }
+    );
   }
 
   if (assigneeId) {
@@ -122,7 +194,12 @@ export async function POST(request: NextRequest) {
           { status: 403 }
         );
       }
-    } else if (role === "manager" && assigneeId !== userId && assigneeEmp.manager_id !== userId) {
+    } else if (
+      role === "manager" &&
+      !assigneeFromProjectSetting &&
+      assigneeId !== userId &&
+      assigneeEmp.manager_id !== userId
+    ) {
       return NextResponse.json(
         { error: "Forbidden: Managers can only assign tasks to themselves or direct reports." },
         { status: 403 }
@@ -151,6 +228,9 @@ export async function POST(request: NextRequest) {
 
   const extendedPayload: Record<string, any> = {
     ...basePayload,
+    department_id: resolvedPrimaryDeptId,
+    department_ids: resolvedDeptIds,
+    assignment_type: resolvedAssignmentType,
     task_type_id: taskTypeId,
     recurrence_id: recurrenceId,
     auto_due_suggested: autoDueSuggested,
@@ -159,7 +239,17 @@ export async function POST(request: NextRequest) {
 
   let insertRes = await dbClient.from("tasks").insert(extendedPayload).select("*").single();
   if (insertRes?.error && isMissingColumnOrRelationError(insertRes.error)) {
-    insertRes = await dbClient.from("tasks").insert(basePayload).select("*").single();
+    const midPayload = {
+      ...basePayload,
+      task_type_id: taskTypeId,
+      recurrence_id: recurrenceId,
+      auto_due_suggested: autoDueSuggested,
+      goal_id: goalId,
+    };
+    insertRes = await dbClient.from("tasks").insert(midPayload).select("*").single();
+    if (insertRes?.error && isMissingColumnOrRelationError(insertRes.error)) {
+      insertRes = await dbClient.from("tasks").insert(basePayload).select("*").single();
+    }
   }
 
   if (insertRes?.error || !insertRes?.data) {
@@ -169,7 +259,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const created = insertRes.data;
+  const created = {
+    ...insertRes.data,
+    department_id: resolvedPrimaryDeptId,
+    department_ids: resolvedDeptIds,
+    assignment_type: resolvedAssignmentType,
+  };
 
   try {
     await dbClient.from("task_events").insert({

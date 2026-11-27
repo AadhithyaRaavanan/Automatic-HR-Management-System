@@ -59,13 +59,15 @@ export async function GET(request: NextRequest) {
   let taskQuery = dbClient
     .from("tasks")
     .select(
-      "id, organization_id, project_id, parent_task_id, title, description, creator_id, assignee_id, status, priority, due_date, estimated_minutes, started_at, completed_at, cancelled_at, created_at, updated_at, task_type_id, recurrence_id, auto_due_suggested, goal_id, project:projects(id, name, code)"
+      "id, organization_id, project_id, department_id, department_ids, assignment_type, parent_task_id, title, description, creator_id, assignee_id, status, priority, due_date, estimated_minutes, started_at, completed_at, cancelled_at, created_at, updated_at, task_type_id, recurrence_id, auto_due_suggested, goal_id, project:projects(id, name, code)"
     )
     .order("created_at", { ascending: false });
   if (orgId) taskQuery = taskQuery.eq("organization_id", orgId);
 
+  let usedFallbackTasks = false;
   let taskRes = await taskQuery;
   if (taskRes?.error && isMissingColumnOrRelationError(taskRes.error)) {
+    usedFallbackTasks = true;
     let fallbackTaskQuery = dbClient
       .from("tasks")
       .select(
@@ -76,7 +78,40 @@ export async function GET(request: NextRequest) {
     taskRes = await fallbackTaskQuery;
   }
 
-  const allTasks: any[] = taskRes?.data || [];
+  let allTasks: any[] = taskRes?.data || [];
+  if (usedFallbackTasks && allTasks.length > 0) {
+    const taskMetaMap = new Map<string, any>();
+    try {
+      let auditQuery = dbClient
+        .from("audit_logs")
+        .select("record_id, new_data")
+        .eq("table_name", "tasks")
+        .eq("action", "TASK_CREATED");
+      if (orgId) auditQuery = auditQuery.eq("organization_id", orgId);
+      const { data: logs } = await auditQuery;
+      for (const log of logs || []) {
+        if (log?.record_id && log?.new_data) {
+          taskMetaMap.set(log.record_id, log.new_data);
+        }
+      }
+    } catch {}
+    allTasks = allTasks.map((t) => {
+      const meta = taskMetaMap.get(t.id);
+      if (!meta) return t;
+      return {
+        ...t,
+        department_id: t.department_id ?? meta.department_id ?? null,
+        department_ids: Array.isArray(t.department_ids)
+          ? t.department_ids
+          : Array.isArray(meta.department_ids)
+          ? meta.department_ids
+          : meta.department_id
+          ? [meta.department_id]
+          : [],
+        assignment_type: t.assignment_type ?? meta.assignment_type ?? "company",
+      };
+    });
+  }
 
   const visibleTasks = allTasks.filter((t) => {
     if (role === "admin" || role === "hr") return true;
