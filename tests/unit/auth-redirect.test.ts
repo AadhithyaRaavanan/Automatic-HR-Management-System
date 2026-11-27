@@ -102,4 +102,3 @@ describe("Auth redirect sanitization & /auth/callback guard", () => {
     }
   });
 });
-

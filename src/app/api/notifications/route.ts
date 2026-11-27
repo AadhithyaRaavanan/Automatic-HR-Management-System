@@ -1,33 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getNotificationCaller } from "@/features/notifications/auth";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getNotificationAuth } from "@/features/notifications/auth";
+import { isSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
 
-export async function GET(request: NextRequest) {
+async function fetchNotificationsWithClient(
+  client: any,
+  userId: string,
+  limit: number,
+  unreadOnly: boolean,
+  cursor: string | null
+) {
   try {
-    const user = await getNotificationCaller(request);
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const unreadOnly = searchParams.get("unread_only") === "true";
-    const cursor = searchParams.get("cursor"); // created_at ISO timestamp
-    const limit = Math.min(parseInt(searchParams.get("limit") || "20", 10), 50);
-
-    // Clean up any lingering example notifications asynchronously
-    (supabaseAdmin.from("notifications") as any)
-      .delete()
-      .ilike("body", "%Example Notification%")
-      .then(() => {})
-      .catch(() => {});
-
-    let query = (supabaseAdmin.from("notifications") as any)
+    let query = (client.from("notifications") as any)
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .not("body", "ilike", "%Example Notification%")
       .order("created_at", { ascending: false })
       .limit(limit + 1);
@@ -40,9 +29,83 @@ export async function GET(request: NextRequest) {
       query = query.lt("created_at", cursor);
     }
 
-    const { data, error } = await query;
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    return await query;
+  } catch (err: any) {
+    return { data: null, error: err };
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const { user, supabase } = await getNotificationAuth(request);
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const unreadOnly = searchParams.get("unread_only") === "true";
+    const cursor = searchParams.get("cursor"); // created_at ISO timestamp
+    const parsedLimit = parseInt(searchParams.get("limit") || "20", 10);
+    const limit = Math.min(Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 20, 50);
+
+    // Clean up any lingering example notifications asynchronously when admin client is available
+    if (isSupabaseAdminConfigured()) {
+      void (async () => {
+        try {
+          await (supabaseAdmin.from("notifications") as any)
+            .delete()
+            .eq("user_id", user.id)
+            .ilike("body", "%Example Notification%");
+        } catch {}
+      })();
+    }
+
+    let data: any[] | null = null;
+    let queryError: any = null;
+
+    if (isSupabaseAdminConfigured()) {
+      const adminRes = await fetchNotificationsWithClient(
+        supabaseAdmin,
+        user.id,
+        limit,
+        unreadOnly,
+        cursor
+      );
+
+      if (!adminRes?.error) {
+        data = adminRes?.data || [];
+      } else {
+        queryError = adminRes.error;
+      }
+    }
+
+    // Fallback gracefully to the caller's RLS-authenticated session client
+    if (data === null) {
+      const userRes = await fetchNotificationsWithClient(
+        supabase,
+        user.id,
+        limit,
+        unreadOnly,
+        cursor
+      );
+
+      if (!userRes?.error) {
+        data = userRes?.data || [];
+        queryError = null;
+      } else {
+        queryError = userRes.error || queryError;
+      }
+    }
+
+    if (queryError) {
+      const msg = String(queryError?.message || "Failed to fetch notifications");
+      const isAuthz =
+        queryError?.code === "42501" ||
+        /permission denied|row-level security|forbidden/i.test(msg);
+      return NextResponse.json(
+        { error: msg },
+        { status: isAuthz ? 403 : 500 }
+      );
     }
 
     const items = (data || []).filter(

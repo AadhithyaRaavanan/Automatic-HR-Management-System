@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { Database } from "@/types/database.types";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { requireApprovedUser } from "@/features/auth/require-approved-user";
+import {
+  DEFAULT_MAX_BREAK_MINUTES,
+  parseNoteBreaks,
+  serializeNoteBreaks,
+} from "@/features/attendance/break-note";
+import { resolveOrgMaxBreakMinutes } from "@/features/attendance/break-timeout";
 
 export const dynamic = "force-dynamic";
 
@@ -13,50 +19,6 @@ export interface AttendanceBreakPayload {
   endTime?: string | null;
   durationMinutes?: number;
   status: "active" | "completed";
-}
-
-interface ParsedBreakItem {
-  id: string;
-  type: "short_break" | "lunch_break";
-  startTime: string;
-  endTime: string | null;
-  durationMinutes: number;
-  status: "active" | "completed";
-}
-
-interface NoteState {
-  originalNote?: string;
-  breaks: ParsedBreakItem[];
-}
-
-function parseNoteBreaks(rawNote: string | null): NoteState {
-  if (!rawNote) return { originalNote: "", breaks: [] };
-  try {
-    const parsed = JSON.parse(rawNote);
-    if (parsed && Array.isArray(parsed.breaks)) {
-      return {
-        originalNote: parsed.originalNote || "",
-        breaks: parsed.breaks,
-      };
-    }
-    // Legacy single-break payload format
-    if (parsed && parsed.breakType) {
-      return {
-        originalNote: "",
-        breaks: [
-          {
-            id: "legacy",
-            type: parsed.breakType,
-            startTime: new Date().toISOString(),
-            endTime: parsed.status === "completed" ? new Date().toISOString() : null,
-            durationMinutes: parsed.durationMinutes || 0,
-            status: parsed.status || "completed",
-          },
-        ],
-      };
-    }
-  } catch {}
-  return { originalNote: rawNote, breaks: [] };
 }
 
 // GET active/completed breaks for current user today
@@ -95,10 +57,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const adminClient = getAdminClient();
     const todayStr = new Date().toISOString().slice(0, 10);
 
+    // Resolve employee organization & max break limit
+    const { data: empRow } = await (adminClient as any)
+      .from("employees")
+      .select("organization_id")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const maxBreakMinutes = await resolveOrgMaxBreakMinutes(
+      adminClient,
+      empRow?.organization_id || null
+    ).catch(() => DEFAULT_MAX_BREAK_MINUTES);
+
     // Fetch user's active session or today's sessions
-    const { data: sessions } = await (supabaseAdmin as any)
+    const { data: sessions } = await (adminClient as any)
       .from("attendance_sessions")
       .select("id, work_date, check_in_at, check_out_at, note")
       .eq("employee_id", user.id)
@@ -127,6 +102,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       breaks: allBreaks,
       activeBreak,
+      maxBreakMinutes,
       shortBreakTaken: shortBreakCount >= 1,
       lunchBreakTaken: lunchBreakCount >= 1,
       canTakeShortBreak: shortBreakCount < 1 && !activeBreak,
@@ -178,11 +154,12 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json().catch(() => ({}));
     const { action, breakType } = body;
+    const adminClient = getAdminClient();
     const todayStr = new Date().toISOString().slice(0, 10);
     const nowIso = new Date().toISOString();
 
     // 1. Fetch user's currently open/active attendance session
-    const { data: activeSession, error: sessErr } = await (supabaseAdmin as any)
+    const { data: activeSession, error: sessErr } = await (adminClient as any)
       .from("attendance_sessions")
       .select("id, employee_id, work_date, check_in_at, check_out_at, note")
       .eq("employee_id", user.id)
@@ -246,17 +223,34 @@ export async function POST(request: NextRequest) {
         status: "active",
       });
 
-      const updatedNote = JSON.stringify({
+      const updatedNote = serializeNoteBreaks({
+        ...noteState,
         originalNote: noteState.originalNote || activeSession.note || "",
+        lastSeenAt: nowIso,
         breaks: noteState.breaks,
       });
 
-      const { error: updateErr } = await (supabaseAdmin as any)
+      let { error: updateErr } = await (adminClient as any)
         .from("attendance_sessions")
         .update({
           note: updatedNote,
+          break_started_at: nowIso,
+          last_seen_at: nowIso,
         })
         .eq("id", activeSession.id);
+
+      if (
+        updateErr &&
+        (updateErr.code === "PGRST204" ||
+          updateErr.code === "42703" ||
+          /column .* does not exist|schema cache/i.test(String(updateErr.message || "")))
+      ) {
+        const fallback = await (adminClient as any)
+          .from("attendance_sessions")
+          .update({ note: updatedNote })
+          .eq("id", activeSession.id);
+        updateErr = fallback.error;
+      }
 
       if (updateErr) {
         return NextResponse.json({ error: updateErr.message }, { status: 500 });
@@ -291,17 +285,40 @@ export async function POST(request: NextRequest) {
       targetBreak.durationMinutes = durationMinutes;
       targetBreak.status = "completed";
 
-      const updatedNote = JSON.stringify({
+      const totalBreakMins = noteState.breaks.reduce(
+        (acc, b) => acc + (Number(b.durationMinutes) || 0),
+        0
+      );
+
+      const updatedNote = serializeNoteBreaks({
+        ...noteState,
         originalNote: noteState.originalNote || "",
+        lastSeenAt: nowIso,
         breaks: noteState.breaks,
       });
 
-      const { error: updateErr } = await (supabaseAdmin as any)
+      let { error: updateErr } = await (adminClient as any)
         .from("attendance_sessions")
         .update({
           note: updatedNote,
+          break_started_at: null,
+          break_duration_minutes: totalBreakMins,
+          last_seen_at: nowIso,
         })
         .eq("id", activeSession.id);
+
+      if (
+        updateErr &&
+        (updateErr.code === "PGRST204" ||
+          updateErr.code === "42703" ||
+          /column .* does not exist|schema cache/i.test(String(updateErr.message || "")))
+      ) {
+        const fallback = await (adminClient as any)
+          .from("attendance_sessions")
+          .update({ note: updatedNote })
+          .eq("id", activeSession.id);
+        updateErr = fallback.error;
+      }
 
       if (updateErr) {
         return NextResponse.json({ error: updateErr.message }, { status: 500 });

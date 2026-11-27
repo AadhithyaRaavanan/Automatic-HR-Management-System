@@ -302,6 +302,31 @@ describe("Phase 3 Admin User & Audit API Route Guards", () => {
       const res = await inviteRoute(req);
       expect(res.status).toBe(403);
     });
+
+    it("fails fast with HTTP 500 and a clear message when SUPABASE_SERVICE_ROLE_KEY is missing", async () => {
+      const prevUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const prevKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+      delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+      try {
+        setupAuthCaller({ authenticated: true, role: "admin", aal: "aal2" });
+        const req = new NextRequest("http://localhost:3000/api/admin/users/invite", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: "new@remotehr.io", fullName: "New Member" }),
+        });
+        const res = await inviteRoute(req);
+        const json = await res.json();
+        expect(res.status).toBe(500);
+        expect(json.success).toBe(false);
+        expect(json.error).toContain("SUPABASE_SERVICE_ROLE_KEY is missing");
+      } finally {
+        if (prevUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+        else process.env.NEXT_PUBLIC_SUPABASE_URL = prevUrl;
+        if (prevKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+        else process.env.SUPABASE_SERVICE_ROLE_KEY = prevKey;
+      }
+    });
   });
 });
 

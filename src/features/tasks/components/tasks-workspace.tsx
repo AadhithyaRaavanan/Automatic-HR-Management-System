@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { FEATURES } from "@/lib/features";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 import { AppShell, useAppSession } from "@/components/shell/app-shell";
 import { StatusPill } from "@/components/shared/status-pill";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -69,8 +70,24 @@ function TasksWorkspaceContent() {
     fullName: currentUserName,
     userEmail: currentUserEmail,
   } = useAppSession();
+  const canShowAdminToggle =
+    process.env.NODE_ENV === "development" || isDemoModeEnabled();
+  const [adminModeEnabled, setAdminModeEnabled] = React.useState<boolean>(
+    () => userRole === "admin"
+  );
+  React.useEffect(() => {
+    setAdminModeEnabled(userRole === "admin");
+  }, [userRole]);
+  const effectiveCanDelete = canShowAdminToggle
+    ? adminModeEnabled
+    : userRole === "admin";
+
   const { data, isLoading, isError, refetch } = useTasksData(Boolean(userId));
-  const mutations = useTaskMutations(userRole, userId);
+  const mutations = useTaskMutations(
+    userRole,
+    userId,
+    canShowAdminToggle ? adminModeEnabled : undefined
+  );
   const isRegularEmployee = userRole === "employee" || userRole === "team_lead";
 
   const [viewMode, setViewMode] = React.useState<"board" | "list">("board");
@@ -235,12 +252,6 @@ function TasksWorkspaceContent() {
   const [logTimeMinutes, setLogTimeMinutes] = React.useState<string>("60");
   const [logTimeNote, setLogTimeNote] = React.useState<string>("");
 
-  React.useEffect(() => {
-    if (userId && !newAssigneeId) {
-      setNewAssigneeId(userId);
-    }
-  }, [userId, newAssigneeId]);
-
   // Create project form state
   const [projName, setProjName] = React.useState("");
   const [projCode, setProjCode] = React.useState("");
@@ -324,6 +335,8 @@ function TasksWorkspaceContent() {
     return undefined;
   }, [employees, userId, currentUserName, currentUserEmail]);
 
+  const currentEmployeeId = currentUserEmp?.id || null;
+
   const actualCurrentUserName = React.useMemo(() => {
     const empName = currentUserEmp?.full_name?.trim();
     if (empName && empName !== "You") return empName;
@@ -338,6 +351,7 @@ function TasksWorkspaceContent() {
   const isCurrentUserEmployee = React.useCallback(
     (emp: { id: string; full_name?: string | null; email?: string | null }) => {
       if (userId && emp.id === userId) return true;
+      if (currentEmployeeId && emp.id === currentEmployeeId) return true;
       const empName = emp.full_name?.trim().toLowerCase();
       if (
         actualCurrentUserName &&
@@ -356,13 +370,45 @@ function TasksWorkspaceContent() {
       }
       return false;
     },
-    [userId, actualCurrentUserName, currentUserEmail]
+    [userId, currentEmployeeId, actualCurrentUserName, currentUserEmail]
+  );
+
+  const isAssignedToMe = React.useCallback(
+    (
+      task: Pick<TaskRecord, "assignee_id"> & {
+        assignee?: { full_name?: string | null } | null;
+      }
+    ) => {
+      if (!task.assignee_id) return false;
+      if (userId && task.assignee_id === userId) return true;
+      if (currentEmployeeId && task.assignee_id === currentEmployeeId) return true;
+      const empMatch = employees.find((e) => e.id === task.assignee_id);
+      if (empMatch && isCurrentUserEmployee(empMatch)) return true;
+      const assigneeName =
+        task.assignee?.full_name?.trim().toLowerCase() ||
+        employeeNameMap.get(task.assignee_id)?.trim().toLowerCase();
+      if (
+        actualCurrentUserName &&
+        assigneeName &&
+        assigneeName === actualCurrentUserName.trim().toLowerCase()
+      ) {
+        return true;
+      }
+      return false;
+    },
+    [
+      userId,
+      currentEmployeeId,
+      employees,
+      isCurrentUserEmployee,
+      employeeNameMap,
+      actualCurrentUserName,
+    ]
   );
 
   const formatPerson = (id: string | null) => {
     if (!id) return "Unassigned";
-    const empMatch = employees.find((e) => e.id === id);
-    if (id === userId || (empMatch && isCurrentUserEmployee(empMatch))) {
+    if (isAssignedToMe({ assignee_id: id })) {
       const mapName = employeeNameMap.get(id)?.trim();
       const resolved =
         (mapName && mapName !== "You" ? mapName : null) || actualCurrentUserName;
@@ -411,12 +457,21 @@ function TasksWorkspaceContent() {
     }
 
     const deduped: typeof employees = [];
+    const seenIds = new Set<string>();
+    const seenEmails = new Set<string>();
     let seenSelf = false;
     for (const emp of list) {
+      if (!emp?.id) continue;
       if (isCurrentUserEmployee(emp)) {
         if (seenSelf) continue;
         seenSelf = true;
       }
+      const idKey = emp.id.trim();
+      const emailKey = emp.email?.trim().toLowerCase() || "";
+      if (seenIds.has(idKey)) continue;
+      if (emailKey && seenEmails.has(emailKey)) continue;
+      seenIds.add(idKey);
+      if (emailKey) seenEmails.add(emailKey);
       deduped.push(emp);
     }
 
@@ -1149,7 +1204,7 @@ function TasksWorkspaceContent() {
     setSelectedTypeId("");
     setNewTitle("");
     setNewDescription("");
-    setNewAssigneeId(userId || "");
+    setNewAssigneeId("");
     setNewPriority("medium");
     setNewDueDate(getPresetDateIso(0));
     setDueDateError("");
@@ -1179,10 +1234,18 @@ function TasksWorkspaceContent() {
     setDueDateError("");
     const totalMinutes =
       (parseInt(estHours || "0", 10) * 60) + parseInt(estMinutes || "0", 10);
-    const effectiveAssigneeId = isRegularEmployee
-      ? userId || null
-      : newAssigneeId || null;
-    const isSelf = Boolean(effectiveAssigneeId && effectiveAssigneeId === userId);
+    const effectiveAssigneeId = newAssigneeId || null;
+    if (
+      isRegularEmployee &&
+      effectiveAssigneeId &&
+      !isAssignedToMe({ assignee_id: effectiveAssigneeId })
+    ) {
+      toast.error("Employees can only leave tasks Unassigned or assign to themselves");
+      return;
+    }
+    const isSelf = Boolean(
+      effectiveAssigneeId && isAssignedToMe({ assignee_id: effectiveAssigneeId })
+    );
 
     try {
       await mutations.createTask.mutateAsync({
@@ -1210,6 +1273,7 @@ function TasksWorkspaceContent() {
           : null,
       });
 
+      setNewAssigneeId("");
       setCreateTaskOpen(false);
     } catch {
       // Toast handled in mutation onError
@@ -1269,7 +1333,11 @@ function TasksWorkspaceContent() {
     }
   };
 
-  const isAdmin = userRole === "admin";
+  const requireAdminDelete = () => {
+    if (effectiveCanDelete) return true;
+    toast.error("Only Admins can delete tasks and projects.");
+    return false;
+  };
   const canManageProjects =
     userRole === "manager" || userRole === "hr" || userRole === "admin";
 
@@ -1318,6 +1386,34 @@ function TasksWorkspaceContent() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          {canShowAdminToggle && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={adminModeEnabled}
+              onClick={() => setAdminModeEnabled((prev) => !prev)}
+              className={cn(
+                "inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors",
+                adminModeEnabled
+                  ? "bg-black text-white border-black"
+                  : "bg-[#F5F5F5] text-[#4D4D4D] border-[#E6E6E6] hover:text-black"
+              )}
+              title="Toggle Admin delete permission check for testing"
+            >
+              <span>Admin Mode</span>
+              <span
+                className={cn(
+                  "px-1.5 py-0.5 rounded text-[10px] font-bold uppercase",
+                  adminModeEnabled
+                    ? "bg-[#B7FF00] text-black"
+                    : "bg-white text-[#808080] border border-[#E6E6E6]"
+                )}
+              >
+                {adminModeEnabled ? "ON" : "OFF"}
+              </span>
+            </button>
+          )}
+
           {canManageProjects && (
             <button
               type="button"
@@ -1674,11 +1770,12 @@ function TasksWorkspaceContent() {
             setProjectFilter(val);
           }}
         />
-        {isAdmin && projectFilter !== "all" && projectFilter !== "none" && (
+        {projectFilter !== "all" && projectFilter !== "none" && (
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
+              if (!requireAdminDelete()) return;
               const targetProj = projects.find((p) => p.id === projectFilter);
               if (targetProj) {
                 setProjectToDelete({
@@ -2178,17 +2275,18 @@ function TasksWorkspaceContent() {
                     </button>
 
                     {/* Delete (Admin only) */}
-                    {isAdmin && (
-                      <button
-                        type="button"
-                        disabled={isBulkUpdating}
-                        onClick={() => setBulkDeleteConfirmOpen(true)}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-xs font-semibold text-[#FF1493] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>{isBulkUpdating ? "Updating..." : "Delete"}</span>
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      disabled={isBulkUpdating}
+                      onClick={() => {
+                        if (!requireAdminDelete()) return;
+                        setBulkDeleteConfirmOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-xs font-semibold text-[#FF1493] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{isBulkUpdating ? "Updating..." : "Delete"}</span>
+                    </button>
                   </div>
                 </>
               )}
@@ -2202,11 +2300,11 @@ function TasksWorkspaceContent() {
           </div>
 
           {/* Scrollable Sticky-Header Table */}
-          <div className="flex-1 min-h-0 overflow-auto [scrollbar-gutter:stable]">
-            <table className="w-full text-sm text-left border-collapse">
+          <div className="flex-1 min-h-0 min-w-0 w-full overflow-x-auto overflow-y-auto">
+            <table className="w-full min-w-[780px] table-fixed text-sm text-left border-collapse">
               <thead className="sticky top-0 bg-[#F5F5F5] z-10 border-b border-[#E6E6E6]">
                 <tr>
-                  <th className="py-2.5 px-3 w-10">
+                  <th className="py-2.5 px-2.5 w-9">
                     <input
                       type="checkbox"
                       aria-label="Select all visible tasks"
@@ -2228,7 +2326,7 @@ function TasksWorkspaceContent() {
                       className="h-3.5 w-3.5 rounded border-[#B3B3B3] accent-black cursor-pointer align-middle"
                     />
                   </th>
-                  <th className="py-2.5 px-3">
+                  <th className="py-2.5 px-3 min-w-0">
                     <SortableTableHeader
                       label="Task Title"
                       column="title"
@@ -2237,7 +2335,7 @@ function TasksWorkspaceContent() {
                       onSort={handleSortTableColumn}
                     />
                   </th>
-                  <th className="py-2.5 px-3">
+                  <th className="py-2.5 px-2.5 w-[136px]">
                     <SortableTableHeader
                       label="Assignee"
                       column="assignee"
@@ -2246,7 +2344,7 @@ function TasksWorkspaceContent() {
                       onSort={handleSortTableColumn}
                     />
                   </th>
-                  <th className="py-2.5 px-3">
+                  <th className="py-2.5 px-2.5 w-[196px]">
                     <SortableTableHeader
                       label="Status"
                       column="status"
@@ -2255,7 +2353,7 @@ function TasksWorkspaceContent() {
                       onSort={handleSortTableColumn}
                     />
                   </th>
-                  <th className="py-2.5 px-3">
+                  <th className="py-2.5 px-2.5 w-[92px]">
                     <SortableTableHeader
                       label="Priority"
                       column="priority"
@@ -2264,10 +2362,10 @@ function TasksWorkspaceContent() {
                       onSort={handleSortTableColumn}
                     />
                   </th>
-                  <th className="py-2.5 px-3 text-[11px] font-bold uppercase tracking-wider text-[#4D4D4D] whitespace-nowrap">
-                    Type / Schedule
+                  <th className="py-2.5 px-2.5 w-[116px] text-[11px] font-bold uppercase tracking-wider text-[#4D4D4D] whitespace-nowrap truncate">
+                    Type / Sched.
                   </th>
-                  <th className="py-2.5 px-3">
+                  <th className="py-2.5 px-3 w-[126px]">
                     <SortableTableHeader
                       label="Due Date"
                       column="due_date"
@@ -2294,8 +2392,7 @@ function TasksWorkspaceContent() {
                         projectName={
                           task.project_id ? projectNameMap.get(task.project_id) : null
                         }
-                        userId={userId}
-                        canManageProjects={canManageProjects}
+                        isAssignedToCurrentUser={isAssignedToMe(task)}
                         isSelected={selectedTaskIds.has(task.id)}
                         isStatusPending={mutations.updateTaskStatus.isPending}
                         onToggleSelect={toggleTableTaskSelection}
@@ -2370,25 +2467,26 @@ function TasksWorkspaceContent() {
                             className="bg-[#FAFAFA] hover:bg-[#F2F2F2] cursor-pointer transition-colors"
                           >
                             <td colSpan={7} className="py-2 px-3">
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2">
+                              <div className="flex items-center justify-between gap-2 min-w-0 w-full">
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
                                   {isExpanded ? (
-                                    <ChevronDown className="w-3.5 h-3.5 text-[#4D4D4D]" />
+                                    <ChevronDown className="w-3.5 h-3.5 text-[#4D4D4D] shrink-0" />
                                   ) : (
-                                    <ChevronRight className="w-3.5 h-3.5 text-[#4D4D4D]" />
+                                    <ChevronRight className="w-3.5 h-3.5 text-[#4D4D4D] shrink-0" />
                                   )}
                                   <span className="w-5 h-5 rounded-md bg-[#E6E6E6] text-black flex items-center justify-center shrink-0">
                                     <Layers className="w-3 h-3" />
                                   </span>
                                   <span
+                                    title={group.label}
                                     className={cn(
-                                      "text-xs font-bold",
+                                      "text-xs font-bold truncate",
                                       group.isUnassignedProject ? "text-[#808080]" : "text-black"
                                     )}
                                   >
                                     {group.label}
                                   </span>
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white border border-[#E6E6E6] text-[#4D4D4D]">
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white border border-[#E6E6E6] text-[#4D4D4D] shrink-0">
                                     {group.tasks.length}{" "}
                                     {group.tasks.length === 1 ? "task" : "tasks"}
                                   </span>
@@ -2409,24 +2507,23 @@ function TasksWorkspaceContent() {
                                       <Plus className="w-3 h-3" />
                                       <span>Add task</span>
                                     </button>
-                                    {isAdmin && (
-                                      <button
-                                        type="button"
-                                        aria-label={`Delete project ${group.label}`}
-                                        title={`Delete project ${group.label}`}
-                                        onMouseDown={(e) => e.preventDefault()}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setProjectToDelete({
-                                            id: group.key,
-                                            name: group.label,
-                                          });
-                                        }}
-                                        className="p-1 rounded-md text-[#808080] hover:text-[#FF1493] hover:bg-red-50 transition-colors cursor-pointer shrink-0"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    )}
+                                    <button
+                                      type="button"
+                                      aria-label={`Delete project ${group.label}`}
+                                      title={`Delete project ${group.label}`}
+                                      onMouseDown={(e) => e.preventDefault()}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (!requireAdminDelete()) return;
+                                        setProjectToDelete({
+                                          id: group.key,
+                                          name: group.label,
+                                        });
+                                      }}
+                                      className="p-1 rounded-md text-[#808080] hover:text-[#FF1493] hover:bg-red-50 transition-colors cursor-pointer shrink-0"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
                                   </div>
                                 )}
                               </div>
@@ -2643,17 +2740,24 @@ function TasksWorkspaceContent() {
                   Assignee
                 </label>
                 {isRegularEmployee ? (
-                  <div
+                  <select
                     aria-label="Task Assignee"
-                    className="w-full px-3 py-2 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] text-xs font-semibold text-black flex items-center justify-between gap-2"
+                    value={newAssigneeId}
+                    onChange={(e) => {
+                      setNewAssigneeId(e.target.value);
+                      editedFields.current.add("assignee");
+                    }}
+                    className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black focus:outline-none focus:border-black"
                   >
-                    <span>
-                      {actualCurrentUserName ? `You (${actualCurrentUserName})` : "You"}
-                    </span>
-                    <span className="text-[10px] font-medium text-[#808080]">
-                      Self-assigned only
-                    </span>
-                  </div>
+                    <option value="">Unassigned</option>
+                    {assignableEmployees
+                      .filter((emp) => isCurrentUserEmployee(emp))
+                      .map((emp) => (
+                        <option key={emp.id} value={emp.id}>
+                          {formatAssigneeOptionLabel(emp)}
+                        </option>
+                      ))}
+                  </select>
                 ) : (
                   <>
                     <select
@@ -3348,7 +3452,10 @@ function TasksWorkspaceContent() {
               </div>
             )}
             {/* Parent Task Completion Gentle Banner (Phase 4) */}
-            {parentSubtasks.length > 0 && allSubtasksDone && selectedTask.status === "in_progress" && (
+            {parentSubtasks.length > 0 &&
+              allSubtasksDone &&
+              selectedTask.status === "in_progress" &&
+              isAssignedToMe(selectedTask) && (
               <div className="p-3 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-black shrink-0" />
@@ -3415,7 +3522,7 @@ function TasksWorkspaceContent() {
             {/* Status & Assignment Controls */}
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                {selectedTask.status === "todo" && selectedTask.assignee_id === userId && (
+                {isAssignedToMe(selectedTask) && selectedTask.status === "todo" && (
                   <>
                     <button
                       type="button"
@@ -3445,8 +3552,7 @@ function TasksWorkspaceContent() {
                   </>
                 )}
 
-                {selectedTask.status === "in_progress" &&
-                  (selectedTask.assignee_id === userId || canManageProjects) && (
+                {isAssignedToMe(selectedTask) && selectedTask.status === "in_progress" && (
                     <>
                       <button
                         type="button"
@@ -3465,7 +3571,7 @@ function TasksWorkspaceContent() {
                       </button>
                     </>
                   )}
-                {selectedTask.status === "in_progress" && (selectedTask.assignee_id === userId || canManageProjects) && (
+                {isAssignedToMe(selectedTask) && selectedTask.status === "in_progress" && (
                     blockingTaskId === selectedTask.id ? (
                       <div className="w-full mt-2 p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
                         <label className="text-xs font-bold text-amber-900 block">
@@ -3523,7 +3629,7 @@ function TasksWorkspaceContent() {
                     )
                 )}
                 {/* 3. Blocked State Next Actions */}
-                {selectedTask.status === "blocked" && (selectedTask.assignee_id === userId || canManageProjects) && (
+                {selectedTask.status === "blocked" && (isAssignedToMe(selectedTask) || canManageProjects) && (
                   <button
                     type="button"
                     disabled={mutations.updateTaskStatus.isPending}
@@ -3587,7 +3693,12 @@ function TasksWorkspaceContent() {
                 {!isRegularEmployee && canReassignTask(selectedTask) ? (
                   <select
                     aria-label="Reassign task"
-                    value={selectedTask.assignee_id || ""}
+                    value={
+                      selectedTask.assignee_id && isAssignedToMe(selectedTask)
+                        ? assignableEmployees.find((e) => isCurrentUserEmployee(e))?.id ||
+                          selectedTask.assignee_id
+                        : selectedTask.assignee_id || ""
+                    }
                     onChange={(e) =>
                       mutations.assignTask.mutate({
                         taskId: selectedTask.id,
@@ -3658,19 +3769,20 @@ function TasksWorkspaceContent() {
                 </div>
               )}
 
-              {isAdmin && (
-                <div className="flex items-center justify-end pt-1">
-                  <button
-                    type="button"
-                    disabled={mutations.deleteTask.isPending}
-                    onClick={() => setTaskToDelete(selectedTask)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-[#FF1493] border border-red-200 text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Delete Task</span>
-                  </button>
-                </div>
-              )}
+              <div className="flex items-center justify-end pt-1">
+                <button
+                  type="button"
+                  disabled={mutations.deleteTask.isPending}
+                  onClick={() => {
+                    if (!requireAdminDelete()) return;
+                    setTaskToDelete(selectedTask);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-[#FF1493] border border-red-200 text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Task</span>
+                </button>
+              </div>
             </div>
 
             {/* Cancellation Option */}
@@ -3883,7 +3995,7 @@ function TasksWorkspaceContent() {
       )}
 
       {/* Bulk Delete Confirmation Modal (Admin only) */}
-      {isAdmin && bulkDeleteConfirmOpen && (
+      {effectiveCanDelete && bulkDeleteConfirmOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
           onClick={(e) => {
@@ -3936,7 +4048,7 @@ function TasksWorkspaceContent() {
       )}
 
       {/* Single Task Delete Confirmation Modal (Admin only) */}
-      {isAdmin && taskToDelete && (
+      {effectiveCanDelete && taskToDelete && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
           onClick={(e) => {
@@ -3999,7 +4111,7 @@ function TasksWorkspaceContent() {
       )}
 
       {/* Delete Project Confirmation Modal (Admin only) */}
-      {isAdmin && projectToDelete && (
+      {effectiveCanDelete && projectToDelete && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
           onClick={(e) => {

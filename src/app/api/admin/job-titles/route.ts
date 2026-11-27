@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { verifyAdminRouteCaller } from "@/features/auth/admin-guard";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getAdminClient, supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdminConfigError } from "@/lib/supabase/admin-config";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 
@@ -204,21 +206,28 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const authResult = await verifyAdminRouteCaller(request, ["admin", "hr"]);
+  const authResult = await verifyAdminRouteCaller(request, ["admin"]);
   if ("response" in authResult) {
     return authResult.response;
   }
   const { context } = authResult;
 
+  const adminConfigError = getSupabaseAdminConfigError();
+  if (adminConfigError) {
+    return NextResponse.json({ error: adminConfigError }, { status: 500 });
+  }
+
   try {
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
+    const id = searchParams.get("id")?.trim();
 
     if (!id) {
       return NextResponse.json({ error: "Validation Error: 'id' parameter is required." }, { status: 400 });
     }
 
-    const { data: existing, error: findErr } = await (supabaseAdmin as any)
+    const adminClient = getAdminClient() as any;
+
+    const { data: existing, error: findErr } = await adminClient
       .from("job_titles")
       .select("id, title_name, organization_id")
       .eq("id", id)
@@ -232,7 +241,23 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Job title not found in your organization." }, { status: 404 });
     }
 
-    const { error: deleteErr } = await (supabaseAdmin as any)
+    // Clear designation references on employees and organization_members before deleting job title
+    try {
+      await Promise.all([
+        adminClient
+          .from("employees")
+          .update({ job_title_id: null })
+          .eq("job_title_id", id)
+          .eq("organization_id", context.organizationId),
+        adminClient
+          .from("organization_members")
+          .update({ job_title_id: null })
+          .eq("job_title_id", id)
+          .eq("organization_id", context.organizationId),
+      ]);
+    } catch {}
+
+    const { error: deleteErr } = await adminClient
       .from("job_titles")
       .delete()
       .eq("id", id)
@@ -245,15 +270,23 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: deleteErr.message }, { status: 400 });
     }
 
-    await supabaseAdmin.from("audit_logs").insert({
-      organization_id: context.organizationId,
-      actor_id: context.userId,
-      action: "JOB_TITLE_DELETED",
-      table_name: "job_titles",
-      record_id: id,
-      old_data: existing,
-      new_data: null,
-    });
+    try {
+      await adminClient.from("audit_logs").insert({
+        organization_id: context.organizationId,
+        actor_id: context.userId,
+        action: "JOB_TITLE_DELETED",
+        table_name: "job_titles",
+        record_id: id,
+        old_data: existing,
+        new_data: null,
+      });
+    } catch {}
+
+    revalidatePath("/ems");
+    revalidatePath("/ems/designations");
+    revalidatePath("/ems/employees");
+    revalidatePath("/employees");
+    revalidatePath("/admin/users");
 
     return NextResponse.json({ success: true, deletedId: id });
   } catch (err: any) {

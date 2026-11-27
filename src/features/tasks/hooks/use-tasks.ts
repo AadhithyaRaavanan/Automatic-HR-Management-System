@@ -7,11 +7,11 @@ import { TaskPriority, TaskStatus } from "@/types/database.types";
 import { toast } from "sonner";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import { TaskType, TaskRecurrence } from "@/features/tasks/types";
+import { sanitizeAndDedupeAssignees } from "@/features/tasks/assignees";
 import {
   getStoredDepartments,
   getStoredProjects,
   getStoredTasks,
-  getStoredUsers,
   addStoredProject,
   deleteStoredProject,
   addStoredTask,
@@ -53,6 +53,11 @@ export interface TaskRecord {
   recurrence_id?: string | null;
   auto_due_suggested?: boolean;
   goal_id?: string | null;
+  project?: {
+    id?: string;
+    name?: string | null;
+    code?: string | null;
+  } | null;
 }
 
 export interface TaskCommentRecord {
@@ -169,33 +174,47 @@ export function useTasksData(enabled = true) {
       let recurrencesData: TaskRecurrence[] = [];
 
       try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session?.access_token) {
+          throw new Error("No active Supabase session");
+        }
+
+        const currentUser = session.user;
+        const currentUserEmail = currentUser?.email || null;
+        const currentUserMetaName =
+          (currentUser?.user_metadata?.full_name as string | undefined) ||
+          (currentUser?.user_metadata?.name as string | undefined) ||
+          null;
+
         let tasksResPromise = supabase
           .from("tasks")
           .select(
-            "id, organization_id, project_id, parent_task_id, title, description, creator_id, assignee_id, status, priority, due_date, estimated_minutes, started_at, completed_at, cancelled_at, created_at, updated_at, task_type_id, recurrence_id, auto_due_suggested"
+            "id, organization_id, project_id, parent_task_id, title, description, creator_id, assignee_id, status, priority, due_date, estimated_minutes, started_at, completed_at, cancelled_at, created_at, updated_at, task_type_id, recurrence_id, auto_due_suggested, project:projects(id, name, code)"
           )
           .order("created_at", { ascending: false });
 
-        const [tasksResAttempt, projectsRes, employeesRes, departmentsRes, membersRes, typesRes, recurrencesRes] =
+        const [tasksResAttempt, projectsRes, assigneesApiRes, departmentsRes, typesRes, recurrencesRes] =
           await Promise.all([
             tasksResPromise,
             supabase
               .from("projects")
               .select("id, organization_id, department_id, name, code, description, status, created_by, created_at")
               .order("name", { ascending: true }),
-            supabase
-              .from("employees")
-              .select("id, full_name, email, manager_id, status")
-              .eq("status", "active")
-              .order("full_name", { ascending: true }),
+            fetch("/api/tasks/assignees", {
+              cache: "no-store",
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+              },
+            })
+              .then(async (r) => (r.ok ? await r.json() : null))
+              .catch(() => null),
             supabase
               .from("departments")
               .select("id, name, code")
               .order("name", { ascending: true }),
-            supabase
-              .from("organization_members")
-              .select("user_id, role")
-              .eq("status", "active"),
             fetch("/api/tasks/types").then((r) => (r.ok ? r.json() : { types: [] })).catch(() => ({ types: [] })),
             fetch("/api/tasks/recurrences").then((r) => (r.ok ? r.json() : { recurrences: [] })).catch(() => ({ recurrences: [] })),
           ]);
@@ -210,34 +229,97 @@ export function useTasksData(enabled = true) {
             .order("created_at", { ascending: false });
         }
 
-        if (finalTasksRes.error) throw finalTasksRes.error;
-        const roleMap = new Map<string, string>();
-        if (membersRes?.data) {
-          for (const m of (membersRes.data as any[])) {
-            if (m?.user_id && m?.role) {
-              roleMap.set(m.user_id, m.role);
+        if (Array.isArray(assigneesApiRes?.assignees)) {
+          employeesData = sanitizeAndDedupeAssignees(assigneesApiRes.assignees, {
+            userId: currentUser?.id,
+            email: currentUserEmail,
+            fullName: currentUserMetaName,
+          });
+        } else {
+          // Direct org-scoped browser fallback when /api/tasks/assignees is unavailable (never demo-store mocks)
+          const selfMemberRes = currentUser?.id
+            ? await supabase
+                .from("organization_members")
+                .select("organization_id, role")
+                .eq("user_id", currentUser.id)
+                .eq("status", "active")
+                .maybeSingle()
+            : { data: null, error: null };
+
+          const callerOrgId: string | null =
+            (selfMemberRes?.data as any)?.organization_id ||
+            (currentUser?.app_metadata?.organization_id as string | undefined) ||
+            (currentUser?.user_metadata?.organization_id as string | undefined) ||
+            null;
+
+          let empQuery = supabase
+            .from("employees")
+            .select("id, full_name, email, manager_id, status")
+            .eq("status", "active")
+            .order("full_name", { ascending: true });
+          if (callerOrgId) {
+            empQuery = empQuery.eq("organization_id", callerOrgId);
+          }
+
+          let membersQuery = supabase
+            .from("organization_members")
+            .select("user_id, role")
+            .eq("status", "active");
+          if (callerOrgId) {
+            membersQuery = membersQuery.eq("organization_id", callerOrgId);
+          }
+
+          const [employeesRes, membersRes] = await Promise.all([empQuery, membersQuery]);
+
+          const roleMap = new Map<string, string>();
+          if (membersRes?.data) {
+            for (const m of membersRes.data as any[]) {
+              if (m?.user_id && m?.role) {
+                roleMap.set(m.user_id, String(m.role).toLowerCase());
+              }
             }
           }
+
+          const rawDbEmployees: VisibleEmployeeOption[] = (employeesRes?.data || []).map((emp: any) => ({
+            ...emp,
+            role: roleMap.get(emp.id) || "employee",
+          }));
+
+          if (currentUser?.id) {
+            rawDbEmployees.push({
+              id: currentUser.id,
+              full_name:
+                currentUserMetaName ||
+                (currentUserEmail ? currentUserEmail.split("@")[0] : null),
+              email: currentUserEmail || "",
+              manager_id: null,
+              status: "active",
+              role:
+                roleMap.get(currentUser.id) ||
+                (currentUser.app_metadata?.user_role as string | undefined) ||
+                (currentUser.user_metadata?.user_role as string | undefined) ||
+                "employee",
+            });
+          }
+
+          employeesData = sanitizeAndDedupeAssignees(rawDbEmployees, {
+            userId: currentUser?.id,
+            email: currentUserEmail,
+            fullName: currentUserMetaName,
+          });
         }
 
         if (finalTasksRes?.data) tasksData = finalTasksRes.data;
         if (projectsRes?.data) projectsData = projectsRes.data;
-        if (employeesRes?.data) {
-          employeesData = employeesRes.data.map((emp: any) => ({
-            ...emp,
-            role: roleMap.get(emp.id) || "employee",
-          }));
-        }
         if (departmentsRes?.data) departmentsData = departmentsRes.data;
         if (typesRes?.types) taskTypesData = typesRes.types;
         if (recurrencesRes?.recurrences) recurrencesData = recurrencesRes.recurrences;
-      } catch (error) {
-        if (!isDemoModeEnabled()) throw error;
+      } catch {
+        // Fallback gracefully without injecting mock users
       }
 
       const storedDepts = isDemoModeEnabled() ? getStoredDepartments() : [];
       const storedProjects = isDemoModeEnabled() ? getStoredProjects() : [];
-      const storedEmployees = isDemoModeEnabled() ? getStoredUsers() : [];
       const storedTasks = isDemoModeEnabled() ? getStoredTasks() : [];
 
       // Active departments (prioritizes user-created demo store to honor deletions)
@@ -250,36 +332,29 @@ export function useTasksData(enabled = true) {
         }
       }
 
-      // Merge projects: database is authoritative in production
-      const mergedProjects: ProjectRecord[] =
-        !isDemoModeEnabled() && projectsData
-          ? projectsData
-          : [
-              ...storedProjects.map((p) => ({
-                id: p.id,
-                organization_id: "",
-                department_id: p.department_id || null,
-                name: p.name,
-                code: p.code,
-                description: p.description || null,
-                status: p.status || "active",
-                created_by: "",
-                created_at: p.created_at || new Date().toISOString(),
-              })),
-            ];
+      // Merge projects: database is authoritative in production, and preserve DB projects in dev fallback
+      const storedProjectItems: ProjectRecord[] = storedProjects.map((p) => ({
+        id: p.id,
+        organization_id: "",
+        department_id: p.department_id || null,
+        name: p.name,
+        code: p.code,
+        description: p.description || null,
+        status: p.status || "active",
+        created_by: "",
+        created_at: p.created_at || new Date().toISOString(),
+      }));
+      const mergedProjects: ProjectRecord[] = !isDemoModeEnabled()
+        ? projectsData || []
+        : [
+            ...storedProjectItems,
+            ...(projectsData || []).filter(
+              (dp) => !storedProjectItems.some((sp) => sp.id === dp.id)
+            ),
+          ];
 
-      // Visible employees: database is authoritative
-      const mergedEmployees: VisibleEmployeeOption[] =
-        employeesData && employeesData.length > 0
-          ? employeesData
-          : storedEmployees.map((u) => ({
-              id: u.id,
-              full_name: u.name,
-              email: u.email,
-              manager_id: null,
-              status: u.status,
-              role: u.role || "employee",
-            }));
+      // Real active organization members only — never fall back to hardcoded/demo-store placeholder users
+      const mergedEmployees: VisibleEmployeeOption[] = employeesData;
 
       // Merge tasks: database is authoritative in production
       const mergedTasks: TaskRecord[] =
@@ -366,7 +441,11 @@ export function useTaskDetails(taskId: string | null) {
   });
 }
 
-export function useTaskMutations(callerRole?: string | null, callerUserId?: string | null) {
+export function useTaskMutations(
+  callerRole?: string | null,
+  callerUserId?: string | null,
+  canDeleteOverride?: boolean
+) {
   const supabase = React.useMemo(() => createClient(), []);
   const queryClient = useQueryClient();
 
@@ -415,9 +494,15 @@ export function useTaskMutations(callerRole?: string | null, callerUserId?: stri
   };
 
   const assertAdminRole = async () => {
+    if (typeof canDeleteOverride === "boolean") {
+      if (!canDeleteOverride) {
+        throw new Error("Only Admins can delete tasks and projects.");
+      }
+      return;
+    }
     if (callerRole) {
       if (callerRole !== "admin") {
-        throw new Error("Only administrators can delete tasks or projects");
+        throw new Error("Only Admins can delete tasks and projects.");
       }
       return;
     }
@@ -425,14 +510,14 @@ export function useTaskMutations(callerRole?: string | null, callerUserId?: stri
       if (typeof window !== "undefined") {
         const cachedRole = localStorage.getItem("remotehr_cached_role");
         if (cachedRole && cachedRole !== "admin") {
-          throw new Error("Only administrators can delete tasks or projects");
+          throw new Error("Only Admins can delete tasks and projects.");
         }
       }
       return;
     }
     const { data: userRes } = await supabase.auth.getUser();
     if (!userRes?.user) {
-      throw new Error("Only administrators can delete tasks or projects");
+      throw new Error("Only Admins can delete tasks and projects.");
     }
     const { data: member } = await (supabase as any)
       .from("organization_members")
@@ -441,7 +526,7 @@ export function useTaskMutations(callerRole?: string | null, callerUserId?: stri
       .eq("status", "active")
       .maybeSingle();
     if (!member || member.role !== "admin") {
-      throw new Error("Only administrators can delete tasks or projects");
+      throw new Error("Only Admins can delete tasks and projects.");
     }
   };
 
@@ -594,8 +679,8 @@ export function useTaskMutations(callerRole?: string | null, callerUserId?: stri
     }) => {
       const caller = await resolveCallerIdentity();
       if (caller.role === "employee" || caller.role === "team_lead") {
-        if (!caller.userId || !input.assigneeId || input.assigneeId !== caller.userId) {
-          throw new Error("Employees can only assign tasks to themselves");
+        if (input.assigneeId && (!caller.userId || input.assigneeId !== caller.userId)) {
+          throw new Error("Employees cannot assign tasks to other employees");
         }
       }
 
@@ -762,6 +847,26 @@ export function useTaskMutations(callerRole?: string | null, callerUserId?: stri
   });
 
   const assignTask = useMutation({
+    onMutate: async (vars: {
+      taskId: string;
+      assigneeId: string | null;
+      silent?: boolean;
+    }) => {
+      await queryClient.cancelQueries({ queryKey: ["tasks-workspace"] });
+      const previousData = queryClient.getQueryData(["tasks-workspace"]);
+      queryClient.setQueryData(["tasks-workspace"], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          tasks: (old.tasks || []).map((t: any) =>
+            t.id === vars.taskId
+              ? { ...t, assignee_id: vars.assigneeId || null }
+              : t
+          ),
+        };
+      });
+      return { previousData };
+    },
     mutationFn: async (input: {
       taskId: string;
       assigneeId: string | null;
@@ -775,12 +880,16 @@ export function useTaskMutations(callerRole?: string | null, callerUserId?: stri
         if (!caller.userId || !input.assigneeId || input.assigneeId !== caller.userId) {
           throw new Error("Employees can only assign tasks to themselves");
         }
-        const cachedWorkspace = queryClient.getQueryData(["tasks-workspace"]) as
-          | { tasks?: TaskRecord[] }
-          | undefined;
-        const cachedTask = cachedWorkspace?.tasks?.find((t) => t.id === input.taskId);
-        const currentAssignee = target?.assignee_id ?? cachedTask?.assignee_id ?? null;
-        if (currentAssignee !== null) {
+        let currentAssignee: string | null = target?.assignee_id ?? null;
+        if (!target && !isDemoModeEnabled()) {
+          const { data: liveRow } = await (supabase as any)
+            .from("tasks")
+            .select("assignee_id")
+            .eq("id", input.taskId)
+            .maybeSingle();
+          currentAssignee = liveRow?.assignee_id ?? null;
+        }
+        if (currentAssignee !== null && currentAssignee !== caller.userId) {
           throw new Error("Employees cannot reassign assigned tasks");
         }
       }
@@ -813,7 +922,10 @@ export function useTaskMutations(callerRole?: string | null, callerUserId?: stri
         }).catch(() => {});
       }
     },
-    onError: (err: Error, vars) => {
+    onError: (err: Error, vars, context: any) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(["tasks-workspace"], context.previousData);
+      }
       if (!vars.silent) {
         toast.error(err.message || "Failed to update task assignee");
       }
@@ -965,7 +1077,10 @@ export function useTaskMutations(callerRole?: string | null, callerUserId?: stri
     },
     onError: (err: Error, vars) => {
       const silent = typeof vars === "object" && Boolean(vars.silent);
-      const isForbidden = err.message.includes("Only administrators");
+      const isForbidden =
+        err.message.includes("Only Admins") ||
+        err.message.includes("Only administrators") ||
+        err.message.includes("403 Forbidden");
       if (!silent || isForbidden) {
         toast.error(err.message || "Failed to delete task");
       }

@@ -34,8 +34,8 @@ export function DueBadge({
 export function TaskTypeBadge({ typeName }: { typeName: string | null | undefined }) {
   if (!typeName) return null;
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-[#F5F5F5] border border-[#E6E6E6] text-black">
-      {typeName}
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#F5F5F5] border border-[#E6E6E6] text-black max-w-full truncate">
+      <span className="truncate">{typeName}</span>
     </span>
   );
 }
@@ -155,7 +155,7 @@ export function SortableTableHeader({
       type="button"
       onClick={() => onSort(column)}
       className={cn(
-        "inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider cursor-pointer select-none transition-colors",
+        "inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider cursor-pointer select-none transition-colors whitespace-nowrap",
         isActive ? "text-black" : "text-[#4D4D4D] hover:text-black"
       )}
     >
@@ -179,8 +179,7 @@ interface TaskTableRowProps {
   initials: string;
   typeName: string | null | undefined;
   projectName: string | null | undefined;
-  userId: string | null;
-  canManageProjects: boolean;
+  isAssignedToCurrentUser: boolean;
   isSelected: boolean;
   isStatusPending: boolean;
   onToggleSelect: (taskId: string) => void;
@@ -199,8 +198,7 @@ export function TaskTableRow({
   initials,
   typeName,
   projectName,
-  userId,
-  canManageProjects,
+  isAssignedToCurrentUser,
   isSelected,
   isStatusPending,
   onToggleSelect,
@@ -209,11 +207,13 @@ export function TaskTableRow({
   onRejectTask,
   onCompleteTask,
 }: TaskTableRowProps) {
-  const canAcceptOrReject =
-    task.status === "todo" && task.assignee_id === userId;
-  const canActInProgress =
-    task.status === "in_progress" &&
-    (task.assignee_id === userId || canManageProjects);
+  const canActOnTask =
+    Boolean(task.assignee_id) &&
+    isAssignedToCurrentUser &&
+    task.status !== "done" &&
+    task.status !== "cancelled";
+  const canAcceptOrReject = canActOnTask && task.status === "todo";
+  const canActInProgress = canActOnTask && task.status === "in_progress";
 
   return (
     <tr
@@ -224,7 +224,7 @@ export function TaskTableRow({
       )}
     >
       <td
-        className="py-2.5 px-3 w-10 align-middle"
+        className="py-2.5 px-2.5 w-9 align-middle"
         onClick={(e) => e.stopPropagation()}
       >
         <input
@@ -235,45 +235,50 @@ export function TaskTableRow({
           className="h-3.5 w-3.5 rounded border-[#B3B3B3] accent-black cursor-pointer align-middle"
         />
       </td>
-      <td className="py-2.5 px-3 min-w-[220px] max-w-[340px]">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <button type="button"
+      <td className="py-2.5 px-3 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <button
+            type="button"
             className={cn(
-              "font-semibold text-xs text-black",
+              "font-semibold text-xs text-black truncate text-left",
               task.status === "cancelled" && "line-through text-[#808080]"
             )}
+            title={task.title}
           >
             {task.title}
           </button>
           {task.assignee_id && task.creator_id === task.assignee_id && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-[#F5F5F5] text-black border border-[#E6E6E6]">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-[#F5F5F5] text-black border border-[#E6E6E6] shrink-0">
               Self
             </span>
           )}
         </div>
         {projectName && (
-          <div className="mt-0.5 flex items-center gap-1.5">
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#F5F5F5] border border-[#E6E6E6] text-[#4D4D4D] truncate max-w-[200px]">
+          <div className="mt-0.5 flex items-center gap-1 min-w-0">
+            <span
+              title={projectName}
+              className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#F5F5F5] border border-[#E6E6E6] text-[#4D4D4D] truncate max-w-full"
+            >
               {projectName}
             </span>
           </div>
         )}
       </td>
-      <td className="py-2.5 px-3 whitespace-nowrap">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="w-6 h-6 rounded-full bg-[#E6E6E6] text-black font-semibold text-[10px] flex items-center justify-center shrink-0">
+      <td className="py-2.5 px-2.5 w-[136px] whitespace-nowrap">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="w-5 h-5 rounded-full bg-[#E6E6E6] text-black font-semibold text-[9px] flex items-center justify-center shrink-0">
             {initials}
           </span>
-          <span className="text-xs font-medium text-black truncate max-w-[160px]">
+          <span className="text-xs font-medium text-black truncate" title={assigneeName}>
             {assigneeName}
           </span>
         </div>
       </td>
       <td
-        className="py-2.5 px-3 whitespace-nowrap"
+        className="py-2.5 px-2.5 w-[196px] whitespace-nowrap"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1 flex-wrap">
           <StatusPill
             status={task.status}
             label={task.status === "done" ? "Completed" : undefined}
@@ -284,7 +289,7 @@ export function TaskTableRow({
                 type="button"
                 disabled={isStatusPending}
                 onClick={() => onUpdateStatus(task.id, "in_progress", "Accepted assigned task")}
-                className="px-2 py-1 rounded bg-black hover:bg-[#1A1A1A] text-white text-[10px] font-semibold cursor-pointer shadow-xs disabled:opacity-50"
+                className="px-1.5 py-0.5 rounded bg-black hover:bg-[#1A1A1A] text-white text-[10px] font-semibold cursor-pointer shadow-xs disabled:opacity-50"
               >
                 Accept
               </button>
@@ -292,7 +297,7 @@ export function TaskTableRow({
                 type="button"
                 disabled={isStatusPending}
                 onClick={() => onRejectTask(task)}
-                className="px-2 py-1 rounded border border-[#E6E6E6] bg-white hover:bg-red-50 hover:text-[#FF1493] hover:border-red-200 text-[#4D4D4D] text-[10px] font-semibold cursor-pointer disabled:opacity-50"
+                className="px-1.5 py-0.5 rounded border border-[#E6E6E6] bg-white hover:bg-red-50 hover:text-[#FF1493] hover:border-red-200 text-[#4D4D4D] text-[10px] font-semibold cursor-pointer disabled:opacity-50"
               >
                 Reject
               </button>
@@ -309,7 +314,7 @@ export function TaskTableRow({
                     onUpdateStatus(task.id, "in_progress");
                   }
                 }}
-                className="px-2 py-1 rounded bg-[#B7FF00]/30 border border-[#84CC16] text-black text-[10px] font-semibold cursor-pointer disabled:opacity-50"
+                className="px-1.5 py-0.5 rounded bg-[#B7FF00]/30 border border-[#84CC16] text-black text-[10px] font-semibold cursor-pointer disabled:opacity-50"
               >
                 In Progress
               </button>
@@ -317,7 +322,7 @@ export function TaskTableRow({
                 type="button"
                 disabled={isStatusPending}
                 onClick={() => onCompleteTask(task)}
-                className="px-2 py-1 rounded bg-black hover:bg-[#1A1A1A] text-white text-[10px] font-semibold cursor-pointer shadow-xs disabled:opacity-50"
+                className="px-1.5 py-0.5 rounded bg-black hover:bg-[#1A1A1A] text-white text-[10px] font-semibold cursor-pointer shadow-xs disabled:opacity-50"
               >
                 Completed
               </button>
@@ -325,11 +330,11 @@ export function TaskTableRow({
           )}
         </div>
       </td>
-      <td className="py-2.5 px-3 whitespace-nowrap">
+      <td className="py-2.5 px-2.5 w-[92px] whitespace-nowrap">
         <StatusPill status={task.priority} />
       </td>
-      <td className="py-2.5 px-3 whitespace-nowrap">
-        <div className="flex items-center gap-1.5">
+      <td className="py-2.5 px-2.5 w-[116px] whitespace-nowrap">
+        <div className="flex items-center gap-1 min-w-0">
           {typeName ? (
             <TaskTypeBadge typeName={typeName} />
           ) : (
@@ -338,15 +343,14 @@ export function TaskTableRow({
           {task.recurrence_id && (
             <span
               title="Recurring Task"
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#F5F5F5] border border-[#E6E6E6] text-black"
+              className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-medium bg-[#F5F5F5] border border-[#E6E6E6] text-black shrink-0"
             >
               <Repeat className="w-2.5 h-2.5" />
-              Recurring
             </span>
           )}
         </div>
       </td>
-      <td className="py-2.5 px-3 whitespace-nowrap">
+      <td className="py-2.5 px-3 w-[126px] whitespace-nowrap">
         {task.due_date ? (
           <DueBadge dueDate={task.due_date} status={task.status} />
         ) : (

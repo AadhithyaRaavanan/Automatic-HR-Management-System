@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { AppShell } from "@/components/shell/app-shell";
+import { useRouter } from "next/navigation";
+import { AppShell, useAppSession } from "@/components/shell/app-shell";
 import { EmsNavigationHeader } from "@/features/ems/components/ems-navigation-header";
+import { ConfirmDeleteModal } from "@/components/shared/confirm-delete-modal";
 import {
   Building2,
   Plus,
@@ -18,6 +20,7 @@ import {
   Clock,
   ShieldCheck,
   Check,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -72,10 +75,15 @@ interface HistoryItem {
 }
 
 export default function EmsDepartmentsPage() {
+  const router = useRouter();
+  const { userRole, isLoaded } = useAppSession();
+  const isAdmin = isLoaded && userRole === "admin";
   const [departments, setDepartments] = React.useState<DepartmentRecord[]>([]);
   const [activeEmployees, setActiveEmployees] = React.useState<ActiveEmployee[]>([]);
   const [designations, setDesignations] = React.useState<string[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [deleteDeptTarget, setDeleteDeptTarget] = React.useState<DepartmentRecord | null>(null);
+  const [deletingDept, setDeletingDept] = React.useState(false);
 
   // Create Department Modal State
   const [modalOpen, setModalOpen] = React.useState(false);
@@ -313,13 +321,13 @@ export default function EmsDepartmentsPage() {
 
   return (
     <AppShell>
-      <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      <div className="space-y-6 w-full max-w-full min-w-0 overflow-x-hidden pb-12">
         <EmsNavigationHeader />
 
         {/* Toolbar */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold text-text-primary tracking-tight">
+        <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-4 min-w-0">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-xl font-bold text-text-primary tracking-tight truncate">
               Department Hierarchy Management
             </h2>
             <p className="text-xs text-text-secondary mt-0.5">
@@ -327,78 +335,86 @@ export default function EmsDepartmentsPage() {
             </p>
           </div>
           <button
+            type="button"
             onClick={() => setModalOpen(true)}
-            className="px-4 py-2 rounded-xl text-xs font-bold bg-brand-purple text-white hover:bg-brand-purple/90 flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            className="px-4 py-2 rounded-xl text-xs font-bold bg-brand-purple text-white hover:bg-brand-purple/90 flex items-center gap-1.5 shadow-sm transition-all cursor-pointer shrink-0 whitespace-nowrap"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-3.5 h-3.5 shrink-0" />
             <span>New Department</span>
           </button>
         </div>
 
         {/* Departments Grid */}
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 min-w-0">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="h-52 rounded-3xl bg-card/40 border border-border-light animate-pulse" />
+              <div key={i} className="h-52 rounded-3xl bg-card/40 border border-border-light animate-pulse min-w-0" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 min-w-0">
             {departments.map((dept) => {
               const hasHead = Boolean(dept.headName || dept.head?.full_name);
               const headDisplayName = dept.headName || dept.head?.full_name || "Vacant";
               const headDesignation = dept.headDesignation || dept.head?.designation || (hasHead ? "Department Head" : null);
               const parentTreeName = dept.parentName || dept.parent?.name || "ZEN XEA Root";
               const isChild = Boolean(dept.parentId || dept.parent_department_id);
+              const isProtectedRoot =
+                dept.name.trim().toLowerCase() === "zen xea root" ||
+                dept.code.trim().toUpperCase() === "ROOT";
 
               return (
                 <div
                   key={dept.id}
-                  className="p-5 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light hover:border-brand-purple/30 transition-all shadow-sm flex flex-col justify-between space-y-4"
+                  className="p-5 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light hover:border-brand-purple/30 transition-all shadow-sm flex flex-col justify-between space-y-4 min-w-0"
                 >
                   {/* Card Header */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
+                  <div className="flex items-start justify-between gap-3 min-w-0">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div className="w-10 h-10 rounded-2xl bg-brand-purple/10 border border-brand-purple/20 flex items-center justify-center text-brand-purple shrink-0">
                         <Building2 className="w-5 h-5" />
                       </div>
-                      <div>
-                        <h3 className="font-bold text-sm text-text-primary leading-tight">{dept.name}</h3>
-                        <p className="text-[11px] font-mono text-brand-purple font-semibold mt-0.5">{dept.code}</p>
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-sm text-text-primary leading-tight truncate" title={dept.name}>
+                          {dept.name}
+                        </h3>
+                        <p className="text-[11px] font-mono text-brand-purple font-semibold mt-0.5 truncate">
+                          {dept.code}
+                        </p>
                       </div>
                     </div>
                     {isChild ? (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-500 border border-cyan-500/20 whitespace-nowrap">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-500 border border-cyan-500/20 whitespace-nowrap shrink-0 truncate max-w-[110px]">
                         Child Subdept
                       </span>
                     ) : (
-                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-lime/20 text-black border border-lime/40 whitespace-nowrap">
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-lime/20 text-black border border-lime/40 whitespace-nowrap shrink-0 truncate max-w-[100px]">
                         Main Dept
                       </span>
                     )}
                   </div>
 
                   {/* Body Info Box */}
-                  <div className="p-3.5 rounded-2xl bg-card-subtle text-xs space-y-2.5 border border-border-light/40">
+                  <div className="p-3.5 rounded-2xl bg-card-subtle text-xs space-y-2.5 border border-border-light/40 min-w-0">
                     {/* Department Head Row */}
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-medium text-text-muted">Department Head:</span>
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 min-w-0">
+                        <span className="text-[11px] font-medium text-text-muted truncate">Department Head:</span>
                         {hasHead ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-status-success/15 text-status-success border border-status-success/20">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-status-success/15 text-status-success border border-status-success/20 shrink-0 whitespace-nowrap">
                             <Check className="w-2.5 h-2.5" />
                             Active Head
                           </span>
                         ) : (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 border border-amber-500/20">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 border border-amber-500/20 shrink-0 whitespace-nowrap">
                             Vacant
                           </span>
                         )}
                       </div>
 
                       {hasHead ? (
-                        <div className="pt-0.5">
-                          <p className="font-bold text-text-primary text-xs flex items-center gap-1.5">
+                        <div className="pt-0.5 min-w-0">
+                          <p className="font-bold text-text-primary text-xs flex items-center gap-1.5 min-w-0">
                             <UserCheck className="w-3.5 h-3.5 text-brand-purple shrink-0" />
                             <span className="truncate">{headDisplayName}</span>
                           </p>
@@ -416,78 +432,102 @@ export default function EmsDepartmentsPage() {
                     </div>
 
                     {/* Parent Tree Row */}
-                    <div className="flex items-center justify-between pt-1 border-t border-border-light/40">
-                      <span className="text-[11px] font-medium text-text-muted">Parent Tree:</span>
-                      <span className="font-semibold text-text-primary text-[11px] truncate max-w-[170px]">
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-border-light/40 min-w-0">
+                      <span className="text-[11px] font-medium text-text-muted shrink-0">Parent Tree:</span>
+                      <span className="font-semibold text-text-primary text-[11px] truncate min-w-0" title={parentTreeName}>
                         {parentTreeName}
                       </span>
                     </div>
 
                     {/* Team & Roles Metrics */}
-                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-border-light/40 text-text-secondary font-medium">
-                      <span className="flex items-center gap-1">
-                        <Users className="w-3 h-3 text-text-tertiary" />
+                    <div className="flex items-center justify-between gap-2 text-[11px] pt-1 border-t border-border-light/40 text-text-secondary font-medium min-w-0">
+                      <span className="flex items-center gap-1 truncate">
+                        <Users className="w-3 h-3 text-text-tertiary shrink-0" />
                         {dept.memberCount || 0} {dept.memberCount === 1 ? "member" : "members"}
                       </span>
-                      <span className="flex items-center gap-1">
-                        <Briefcase className="w-3 h-3 text-text-tertiary" />
+                      <span className="flex items-center gap-1 truncate">
+                        <Briefcase className="w-3 h-3 text-text-tertiary shrink-0" />
                         {dept.rolesCount || 0} {dept.rolesCount === 1 ? "role" : "roles"}
                       </span>
                     </div>
                   </div>
 
                   {/* Actions Footer */}
-                  <div className="pt-1 flex items-center justify-between gap-1.5 border-t border-border-light/30">
+                  <div className="pt-1 flex items-center justify-between gap-1.5 border-t border-border-light/30 min-w-0">
                     {hasHead ? (
-                      <div className="flex items-center gap-1.5 w-full">
+                      <div className="flex items-center gap-1.5 w-full min-w-0">
                         <button
                           type="button"
                           onClick={() => openAssignModal(dept, true)}
-                          className="flex-1 px-2.5 py-1.5 rounded-xl bg-card border border-border-light hover:bg-card-subtle text-[11px] font-bold text-text-primary transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                          className="flex-1 min-w-0 px-2.5 py-1.5 rounded-xl bg-card border border-border-light hover:bg-card-subtle text-[11px] font-bold text-text-primary transition-colors flex items-center justify-center gap-1 cursor-pointer"
                           title="Reassign another active employee as head"
                         >
-                          <UserCheck className="w-3 h-3 text-brand-purple" />
-                          <span>Reassign</span>
+                          <UserCheck className="w-3 h-3 text-brand-purple shrink-0" />
+                          <span className="truncate">Reassign</span>
                         </button>
 
                         <button
                           type="button"
                           onClick={() => openRemoveModal(dept)}
-                          className="px-2.5 py-1.5 rounded-xl bg-card border border-border-light hover:bg-status-danger/10 hover:text-status-danger text-[11px] font-bold text-text-secondary transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                          className="px-2.5 py-1.5 rounded-xl bg-card border border-border-light hover:bg-status-danger/10 hover:text-status-danger text-[11px] font-bold text-text-secondary transition-colors flex items-center justify-center gap-1 cursor-pointer shrink-0"
                           title="Remove Department Head and set to Vacant"
                         >
-                          <UserMinus className="w-3 h-3" />
+                          <UserMinus className="w-3 h-3 shrink-0" />
                           <span>Remove</span>
                         </button>
 
                         <button
                           type="button"
                           onClick={() => openHistoryModal(dept)}
-                          className="px-2.5 py-1.5 rounded-xl bg-card border border-border-light hover:bg-card-subtle text-[11px] font-bold text-text-secondary transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                          className="px-2.5 py-1.5 rounded-xl bg-card border border-border-light hover:bg-card-subtle text-[11px] font-bold text-text-secondary transition-colors flex items-center justify-center gap-1 cursor-pointer shrink-0"
                           title="View historical assignment audit log"
                         >
                           <History className="w-3 h-3" />
                         </button>
+
+                        {isAdmin && !isProtectedRoot && (
+                          <button
+                            type="button"
+                            onClick={() => setDeleteDeptTarget(dept)}
+                            aria-label={`Delete department ${dept.name}`}
+                            title={`Delete ${dept.name}`}
+                            className="px-2.5 py-1.5 rounded-xl bg-card border border-rose-200 hover:bg-rose-500/10 text-rose-600 text-[11px] font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer shrink-0"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1.5 w-full">
+                      <div className="flex items-center gap-1.5 w-full min-w-0">
                         <button
                           type="button"
                           onClick={() => openAssignModal(dept, false)}
-                          className="flex-1 px-3 py-1.5 rounded-xl bg-brand-purple hover:bg-brand-purple/90 text-[11px] font-bold text-white transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                          className="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-brand-purple hover:bg-brand-purple/90 text-[11px] font-bold text-white transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
                         >
-                          <UserPlus className="w-3.5 h-3.5" />
-                          <span>Assign Department Head</span>
+                          <UserPlus className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate">Assign Department Head</span>
                         </button>
 
                         <button
                           type="button"
                           onClick={() => openHistoryModal(dept)}
-                          className="px-2.5 py-1.5 rounded-xl bg-card border border-border-light hover:bg-card-subtle text-[11px] font-bold text-text-secondary transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                          className="px-2.5 py-1.5 rounded-xl bg-card border border-border-light hover:bg-card-subtle text-[11px] font-bold text-text-secondary transition-colors flex items-center justify-center gap-1 cursor-pointer shrink-0"
                           title="View historical assignment audit log"
                         >
                           <History className="w-3 h-3" />
                         </button>
+
+                        {isAdmin && !isProtectedRoot && (
+                          <button
+                            type="button"
+                            onClick={() => setDeleteDeptTarget(dept)}
+                            aria-label={`Delete department ${dept.name}`}
+                            title={`Delete ${dept.name}`}
+                            className="px-2.5 py-1.5 rounded-xl bg-card border border-rose-200 hover:bg-rose-500/10 text-rose-600 text-[11px] font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer shrink-0"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -881,6 +921,50 @@ export default function EmsDepartmentsPage() {
             </div>
           </div>
         )}
+
+        <ConfirmDeleteModal
+          open={Boolean(deleteDeptTarget)}
+          title="Delete Department"
+          itemName={deleteDeptTarget?.name || ""}
+          itemMeta={
+            deleteDeptTarget
+              ? `${deleteDeptTarget.code} • ${deleteDeptTarget.memberCount || 0} ${
+                  deleteDeptTarget.memberCount === 1 ? "member" : "members"
+                } • ${deleteDeptTarget.rolesCount || 0} ${
+                  deleteDeptTarget.rolesCount === 1 ? "role" : "roles"
+                }`
+              : null
+          }
+          description="Deleting this department is permanent. Any assigned members, sub-departments, teams, and designations will be safely unassigned so employee profiles remain intact."
+          confirmLabel="Delete Department"
+          deleting={deletingDept}
+          onClose={() => {
+            if (!deletingDept) setDeleteDeptTarget(null);
+          }}
+          onConfirm={async () => {
+            if (!deleteDeptTarget) return;
+            setDeletingDept(true);
+            try {
+              const res = await fetch(
+                `/api/admin/departments?id=${encodeURIComponent(deleteDeptTarget.id)}`,
+                { method: "DELETE" }
+              );
+              const json = await res.json().catch(() => ({}));
+              if (!res.ok || !json?.success) {
+                throw new Error(json?.error || "Failed to delete department.");
+              }
+              toast.success(`Department '${deleteDeptTarget.name}' deleted.`);
+              setDepartments((prev) => prev.filter((d) => d.id !== deleteDeptTarget.id));
+              setDeleteDeptTarget(null);
+              await loadDepartments();
+              router.refresh();
+            } catch (err: any) {
+              toast.error(err?.message || "Failed to delete department.");
+            } finally {
+              setDeletingDept(false);
+            }
+          }}
+        />
       </div>
     </AppShell>
   );

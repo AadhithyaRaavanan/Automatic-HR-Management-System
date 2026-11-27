@@ -187,28 +187,37 @@ function UsersDirectoryContent() {
       let locsData: any = null;
 
       try {
-        const [empRes, memberRes, titlesRes, deptsRes, locsRes] = await Promise.all([
-          (supabase as any)
-            .from("employees")
-            .select(
-              "id, full_name, email, work_mode, status, timezone, shift_start_time, shift_end_time, department_id, job_title_id, primary_location_id, departments:department_id(id, name), job_titles:job_title_id(id, title_name), locations:primary_location_id(id, name)"
-            )
-            .order("full_name"),
-          (supabase as any)
-            .from("organization_members")
-            .select("user_id, role, status, shift_start_time, shift_end_time, department_id, job_title_id"),
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        const [titlesRes, deptsRes] = await Promise.all([
           fetch("/api/admin/job-titles").then((r) => (r.ok ? r.json() : null)).catch(() => null),
           fetch("/api/admin/departments").then((r) => (r.ok ? r.json() : null)).catch(() => null),
-          (supabase as any)
-            .from("locations")
-            .select("id, name")
-            .order("name"),
         ]);
-        emps = empRes?.data;
-        members = memberRes?.data;
         jobTitlesData = titlesRes?.titles;
         deptsData = deptsRes?.departments;
-        locsData = locsRes?.data;
+
+        if (session?.access_token) {
+          const [empRes, memberRes, locsRes] = await Promise.all([
+            (supabase as any)
+              .from("employees")
+              .select(
+                "id, full_name, email, work_mode, status, timezone, shift_start_time, shift_end_time, department_id, job_title_id, primary_location_id, departments:department_id(id, name), job_titles:job_title_id(id, title_name), locations:primary_location_id(id, name)"
+              )
+              .order("full_name"),
+            (supabase as any)
+              .from("organization_members")
+              .select("user_id, role, status, shift_start_time, shift_end_time, department_id, job_title_id"),
+            (supabase as any)
+              .from("locations")
+              .select("id, name")
+              .order("name"),
+          ]);
+          emps = empRes?.data;
+          members = memberRes?.data;
+          locsData = locsRes?.data;
+        }
       } catch {
         // Supabase not running, continue with stored
       }

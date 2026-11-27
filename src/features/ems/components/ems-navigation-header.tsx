@@ -38,10 +38,10 @@ export function EmsNavigationHeader({ currentTab }: EmsNavProps) {
   const pathname = usePathname();
 
   return (
-    <div data-tour="ems-hub" data-tour-mgr="ems-department" className="space-y-4">
+    <div data-tour="ems-hub" data-tour-mgr="ems-department" className="space-y-4 min-w-0 w-full max-w-full">
       {/* Module Title */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-border-light pb-3">
-        <div>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-border-light pb-3 min-w-0">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-text-primary tracking-tight">Employees</h1>
           <p className="text-xs text-text-secondary mt-0.5">
             Manage staff, teams, organizational hierarchy, and internships for Zenxea.
@@ -50,7 +50,10 @@ export function EmsNavigationHeader({ currentTab }: EmsNavProps) {
       </div>
 
       {/* Tabs / Sub-Navigation */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none">
+      <nav
+        aria-label="EMS sections"
+        className="flex items-center gap-1.5 pb-1 w-full max-w-full overflow-x-auto no-scrollbar"
+      >
         {emsNavItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== "/ems" && pathname?.startsWith(item.href));
           const Icon = item.icon;
@@ -59,7 +62,7 @@ export function EmsNavigationHeader({ currentTab }: EmsNavProps) {
               key={item.href}
               href={item.href}
               className={cn(
-                "px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-colors",
+                "px-2.5 2xl:px-3 py-1.5 rounded-lg text-[11px] 2xl:text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors",
                 isActive
                   ? "bg-black text-white shadow-xs"
                   : "bg-white hover:bg-[#F5F5F5] text-[#808080] hover:text-black border border-[#E6E6E6]"
@@ -70,7 +73,7 @@ export function EmsNavigationHeader({ currentTab }: EmsNavProps) {
             </Link>
           );
         })}
-      </div>
+      </nav>
     </div>
   );
 }

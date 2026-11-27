@@ -137,6 +137,18 @@ export function CurvedSidebar({
           }
         }
 
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session?.access_token) {
+          if (isMounted) {
+            const activeUsers = getStoredUsers().filter((u) => u.status === "active");
+            setTeamMemberCount(activeUsers.length || 1);
+          }
+          return;
+        }
+
         const { count, error } = await supabase
           .from("employees")
           .select("id", { count: "exact", head: true })

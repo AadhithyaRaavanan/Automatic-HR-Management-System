@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import { requireApprovedUser } from "@/features/auth/require-approved-user";
 import { verifyAdminRouteCaller } from "@/features/auth/admin-guard";
 import { getSignedUrl } from "@/features/onboarding/storage";
+import { getSupabaseAdminConfigError } from "@/lib/supabase/admin-config";
+import { permanentlyDeleteEmployee } from "@/features/admin/delete-employee";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +29,7 @@ export async function GET(
     let emp: any = null;
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
     if (isUuid) {
-      const { data } = await (supabaseAdmin as any)
+      const { data, error: empErr } = await (supabaseAdmin as any)
         .from("employees")
         .select(`
           *,
@@ -36,9 +39,18 @@ export async function GET(
         `)
         .eq("id", cleanId)
         .maybeSingle();
-      emp = data;
+      if (!empErr) {
+        emp = data;
+      } else {
+        const { data: baseEmp } = await (supabaseAdmin as any)
+          .from("employees")
+          .select("*")
+          .eq("id", cleanId)
+          .maybeSingle();
+        emp = baseEmp;
+      }
     } else {
-      const { data } = await (supabaseAdmin as any)
+      const { data, error: empErr } = await (supabaseAdmin as any)
         .from("employees")
         .select(`
           *,
@@ -48,7 +60,16 @@ export async function GET(
         `)
         .ilike("id", `${cleanId}%`)
         .maybeSingle();
-      emp = data;
+      if (!empErr) {
+        emp = data;
+      } else {
+        const { data: baseEmp } = await (supabaseAdmin as any)
+          .from("employees")
+          .select("*")
+          .ilike("id", `${cleanId}%`)
+          .maybeSingle();
+        emp = baseEmp;
+      }
     }
 
     const targetUserId = emp?.id || cleanId;
@@ -448,5 +469,48 @@ export async function PATCH(
     return NextResponse.json({ success: true, message: "Profile parameters updated successfully." });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Failed to update employee" }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> | { id: string } }
+) {
+  const authResult = await verifyAdminRouteCaller(request, ["admin"]);
+  if ("response" in authResult) {
+    return authResult.response;
+  }
+
+  const adminConfigError = getSupabaseAdminConfigError();
+  if (adminConfigError) {
+    return NextResponse.json({ success: false, error: adminConfigError }, { status: 500 });
+  }
+
+  const resolvedParams = await Promise.resolve(params);
+  const rawId = resolvedParams?.id || "";
+
+  try {
+    const result = await permanentlyDeleteEmployee(authResult.context, rawId);
+    if (!result.ok) {
+      return NextResponse.json(
+        { success: false, error: result.error || "Failed to delete employee." },
+        { status: result.status }
+      );
+    }
+
+    revalidatePath("/employees");
+    revalidatePath("/ems/employees");
+    revalidatePath("/admin/users");
+    revalidatePath("/tasks");
+
+    return NextResponse.json({
+      success: true,
+      deletedUserId: result.deletedUserId,
+    });
+  } catch (err: any) {
+    return NextResponse.json(
+      { success: false, error: err?.message || "Failed to delete employee." },
+      { status: 500 }
+    );
   }
 }

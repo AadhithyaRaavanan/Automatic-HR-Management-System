@@ -211,16 +211,22 @@ export function JobTitlesManager({
       return;
     }
 
-    deleteStoredJobTitle(t.id);
-    setTitles((prev) => prev.filter((item) => item.id !== t.id));
-    toast.success(`Job title '${t.title_name}' deleted.`);
-    onTitlesUpdated?.();
-
     try {
-      await fetch(`/api/admin/job-titles?id=${t.id}`, {
+      const res = await fetch(`/api/admin/job-titles?id=${encodeURIComponent(t.id)}`, {
         method: "DELETE",
       });
-    } catch {}
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error || "Failed to delete job title");
+      }
+
+      deleteStoredJobTitle(t.id);
+      setTitles((prev) => prev.filter((item) => item.id !== t.id));
+      toast.success(`Job title '${t.title_name}' deleted.`);
+      onTitlesUpdated?.();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete job title");
+    }
   };
 
   const filteredTitles = React.useMemo(() => {

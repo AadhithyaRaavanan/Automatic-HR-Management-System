@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { verifyAdminRouteCaller } from "@/features/auth/admin-guard";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getAdminClient, supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdminConfigError } from "@/lib/supabase/admin-config";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import {
   getStoredTeams,
@@ -134,5 +136,104 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, team });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Failed to create team" }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const authResult = await verifyAdminRouteCaller(request, ["admin"]);
+  if ("response" in authResult) {
+    return authResult.response;
+  }
+  const { context } = authResult;
+
+  const adminConfigError = getSupabaseAdminConfigError();
+  if (adminConfigError) {
+    return NextResponse.json({ error: adminConfigError }, { status: 500 });
+  }
+
+  try {
+    const { searchParams } = new URL(request.url);
+    let id = searchParams.get("id")?.trim();
+    if (!id) {
+      const body = await request.json().catch(() => null);
+      id = body?.id ? String(body.id).trim() : "";
+    }
+
+    if (!id) {
+      return NextResponse.json({ error: "Validation Error: 'id' parameter is required." }, { status: 400 });
+    }
+
+    const adminClient = getAdminClient() as any;
+
+    const { data: existing, error: findErr } = await adminClient
+      .from("teams")
+      .select("id, name, code, organization_id")
+      .eq("id", id)
+      .eq("organization_id", context.organizationId)
+      .maybeSingle();
+
+    if (findErr && !isDemoModeEnabled()) {
+      return NextResponse.json({ error: findErr.message }, { status: 400 });
+    }
+
+    if (!existing) {
+      if (isDemoModeEnabled()) {
+        deleteStoredTeam(id);
+        revalidatePath("/ems");
+        revalidatePath("/ems/teams");
+        return NextResponse.json({ success: true, deletedId: id });
+      }
+      return NextResponse.json({ error: "Team not found in your organization." }, { status: 404 });
+    }
+
+    // 1. Delete team membership links cleanly before removing team record
+    const { error: membersDelErr } = await adminClient
+      .from("team_members")
+      .delete()
+      .eq("team_id", id);
+
+    if (membersDelErr && !/does not exist|could not find the table/i.test(membersDelErr.message || "")) {
+      return NextResponse.json(
+        { error: `Failed to remove team memberships: ${membersDelErr.message}` },
+        { status: 400 }
+      );
+    }
+
+    // 2. Delete team row scoped to organization
+    const { error: delErr } = await adminClient
+      .from("teams")
+      .delete()
+      .eq("id", id)
+      .eq("organization_id", context.organizationId);
+
+    if (delErr) {
+      return NextResponse.json({ error: delErr.message }, { status: 400 });
+    }
+
+    if (isDemoModeEnabled()) {
+      deleteStoredTeam(id);
+    }
+
+    try {
+      await adminClient.from("audit_logs").insert({
+        organization_id: context.organizationId,
+        actor_id: context.userId,
+        action: "TEAM_DELETED",
+        table_name: "teams",
+        record_id: id,
+        old_data: existing,
+        new_data: null,
+      });
+    } catch {}
+
+    revalidatePath("/ems");
+    revalidatePath("/ems/teams");
+    revalidatePath("/ems/employees");
+    revalidatePath("/ems/organization");
+    revalidatePath("/employees");
+
+    return NextResponse.json({ success: true, deletedId: id });
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || "Failed to delete team" }, { status: 500 });
   }
 }

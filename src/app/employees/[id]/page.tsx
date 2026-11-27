@@ -33,9 +33,11 @@ import {
   Loader2,
   Upload,
   UserCheck,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { DeleteEmployeeModal } from "@/components/employees/delete-employee-modal";
 
 const ALL_DOCUMENT_TYPES = [
   // Cloud & DevOps Certifications
@@ -215,7 +217,12 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
   const [submittingPerm, setSubmittingPerm] = React.useState(false);
   const [showFullAccount, setShowFullAccount] = React.useState(false);
 
+  // Admin Delete Employee Modal State
+  const [deleteModalOpen, setDeleteModalOpen] = React.useState(false);
+  const [deletingEmployee, setDeletingEmployee] = React.useState(false);
+
   const isAdminOrHr = userRole === "admin" || userRole === "hr";
+  const isAdmin = userRole === "admin";
 
   const emergencyContactDisplay = React.useMemo(() => {
     const emp = profileData?.employee || {};
@@ -693,6 +700,17 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
             >
               <Pencil className="w-3.5 h-3.5" />
               Edit Parameters
+            </button>
+          )}
+
+          {isLoaded && isAdmin && Boolean(emp?.id) && userId !== emp.id && (
+            <button
+              type="button"
+              onClick={() => setDeleteModalOpen(true)}
+              className="px-4 py-2 rounded-lg text-xs font-semibold bg-white hover:bg-rose-50 border border-rose-200 text-rose-600 shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete Employee
             </button>
           )}
         </div>
@@ -1788,6 +1806,36 @@ function Employee360ProfileContent({ employeeId }: { employeeId: string }) {
           </div>
         </div>
       )}
+
+      <DeleteEmployeeModal
+        open={deleteModalOpen}
+        employee={emp?.id ? { id: emp.id, full_name: emp.full_name, email: emp.email } : null}
+        deleting={deletingEmployee}
+        onClose={() => {
+          if (!deletingEmployee) setDeleteModalOpen(false);
+        }}
+        onConfirm={async () => {
+          if (!emp?.id) return;
+          setDeletingEmployee(true);
+          try {
+            const res = await fetch(`/api/employees/${encodeURIComponent(emp.id)}`, {
+              method: "DELETE",
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data?.success) {
+              throw new Error(data?.error || "Failed to delete employee");
+            }
+            toast.success(`${emp.full_name || "Employee"} permanently deleted.`);
+            setDeleteModalOpen(false);
+            router.push("/employees");
+            router.refresh();
+          } catch (err: any) {
+            toast.error(err?.message || "Failed to delete employee");
+          } finally {
+            setDeletingEmployee(false);
+          }
+        }}
+      />
     </div>
   );
 }

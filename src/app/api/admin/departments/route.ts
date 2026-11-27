@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { verifyAdminRouteCaller } from "@/features/auth/admin-guard";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getAdminClient, supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdminConfigError } from "@/lib/supabase/admin-config";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+
+async function safeDbOp(op: PromiseLike<{ error?: any }>): Promise<{ error?: any }> {
+  try {
+    return (await op) || {};
+  } catch (err: any) {
+    return { error: err };
+  }
+}
 
 export const dynamic = "force-dynamic";
 
@@ -239,34 +249,92 @@ export async function DELETE(request: NextRequest) {
   }
   const { context } = authResult;
 
+  const adminConfigError = getSupabaseAdminConfigError();
+  if (adminConfigError) {
+    return NextResponse.json({ error: adminConfigError }, { status: 500 });
+  }
+
   try {
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
+    const id = searchParams.get("id")?.trim();
 
     if (!id) {
       return NextResponse.json({ error: "Department ID is required." }, { status: 400 });
     }
 
-    // 1. Unlink employees referencing this department
-    await (supabaseAdmin as any)
-      .from("employees")
-      .update({ department_id: null })
-      .eq("department_id", id);
+    const adminClient = getAdminClient() as any;
 
-    // 2. Unlink subdepartments
-    await (supabaseAdmin as any)
+    const { data: existing, error: findErr } = await adminClient
       .from("departments")
-      .update({ parent_department_id: null })
-      .eq("parent_department_id", id);
+      .select("id, name, code, organization_id")
+      .eq("id", id)
+      .eq("organization_id", context.organizationId)
+      .maybeSingle();
 
-    // 3. Unlink job titles or delete
-    await (supabaseAdmin as any)
-      .from("job_titles")
-      .update({ department_id: null })
-      .eq("department_id", id);
+    if (findErr) {
+      return NextResponse.json({ error: findErr.message }, { status: 400 });
+    }
 
-    // 4. Delete department
-    const { error: delErr } = await (supabaseAdmin as any)
+    if (!existing) {
+      return NextResponse.json({ error: "Department not found in your organization." }, { status: 404 });
+    }
+
+    const normalizedName = String(existing.name || "").trim().toLowerCase();
+    const normalizedCode = String(existing.code || "").trim().toUpperCase();
+    if (normalizedName === "zen xea root" || normalizedCode === "ROOT") {
+      return NextResponse.json(
+        { error: "The core root department cannot be deleted." },
+        { status: 400 }
+      );
+    }
+
+    // Safely unlink dependent references before deleting the department
+    await Promise.all([
+      safeDbOp(
+        adminClient
+          .from("employees")
+          .update({ department_id: null })
+          .eq("department_id", id)
+          .eq("organization_id", context.organizationId)
+      ),
+      safeDbOp(
+        adminClient
+          .from("organization_members")
+          .update({ department_id: null })
+          .eq("department_id", id)
+          .eq("organization_id", context.organizationId)
+      ),
+      safeDbOp(
+        adminClient
+          .from("departments")
+          .update({ parent_department_id: null })
+          .eq("parent_department_id", id)
+          .eq("organization_id", context.organizationId)
+      ),
+      safeDbOp(
+        adminClient
+          .from("job_titles")
+          .update({ department_id: null })
+          .eq("department_id", id)
+          .eq("organization_id", context.organizationId)
+      ),
+      safeDbOp(
+        adminClient
+          .from("teams")
+          .update({ department_id: null })
+          .eq("department_id", id)
+          .eq("organization_id", context.organizationId)
+      ),
+      safeDbOp(
+        adminClient
+          .from("projects")
+          .update({ department_id: null })
+          .eq("department_id", id)
+          .eq("organization_id", context.organizationId)
+      ),
+    ]);
+
+    const { error: delErr } = await adminClient
       .from("departments")
       .delete()
       .eq("id", id)
@@ -275,6 +343,26 @@ export async function DELETE(request: NextRequest) {
     if (delErr) {
       return NextResponse.json({ error: delErr.message }, { status: 400 });
     }
+
+    await safeDbOp(
+      adminClient.from("audit_logs").insert({
+        organization_id: context.organizationId,
+        actor_id: context.userId,
+        action: "DEPARTMENT_DELETED",
+        table_name: "departments",
+        record_id: id,
+        old_data: existing,
+        new_data: null,
+      })
+    );
+
+    revalidatePath("/ems");
+    revalidatePath("/ems/departments");
+    revalidatePath("/ems/employees");
+    revalidatePath("/ems/organization");
+    revalidatePath("/employees");
+    revalidatePath("/admin/departments");
+    revalidatePath("/admin/users");
 
     return NextResponse.json({ success: true, deletedId: id });
   } catch (err: any) {

@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { AppShell, useAppSession } from "@/components/shell/app-shell";
 import { BentoGrid } from "@/components/bento/bento-grid";
 import { BentoCard } from "@/components/bento/bento-card";
@@ -32,9 +33,9 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { formatDurationMinutes, formatTimeInTimezone, evaluatePreCheckInLock } from "@/lib/date/timezone";
 import { getTamilMonthInfo } from "@/lib/date/holidays-tn";
-import { getTaskDueState, TaskRecord } from "@/features/tasks/hooks/use-tasks";
 import { EarlyCheckOutDialog } from "@/features/attendance/components/early-checkout-dialog";
 import { LivePresenceWidget } from "@/features/attendance/components/live-presence-widget";
+import { DashboardTasksCard } from "@/features/tasks/components/dashboard-tasks-card";
 import {
   Clock,
   Calendar,
@@ -44,7 +45,6 @@ import {
   Bell,
   FileCheck2,
   ArrowRight,
-  CheckSquare,
   AlertTriangle,
   BarChart3,
   Lock,
@@ -70,60 +70,72 @@ function DashboardContent({
   isCheckingOut?: boolean;
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { userId, fullName, timezone, userRole } = useAppSession();
   const isPrivileged = userRole === "admin" || userRole === "hr" || userRole === "manager";
-  const { data, isLoading, refetch } = useAttendanceToday();
+  const { data, isLoading, refetch: refetchAttendance } = useAttendanceToday();
   const checkInMutation = useCheckIn();
   const checkOutMutation = useCheckOut();
-  const { notifications, unreadCount, markSingleRead, markAllRead } = useNotifications();
-  const { data: regularizations = [] } = useRegularizations();
+  const {
+    notifications,
+    unreadCount,
+    markSingleRead,
+    markAllRead,
+    refetch: refetchNotifications,
+  } = useNotifications();
+  const { data: regularizations = [], refetch: refetchRegularizations } = useRegularizations();
   const submitRegMutation = useSubmitRegularization();
 
   const [requestModalOpen, setRequestModalOpen] = React.useState(false);
   const [nextHoliday, setNextHoliday] = React.useState<UpcomingHolidayRow | null>(null);
-  const [myTasks, setMyTasks] = React.useState<TaskRecord[]>([]);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
   const supabase = React.useMemo(() => createClient(), []);
 
-  React.useEffect(() => {
-    let active = true;
-    async function loadDashboardExtras() {
-      const todayIso = new Intl.DateTimeFormat("en-CA", {
-        timeZone: "Asia/Kolkata",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).format(new Date());
-      const { data: hols } = await (supabase as any)
-        .from("holidays")
-        .select("id, date, name, local_name, region")
-        .eq("is_active", true)
-        .gte("date", todayIso)
-        .order("date", { ascending: true })
-        .limit(1);
-      if (active && hols && hols.length > 0) {
-        setNextHoliday(hols[0] as UpcomingHolidayRow);
-      }
+  const loadDashboardExtras = React.useCallback(async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token || !session.user) {
+      return;
+    }
 
-      if (userId) {
-        const { data: assignedTasks } = await supabase
-          .from("tasks")
-          .select(
-            "id, organization_id, project_id, parent_task_id, title, description, creator_id, assignee_id, status, priority, due_date, estimated_minutes, started_at, completed_at, cancelled_at, created_at, updated_at"
-          )
-          .eq("assignee_id", userId)
-          .in("status", ["todo", "in_progress", "blocked"])
-          .order("due_date", { ascending: true, nullsFirst: false })
-          .limit(4);
-        if (active && assignedTasks) {
-          setMyTasks(assignedTasks as TaskRecord[]);
-        }
+    const todayIso = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+    const { data: hols, error: holErr } = await (supabase as any)
+      .from("holidays")
+      .select("id, date, name, local_name, region")
+      .eq("is_active", true)
+      .gte("date", todayIso)
+      .order("date", { ascending: true })
+      .limit(1);
+    if (hols && hols.length > 0) {
+      setNextHoliday(hols[0] as UpcomingHolidayRow);
+    } else if (holErr) {
+      const { data: legacyHols } = await (supabase as any)
+        .from("holidays")
+        .select("id, holiday_date, name")
+        .gte("holiday_date", todayIso)
+        .order("holiday_date", { ascending: true })
+        .limit(1);
+      if (legacyHols && legacyHols.length > 0) {
+        setNextHoliday({
+          id: legacyHols[0].id,
+          date: legacyHols[0].holiday_date,
+          name: legacyHols[0].name,
+          local_name: null,
+          region: "All",
+        });
       }
     }
-    loadDashboardExtras();
-    return () => {
-      active = false;
-    };
-  }, [supabase, userId]);
+  }, [supabase]);
+
+  React.useEffect(() => {
+    void loadDashboardExtras();
+  }, [loadDashboardExtras]);
 
   const isCheckedIn = Boolean(data?.activeSession);
   const timer = useAttendanceTimer(data?.activeSession?.check_in_at);
@@ -161,23 +173,23 @@ function DashboardContent({
     evaluatePreCheckInLock(shiftStartTime, shiftEndTime, userTimezone, new Date())
   );
 
-  React.useEffect(() => {
-    async function syncClock() {
-      try {
-        const t0 = Date.now();
-        const res = await fetch("/api/time", { cache: "no-store" });
-        if (res.ok) {
-          const t1 = Date.now();
-          const json = await res.json();
-          const latency = (t1 - t0) / 2;
-          serverOffsetRef.current = json.epoch + latency - t1;
-          const syncedNow = new Date(Date.now() + serverOffsetRef.current);
-          setLockStatus(evaluatePreCheckInLock(shiftStartTime, shiftEndTime, userTimezone, syncedNow));
-        }
-      } catch {}
+  const syncClock = React.useCallback(async () => {
+    const t0 = Date.now();
+    const res = await fetch(`/api/time?_t=${t0}`, { cache: "no-store" });
+    if (!res.ok) {
+      throw new Error(`Clock sync failed (${res.status})`);
     }
-    syncClock();
+    const t1 = Date.now();
+    const json = await res.json();
+    const latency = (t1 - t0) / 2;
+    serverOffsetRef.current = json.epoch + latency - t1;
+    const syncedNow = new Date(Date.now() + serverOffsetRef.current);
+    setLockStatus(evaluatePreCheckInLock(shiftStartTime, shiftEndTime, userTimezone, syncedNow));
   }, [shiftStartTime, shiftEndTime, userTimezone]);
+
+  React.useEffect(() => {
+    syncClock().catch(() => {});
+  }, [syncClock]);
 
   React.useEffect(() => {
     const timer = setInterval(() => {
@@ -190,68 +202,115 @@ function DashboardContent({
   // Load week attendance history for the weekly bar chart (Mon - Fri)
   const [weeklyBars, setWeeklyBars] = React.useState<DayBarData[]>([]);
 
-  React.useEffect(() => {
-    let active = true;
-    async function loadWeekChart() {
-      if (!userId) return;
-      const today = new Date();
-      const dayOfWeek = today.getDay(); // 0 is Sunday, 1 is Monday
-      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      const monday = new Date(today);
-      monday.setDate(today.getDate() + mondayOffset);
+  const loadWeekChart = React.useCallback(async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const effectiveUid = session?.user?.id || userId;
+    if (!session?.access_token || !effectiveUid) return;
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 is Sunday, 1 is Monday
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + mondayOffset);
 
-      const daysArr: DayBarData[] = [];
-      const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-      const datesToQuery: string[] = [];
+    const daysArr: DayBarData[] = [];
+    const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+    const datesToQuery: string[] = [];
 
-      for (let i = 0; i < 5; i++) {
-        const d = new Date(monday);
-        d.setDate(monday.getDate() + i);
-        const iso = d.toISOString().slice(0, 10);
-        datesToQuery.push(iso);
-        daysArr.push({
-          dayLabel: dayNames[i],
-          dateStr: iso,
-          workedMinutes: 0,
-          isToday: iso === (data?.workDate || today.toISOString().slice(0, 10)),
-        });
-      }
-
-      const { data: dbDays } = await (supabase as any)
-        .from("attendance_days")
-        .select("work_date, total_minutes")
-        .eq("employee_id", userId)
-        .in("work_date", datesToQuery);
-
-      if (active && dbDays) {
-        const minMap = new Map<string, number>();
-        for (const row of dbDays) {
-          minMap.set(row.work_date, row.total_minutes || 0);
-        }
-        const todayDate = data?.workDate || today.toISOString().slice(0, 10);
-        if (todayMinutes > 0) {
-          minMap.set(todayDate, Math.max(minMap.get(todayDate) || 0, todayMinutes));
-        }
-
-        const merged = daysArr.map((d) => ({
-          ...d,
-          workedMinutes: minMap.get(d.dateStr) || 0,
-        }));
-        setWeeklyBars(merged);
-      } else if (active) {
-        const todayDate = data?.workDate || today.toISOString().slice(0, 10);
-        const merged = daysArr.map((d) => ({
-          ...d,
-          workedMinutes: d.dateStr === todayDate ? todayMinutes : 0,
-        }));
-        setWeeklyBars(merged);
-      }
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const iso = d.toISOString().slice(0, 10);
+      datesToQuery.push(iso);
+      daysArr.push({
+        dayLabel: dayNames[i],
+        dateStr: iso,
+        workedMinutes: 0,
+        isToday: iso === (data?.workDate || today.toISOString().slice(0, 10)),
+      });
     }
-    loadWeekChart();
-    return () => {
-      active = false;
-    };
+
+    const { data: dbDays } = await (supabase as any)
+      .from("attendance_days")
+      .select("work_date, total_minutes")
+      .eq("employee_id", effectiveUid)
+      .in("work_date", datesToQuery);
+
+    if (dbDays) {
+      const minMap = new Map<string, number>();
+      for (const row of dbDays) {
+        minMap.set(row.work_date, row.total_minutes || 0);
+      }
+      const todayDate = data?.workDate || today.toISOString().slice(0, 10);
+      if (todayMinutes > 0) {
+        minMap.set(todayDate, Math.max(minMap.get(todayDate) || 0, todayMinutes));
+      }
+
+      const merged = daysArr.map((d) => ({
+        ...d,
+        workedMinutes: minMap.get(d.dateStr) || 0,
+      }));
+      setWeeklyBars(merged);
+    } else {
+      const todayDate = data?.workDate || today.toISOString().slice(0, 10);
+      const merged = daysArr.map((d) => ({
+        ...d,
+        workedMinutes: d.dateStr === todayDate ? todayMinutes : 0,
+      }));
+      setWeeklyBars(merged);
+    }
   }, [supabase, userId, data?.workDate, todayMinutes]);
+
+  React.useEffect(() => {
+    void loadWeekChart();
+  }, [loadWeekChart]);
+
+  const handleRefreshDashboard = React.useCallback(async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await fetch("/api/attendance/process-timeouts", {
+        method: "POST",
+        cache: "no-store",
+      }).catch(() => null);
+
+      const [attendanceRes] = await Promise.all([
+        refetchAttendance(),
+        syncClock(),
+        loadWeekChart(),
+        loadDashboardExtras(),
+        refetchNotifications(),
+        refetchRegularizations(),
+        queryClient.refetchQueries({ queryKey: ["tasks-workspace"] }),
+      ]);
+
+      if (attendanceRes?.isError || attendanceRes?.error) {
+        throw new Error(
+          (attendanceRes.error as any)?.message || "Failed to refresh attendance records."
+        );
+      }
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("pulse:refresh-dashboard"));
+      }
+      router.refresh();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to refresh dashboard data.");
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [
+    isRefreshing,
+    refetchAttendance,
+    syncClock,
+    loadWeekChart,
+    loadDashboardExtras,
+    refetchNotifications,
+    refetchRegularizations,
+    queryClient,
+    router,
+  ]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -274,12 +333,14 @@ function DashboardContent({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => refetch()}
-            className="p-2 rounded-lg bg-card border border-border-light text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors cursor-pointer"
+            disabled={isRefreshing}
+            aria-busy={isRefreshing}
+            onClick={() => void handleRefreshDashboard()}
+            className="p-2 rounded-lg bg-card border border-border-light text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             title="Refresh attendance records"
             aria-label="Refresh attendance records"
           >
-            <RefreshCw className="w-4 h-4 text-text-secondary" />
+            <RefreshCw className={cn("w-4 h-4 text-text-secondary", isRefreshing && "animate-spin text-black")} />
           </button>
 
           {/* Synchronized Header Action Button */}
@@ -581,76 +642,7 @@ function DashboardContent({
 
       {/* Row 4: My Tasks Widget */}
       <BentoGrid>
-        <BentoCard
-          title="My Tasks"
-          subtitle="Open assignments and upcoming deadlines"
-          action={
-            <Link
-              href="/tasks"
-              className="text-black hover:underline text-xs font-semibold flex items-center gap-1"
-            >
-              <span>Open Tasks Board</span>
-              <ArrowRight className="w-3 h-3" />
-            </Link>
-          }
-          className="lg:col-span-12"
-        >
-          {myTasks.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-              {myTasks.filter(Boolean).map((task) => {
-                const status = task.status || "todo";
-                const priority = task.priority || "medium";
-                const dueState = getTaskDueState(task.due_date, status);
-                return (
-                  <Link
-                    key={task.id}
-                    href={`/tasks?task=${task.id}`}
-                    className="p-3.5 rounded-xl bg-[#F5F5F5] hover:bg-white border border-[#E6E6E6] transition-all flex flex-col justify-between h-[105px] block"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between gap-2">
-                        <StatusPill status={status} />
-                        <StatusPill status={priority} showIcon={false} />
-                      </div>
-                      <h3 className="text-xs font-semibold text-black line-clamp-1 mt-2" title={task.title || "Untitled Task"}>
-                        {task.title || "Untitled Task"}
-                      </h3>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-[#E6E6E6]/60">
-                      {dueState === "overdue" ? (
-                        <span className="inline-flex items-center gap-1 font-semibold text-[#FF1493]">
-                          <AlertTriangle className="w-3 h-3" />
-                          Overdue ({task.due_date})
-                        </span>
-                      ) : task.due_date ? (
-                        <span className="text-[#808080] font-mono">
-                          Due {task.due_date}
-                        </span>
-                      ) : (
-                        <span className="text-[#808080]">No due date</span>
-                      )}
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          ) : (
-            <EmptyState
-              className="py-6 border-dashed shadow-none bg-card-subtle/40"
-              icon={<CheckSquare className="w-5 h-5" />}
-              title="No open tasks assigned"
-              description="Visit the Tasks board to track assignments or create a new deliverable."
-              action={
-                <Link
-                  href="/tasks"
-                  className="px-4 py-1.5 rounded-lg bg-black text-white text-xs font-semibold"
-                >
-                  Go to Tasks
-                </Link>
-              }
-            />
-          )}
-        </BentoCard>
+        <DashboardTasksCard userId={userId} userRole={userRole} />
       </BentoGrid>
 
       <RequestModal
