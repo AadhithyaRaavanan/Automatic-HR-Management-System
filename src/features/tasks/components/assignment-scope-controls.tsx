@@ -104,17 +104,10 @@ export function AssignmentScopeControls({
   const handleSelectScope = (nextType: ProjectAssignmentType) => {
     if (isScopeLocked) return;
     onAssignmentTypeChange(nextType);
-    if (nextType === "department") {
-      if (departmentIds.length === 0 && departments.length > 0) {
-        const firstId = departments[0].id;
-        onDepartmentIdsChange([firstId]);
-        const lock = resolveDepartmentInchargeLock([firstId], departments);
-        onInchargeIdChange(
-          lock.isLocked && lock.lockedInchargeId ? lock.lockedInchargeId : ""
-        );
-      }
-    } else {
+    if (nextType !== "department") {
       onDepartmentIdsChange([]);
+      onInchargeIdChange("");
+    } else if (departmentIds.length === 0) {
       onInchargeIdChange("");
     }
   };
