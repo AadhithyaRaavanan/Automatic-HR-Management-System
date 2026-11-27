@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRouteCaller } from "@/features/auth/admin-guard";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getAdminClient, isSupabaseAdminConfigured } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   if ("response" in authResult) {
     return authResult.response;
   }
-  const { context } = authResult;
+  const { context, supabase: callerSupabase } = authResult;
 
   try {
     const todayIso = new Intl.DateTimeFormat("en-CA", {
@@ -21,31 +21,69 @@ export async function GET(request: NextRequest) {
       day: "2-digit",
     }).format(new Date());
 
-    // Fetch all active employees in the organization directly from Supabase
-    let empQuery = (supabaseAdmin as any)
-      .from("employees")
-      .select("id, full_name, email, avatar_url, timezone, work_mode, department_id, departments:department_id(name), job_titles:job_title_id(title_name)")
-      .eq("organization_id", context.organizationId)
-      .eq("status", "active")
-      .order("full_name");
+    const queryEmployeesWithClient = async (client: any) => {
+      let empQuery = client
+        .from("employees")
+        .select(
+          "id, full_name, email, avatar_url, timezone, work_mode, department_id, departments:department_id(name), job_titles:job_title_id(title_name)"
+        )
+        .eq("organization_id", context.organizationId)
+        .eq("status", "active")
+        .order("full_name");
 
-    // If manager, restrict to direct reports
-    if (context.role === "manager") {
-      empQuery = empQuery.eq("manager_id", context.userId);
+      if (context.role === "manager") {
+        empQuery = empQuery.eq("manager_id", context.userId);
+      }
+
+      const extRes = await empQuery;
+      if (!extRes.error) return extRes;
+
+      let baseQuery = client
+        .from("employees")
+        .select("id, full_name, email, timezone")
+        .eq("status", "active")
+        .order("full_name");
+      if (context.role === "manager") {
+        baseQuery = baseQuery.eq("manager_id", context.userId);
+      }
+      const baseRes = await baseQuery;
+      if (!baseRes.error) return baseRes;
+
+      return await client
+        .from("employees")
+        .select("id, full_name, email")
+        .order("full_name");
+    };
+
+    const adminClient: any = isSupabaseAdminConfigured() ? getAdminClient() : callerSupabase;
+    let empRes = await queryEmployeesWithClient(adminClient);
+    if (empRes?.error && adminClient !== callerSupabase) {
+      empRes = await queryEmployeesWithClient(callerSupabase);
     }
 
-    const { data: employees, error: empErr } = await empQuery;
+    const employees = empRes?.data || [];
+    const empErr = empRes?.error;
 
     if (empErr) {
       return NextResponse.json({ error: empErr.message }, { status: 400 });
     }
 
     // Fetch today sessions or any currently active session directly from Supabase
-    const { data: sessions, error: sessErr } = await (supabaseAdmin as any)
+    const sessClient: any = adminClient;
+    let { data: sessions } = await sessClient
       .from("attendance_sessions")
       .select("id, employee_id, check_in_at, check_out_at, work_date")
       .or(`work_date.eq.${todayIso},check_out_at.is.null`)
       .order("check_in_at", { ascending: true });
+
+    if (!sessions && sessClient !== callerSupabase) {
+      const fallbackSess = await (callerSupabase as any)
+        .from("attendance_sessions")
+        .select("id, employee_id, check_in_at, check_out_at, work_date")
+        .or(`work_date.eq.${todayIso},check_out_at.is.null`)
+        .order("check_in_at", { ascending: true });
+      sessions = fallbackSess?.data || [];
+    }
 
     const empList = employees || [];
     const sessList = sessions || [];

@@ -53,15 +53,23 @@ export function useAttendanceToday() {
   return useQuery<TodayAttendanceData>({
     queryKey: ["attendance", "today"],
     queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user ?? (await supabase.auth.getUser()).data.user;
+      let {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        const refreshed = await supabase.auth.refreshSession().catch(() => null);
+        if (refreshed?.data?.session?.access_token) {
+          session = refreshed.data.session;
+        }
+      }
+      const user = session?.user ?? (session?.access_token ? (await supabase.auth.getUser()).data.user : null);
 
       const userTimezone =
         (user?.user_metadata?.timezone as string) || "UTC";
       const todayDate = getEmployeeWorkDate(userTimezone);
 
-      // If no authenticated user session, only allow mock preview in non-production demo mode
-      if (!user) {
+      // Wait until an authenticated session token exists before hitting RLS-protected tables
+      if (!user || !session?.access_token) {
         const storedSessions = getStoredAttendanceSessions().filter((s) => s.work_date === todayDate);
         const storedDays = getStoredAttendanceDays().find((d) => d.work_date === todayDate);
         const activeSess = storedSessions.find((s) => !s.check_out_at);
@@ -105,19 +113,36 @@ export function useAttendanceToday() {
         };
       }
 
-      // Fetch employee profile & shift hours
-      const [{ data: profileData }, { data: memberData }] = await Promise.all([
-        supabase
-          .from("employees")
-          .select("timezone, work_target_minutes, shift_start_time, shift_end_time")
-          .eq("id", user.id)
-          .maybeSingle(),
-        supabase
-          .from("organization_members")
-          .select("shift_start_time, shift_end_time")
-          .eq("user_id", user.id)
-          .maybeSingle(),
+      // Fetch employee profile & shift hours (with graceful fallback when optional columns/tables are absent)
+      const [profileRes, memberRes] = await Promise.all([
+        (async () => {
+          const ext = await supabase
+            .from("employees")
+            .select("timezone, work_target_minutes, shift_start_time, shift_end_time")
+            .eq("id", user.id)
+            .maybeSingle();
+          if (!ext.error) return ext;
+          return await supabase
+            .from("employees")
+            .select("timezone, work_target_minutes")
+            .eq("id", user.id)
+            .maybeSingle();
+        })(),
+        (async () => {
+          try {
+            const res = await supabase
+              .from("organization_members")
+              .select("shift_start_time, shift_end_time")
+              .eq("user_id", user.id)
+              .maybeSingle();
+            return res.error ? { data: null } : res;
+          } catch {
+            return { data: null };
+          }
+        })(),
       ]);
+      const profileData = profileRes?.data;
+      const memberData = memberRes?.data;
 
       const empProfile = profileData as EmployeeProfileRow | null;
       const memRow = memberData as any;

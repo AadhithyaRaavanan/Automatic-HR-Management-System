@@ -2,8 +2,10 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { AppShell } from "@/components/shell/app-shell";
+import { useRouter } from "next/navigation";
+import { AppShell, useAppSession } from "@/components/shell/app-shell";
 import { EmsNavigationHeader } from "@/features/ems/components/ems-navigation-header";
+import { DeleteEmployeeModal } from "@/components/employees/delete-employee-modal";
 import {
   Users,
   Search,
@@ -14,32 +16,65 @@ import {
   ExternalLink,
   Plus,
   Shield,
+  AlertTriangle,
+  RefreshCw,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export default function EmsEmployeesPage() {
+  const router = useRouter();
+  const { userRole, userId, isLoaded } = useAppSession();
   const [employees, setEmployees] = React.useState<any[]>([]);
+  const [departments, setDepartments] = React.useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = React.useState(true);
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState("");
   const [selectedDept, setSelectedDept] = React.useState("all");
   const [selectedCategory, setSelectedCategory] = React.useState("all");
+  const [deleteTarget, setDeleteTarget] = React.useState<{
+    id: string;
+    full_name?: string | null;
+    email?: string | null;
+  } | null>(null);
+  const [deletingEmployee, setDeletingEmployee] = React.useState(false);
 
   const loadEmployees = React.useCallback(async () => {
     setLoading(true);
+    setErrorMessage(null);
     try {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (selectedDept !== "all") params.set("departmentId", selectedDept);
       if (selectedCategory !== "all") params.set("category", selectedCategory);
 
-      const res = await fetch(`/api/employees?${params.toString()}`);
-      const data = await res.json();
-      if (data.employees) {
-        setEmployees(data.employees);
+      const res = await fetch(`/api/employees?${params.toString()}`, { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = data?.error || `Failed to load workforce directory (${res.status})`;
+        setErrorMessage(msg);
+        setEmployees([]);
+        toast.error(msg);
+        return;
       }
-    } catch {
-      toast.error("Failed to load workforce directory");
+
+      const list = Array.isArray(data?.employees) ? data.employees : [];
+      setEmployees(list);
+      setDepartments((prev) => {
+        const map = new Map<string, string>(prev.map((d) => [d.id, d.name]));
+        list.forEach((e: any) => {
+          if (e.departments?.id && e.departments?.name) {
+            map.set(e.departments.id, e.departments.name);
+          }
+        });
+        return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+      });
+    } catch (err: any) {
+      const msg = err?.message || "Failed to load workforce directory";
+      setErrorMessage(msg);
+      setEmployees([]);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -49,15 +84,9 @@ export default function EmsEmployeesPage() {
     loadEmployees();
   }, [loadEmployees]);
 
-  const departments = React.useMemo(() => {
-    const map = new Map<string, string>();
-    employees.forEach((e) => {
-      if (e.departments?.id && e.departments?.name) {
-        map.set(e.departments.id, e.departments.name);
-      }
-    });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [employees]);
+  const hasActiveFilters = Boolean(
+    search.trim() || selectedDept !== "all" || selectedCategory !== "all"
+  );
 
   return (
     <AppShell>
@@ -113,6 +142,27 @@ export default function EmsEmployeesPage() {
           </Link>
         </div>
 
+        {/* Inline Error Banner */}
+        {errorMessage && (
+          <div
+            role="alert"
+            className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-medium"
+          >
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500" />
+              <span>{errorMessage}</span>
+            </div>
+            <button
+              type="button"
+              onClick={loadEmployees}
+              className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-rose-500/30 text-rose-600 dark:text-rose-300 font-semibold hover:bg-rose-500/10 inline-flex items-center gap-1.5 self-start sm:self-auto"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Employees Table */}
         {loading ? (
           <div className="h-64 rounded-3xl bg-card/40 border border-border-light animate-pulse" />
@@ -132,7 +182,46 @@ export default function EmsEmployeesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-light/40">
-                  {employees.map((emp) => (
+                  {employees.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-14 px-6 text-center">
+                        <div className="max-w-sm mx-auto space-y-2.5">
+                          <Users className="w-9 h-9 text-text-muted mx-auto opacity-60" />
+                          <h3 className="text-sm font-semibold text-text-primary">No employees found</h3>
+                          <p className="text-xs text-text-secondary">
+                            {errorMessage
+                              ? "Workforce records could not be loaded. Check your permissions or try retrying."
+                              : hasActiveFilters
+                              ? "No employees match your current search or filter criteria."
+                              : "No active employees are listed yet. Provision an employee to get started."}
+                          </p>
+                          <div className="pt-2 flex items-center justify-center gap-2">
+                            {hasActiveFilters && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSearch("");
+                                  setSelectedDept("all");
+                                  setSelectedCategory("all");
+                                }}
+                                className="px-3.5 py-1.5 rounded-lg bg-card-subtle hover:bg-card border border-border-light text-xs font-semibold text-text-primary"
+                              >
+                                Clear filters
+                              </button>
+                            )}
+                            <Link
+                              href="/ems/employees/new"
+                              className="px-3.5 py-1.5 rounded-lg bg-brand-purple text-white hover:bg-brand-purple/90 text-xs font-bold inline-flex items-center gap-1"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              New Employee
+                            </Link>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    employees.map((emp) => (
                     <tr key={emp.id} className="hover:bg-card-subtle/40 transition-colors">
                       <td className="p-4">
                         <div className="flex items-center gap-3">
@@ -204,21 +293,70 @@ export default function EmsEmployeesPage() {
                       </td>
 
                       <td className="p-4 text-right">
-                        <Link
-                          href={`/employees/${emp.id}`}
-                          className="px-3 py-1.5 rounded-xl bg-card-subtle hover:bg-brand-purple/10 border border-border-light text-brand-purple font-semibold text-xs inline-flex items-center gap-1 transition-all"
-                        >
-                          360° Profile
-                          <ExternalLink className="w-3 h-3" />
-                        </Link>
+                        <div className="inline-flex items-center justify-end gap-2">
+                          <Link
+                            href={`/employees/${emp.id}`}
+                            className="px-3 py-1.5 rounded-xl bg-card-subtle hover:bg-brand-purple/10 border border-border-light text-brand-purple font-semibold text-xs inline-flex items-center gap-1 transition-all"
+                          >
+                            360° Profile
+                            <ExternalLink className="w-3 h-3" />
+                          </Link>
+                          {isLoaded && userRole === "admin" && userId !== emp.id && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDeleteTarget({
+                                  id: emp.id,
+                                  full_name: emp.full_name,
+                                  email: emp.email,
+                                })
+                              }
+                              className="px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-900 hover:bg-rose-500/10 border border-rose-500/30 text-rose-600 font-semibold text-xs inline-flex items-center gap-1 transition-all cursor-pointer"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Delete Employee
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
-                  ))}
+                  ))
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         )}
+
+        <DeleteEmployeeModal
+          open={Boolean(deleteTarget)}
+          employee={deleteTarget}
+          deleting={deletingEmployee}
+          onClose={() => {
+            if (!deletingEmployee) setDeleteTarget(null);
+          }}
+          onConfirm={async () => {
+            if (!deleteTarget) return;
+            setDeletingEmployee(true);
+            try {
+              const res = await fetch(`/api/employees/${encodeURIComponent(deleteTarget.id)}`, {
+                method: "DELETE",
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok || !data?.success) {
+                throw new Error(data?.error || "Failed to delete employee");
+              }
+              toast.success(`${deleteTarget.full_name || "Employee"} permanently deleted.`);
+              setDeleteTarget(null);
+              await loadEmployees();
+              router.refresh();
+            } catch (err: any) {
+              toast.error(err?.message || "Failed to delete employee");
+            } finally {
+              setDeletingEmployee(false);
+            }
+          }}
+        />
       </div>
     </AppShell>
   );

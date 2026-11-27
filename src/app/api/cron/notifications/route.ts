@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getAdminClient, supabaseAdmin } from "@/lib/supabase/admin";
 import { notify } from "@/features/notifications/notify";
 import { getManagersOf, getHrUsers } from "@/features/notifications/recipients";
 import { dispatchBirthdayNotifications } from "@/features/notifications/birthdays";
+import { enforceBreakTimeouts } from "@/features/attendance/break-timeout";
+import { processSessionTimeouts } from "@/features/attendance/session-timeout";
 import { calculateWorkingDaysAhead, countWorkingDaysBetween } from "@/lib/date/working-days";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +59,7 @@ export async function GET(request: NextRequest) {
       shiftMissedCheckIn: 0,
       shiftLateCheckOut: 0,
       autoClosedSessions: 0,
+      breakTimeoutAutoLogouts: 0,
       onboardingIncomplete: 0,
       birthdaysCelebrated: 0,
       recurringTasksCreated: 0,
@@ -591,6 +594,26 @@ export async function GET(request: NextRequest) {
       }
     } catch (err) {
       console.error("[Cron: Stale In-Progress Tasks Error]:", err);
+    }
+
+    // ------------------------------------------------------------------------
+    // Rule 9: Auto Check-Out & Notify Employees on Inactivity (20m) or Break Timeout
+    // ------------------------------------------------------------------------
+    try {
+      const [sessionTimeoutResult, breakTimeoutResult] = await Promise.all([
+        processSessionTimeouts({
+          adminClient: getAdminClient(),
+          now,
+        }),
+        enforceBreakTimeouts({
+          adminClient: getAdminClient(),
+          now,
+        }),
+      ]);
+      stats.breakTimeoutAutoLogouts =
+        sessionTimeoutResult.timedOutCount + breakTimeoutResult.timedOutCount;
+    } catch (err) {
+      console.error("[Cron: Attendance Timeout Enforcement Error]:", err);
     }
 
     return NextResponse.json({

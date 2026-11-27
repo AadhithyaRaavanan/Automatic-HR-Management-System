@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin, isSupabaseAdminConfigured } from "@/lib/supabase/admin";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import { getStoredUsers, getStoredDepartments, getStoredJobTitles } from "@/lib/storage/demo-store";
 import { requireApprovedUser } from "@/features/auth/require-approved-user";
@@ -9,121 +8,386 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
 
+const BASE_EMPLOYEE_SELECT = `
+  id,
+  organization_id,
+  email,
+  full_name,
+  avatar_url,
+  phone,
+  emergency_contact,
+  work_mode,
+  timezone,
+  status,
+  joined_on,
+  primary_location_id,
+  manager_id,
+  department_id,
+  job_title_id,
+  departments:department_id(id, name, code, parent_department_id),
+  job_titles:job_title_id(id, title_name)
+`;
+
+const STARTER_EMPLOYEE_SELECT = `
+  id,
+  email,
+  full_name,
+  avatar_url,
+  timezone,
+  work_target_minutes,
+  status,
+  joined_on,
+  manager_id
+`;
+
+const EXTENDED_EMPLOYEE_SELECT = `
+  id,
+  organization_id,
+  email,
+  full_name,
+  avatar_url,
+  phone,
+  emergency_contact,
+  work_mode,
+  timezone,
+  status,
+  joined_on,
+  employment_category,
+  employee_number,
+  primary_location_id,
+  manager_id,
+  department_id,
+  job_title_id,
+  departments:department_id(id, name, code, parent_department_id),
+  job_titles:job_title_id(id, title_name)
+`;
+
+async function safeQuery<T = any>(promiseLike: PromiseLike<T>): Promise<T | null> {
+  try {
+    return await promiseLike;
+  } catch {
+    return null;
+  }
+}
+
+function buildEmployeeQuery(
+  client: any,
+  selectColumns: string,
+  filters: {
+    orgId: string | null;
+    managerDeptId: string | null;
+    departmentId: string | null;
+    status: string | null;
+  }
+) {
+  let query = client
+    .from("employees")
+    .select(selectColumns)
+    .order("joined_on", { ascending: false });
+
+  if (filters.orgId) {
+    query = query.eq("organization_id", filters.orgId);
+  }
+  if (filters.managerDeptId) {
+    query = query.eq("department_id", filters.managerDeptId);
+  } else if (filters.departmentId) {
+    query = query.eq("department_id", filters.departmentId);
+  }
+  if (filters.status) {
+    query = query.eq("status", filters.status);
+  }
+  return query;
+}
+
 export async function GET(request: NextRequest) {
   const approvedCheck = await requireApprovedUser(request);
   if ("response" in approvedCheck) {
     return approvedCheck.response;
   }
+
+  const { user, supabase: callerSupabase, role: approvedRole } = approvedCheck;
   const { searchParams } = new URL(request.url);
-  const search = searchParams.get("search")?.toLowerCase();
+  const search = searchParams.get("search")?.trim().toLowerCase() || "";
   const departmentId = searchParams.get("departmentId");
-  const role = searchParams.get("role");
-  const category = searchParams.get("category");
-  const status = searchParams.get("status");
+  const role = searchParams.get("role")?.trim().toLowerCase() || "";
+  const category = searchParams.get("category")?.trim().toLowerCase() || "";
+  const status = searchParams.get("status")?.trim().toLowerCase() || "";
 
   try {
     const isDemo = isDemoModeEnabled();
+    const adminConfigured = isSupabaseAdminConfigured();
+    const dbClient: any = adminConfigured ? supabaseAdmin : callerSupabase;
 
-    // Authenticate caller
-    let user = null;
-    let userRole = "employee";
-    const authHeader = request.headers.get("Authorization");
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      const token = authHeader.replace("Bearer ", "").trim();
-      const { data: userData } = await supabaseAdmin.auth.getUser(token);
-      user = userData?.user || null;
-    }
-    if (!user) {
-      const supabase = await createClient();
-      const { data: cookieUser } = await supabase.auth.getUser();
-      user = cookieUser?.user || null;
-    }
+    // Resolve authoritative membership, role, and organization_id
+    let userRole: string = approvedRole || "employee";
+    let orgId: string | null =
+      (user?.app_metadata?.organization_id as string | undefined) ||
+      (user?.user_metadata?.organization_id as string | undefined) ||
+      null;
 
-    if (user) {
-      const { data: member } = await supabaseAdmin
-        .from("organization_members")
-        .select("role")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      userRole = (member?.role || user.user_metadata?.role || user.user_metadata?.user_role || "employee").toLowerCase();
+    if (user?.id) {
+      const memberRes: any = await safeQuery(
+        dbClient
+          .from("organization_members")
+          .select("role, organization_id, department_id")
+          .eq("user_id", user.id)
+          .eq("status", "active")
+          .maybeSingle()
+      );
+
+      if (memberRes?.data?.role) {
+        userRole = String(memberRes.data.role).toLowerCase();
+      } else {
+        const roleRes: any = await safeQuery(
+          dbClient
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", user.id)
+            .limit(1)
+            .maybeSingle()
+        );
+        if (roleRes?.data?.role) {
+          userRole = String(roleRes.data.role).toLowerCase();
+        }
+      }
+      if (memberRes?.data?.organization_id) {
+        orgId = memberRes.data.organization_id;
+      }
     }
 
     if (userRole === "employee") {
-      return NextResponse.json({ error: "Forbidden: Employee access denied." }, { status: 403 });
+      return NextResponse.json(
+        { error: "Forbidden: Employee access denied." },
+        { status: 403 }
+      );
+    }
+
+    // Resolve caller's orgId from employees if not on organization_members
+    if (!orgId && user?.id) {
+      const selfEmpRes: any = await safeQuery(
+        dbClient
+          .from("employees")
+          .select("organization_id, department_id")
+          .eq("id", user.id)
+          .maybeSingle()
+      );
+      if (selfEmpRes?.data?.organization_id) {
+        orgId = selfEmpRes.data.organization_id;
+      }
+    }
+
+    if (!orgId && isDemo) {
+      orgId = "00000000-0000-0000-0000-000000000001";
     }
 
     let managerDeptId: string | null = null;
-    if (userRole === "manager" && user) {
-      const { data: empRecord } = await (supabaseAdmin as any)
-        .from("employees")
-        .select("department_id")
-        .eq("id", user.id)
-        .maybeSingle();
-      managerDeptId = empRecord?.department_id || null;
+    if (userRole === "manager" && user?.id) {
+      const empRecordRes: any = await safeQuery(
+        dbClient
+          .from("employees")
+          .select("department_id")
+          .eq("id", user.id)
+          .maybeSingle()
+      );
+      managerDeptId = empRecordRes?.data?.department_id || null;
     }
 
-    // Query real Supabase database
-    let query = (supabaseAdmin as any)
-      .from("employees")
-      .select(`
-        id,
-        email,
-        full_name,
-        avatar_url,
-        phone,
-        emergency_contact,
-        work_mode,
-        timezone,
-        status,
-        joined_on,
-        primary_location_id,
-        manager_id,
-        department_id,
-        job_title_id,
-        departments:department_id(id, name, code, parent_department_id),
-        job_titles:job_title_id(id, title_name)
-      `)
-      .order("joined_on", { ascending: false });
+    // Query employees using LEFT JOINs (departments & job_titles nullable) with safe schema fallback
+    const filters = { orgId, managerDeptId, departmentId, status: status || null };
 
-    if (managerDeptId) {
-      query = query.eq("department_id", managerDeptId);
-    } else if (departmentId) {
-      query = query.eq("department_id", departmentId);
-    }
-    if (category) {
-      query = query.eq("employment_category", category);
-    }
-    if (status) {
-      query = query.eq("status", status);
+    const executeEmployeeFetch = async (client: any) => {
+      try {
+        let res = await buildEmployeeQuery(client, EXTENDED_EMPLOYEE_SELECT, filters);
+        if (
+          res?.error &&
+          /column .* does not exist|could not find|relationship|schema cache/i.test(res.error.message || "")
+        ) {
+          res = await buildEmployeeQuery(client, BASE_EMPLOYEE_SELECT, filters);
+        }
+        if (
+          res?.error &&
+          /column .* does not exist|could not find|relationship|schema cache/i.test(res.error.message || "")
+        ) {
+          let starterQuery = client
+            .from("employees")
+            .select(STARTER_EMPLOYEE_SELECT)
+            .order("joined_on", { ascending: false });
+          if (filters.status) {
+            starterQuery = starterQuery.eq("status", filters.status);
+          }
+          res = await starterQuery;
+        }
+        return res;
+      } catch (err: any) {
+        return { data: null, error: err };
+      }
+    };
+
+    let empQueryRes: any = await executeEmployeeFetch(dbClient);
+
+    // If admin query failed (e.g. invalid service key), fall back cleanly to caller's authenticated SSR client
+    if (empQueryRes?.error && dbClient !== callerSupabase) {
+      const fallbackRes: any = await executeEmployeeFetch(callerSupabase);
+      if (!fallbackRes?.error) {
+        empQueryRes = fallbackRes;
+      }
     }
 
-    const { data: emps, error } = await query;
+    if (empQueryRes?.error && !isDemo) {
+      const msg = String(empQueryRes.error.message || "Failed to fetch employees");
+      const isAuthz =
+        empQueryRes.error.code === "42501" ||
+        /permission denied|row-level security|forbidden/i.test(msg);
+      return NextResponse.json(
+        { error: msg },
+        { status: isAuthz ? 403 : 500 }
+      );
+    }
 
-    // Fetch authoritative roles from organization_members and user_roles
-    const [orgMembersRes, userRolesRes] = await Promise.all([
-      (supabaseAdmin as any).from("organization_members").select("user_id, role"),
-      (supabaseAdmin as any).from("user_roles").select("user_id, role"),
+    let emps: any[] = empQueryRes?.data || [];
+
+    // Fetch authoritative active org memberships, onboarding categories, and legacy roles
+    const queryClientForMeta = empQueryRes?.error ? callerSupabase : dbClient;
+
+    const orgMembersPromise = orgId
+      ? queryClientForMeta
+          .from("organization_members")
+          .select(
+            "user_id, role, status, department_id, job_title_id, shift_start_time, shift_end_time, departments:department_id(id, name, code, parent_department_id), job_titles:job_title_id(id, title_name)"
+          )
+          .eq("organization_id", orgId)
+      : queryClientForMeta
+          .from("organization_members")
+          .select("user_id, role, status, department_id, job_title_id");
+
+    const [orgMembersRes, userRolesRes, onbProfilesRes] = await Promise.all([
+      safeQuery(orgMembersPromise),
+      safeQuery(queryClientForMeta.from("user_roles").select("user_id, role")),
+      safeQuery(
+        queryClientForMeta
+          .from("onboarding_profiles")
+          .select("user_id, full_name, personal_email, candidate_type, education_details, phone")
+      ),
     ]);
 
+    const orgMembers: any[] = orgMembersRes?.data || [];
     const roleMap = new Map<string, string>();
-    for (const m of orgMembersRes.data || []) {
+    for (const m of orgMembers) {
       if (m.user_id && m.role) {
         roleMap.set(m.user_id, String(m.role).toLowerCase());
       }
     }
-    for (const ur of userRolesRes.data || []) {
+    for (const ur of userRolesRes?.data || []) {
       if (ur.user_id && ur.role && !roleMap.has(ur.user_id)) {
         roleMap.set(ur.user_id, String(ur.role).toLowerCase());
       }
     }
 
-    let employeeList = (emps || []).map((e: any) => ({
-      ...e,
-      role: roleMap.get(e.id) || "employee",
-    }));
+    // Enrich missing phone / employment_category / role from Auth user_metadata in starter schema
+    const authUserMetaMap = new Map<string, any>();
+    if (adminConfigured && orgMembers.length === 0) {
+      try {
+        const { data: authList } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 200 });
+        for (const au of authList?.users || []) {
+          if (au?.id) authUserMetaMap.set(au.id, au);
+        }
+      } catch {}
+    }
 
-    // Fallback or merge with demo store if empty or demo mode
-    if ((!employeeList || employeeList.length === 0) && isDemo) {
+    const onboardingMap = new Map<string, any>();
+    for (const p of onbProfilesRes?.data || []) {
+      if (p?.user_id) onboardingMap.set(p.user_id, p);
+    }
+
+    // Sync any active organization_members (such as the tenant admin) missing from employees table
+    if (orgId && adminConfigured && orgMembers.length > 0) {
+      const existingEmpIds = new Set(emps.map((e: any) => e.id));
+      const missingActiveMembers = orgMembers.filter(
+        (m: any) =>
+          m?.user_id &&
+          (m.status === "active" || !m.status) &&
+          !existingEmpIds.has(m.user_id) &&
+          !managerDeptId &&
+          (!departmentId || m.department_id === departmentId) &&
+          (!status || status === "active")
+      );
+
+      if (missingActiveMembers.length > 0) {
+        const syncedRows: any[] = [];
+        for (const m of missingActiveMembers) {
+          try {
+            let authUser: any = m.user_id === user?.id ? user : null;
+            if (!authUser) {
+              const { data: uRes } = await supabaseAdmin.auth.admin.getUserById(m.user_id);
+              authUser = uRes?.user || null;
+            }
+            if (!authUser?.email) continue;
+
+            const onb = onboardingMap.get(m.user_id);
+            const resolvedName =
+              onb?.full_name ||
+              authUser.user_metadata?.full_name ||
+              authUser.user_metadata?.name ||
+              authUser.email.split("@")[0];
+
+            const upsertPayload = {
+              id: m.user_id,
+              organization_id: orgId,
+              email: authUser.email,
+              full_name: resolvedName,
+              status: "active",
+              work_mode: "remote",
+              timezone: authUser.user_metadata?.timezone || "Asia/Kolkata",
+              department_id: m.department_id || null,
+              job_title_id: m.job_title_id || null,
+              shift_start_time: m.shift_start_time || "09:00:00",
+              shift_end_time: m.shift_end_time || "17:00:00",
+              onboarding_completed: true,
+            };
+
+            const { error: syncErr } = await (supabaseAdmin.from("employees") as any)
+              .upsert(upsertPayload, { onConflict: "id", ignoreDuplicates: true });
+
+            if (!syncErr) {
+              syncedRows.push({
+                ...upsertPayload,
+                phone: onb?.phone || null,
+                joined_on: new Date().toISOString().slice(0, 10),
+                departments: m.departments || null,
+                job_titles: m.job_titles || null,
+              });
+            }
+          } catch {}
+        }
+        if (syncedRows.length > 0) {
+          emps = [...syncedRows, ...emps];
+        }
+      }
+    }
+
+    let employeeList = emps.map((e: any) => {
+      const onb = onboardingMap.get(e.id);
+      const authMeta = authUserMetaMap.get(e.id)?.user_metadata || {};
+      const authAppMeta = authUserMetaMap.get(e.id)?.app_metadata || {};
+      const eduDetails = onb?.education_details || {};
+      const resolvedCategory =
+        e.employment_category ||
+        eduDetails?.employment_category ||
+        authMeta?.employment_category ||
+        (onb?.candidate_type === "INTERN" ? "intern" : "full_time");
+
+      return {
+        ...e,
+        phone: e.phone || onb?.phone || authMeta?.phone || null,
+        employment_category: resolvedCategory,
+        role:
+          roleMap.get(e.id) ||
+          (authAppMeta?.user_role || authMeta?.user_role || "employee").toLowerCase(),
+      };
+    });
+
+    // Fallback to demo store only when database returned zero rows in demo mode
+    if (employeeList.length === 0 && isDemo) {
       const storedUsers = getStoredUsers();
       const storedDepts = getStoredDepartments();
       const storedTitles = getStoredJobTitles();
@@ -155,10 +419,15 @@ export async function GET(request: NextRequest) {
 
       if (managerDeptId) {
         employeeList = employeeList.filter((e: any) => e.department_id === managerDeptId);
+      } else if (departmentId) {
+        employeeList = employeeList.filter((e: any) => e.department_id === departmentId);
+      }
+      if (status) {
+        employeeList = employeeList.filter((e: any) => (e.status || "").toLowerCase() === status);
       }
     }
 
-    // Client search filter
+    // Apply search, role, and category filters safely in memory
     if (search) {
       employeeList = employeeList.filter(
         (e: any) =>
@@ -171,7 +440,13 @@ export async function GET(request: NextRequest) {
     }
 
     if (role) {
-      employeeList = employeeList.filter((e: any) => e.role === role);
+      employeeList = employeeList.filter((e: any) => (e.role || "").toLowerCase() === role);
+    }
+
+    if (category) {
+      employeeList = employeeList.filter(
+        (e: any) => (e.employment_category || "full_time").toLowerCase() === category
+      );
     }
 
     return NextResponse.json(
@@ -187,6 +462,9 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to fetch employees" }, { status: 500 });
+    return NextResponse.json(
+      { error: err?.message || "Failed to fetch employees" },
+      { status: 500 }
+    );
   }
 }

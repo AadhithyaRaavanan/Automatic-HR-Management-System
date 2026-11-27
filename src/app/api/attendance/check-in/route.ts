@@ -121,23 +121,59 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Create new attendance session
+    // 4. Create new attendance session with initial last_seen_at heartbeat
     const effectiveWorkDate = getEmployeeWorkDate(timezone, new Date(), shiftStartTime, shiftEndTime);
     const nowIso = new Date().toISOString();
     const orgId = emp?.organization_id || "00000000-0000-0000-0000-000000000001";
+    const initialNote = JSON.stringify({
+      originalNote: body.note || "",
+      breaks: [],
+      lastSeenAt: nowIso,
+    });
 
-    const { data: session, error: insertErr } = await (supabaseAdmin as any)
+    let { data: session, error: insertErr } = await (supabaseAdmin as any)
       .from("attendance_sessions")
       .insert({
         organization_id: orgId,
         employee_id: user.id,
         work_date: effectiveWorkDate,
         check_in_at: nowIso,
+        last_seen_at: nowIso,
+        status: "checked_in",
         source: "web",
-        note: body.note || null,
+        note: initialNote,
       })
       .select()
       .single();
+
+    if (
+      insertErr &&
+      (insertErr.code === "PGRST204" ||
+        insertErr.code === "42703" ||
+        /column .* does not exist|schema cache/i.test(String(insertErr.message || "")))
+    ) {
+      const fallback = await (supabaseAdmin as any)
+        .from("attendance_sessions")
+        .insert({
+          organization_id: orgId,
+          employee_id: user.id,
+          work_date: effectiveWorkDate,
+          check_in_at: nowIso,
+          source: "web",
+          note: initialNote,
+        })
+        .select()
+        .single();
+      session = fallback.data;
+      insertErr = fallback.error;
+    }
+
+    try {
+      await (supabaseAdmin as any)
+        .from("employees")
+        .update({ last_seen_at: nowIso })
+        .eq("id", user.id);
+    } catch {}
 
     if (insertErr) {
       if (insertErr.code === "23505" || insertErr.message?.includes("idx_single_open_session")) {

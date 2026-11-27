@@ -3,7 +3,7 @@ import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { Database, EmployeeRole } from "@/types/database.types";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { isSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabase/admin";
 
 export interface ApprovedUserContext {
   user: any;
@@ -82,15 +82,16 @@ export async function requireApprovedUser(
     return { user, role, userId: user.id, supabase };
   }
 
-  // 3. Fallback: lightweight DB check using supabaseAdmin
+  // 3. Fallback: lightweight DB check using supabaseAdmin when configured, else caller SSR client
   try {
+    const dbClient: any = isSupabaseAdminConfigured() ? supabaseAdmin : supabase;
     const [onbRes, empRes] = await Promise.all([
-      (supabaseAdmin as any)
+      dbClient
         .from("onboarding_profiles")
         .select("status")
         .eq("user_id", user.id)
         .maybeSingle(),
-      (supabaseAdmin as any)
+      dbClient
         .from("employees")
         .select("status, onboarding_completed")
         .eq("id", user.id)
@@ -99,14 +100,22 @@ export async function requireApprovedUser(
 
     const profStatus = (onbRes.data?.status || "").toLowerCase();
     const empStatus = (empRes.data?.status || "").toLowerCase();
+    const onbTableMissing = Boolean(
+      onbRes.error &&
+        (onbRes.error.code === "PGRST205" ||
+          onbRes.error.code === "42P01" ||
+          /could not find the table|does not exist/i.test(onbRes.error.message || ""))
+    );
 
-    if (profStatus === "approved" && empStatus === "active") {
+    if ((profStatus === "approved" || onbTableMissing) && empStatus === "active") {
       // Stamp claim in background so subsequent calls hit fast-path
-      try {
-        await supabaseAdmin.auth.admin.updateUserById(user.id, {
-          app_metadata: { onboarding_approved: true },
-        });
-      } catch {}
+      if (isSupabaseAdminConfigured()) {
+        try {
+          await supabaseAdmin.auth.admin.updateUserById(user.id, {
+            app_metadata: { onboarding_approved: true },
+          });
+        } catch {}
+      }
 
       return { user, employee: empRes.data, role, userId: user.id, supabase };
     }

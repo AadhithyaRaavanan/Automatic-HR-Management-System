@@ -483,6 +483,13 @@ export function getStoredUsers(): DemoUser[] {
         !u.name.toLowerCase().includes("jamesaathithyandev") &&
         !u.name.toLowerCase().includes("james aathithyan") &&
         !u.name.toLowerCase().includes("sarah jenkins") &&
+        !u.name.toLowerCase().includes("sarah connor") &&
+        !u.name.toLowerCase().includes("alex morgan") &&
+        !u.name.toLowerCase().includes("devon lane") &&
+        !u.name.toLowerCase().includes("james sullivan") &&
+        !u.name.toLowerCase().includes("ken smith") &&
+        !u.name.toLowerCase().includes("marcus vance") &&
+        !u.name.toLowerCase().includes("rachel lee") &&
         !u.name.toLowerCase().includes("david chen") &&
         !u.name.toLowerCase().includes("maya patel") &&
         !u.name.toLowerCase().includes("eleanor") &&

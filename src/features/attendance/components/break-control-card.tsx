@@ -62,7 +62,10 @@ export function BreakControlCard({ isCheckedIn, className, onBreakChange }: Brea
       hasAlertedOvertimeRef.current = false;
       return;
     }
-    const maxAllowedMins = activeBreak.type === "short_break" ? 15 : 60;
+    const maxAllowedMins = Math.min(
+      activeBreak.type === "short_break" ? 15 : 60,
+      attendanceCtx?.maxBreakMinutes || 60
+    );
 
     const interval = setInterval(() => {
       const startedAt = new Date(activeBreak.startTime).getTime();
@@ -82,7 +85,7 @@ export function BreakControlCard({ isCheckedIn, className, onBreakChange }: Brea
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [activeBreak]);
+  }, [activeBreak, attendanceCtx?.maxBreakMinutes]);
 
   const handleStartBreak = async (type: "short_break" | "lunch_break") => {
     if (!isCheckedIn) {
@@ -138,7 +141,10 @@ export function BreakControlCard({ isCheckedIn, className, onBreakChange }: Brea
     return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
   };
 
-  const maxAllowedMins = activeBreak?.type === "short_break" ? 15 : 60;
+  const maxAllowedMins = Math.min(
+    activeBreak?.type === "short_break" ? 15 : 60,
+    attendanceCtx?.maxBreakMinutes || 60
+  );
   const isOvertime = Math.floor(elapsedSeconds / 60) >= maxAllowedMins;
 
   return (

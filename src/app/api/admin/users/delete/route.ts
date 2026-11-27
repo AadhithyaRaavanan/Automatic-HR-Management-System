@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { verifyAdminRouteCaller } from "@/features/auth/admin-guard";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdminConfigError } from "@/lib/supabase/admin-config";
+import { permanentlyDeleteEmployee } from "@/features/admin/delete-employee";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +12,11 @@ export async function POST(request: NextRequest) {
     return authResult.response;
   }
   const { context } = authResult;
+
+  const adminConfigError = getSupabaseAdminConfigError();
+  if (adminConfigError) {
+    return NextResponse.json({ error: adminConfigError }, { status: 500 });
+  }
 
   try {
     const { targetUserId } = await request.json();
@@ -21,66 +28,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (targetUserId === context.userId) {
+    const result = await permanentlyDeleteEmployee(context, targetUserId);
+    if (!result.ok) {
       return NextResponse.json(
-        { error: "Admins cannot delete their own account." },
-        { status: 400 }
+        { error: result.error || "Failed to permanently delete user." },
+        { status: result.status }
       );
     }
 
-    // 1. Unlink any manager or lead assignments
-    await (supabaseAdmin as any)
-      .from("employees")
-      .update({ manager_id: null })
-      .eq("manager_id", targetUserId);
-
-    await (supabaseAdmin as any)
-      .from("departments")
-      .update({ department_head_id: null })
-      .eq("department_head_id", targetUserId);
-
-    // 2. Cascade delete records tied to this user
-    await supabaseAdmin.from("attendance_sessions").delete().eq("employee_id", targetUserId);
-    await supabaseAdmin.from("attendance_days").delete().eq("employee_id", targetUserId);
-    await supabaseAdmin.from("leave_requests").delete().eq("employee_id", targetUserId);
-    await supabaseAdmin.from("regularization_requests").delete().eq("employee_id", targetUserId);
-
-    // 3. Delete from employees & organization_members
-    const { error: empDelErr } = await supabaseAdmin
-      .from("employees")
-      .delete()
-      .eq("id", targetUserId);
-
-    if (empDelErr) {
-      console.warn("Note during employees delete:", empDelErr.message);
-    }
-
-    await supabaseAdmin
-      .from("organization_members")
-      .delete()
-      .eq("user_id", targetUserId);
-
-    // 4. Permanently delete from Supabase Auth
-    try {
-      await supabaseAdmin.auth.admin.deleteUser(targetUserId);
-    } catch (authDelErr: any) {
-      console.warn("Note during auth.admin.deleteUser:", authDelErr?.message);
-    }
-
-    // 5. Audit log
-    await supabaseAdmin.from("audit_logs").insert({
-      organization_id: context.organizationId,
-      actor_id: context.userId,
-      action: "USER_PERMANENTLY_DELETED",
-      table_name: "employees",
-      record_id: targetUserId,
-      old_data: { targetUserId },
-      new_data: null,
-    });
+    revalidatePath("/employees");
+    revalidatePath("/ems/employees");
+    revalidatePath("/admin/users");
+    revalidatePath("/tasks");
 
     return NextResponse.json({
       success: true,
-      message: `User ${targetUserId} and all associated records permanently deleted.`,
+      message: `User ${result.deletedUserId} and all associated records permanently deleted.`,
     });
   } catch (err: any) {
     return NextResponse.json(

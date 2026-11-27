@@ -48,10 +48,24 @@ function LoginForm() {
   const supabase = React.useMemo(() => createClient(), []);
   const hashHandledRef = React.useRef(false);
 
-  // Surface callback/expiry error banners when redirected back to /login
+  // Surface callback/expiry error & break-timeout banners when redirected back to /login
+  const breakTimeoutToastedRef = React.useRef(false);
   React.useEffect(() => {
     const errParam = searchParams.get("error");
-    if (errParam === "auth_callback_failed") {
+    const reasonParam = searchParams.get("reason");
+    if (reasonParam === "break_timeout") {
+      const msg =
+        "You were automatically logged out because your break time exceeded the allowed limit. Please remember to end your breaks or log out properly next time.";
+      setLockoutMessage(msg);
+      if (!breakTimeoutToastedRef.current) {
+        breakTimeoutToastedRef.current = true;
+        toast.warning("Auto Logged Out: Break Time Exceeded", {
+          description:
+            "Your shift was ended because your break exceeded the allowed limit.",
+          duration: 8000,
+        });
+      }
+    } else if (errParam === "auth_callback_failed") {
       setLockoutMessage("Your sign-in link has expired or could not be verified. Please request a new link.");
     } else if (errParam === "expired_temp_password") {
       setLockoutMessage("Your temporary password has expired. Please use Forgot password to reset it.");

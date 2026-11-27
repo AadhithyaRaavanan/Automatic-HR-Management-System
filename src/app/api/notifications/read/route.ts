@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getNotificationCaller } from "@/features/notifications/auth";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getNotificationAuth } from "@/features/notifications/auth";
+import { isSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getNotificationCaller(request);
+    const { user, supabase } = await getNotificationAuth(request);
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -14,16 +14,27 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const { ids, all } = body;
     const nowIso = new Date().toISOString();
+    const primaryClient: any = isSupabaseAdminConfigured() ? supabaseAdmin : supabase;
 
     if (all === true) {
-      const { data, error } = await (supabaseAdmin.from("notifications") as any)
+      let { data, error } = await (primaryClient.from("notifications") as any)
         .update({ read_at: nowIso })
         .eq("user_id", user.id)
         .is("read_at", null)
         .select("id");
 
+      if (error && primaryClient === supabaseAdmin) {
+        const fallback = await (supabase.from("notifications") as any)
+          .update({ read_at: nowIso })
+          .eq("user_id", user.id)
+          .is("read_at", null)
+          .select("id");
+        data = fallback.data;
+        error = fallback.error;
+      }
+
       if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: error.message }, { status: 403 });
       }
 
       return NextResponse.json({
@@ -33,15 +44,26 @@ export async function POST(request: NextRequest) {
     }
 
     if (Array.isArray(ids) && ids.length > 0) {
-      const { data, error } = await (supabaseAdmin.from("notifications") as any)
+      let { data, error } = await (primaryClient.from("notifications") as any)
         .update({ read_at: nowIso })
         .eq("user_id", user.id)
         .in("id", ids)
         .is("read_at", null)
         .select("id");
 
+      if (error && primaryClient === supabaseAdmin) {
+        const fallback = await (supabase.from("notifications") as any)
+          .update({ read_at: nowIso })
+          .eq("user_id", user.id)
+          .in("id", ids)
+          .is("read_at", null)
+          .select("id");
+        data = fallback.data;
+        error = fallback.error;
+      }
+
       if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: error.message }, { status: 403 });
       }
 
       return NextResponse.json({

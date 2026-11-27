@@ -16,6 +16,8 @@ import {
   Calendar,
   ExternalLink,
   GraduationCap,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -39,7 +41,9 @@ interface EmployeeDirectoryItem {
 export default function EmployeeDirectoryPage() {
   const { userRole } = useAppSession();
   const [employees, setEmployees] = React.useState<EmployeeDirectoryItem[]>([]);
+  const [departments, setDepartments] = React.useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = React.useState(true);
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
   // Filters
   const [search, setSearch] = React.useState("");
@@ -49,6 +53,7 @@ export default function EmployeeDirectoryPage() {
 
   const loadEmployees = React.useCallback(async () => {
     setLoading(true);
+    setErrorMessage(null);
     try {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
@@ -56,13 +61,32 @@ export default function EmployeeDirectoryPage() {
       if (selectedCategory !== "all") params.set("category", selectedCategory);
       if (selectedStatus !== "all") params.set("status", selectedStatus);
 
-      const res = await fetch(`/api/employees?${params.toString()}`);
-      const data = await res.json();
-      if (data.employees) {
-        setEmployees(data.employees);
+      const res = await fetch(`/api/employees?${params.toString()}`, { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = data?.error || `Failed to load employee directory (${res.status})`;
+        setErrorMessage(msg);
+        setEmployees([]);
+        toast.error(msg);
+        return;
       }
+
+      const list: EmployeeDirectoryItem[] = Array.isArray(data?.employees) ? data.employees : [];
+      setEmployees(list);
+      setDepartments((prev) => {
+        const map = new Map<string, string>(prev.map((d) => [d.id, d.name]));
+        list.forEach((e) => {
+          if (e.departments?.id && e.departments?.name) {
+            map.set(e.departments.id, e.departments.name);
+          }
+        });
+        return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+      });
     } catch (err: any) {
-      toast.error("Failed to load employee directory");
+      const msg = err?.message || "Failed to load employee directory";
+      setErrorMessage(msg);
+      setEmployees([]);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -71,17 +95,6 @@ export default function EmployeeDirectoryPage() {
   React.useEffect(() => {
     loadEmployees();
   }, [loadEmployees]);
-
-  // Unique departments for filter
-  const departments = React.useMemo(() => {
-    const map = new Map<string, string>();
-    employees.forEach((e) => {
-      if (e.departments?.id && e.departments?.name) {
-        map.set(e.departments.id, e.departments.name);
-      }
-    });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [employees]);
 
   const handleExportCSV = () => {
     if (!employees.length) return;
@@ -193,6 +206,27 @@ export default function EmployeeDirectoryPage() {
             </div>
           </div>
         </div>
+
+        {/* Inline Error Banner */}
+        {errorMessage && (
+          <div
+            role="alert"
+            className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-medium"
+          >
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500" />
+              <span>{errorMessage}</span>
+            </div>
+            <button
+              type="button"
+              onClick={loadEmployees}
+              className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-rose-500/30 text-rose-600 dark:text-rose-300 font-semibold hover:bg-rose-500/10 inline-flex items-center gap-1.5 self-start sm:self-auto"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Retry
+            </button>
+          </div>
+        )}
 
         {/* Directory Grid */}
         {loading ? (

@@ -93,30 +93,17 @@ function getInitialSession(propRole?: AppUserRole): AppSessionState {
       requireMfaForPrivileged: true,
     };
   }
-  let cached: AppSessionState | null = null;
-  if (typeof window !== "undefined") {
-    try {
-      const raw = localStorage.getItem("remotehr_cached_session");
-      if (raw) cached = JSON.parse(raw);
-    } catch {}
-  }
-  const cookieRole = getCookieRole();
-  const defaultRole: AppUserRole =
-    cached?.userRole ||
-    (typeof window !== "undefined" ? (localStorage.getItem("remotehr_cached_role") as AppUserRole) : null) ||
-    cookieRole ||
-    (isDemoModeEnabled() ? "admin" : "employee");
 
   return {
-    userId: cached?.userId || null,
-    organizationId: cached?.organizationId || null,
-    userRole: defaultRole,
-    fullName: cached?.fullName || null,
-    userEmail: cached?.userEmail || null,
-    timezone: cached?.timezone || "Asia/Kolkata",
-    isLoaded: Boolean(cached?.fullName),
-    departmentName: cached?.departmentName || null,
-    jobTitleName: cached?.jobTitleName || null,
+    userId: null,
+    organizationId: null,
+    userRole: isDemoModeEnabled() ? "admin" : "employee",
+    fullName: null,
+    userEmail: null,
+    timezone: "Asia/Kolkata",
+    isLoaded: false,
+    departmentName: null,
+    jobTitleName: null,
     requireMfaForPrivileged: true,
   };
 }
@@ -134,10 +121,38 @@ export function AppShell({
   );
   const [userTutorialVersion, setUserTutorialVersion] = React.useState<number>(0);
   const [isExistingUserTour, setIsExistingUserTour] = React.useState<boolean>(false);
-  const [tourOpen, setTourOpen] = React.useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return sessionStorage.getItem("pulse_tutorial_active") === "true";
-  });
+  const [tourOpen, setTourOpen] = React.useState<boolean>(false);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!propUserRole) {
+      try {
+        const raw = localStorage.getItem("remotehr_cached_session");
+        const cached = raw ? (JSON.parse(raw) as AppSessionState) : null;
+        const cookieRole = getCookieRole();
+        const storedRole = localStorage.getItem("remotehr_cached_role") as AppUserRole | null;
+        const resolvedRole: AppUserRole =
+          cached?.userRole || storedRole || cookieRole || (isDemoModeEnabled() ? "admin" : "employee");
+        if (cached || cookieRole || storedRole) {
+          setSessionState((prev) => ({
+            ...prev,
+            userId: cached?.userId || prev.userId,
+            organizationId: cached?.organizationId || prev.organizationId,
+            userRole: resolvedRole,
+            fullName: cached?.fullName || prev.fullName,
+            userEmail: cached?.userEmail || prev.userEmail,
+            timezone: cached?.timezone || prev.timezone,
+            isLoaded: Boolean(cached?.fullName),
+            departmentName: cached?.departmentName || prev.departmentName,
+            jobTitleName: cached?.jobTitleName || prev.jobTitleName,
+          }));
+        }
+      } catch {}
+    }
+    if (sessionStorage.getItem("pulse_tutorial_active") === "true") {
+      setTourOpen(true);
+    }
+  }, [propUserRole]);
 
   const handleTourOpenChange = React.useCallback((open: boolean) => {
     if (!open && typeof window !== "undefined") {
@@ -239,15 +254,23 @@ export function AppShell({
             resolvedRole === "manager" ||
             resolvedRole === "hr";
 
-          // Run independent profile, tutorial status, and MFA checks in parallel
+          // Run independent profile, tutorial status, and MFA checks in parallel (with base-schema fallback)
           const [empResult, tutorialStatusResult, aalResult] = await Promise.all([
-            (supabase as any)
-              .from("employees")
-              .select(
-                "full_name, timezone, organization_id, onboarding_completed, onboarding_completed_at, departments:department_id(name), job_titles:job_title_id(title_name)"
-              )
-              .eq("id", user.id)
-              .maybeSingle(),
+            (async () => {
+              const ext = await (supabase as any)
+                .from("employees")
+                .select(
+                  "full_name, timezone, organization_id, onboarding_completed, onboarding_completed_at, departments:department_id(name), job_titles:job_title_id(title_name)"
+                )
+                .eq("id", user.id)
+                .maybeSingle();
+              if (!ext?.error) return ext;
+              return await (supabase as any)
+                .from("employees")
+                .select("full_name, timezone, status")
+                .eq("id", user.id)
+                .maybeSingle();
+            })(),
             isEligibleRole
               ? fetch("/api/tutorial/complete", {
                   headers: session?.access_token

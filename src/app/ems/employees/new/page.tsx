@@ -18,9 +18,18 @@ import {
   Mail,
   Copy,
   Check,
+  ChevronDown,
+  Search,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import {
+  COUNTRY_DIAL_CODES,
+  DEFAULT_COUNTRY_ISO2,
+  getCountryByIso2,
+  validatePhoneNumber,
+} from "@/lib/constants/country-dial-codes";
 
 export default function NewEmployeeWizardPage() {
   const router = useRouter();
@@ -32,7 +41,13 @@ export default function NewEmployeeWizardPage() {
   // Step 1: Personal
   const [fullName, setFullName] = React.useState("");
   const [email, setEmail] = React.useState("");
+  const [countryIso2, setCountryIso2] = React.useState<string>(DEFAULT_COUNTRY_ISO2);
+  const [countryDropdownOpen, setCountryDropdownOpen] = React.useState(false);
+  const [countrySearch, setCountrySearch] = React.useState("");
   const [phone, setPhone] = React.useState("");
+  const [phoneTouched, setPhoneTouched] = React.useState(false);
+  const countryDropdownRef = React.useRef<HTMLDivElement>(null);
+  const countrySearchInputRef = React.useRef<HTMLInputElement>(null);
 
   // Step 2: Org Assignment
   const [departmentId, setDepartmentId] = React.useState("");
@@ -51,8 +66,9 @@ export default function NewEmployeeWizardPage() {
   const [internshipDuration, setInternshipDuration] = React.useState(3);
   const [trainingPlan, setTrainingPlan] = React.useState("");
 
-  // Created Credentials State
+  // Created Credentials & Submission Error State
   const [createdResult, setCreatedResult] = React.useState<any>(null);
+  const [submitError, setSubmitError] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
 
   React.useEffect(() => {
@@ -78,17 +94,97 @@ export default function NewEmployeeWizardPage() {
     return filtered.length > 0 ? filtered : jobTitles;
   }, [departmentId, jobTitles]);
 
-  const sanitizePhone = (val: string) => {
-    const hasPlus = val.startsWith("+");
-    const digits = val.replace(/\D/g, "");
-    return hasPlus ? `+${digits}` : digits;
-  };
+  const selectedCountry = React.useMemo(
+    () => getCountryByIso2(countryIso2),
+    [countryIso2]
+  );
+
+  const filteredCountries = React.useMemo(() => {
+    const q = countrySearch.trim().toLowerCase();
+    if (!q) return COUNTRY_DIAL_CODES;
+    const qDigits = q.replace(/^\+/, "");
+    return COUNTRY_DIAL_CODES
+      .map((c) => {
+        const nameLower = c.name.toLowerCase();
+        const isoLower = c.iso2.toLowerCase();
+        const dialLower = c.dialCode.toLowerCase();
+        const dialDigits = dialLower.replace(/^\+/, "");
+
+        let rank = -1;
+        if (isoLower === q || dialLower === q || (qDigits && dialDigits === qDigits)) {
+          rank = 0;
+        } else if (
+          nameLower.startsWith(q) ||
+          isoLower.startsWith(q) ||
+          (qDigits && dialDigits.startsWith(qDigits))
+        ) {
+          rank = 1;
+        } else if (
+          nameLower.includes(q) ||
+          isoLower.includes(q) ||
+          dialLower.includes(q) ||
+          (qDigits && dialDigits.includes(qDigits))
+        ) {
+          rank = 2;
+        }
+        return { country: c, rank };
+      })
+      .filter((entry) => entry.rank !== -1)
+      .sort((a, b) => a.rank - b.rank || a.country.name.localeCompare(b.country.name))
+      .map((entry) => entry.country);
+  }, [countrySearch]);
+
+  React.useEffect(() => {
+    if (!countryDropdownOpen) return;
+    const timer = window.setTimeout(() => {
+      countrySearchInputRef.current?.focus();
+    }, 10);
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        countryDropdownRef.current &&
+        !countryDropdownRef.current.contains(event.target as Node)
+      ) {
+        setCountryDropdownOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setCountryDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [countryDropdownOpen]);
+
+  const phoneValidationError = React.useMemo(
+    () => validatePhoneNumber(selectedCountry, phone.trim()),
+    [selectedCountry, phone]
+  );
+
+  const countryDialDigits = selectedCountry.dialCode.replace(/\D/g, "").length;
+  const maxLocalDigitsForTrigger = selectedCountry.maxLength ?? 15 - countryDialDigits;
+
+  const showInlinePhoneError = Boolean(
+    phoneValidationError &&
+      (phoneTouched || phone.trim().length > maxLocalDigitsForTrigger)
+  );
+
+  const combinedPhone = phone.trim() ? `${selectedCountry.dialCode}${phone.trim()}` : undefined;
+
+  const sanitizeLocalPhone = (val: string) => val.replace(/\D/g, "");
 
   const handleNext = () => {
     if (currentStep === 1) {
       const cleanName = fullName.trim();
       const cleanEmail = email.trim();
-      const cleanPhone = phone.trim();
+      setPhoneTouched(true);
 
       if (!cleanName) {
         toast.error("Full name is required.");
@@ -106,14 +202,8 @@ export default function NewEmployeeWizardPage() {
         toast.error("Email must contain only lowercase letters, numbers, and valid email symbols.");
         return;
       }
-      if (cleanPhone && !/^\+?[0-9]{7,15}$/.test(cleanPhone)) {
-        toast.error("Contact phone must contain only numbers, optionally starting with '+'.");
-        return;
-      }
-    }
-    if (currentStep === 2) {
-      if (!departmentId) {
-        toast.error("Please select a department");
+      if (phoneValidationError) {
+        toast.error(phoneValidationError);
         return;
       }
     }
@@ -127,11 +217,13 @@ export default function NewEmployeeWizardPage() {
   };
 
   const handlePrev = () => {
+    setSubmitError(null);
     setCurrentStep((prev) => Math.max(prev - 1, 1));
   };
 
   const handleCreateEmployee = async () => {
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
       const res = await fetch("/api/admin/users/invite", {
         method: "POST",
@@ -139,25 +231,34 @@ export default function NewEmployeeWizardPage() {
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
           fullName: fullName.trim(),
+          phone: combinedPhone,
           role: systemRole,
           employmentCategory,
           workMode,
           timezone: timezone || "Asia/Kolkata",
-          departmentId,
-          jobTitleId,
+          departmentId: departmentId || null,
+          jobTitleId: jobTitleId || null,
           shiftStartTime: shiftStart.length === 5 ? `${shiftStart}:00` : shiftStart,
           shiftEndTime: shiftEnd.length === 5 ? `${shiftEnd}:00` : shiftEnd,
           salary: salary ? Number(salary) : undefined,
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to create employee");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.success !== true || !data?.employee?.id) {
+        throw new Error(
+          data?.error ||
+            `Failed to provision employee (HTTP ${res.status}): database record was not confirmed.`
+        );
+      }
 
       toast.success(`Account provisioned successfully for ${fullName}!`);
       setCreatedResult(data);
+      router.refresh();
     } catch (err: any) {
-      toast.error(err.message || "Failed to provision employee");
+      const msg = err?.message || "Failed to provision employee";
+      setSubmitError(msg);
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -286,13 +387,153 @@ export default function NewEmployeeWizardPage() {
                     </div>
                     <div>
                       <label className="block font-semibold text-text-secondary mb-1">Contact Phone</label>
-                      <input
-                        type="tel"
-                        placeholder="e.g. +91 98765 43210"
-                        value={phone}
-                        onChange={(e) => setPhone(sanitizePhone(e.target.value))}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-card-subtle border border-border-light text-text-primary focus:ring-2 focus:ring-brand-purple/20 focus:border-brand-purple"
-                      />
+                      <div className="flex items-stretch gap-2">
+                        <div ref={countryDropdownRef} className="relative shrink-0">
+                          <button
+                            type="button"
+                            role="combobox"
+                            aria-expanded={countryDropdownOpen}
+                            aria-haspopup="listbox"
+                            aria-label="Country dialing code"
+                            title={`${selectedCountry.name} (${selectedCountry.iso2}) ${selectedCountry.dialCode}`}
+                            onClick={() => {
+                              setCountryDropdownOpen((prev) => {
+                                const next = !prev;
+                                if (!next) setCountrySearch("");
+                                return next;
+                              });
+                            }}
+                            className="h-full min-w-[104px] px-2.5 py-2.5 rounded-xl bg-card-subtle border border-border-light text-text-primary font-medium flex items-center justify-between gap-1.5 hover:border-border-focus/40 focus:outline-none focus:ring-2 focus:ring-brand-purple/20 focus:border-brand-purple transition-colors"
+                          >
+                            <span className="flex items-center gap-1.5 whitespace-nowrap">
+                              <span className="text-[11px] font-bold text-text-muted">{selectedCountry.iso2}</span>
+                              <span>{selectedCountry.dialCode}</span>
+                            </span>
+                            <ChevronDown
+                              className={cn(
+                                "w-3.5 h-3.5 text-text-muted transition-transform shrink-0",
+                                countryDropdownOpen && "rotate-180"
+                              )}
+                            />
+                          </button>
+
+                          {countryDropdownOpen && (
+                            <div
+                              role="listbox"
+                              aria-label="Select country dialing code"
+                              className="absolute left-0 top-full mt-1.5 w-80 max-w-[calc(100vw-3rem)] rounded-xl bg-card border border-border-light shadow-xl z-50 overflow-hidden"
+                            >
+                              <div className="p-2 border-b border-border-light bg-card">
+                                <div className="relative flex items-center">
+                                  <Search className="w-3.5 h-3.5 text-text-muted absolute left-2.5 pointer-events-none" />
+                                  <input
+                                    ref={countrySearchInputRef}
+                                    type="text"
+                                    value={countrySearch}
+                                    onChange={(e) => setCountrySearch(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" && filteredCountries.length > 0) {
+                                        e.preventDefault();
+                                        setCountryIso2(filteredCountries[0].iso2);
+                                        setCountryDropdownOpen(false);
+                                        setCountrySearch("");
+                                        if (phone) setPhoneTouched(true);
+                                      }
+                                    }}
+                                    placeholder="Search country, ISO (IN), or +code..."
+                                    className="w-full pl-8 pr-7 py-1.5 rounded-lg bg-card-subtle border border-border-light text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-purple/20 focus:border-brand-purple"
+                                  />
+                                  {countrySearch && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setCountrySearch("");
+                                        countrySearchInputRef.current?.focus();
+                                      }}
+                                      aria-label="Clear country search"
+                                      className="absolute right-2 text-text-muted hover:text-text-primary p-0.5"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="max-h-60 overflow-y-auto divide-y divide-border-light/40">
+                                {filteredCountries.length === 0 ? (
+                                  <div className="px-3 py-5 text-center text-[11px] text-text-muted">
+                                    No countries match &ldquo;{countrySearch}&rdquo;
+                                  </div>
+                                ) : (
+                                  filteredCountries.map((country) => {
+                                    const isSelected = country.iso2 === selectedCountry.iso2;
+                                    return (
+                                      <button
+                                        key={country.iso2}
+                                        type="button"
+                                        role="option"
+                                        aria-selected={isSelected}
+                                        onClick={() => {
+                                          setCountryIso2(country.iso2);
+                                          setCountryDropdownOpen(false);
+                                          setCountrySearch("");
+                                          if (phone) setPhoneTouched(true);
+                                        }}
+                                        className={cn(
+                                          "w-full px-3 py-2 text-left text-xs flex items-center justify-between gap-2 hover:bg-card-subtle transition-colors",
+                                          isSelected && "bg-card-subtle font-semibold"
+                                        )}
+                                      >
+                                        <span className="truncate text-text-primary">
+                                          {country.name}{" "}
+                                          <span className="text-text-muted font-medium">({country.iso2})</span>
+                                        </span>
+                                        <span className="flex items-center gap-1.5 shrink-0 font-mono text-text-secondary">
+                                          <span>{country.dialCode}</span>
+                                          {isSelected && <Check className="w-3.5 h-3.5 text-brand-purple" />}
+                                        </span>
+                                      </button>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <input
+                          type="tel"
+                          inputMode="numeric"
+                          aria-invalid={showInlinePhoneError}
+                          placeholder={selectedCountry.placeholder || "Enter phone number"}
+                          value={phone}
+                          onChange={(e) => setPhone(sanitizeLocalPhone(e.target.value))}
+                          onBlur={() => {
+                            if (phone) setPhoneTouched(true);
+                          }}
+                          className={cn(
+                            "flex-1 min-w-0 px-3.5 py-2.5 rounded-xl bg-card-subtle border text-text-primary focus:ring-2",
+                            showInlinePhoneError
+                              ? "border-rose-500 focus:ring-rose-500/20 focus:border-rose-500"
+                              : "border-border-light focus:ring-brand-purple/20 focus:border-brand-purple"
+                          )}
+                        />
+                      </div>
+                      {showInlinePhoneError ? (
+                        <p className="text-[11px] text-rose-500 mt-1 font-medium" role="alert">
+                          {phoneValidationError}
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-text-muted mt-1">
+                          {selectedCountry.name} ({selectedCountry.dialCode}):{" "}
+                          {selectedCountry.minLength !== undefined && selectedCountry.maxLength !== undefined
+                            ? selectedCountry.minLength === selectedCountry.maxLength
+                              ? `${selectedCountry.minLength} digits`
+                              : `${selectedCountry.minLength}–${selectedCountry.maxLength} digits`
+                            : "E.164 (7–15 total digits)"}
+                          {combinedPhone ? ` • Will save as ${combinedPhone}` : ""}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -303,7 +544,7 @@ export default function NewEmployeeWizardPage() {
                 <div className="space-y-4 text-xs">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block font-semibold text-text-secondary mb-1">Department *</label>
+                      <label className="block font-semibold text-text-secondary mb-1">Department</label>
                       <select
                         value={departmentId}
                         onChange={(e) => {
@@ -312,7 +553,7 @@ export default function NewEmployeeWizardPage() {
                         }}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-card-subtle border border-border-light text-text-primary"
                       >
-                        <option value="">Select Department...</option>
+                        <option value="">Select Department (Optional)...</option>
                         {departments.map((d) => (
                           <option key={d.id} value={d.id}>
                             {d.name} {d.parent_department_id ? "(Subdepartment)" : ""}
@@ -496,6 +737,15 @@ export default function NewEmployeeWizardPage() {
                     <p>
                       <span className="text-text-muted">Email:</span> {email}
                     </p>
+                    {combinedPhone && (
+                      <p>
+                        <span className="text-text-muted">Phone:</span> {combinedPhone}
+                      </p>
+                    )}
+                    <p>
+                      <span className="text-text-muted">Department:</span>{" "}
+                      {departments.find((d) => d.id === departmentId)?.name || "Unassigned"}
+                    </p>
                     <p>
                       <span className="text-text-muted">System Role:</span> {systemRole.toUpperCase()}
                     </p>
@@ -518,6 +768,14 @@ export default function NewEmployeeWizardPage() {
                     Clicking &quot;Confirm &amp; Provision Account&quot; creates the Supabase Auth user, generates a unique business ID
                     (`ZX-EMP-XXX` or `ZX-INT-XXX`), and sets up their initial onboarding profile.
                   </p>
+                  {submitError && (
+                    <div
+                      role="alert"
+                      className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-300 text-xs font-medium"
+                    >
+                      <strong>Provisioning Failed:</strong> {submitError}
+                    </div>
+                  )}
                 </div>
               )}
 

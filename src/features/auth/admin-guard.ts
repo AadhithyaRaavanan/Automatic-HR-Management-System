@@ -79,16 +79,109 @@ export async function verifyAdminRouteCaller(
     .eq("status", "active")
     .maybeSingle();
 
+  if (memberError && (memberError as any).code === "SUPABASE_ADMIN_NOT_CONFIGURED") {
+    return {
+      response: NextResponse.json(
+        { success: false, error: memberError.message },
+        { status: 500 }
+      ),
+    };
+  }
+
   const isDemo = isDemoModeEnabled();
+  const isMissingOrgMembersTable = Boolean(
+    memberError &&
+      (memberError.code === "PGRST205" ||
+        memberError.code === "42P01" ||
+        /could not find the table|does not exist|schema cache/i.test(memberError.message || ""))
+  );
+
+  // Fallback for starter/base schemas where public.organization_members does not exist yet
+  if (isMissingOrgMembersTable) {
+    let baseRole: string =
+      (user.app_metadata as any)?.user_role ||
+      (user.user_metadata as any)?.user_role ||
+      (user.user_metadata as any)?.role ||
+      "";
+
+    try {
+      const { data: urRow } = await supabaseAdmin
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .limit(1)
+        .maybeSingle();
+      if (urRow?.role) {
+        baseRole = String(urRow.role).toLowerCase();
+      }
+    } catch {}
+
+    if (!baseRole) {
+      baseRole = isDemo ? "admin" : "employee";
+    }
+
+    const resolvedRole = baseRole.toLowerCase() as EmployeeRole;
+    if (!allowedRoles.includes(resolvedRole)) {
+      return {
+        response: NextResponse.json(
+          {
+            error:
+              allowedRoles.length === 1 && allowedRoles[0] === "admin"
+                ? "Forbidden: Only Admins can delete tasks or projects."
+                : `Forbidden: Action requires one of [${allowedRoles.join(", ")}] roles.`,
+          },
+          { status: 403 }
+        ),
+      };
+    }
+
+    return {
+      supabase,
+      context: {
+        userId: user.id,
+        organizationId: "00000000-0000-0000-0000-000000000001",
+        role: resolvedRole,
+        aal: "aal1",
+        email: user.email,
+      },
+    };
+  }
+
   const orgStatus = (member as any)?.organizations?.status;
   if (memberError || !member || (orgStatus && !["active", "trial"].includes(orgStatus))) {
     if (isDemo && user) {
+      const demoMetaRole =
+        (user.app_metadata as any)?.user_role ||
+        (user.user_metadata as any)?.user_role;
+      const demoFallbackRole: EmployeeRole =
+        demoMetaRole && ["employee", "manager", "hr", "admin"].includes(demoMetaRole)
+          ? (demoMetaRole as EmployeeRole)
+          : user.email === "hr@remotehr.io"
+          ? "hr"
+          : user.email === "manager@remotehr.io"
+          ? "manager"
+          : user.email === "employee@remotehr.io"
+          ? "employee"
+          : "admin";
+      if (!allowedRoles.includes(demoFallbackRole)) {
+        return {
+          response: NextResponse.json(
+            {
+              error:
+                allowedRoles.length === 1 && allowedRoles[0] === "admin"
+                  ? "Forbidden: Only Admins can delete tasks or projects."
+                  : `Forbidden: Action requires one of [${allowedRoles.join(", ")}] roles.`,
+            },
+            { status: 403 }
+          ),
+        };
+      }
       return {
         supabase,
         context: {
           userId: user.id,
           organizationId: "00000000-0000-0000-0000-000000000001",
-          role: "admin",
+          role: demoFallbackRole,
           aal: "aal1",
           email: user.email,
         },
@@ -104,12 +197,21 @@ export async function verifyAdminRouteCaller(
 
   const role = member.role as EmployeeRole;
   if (!allowedRoles.includes(role)) {
-    if (isDemo && (user.email === "admin@remotehr.io" || user.email === "hr@remotehr.io")) {
-      // Allow demo account
+    if (
+      isDemo &&
+      ((user.email === "admin@remotehr.io" && allowedRoles.includes("admin")) ||
+        (user.email === "hr@remotehr.io" && allowedRoles.includes("hr")))
+    ) {
+      // Allow matching demo account role
     } else {
       return {
         response: NextResponse.json(
-          { error: `Forbidden: Action requires one of [${allowedRoles.join(", ")}] roles.` },
+          {
+            error:
+              allowedRoles.length === 1 && allowedRoles[0] === "admin"
+                ? "Forbidden: Only Admins can delete tasks or projects."
+                : `Forbidden: Action requires one of [${allowedRoles.join(", ")}] roles.`,
+          },
           { status: 403 }
         ),
       };

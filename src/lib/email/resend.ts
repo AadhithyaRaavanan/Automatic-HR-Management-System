@@ -729,6 +729,431 @@ export async function sendNotificationEmail(params: SendNotificationEmailParams)
   return { success: true, messageId: `sim_${Date.now()}` };
 }
 
+export interface SendEarlyCheckoutEmailParams {
+  to: string;
+  adminName?: string | null;
+  employeeId: string;
+  employeeNumber?: string | null;
+  employeeName: string;
+  employeeEmail: string;
+  departmentName?: string | null;
+  timezone: string;
+  checkInAtFormatted: string;
+  checkOutAtFormatted: string;
+  workedFormatted: string;
+  targetFormatted: string;
+  shortfallFormatted: string;
+  reason?: string | null;
+  attendanceUrl?: string;
+  profileUrl?: string;
+}
+
+export function buildEarlyCheckoutEmailHtml(params: SendEarlyCheckoutEmailParams): string {
+  const siteUrl = getSiteUrl();
+  const {
+    adminName,
+    employeeId,
+    employeeNumber,
+    employeeName,
+    employeeEmail,
+    departmentName,
+    timezone,
+    checkInAtFormatted,
+    checkOutAtFormatted,
+    workedFormatted,
+    targetFormatted,
+    shortfallFormatted,
+    reason,
+    attendanceUrl = `${siteUrl}/attendance`,
+    profileUrl = `${siteUrl}/employees/${employeeId}`,
+  } = params;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Early Sign-Out Alert - Pulse</title>
+    <style>
+      body { margin: 0; padding: 0; background-color: #F5F5F5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #000000; }
+      .container { max-width: 600px; margin: 24px auto; background: #FFFFFF; border-radius: 14px; border: 1px solid #E6E6E6; overflow: hidden; }
+      .header { background: #000000; padding: 24px 28px; color: #FFFFFF; }
+      .content { padding: 26px 28px; }
+      .details { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+      .details td { padding: 8px 0; border-bottom: 1px solid #F0F0F0; vertical-align: top; }
+      .label { color: #71717A; width: 170px; font-weight: 500; }
+      .val { color: #000000; font-weight: 600; }
+      .btn { display: inline-block; padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; text-decoration: none; margin-right: 8px; }
+      .btn-primary { background: #000000; color: #FFFFFF !important; }
+      .btn-secondary { background: #F5F5F5; color: #000000 !important; border: 1px solid #E6E6E6; }
+      .footer { padding: 16px 28px; background: #FAFAFA; border-top: 1px solid #E6E6E6; font-size: 12px; color: #71717A; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <p style="margin: 0; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #B7FF00; font-weight: 700;">Pulse Attendance Alert</p>
+        <h1 style="margin: 6px 0 0; font-size: 20px; font-weight: 700; color: #FFFFFF;">Early Sign-Out Alert</h1>
+      </div>
+      <div class="content">
+        ${adminName ? `<p style="font-size: 14px; margin-top: 0;">Hi <strong>${adminName}</strong>,</p>` : ""}
+        <p style="font-size: 14px; line-height: 1.5; color: #27272A;">
+          <strong>${employeeName}</strong> checked out before completing their shift target (<strong>Worked ${workedFormatted} of ${targetFormatted} target</strong>, ${shortfallFormatted} short).
+        </p>
+
+        <table class="details">
+          <tr><td class="label">Employee</td><td class="val">${employeeName} (${employeeEmail})</td></tr>
+          <tr><td class="label">Employee ID</td><td class="val">${employeeNumber || employeeId}</td></tr>
+          <tr><td class="label">Department</td><td class="val">${departmentName || "Unassigned"}</td></tr>
+          <tr><td class="label">Check-In Time (${timezone})</td><td class="val">${checkInAtFormatted}</td></tr>
+          <tr><td class="label">Check-Out Time (${timezone})</td><td class="val">${checkOutAtFormatted}</td></tr>
+          <tr><td class="label">Worked / Target</td><td class="val">${workedFormatted} / ${targetFormatted} (${shortfallFormatted} short)</td></tr>
+          ${reason ? `<tr><td class="label">Reason Provided</td><td class="val">${reason}</td></tr>` : ""}
+        </table>
+
+        <div style="margin-top: 20px;">
+          <a href="${attendanceUrl}" class="btn btn-primary" target="_blank" rel="noopener noreferrer">Review Attendance</a>
+          <a href="${profileUrl}" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">360° Profile</a>
+        </div>
+      </div>
+      <div class="footer">
+        Sent automatically by Pulse Attendance Management.
+      </div>
+    </div>
+  </body>
+</html>`;
+}
+
+export async function sendEarlyCheckoutEmail(params: SendEarlyCheckoutEmailParams): Promise<{
+  success: boolean;
+  messageId?: string;
+  simulated?: boolean;
+  error?: string;
+}> {
+  const { to, employeeName, workedFormatted, targetFormatted } = params;
+  const subject = `[Pulse] Early Sign-Out Alert: ${employeeName} (${workedFormatted} / ${targetFormatted})`;
+  const htmlContent = buildEarlyCheckoutEmailHtml(params);
+
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      const transporter = getSmtpTransporter();
+      if (transporter) {
+        const fromAddress =
+          process.env.SMTP_FROM || `Pulse <${process.env.SMTP_USER || "business@zenxea.com"}>`;
+        const info = await transporter.sendMail({
+          from: fromAddress,
+          to,
+          subject,
+          html: htmlContent,
+        });
+        return { success: true, messageId: info.messageId };
+      }
+    } catch (smtpErr: any) {
+      console.warn("[EarlyCheckoutEmail] SMTP failed, trying Resend:", smtpErr?.message || smtpErr);
+    }
+  }
+
+  if (process.env.RESEND_API_KEY) {
+    const client = resend || new Resend(process.env.RESEND_API_KEY);
+    try {
+      const fromAddress = process.env.RESEND_FROM_EMAIL || "Pulse <onboarding@remotehr.io>";
+      const response = await client.emails.send({
+        from: fromAddress,
+        to: [to],
+        subject,
+        html: htmlContent,
+      });
+      if (response.error) {
+        return { success: false, error: response.error.message };
+      }
+      return { success: true, messageId: response.data?.id };
+    } catch (err: any) {
+      return { success: false, error: err?.message || String(err) };
+    }
+  }
+
+  console.info(
+    `[EarlyCheckoutEmail] Simulated dev delivery to ${to}: ${subject} (check-in ${params.checkInAtFormatted}, check-out ${params.checkOutAtFormatted})`
+  );
+  return { success: true, simulated: true, messageId: `sim_early_${Date.now()}` };
+}
+
+export interface SendBreakTimeoutEmailParams {
+  to: string;
+  employeeName: string;
+  workDate: string;
+  breakTypeLabel: string;
+  breakStartFormatted: string;
+  autoCheckoutFormatted: string;
+  timezone: string;
+  allowedLimitMinutes: number;
+  elapsedBreakFormatted: string;
+  attendanceUrl?: string;
+}
+
+export function buildBreakTimeoutEmailHtml(params: SendBreakTimeoutEmailParams): string {
+  const siteUrl = getSiteUrl();
+  const {
+    employeeName,
+    workDate,
+    breakTypeLabel,
+    breakStartFormatted,
+    autoCheckoutFormatted,
+    timezone,
+    allowedLimitMinutes,
+    elapsedBreakFormatted,
+    attendanceUrl = `${siteUrl}/attendance`,
+  } = params;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Break Time Exceeded - Auto Logout Reminder</title>
+    <style>
+      body { margin: 0; padding: 0; background-color: #F5F5F5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #000000; }
+      .container { max-width: 600px; margin: 24px auto; background: #FFFFFF; border-radius: 14px; border: 1px solid #E6E6E6; overflow: hidden; }
+      .header { background: #000000; padding: 24px 28px; color: #FFFFFF; }
+      .content { padding: 26px 28px; }
+      .details { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+      .details td { padding: 8px 0; border-bottom: 1px solid #F0F0F0; vertical-align: top; }
+      .label { color: #71717A; width: 185px; font-weight: 500; }
+      .val { color: #000000; font-weight: 600; }
+      .btn { display: inline-block; padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; text-decoration: none; background: #000000; color: #FFFFFF !important; }
+      .footer { padding: 16px 28px; background: #FAFAFA; border-top: 1px solid #E6E6E6; font-size: 12px; color: #71717A; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <p style="margin: 0; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #B7FF00; font-weight: 700;">Pulse Attendance Reminder</p>
+        <h1 style="margin: 6px 0 0; font-size: 20px; font-weight: 700; color: #FFFFFF;">Auto Logged Out: Break Time Exceeded</h1>
+      </div>
+      <div class="content">
+        <p style="font-size: 14px; margin-top: 0;">Hi <strong>${employeeName}</strong>,</p>
+        <p style="font-size: 14px; line-height: 1.5; color: #27272A;">
+          Your active break exceeded the allowed <strong>${allowedLimitMinutes}m</strong> limit (${elapsedBreakFormatted} elapsed), so your shift was automatically ended and your account was logged out.
+        </p>
+
+        <table class="details">
+          <tr><td class="label">Employee</td><td class="val">${employeeName}</td></tr>
+          <tr><td class="label">Date</td><td class="val">${workDate}</td></tr>
+          <tr><td class="label">Break Type</td><td class="val">${breakTypeLabel}</td></tr>
+          <tr><td class="label">Break Start (${timezone})</td><td class="val">${breakStartFormatted}</td></tr>
+          <tr><td class="label">Auto-Checkout (${timezone})</td><td class="val">${autoCheckoutFormatted}</td></tr>
+          <tr><td class="label">Allowed / Elapsed Break</td><td class="val">${allowedLimitMinutes}m limit / ${elapsedBreakFormatted} elapsed</td></tr>
+        </table>
+
+        <p style="font-size: 13px; line-height: 1.5; color: #52525B; background: #FAFAFA; padding: 12px 14px; border-radius: 8px; border: 1px solid #E6E6E6;">
+          <strong>Reminder:</strong> Please remember to end your breaks on time and log out properly next time before stepping away.
+        </p>
+
+        <div style="margin-top: 20px;">
+          <a href="${attendanceUrl}" class="btn" target="_blank" rel="noopener noreferrer">View Attendance Log</a>
+        </div>
+      </div>
+      <div class="footer">
+        Sent automatically by Pulse Attendance Management.
+      </div>
+    </div>
+  </body>
+</html>`;
+}
+
+export async function sendBreakTimeoutEmail(params: SendBreakTimeoutEmailParams): Promise<{
+  success: boolean;
+  messageId?: string;
+  simulated?: boolean;
+  error?: string;
+}> {
+  const { to, employeeName } = params;
+  const subject = `[Pulse] Reminder: Auto Logged Out After Exceeding Break Limit`;
+  const htmlContent = buildBreakTimeoutEmailHtml(params);
+
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      const transporter = getSmtpTransporter();
+      if (transporter) {
+        const fromAddress =
+          process.env.SMTP_FROM || `Pulse <${process.env.SMTP_USER || "business@zenxea.com"}>`;
+        const info = await transporter.sendMail({
+          from: fromAddress,
+          to,
+          subject,
+          html: htmlContent,
+        });
+        return { success: true, messageId: info.messageId };
+      }
+    } catch (smtpErr: any) {
+      console.warn("[BreakTimeoutEmail] SMTP failed, trying Resend:", smtpErr?.message || smtpErr);
+    }
+  }
+
+  if (process.env.RESEND_API_KEY) {
+    const client = resend || new Resend(process.env.RESEND_API_KEY);
+    try {
+      const fromAddress = process.env.RESEND_FROM_EMAIL || "Pulse <onboarding@remotehr.io>";
+      const response = await client.emails.send({
+        from: fromAddress,
+        to: [to],
+        subject,
+        html: htmlContent,
+      });
+      if (response.error) {
+        return { success: false, error: response.error.message };
+      }
+      return { success: true, messageId: response.data?.id };
+    } catch (err: any) {
+      return { success: false, error: err?.message || String(err) };
+    }
+  }
+
+  console.info(
+    `[BreakTimeoutEmail] Simulated dev delivery to ${employeeName} <${to}>: ${subject} (break started ${params.breakStartFormatted}, auto-checkout ${params.autoCheckoutFormatted}, limit ${params.allowedLimitMinutes}m, elapsed ${params.elapsedBreakFormatted})`
+  );
+  return { success: true, simulated: true, messageId: `sim_break_timeout_${Date.now()}` };
+}
+
+export interface SendInactivityAutoLogoutEmailParams {
+  to: string;
+  employeeName: string;
+  workDate: string;
+  checkInFormatted: string;
+  autoCheckoutFormatted: string;
+  timezone: string;
+  reasonText: string;
+  attendanceUrl?: string;
+}
+
+export function buildInactivityAutoLogoutEmailHtml(
+  params: SendInactivityAutoLogoutEmailParams
+): string {
+  const siteUrl = getSiteUrl();
+  const {
+    employeeName,
+    workDate,
+    checkInFormatted,
+    autoCheckoutFormatted,
+    timezone,
+    reasonText,
+    attendanceUrl = `${siteUrl}/attendance`,
+  } = params;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Automatic Sign-Out Notice - Pulse</title>
+    <style>
+      body { margin: 0; padding: 0; background-color: #F5F5F5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #000000; }
+      .container { max-width: 600px; margin: 24px auto; background: #FFFFFF; border-radius: 14px; border: 1px solid #E6E6E6; overflow: hidden; }
+      .header { background: #000000; padding: 24px 28px; color: #FFFFFF; }
+      .content { padding: 26px 28px; }
+      .details { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+      .details td { padding: 8px 0; border-bottom: 1px solid #F0F0F0; vertical-align: top; }
+      .label { color: #71717A; width: 185px; font-weight: 500; }
+      .val { color: #000000; font-weight: 600; }
+      .btn { display: inline-block; padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; text-decoration: none; background: #000000; color: #FFFFFF !important; }
+      .footer { padding: 16px 28px; background: #FAFAFA; border-top: 1px solid #E6E6E6; font-size: 12px; color: #71717A; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <p style="margin: 0; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #B7FF00; font-weight: 700;">Pulse Attendance Notice</p>
+        <h1 style="margin: 6px 0 0; font-size: 20px; font-weight: 700; color: #FFFFFF;">Automatic Sign-Out Notice</h1>
+      </div>
+      <div class="content">
+        <p style="font-size: 14px; margin-top: 0;">Hi <strong>${employeeName}</strong>,</p>
+        <p style="font-size: 14px; line-height: 1.5; color: #27272A;">
+          Your attendance session was automatically signed out because ${reasonText}.
+        </p>
+
+        <table class="details">
+          <tr><td class="label">Employee</td><td class="val">${employeeName}</td></tr>
+          <tr><td class="label">Date</td><td class="val">${workDate}</td></tr>
+          <tr><td class="label">Check-In Time (${timezone})</td><td class="val">${checkInFormatted}</td></tr>
+          <tr><td class="label">Auto Check-Out (${timezone})</td><td class="val">${autoCheckoutFormatted}</td></tr>
+          <tr><td class="label">Reason</td><td class="val">${reasonText}</td></tr>
+        </table>
+
+        <p style="font-size: 13px; line-height: 1.5; color: #52525B; background: #FAFAFA; padding: 12px 14px; border-radius: 8px; border: 1px solid #E6E6E6;">
+          <strong>Friendly Reminder:</strong> Please remember to check out properly before going offline or taking extended breaks so your attendance hours stay accurate.
+        </p>
+
+        <div style="margin-top: 20px;">
+          <a href="${attendanceUrl}" class="btn" target="_blank" rel="noopener noreferrer">Review Attendance</a>
+        </div>
+      </div>
+      <div class="footer">
+        Sent automatically by Pulse Attendance Management.
+      </div>
+    </div>
+  </body>
+</html>`;
+}
+
+export async function sendInactivityAutoLogoutEmail(
+  params: SendInactivityAutoLogoutEmailParams
+): Promise<{
+  success: boolean;
+  messageId?: string;
+  simulated?: boolean;
+  error?: string;
+}> {
+  const { to, employeeName } = params;
+  const subject = `[Pulse] Automatic Sign-Out Notice`;
+  const htmlContent = buildInactivityAutoLogoutEmailHtml(params);
+
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      const transporter = getSmtpTransporter();
+      if (transporter) {
+        const fromAddress =
+          process.env.SMTP_FROM || `Pulse <${process.env.SMTP_USER || "business@zenxea.com"}>`;
+        const info = await transporter.sendMail({
+          from: fromAddress,
+          to,
+          subject,
+          html: htmlContent,
+        });
+        return { success: true, messageId: info.messageId };
+      }
+    } catch (smtpErr: any) {
+      console.warn(
+        "[InactivityAutoLogoutEmail] SMTP failed, trying Resend:",
+        smtpErr?.message || smtpErr
+      );
+    }
+  }
+
+  if (process.env.RESEND_API_KEY) {
+    const client = resend || new Resend(process.env.RESEND_API_KEY);
+    try {
+      const fromAddress = process.env.RESEND_FROM_EMAIL || "Pulse <onboarding@remotehr.io>";
+      const response = await client.emails.send({
+        from: fromAddress,
+        to: [to],
+        subject,
+        html: htmlContent,
+      });
+      if (response.error) {
+        return { success: false, error: response.error.message };
+      }
+      return { success: true, messageId: response.data?.id };
+    } catch (err: any) {
+      return { success: false, error: err?.message || String(err) };
+    }
+  }
+
+  console.info(
+    `[InactivityAutoLogoutEmail] Simulated dev delivery to ${employeeName} <${to}>: ${subject} (check-in ${params.checkInFormatted}, auto-checkout ${params.autoCheckoutFormatted}, reason: ${params.reasonText})`
+  );
+  return { success: true, simulated: true, messageId: `sim_inactivity_logout_${Date.now()}` };
+}
+
 export interface SendApprovalEmailParams {
   to: string;
   firstName: string;

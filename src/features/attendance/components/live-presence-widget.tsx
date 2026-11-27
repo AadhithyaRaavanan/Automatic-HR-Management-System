@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { formatTimeInTimezone, formatDurationMinutes } from "@/lib/date/timezone";
 import { Users, Clock, LogIn, LogOut, Search, Radio, Filter, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -29,36 +31,63 @@ interface PresenceData {
 }
 
 export function LivePresenceWidget({ userTimezone = "UTC" }: { userTimezone?: string }) {
+  const router = useRouter();
+  const routerRef = React.useRef(router);
+  routerRef.current = router;
+
   const [data, setData] = React.useState<PresenceData | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const [filter, setFilter] = React.useState<"ALL" | "active" | "checked_out" | "not_logged_in">("ALL");
 
-  const loadData = React.useCallback(async () => {
+  const loadData = React.useCallback(async (isManualRefresh = false) => {
+    if (isManualRefresh) {
+      setIsRefreshing(true);
+    }
     try {
       const res = await fetch(`/api/attendance/live-presence?_t=${Date.now()}`, {
         cache: "no-store",
         headers: {
-          "Pragma": "no-cache",
+          Pragma: "no-cache",
           "Cache-Control": "no-cache",
         },
       });
-      const json = await res.json();
-      if (res.ok && json.success) {
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json?.success) {
         setData(json);
+        if (isManualRefresh) {
+          routerRef.current.refresh();
+        }
+      } else if (isManualRefresh) {
+        toast.error(json?.error || `Failed to refresh live presence (${res.status})`);
       }
-    } catch {
-      // ignore
+    } catch (err: any) {
+      if (isManualRefresh) {
+        toast.error(err?.message || "Failed to refresh live presence");
+      }
     } finally {
       setLoading(false);
+      if (isManualRefresh) {
+        setIsRefreshing(false);
+      }
     }
   }, []);
 
   React.useEffect(() => {
-    loadData();
+    void loadData(false);
+    const handleDashboardRefresh = () => {
+      void loadData(true);
+    };
+    window.addEventListener("pulse:refresh-dashboard", handleDashboardRefresh);
     // Refresh presence data every 45 seconds automatically
-    const interval = setInterval(loadData, 45000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      void loadData(false);
+    }, 45000);
+    return () => {
+      window.removeEventListener("pulse:refresh-dashboard", handleDashboardRefresh);
+      clearInterval(interval);
+    };
   }, [loadData]);
 
   const filteredLogs = React.useMemo(() => {
@@ -91,11 +120,13 @@ export function LivePresenceWidget({ userTimezone = "UTC" }: { userTimezone?: st
               </span>
               <button
                 type="button"
-                onClick={loadData}
-                className="p-1 rounded-md text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors cursor-pointer"
+                onClick={() => void loadData(true)}
+                disabled={loading || isRefreshing}
+                aria-label="Refresh Live Presence"
+                className="p-1 rounded-md text-text-tertiary hover:text-text-primary hover:bg-card-subtle transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Refresh Live Presence"
               >
-                <RefreshCw className={cn("w-3 h-3", loading && "animate-spin text-black")} />
+                <RefreshCw className={cn("w-3 h-3", (loading || isRefreshing) && "animate-spin text-black")} />
               </button>
             </div>
             <p className="text-xs text-text-secondary mt-0.5">

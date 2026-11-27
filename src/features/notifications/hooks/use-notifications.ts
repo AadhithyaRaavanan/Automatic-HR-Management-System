@@ -46,7 +46,7 @@ export function useNotifications() {
   const queryClient = useQueryClient();
   const [userId, setUserId] = React.useState<string | null>(null);
 
-  // Initialize active user ID outside queryFn to prevent render-cycle state updates
+  // Initialize active user ID outside queryFn and track auth state transitions
   React.useEffect(() => {
     let active = true;
     async function initUser() {
@@ -54,21 +54,35 @@ export function useNotifications() {
         const {
           data: { session },
         } = await supabase.auth.getSession();
-        const user = session?.user ?? (await supabase.auth.getUser()).data.user;
-        if (active && user?.id) {
-          setUserId(user.id);
+        if (active && session?.access_token && session?.user?.id) {
+          setUserId(session.user.id);
+          return;
+        }
+        const { data: userData } = await supabase.auth.getUser();
+        if (active && userData?.user?.id) {
+          setUserId(userData.user.id);
         }
       } catch {}
     }
     initUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      setUserId(session?.user?.id || null);
+    });
+
     return () => {
       active = false;
+      subscription?.unsubscribe();
     };
   }, [supabase]);
 
-  // 1. Fetch user notifications with 60-second fallback polling
+  // 1. Fetch user notifications with 15-second polling once auth session is ready
   const query = useQuery<NotificationItemRecord[]>({
     queryKey: ["notifications"],
+    enabled: Boolean(userId),
     queryFn: async () => {
       try {
         const {
@@ -79,7 +93,15 @@ export function useNotifications() {
           return [];
         }
 
-        const res = await fetch("/api/notifications?limit=30", { cache: "no-store" });
+        const headers: Record<string, string> = {};
+        if (session?.access_token) {
+          headers.Authorization = `Bearer ${session.access_token}`;
+        }
+
+        const res = await fetch("/api/notifications?limit=30", {
+          cache: "no-store",
+          headers,
+        });
         if (res.ok) {
           const json = await res.json();
           const list: NotificationItemRecord[] = Array.isArray(json?.notifications) ? json.notifications : [];
@@ -89,7 +111,11 @@ export function useNotifications() {
           );
         }
 
-        // Supabase fallback query if API route is unreachable
+        // Only attempt browser REST fallback when a valid bearer session token is present
+        if (!session?.access_token) {
+          return [];
+        }
+
         const { data, error } = await supabase
           .from("notifications")
           .select("*")
