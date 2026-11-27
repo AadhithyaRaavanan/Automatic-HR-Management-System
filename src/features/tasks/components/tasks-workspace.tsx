@@ -246,32 +246,6 @@ function TasksWorkspaceContent() {
   const [projCode, setProjCode] = React.useState("");
   const [projDeptId, setProjDeptId] = React.useState("");
   const [projDesc, setProjDesc] = React.useState("");
-  const [projInitialTasks, setProjInitialTasks] = React.useState<
-    Array<{ localId: string; title: string; assigneeId: string | null; dueDate: string }>
-  >([]);
-  const [projTaskDraftTitle, setProjTaskDraftTitle] = React.useState("");
-  const [projTaskDraftAssignee, setProjTaskDraftAssignee] = React.useState("");
-  const [projTaskDraftDueDate, setProjTaskDraftDueDate] = React.useState(() =>
-    getPresetDateIso(0)
-  );
-  const [isCreatingProjectWithTasks, setIsCreatingProjectWithTasks] = React.useState(false);
-
-  const handleAddInitialProjectTask = React.useCallback(() => {
-    const trimmed = projTaskDraftTitle.trim();
-    if (!trimmed || !projTaskDraftDueDate) return;
-    setProjInitialTasks((prev) => [
-      ...prev,
-      {
-        localId: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        title: trimmed,
-        assigneeId: isRegularEmployee ? userId || null : projTaskDraftAssignee || null,
-        dueDate: projTaskDraftDueDate,
-      },
-    ]);
-    setProjTaskDraftTitle("");
-    setProjTaskDraftAssignee("");
-    setProjTaskDraftDueDate(getPresetDateIso(0));
-  }, [projTaskDraftTitle, projTaskDraftAssignee, projTaskDraftDueDate, isRegularEmployee, userId]);
 
   // Drawer interactions state
   const [commentBody, setCommentBody] = React.useState("");
@@ -1244,62 +1218,23 @@ function TasksWorkspaceContent() {
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (projName.trim().length < 2 || isCreatingProjectWithTasks) return;
+    if (projName.trim().length < 2 || mutations.createProject.isPending) return;
 
-    const queuedTasks = projInitialTasks;
-    setIsCreatingProjectWithTasks(true);
     try {
-      const projRes = await mutations.createProject.mutateAsync({
+      await mutations.createProject.mutateAsync({
         name: projName.trim(),
         code: projCode.trim() || null,
         departmentId: projDeptId || null,
         description: projDesc.trim() || null,
-        silent: queuedTasks.length > 0,
       });
-
-      const createdProjectId = projRes?.projectId || projRes?.project?.id || null;
-
-      if (queuedTasks.length > 0) {
-        const results = await Promise.allSettled(
-          queuedTasks.map((item) =>
-            mutations.createTask.mutateAsync({
-              title: item.title,
-              assigneeId: item.assigneeId,
-              priority: "medium",
-              dueDate: item.dueDate || getPresetDateIso(0),
-              projectId: createdProjectId,
-              isSelfAssign: false,
-              silent: true,
-            })
-          )
-        );
-        const succeeded = results.filter((r) => r.status === "fulfilled").length;
-        const failed = results.length - succeeded;
-
-        if (failed === 0) {
-          toast.success(
-            `Project created with ${succeeded} ${succeeded === 1 ? "task" : "tasks"}`
-          );
-        } else {
-          toast.error(
-            `Project created, but ${failed} initial ${failed === 1 ? "task" : "tasks"} failed to create`
-          );
-        }
-      }
 
       setProjName("");
       setProjCode("");
       setProjDeptId("");
       setProjDesc("");
-      setProjInitialTasks([]);
-      setProjTaskDraftTitle("");
-      setProjTaskDraftAssignee("");
-      setProjTaskDraftDueDate(getPresetDateIso(0));
       setCreateProjectOpen(false);
     } catch {
       // Toast handled in mutation onError
-    } finally {
-      setIsCreatingProjectWithTasks(false);
     }
   };
 
@@ -3234,7 +3169,7 @@ function TasksWorkspaceContent() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
           onClick={(e) => {
-            if (e.target === e.currentTarget && !isCreatingProjectWithTasks) {
+            if (e.target === e.currentTarget && !mutations.createProject.isPending) {
               setCreateProjectOpen(false);
             }
           }}
@@ -3252,7 +3187,7 @@ function TasksWorkspaceContent() {
               <button
                 type="button"
                 aria-label="Close project modal"
-                disabled={isCreatingProjectWithTasks}
+                disabled={mutations.createProject.isPending}
                 onClick={() => setCreateProjectOpen(false)}
                 className="p-1 rounded text-[#808080] hover:text-black cursor-pointer disabled:opacity-50"
               >
@@ -3311,117 +3246,10 @@ function TasksWorkspaceContent() {
                 />
               </div>
 
-              {/* Initial Tasks (Optional) Multi-Task Builder */}
-              <div className="pt-2 border-t border-[#E6E6E6] space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-black">
-                    Initial Tasks (Optional)
-                  </label>
-                  {projInitialTasks.length > 0 && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#F5F5F5] border border-[#E6E6E6] text-black">
-                      {projInitialTasks.length} queued
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <input
-                    type="text"
-                    aria-label="Initial task title"
-                    value={projTaskDraftTitle}
-                    onChange={(e) => setProjTaskDraftTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleAddInitialProjectTask();
-                      }
-                    }}
-                    placeholder="Task title..."
-                    className="flex-1 min-w-[140px] px-2.5 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black focus:outline-none focus:border-black"
-                  />
-                  {isRegularEmployee ? (
-                    <span
-                      aria-label="Initial task assignee"
-                      className="max-w-[160px] truncate px-2.5 py-1.5 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] text-xs font-semibold text-black"
-                    >
-                      {actualCurrentUserName ? `You (${actualCurrentUserName})` : "You"}
-                    </span>
-                  ) : (
-                    <select
-                      aria-label="Initial task assignee"
-                      value={projTaskDraftAssignee}
-                      onChange={(e) => setProjTaskDraftAssignee(e.target.value)}
-                      className="max-w-[130px] px-2 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black focus:outline-none focus:border-black"
-                    >
-                      <option value="">Unassigned</option>
-                      {assignableEmployees.map((emp) => (
-                        <option key={emp.id} value={emp.id}>
-                          {formatAssigneeOptionLabel(emp)}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  <input
-                    type="date"
-                    aria-label="Initial task due date"
-                    required
-                    value={projTaskDraftDueDate}
-                    onChange={(e) => setProjTaskDraftDueDate(e.target.value)}
-                    className="px-2 py-1.5 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black focus:outline-none focus:border-black"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddInitialProjectTask}
-                    disabled={
-                      !projTaskDraftTitle.trim() ||
-                      !projTaskDraftDueDate ||
-                      isCreatingProjectWithTasks
-                    }
-                    className="px-2.5 py-1.5 rounded-lg border border-[#E6E6E6] bg-[#F5F5F5] hover:bg-[#E6E6E6] text-xs font-semibold text-black cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0 transition-colors"
-                  >
-                    + Add
-                  </button>
-                </div>
-
-                {projInitialTasks.length > 0 && (
-                  <div className="max-h-36 overflow-y-auto space-y-1.5 pr-0.5">
-                    {projInitialTasks.map((item) => (
-                      <div
-                        key={item.localId}
-                        className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] text-xs"
-                      >
-                        <span className="truncate font-medium text-black flex-1" title={item.title}>
-                          {item.title}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full bg-white border border-[#E6E6E6] text-[10px] font-medium text-[#4D4D4D] shrink-0">
-                          {item.dueDate}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full bg-white border border-[#E6E6E6] text-[10px] font-medium text-[#4D4D4D] shrink-0 max-w-[120px] truncate">
-                          {item.assigneeId ? formatPerson(item.assigneeId) : "Unassigned"}
-                        </span>
-                        <button
-                          type="button"
-                          aria-label={`Remove ${item.title}`}
-                          disabled={isCreatingProjectWithTasks}
-                          onClick={() =>
-                            setProjInitialTasks((prev) =>
-                              prev.filter((t) => t.localId !== item.localId)
-                            )
-                          }
-                          className="p-0.5 rounded text-[#808080] hover:text-[#FF1493] cursor-pointer shrink-0 disabled:opacity-40"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
               <div className="flex justify-end gap-2 pt-2 border-t border-[#E6E6E6]">
                 <button
                   type="button"
-                  disabled={isCreatingProjectWithTasks}
+                  disabled={mutations.createProject.isPending}
                   onClick={() => setCreateProjectOpen(false)}
                   className="px-4 py-2 rounded-lg bg-white border border-[#E6E6E6] hover:bg-[#F5F5F5] text-xs font-semibold text-black cursor-pointer shadow-xs disabled:opacity-50"
                 >
@@ -3429,10 +3257,10 @@ function TasksWorkspaceContent() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isCreatingProjectWithTasks || mutations.createProject.isPending}
+                  disabled={mutations.createProject.isPending}
                   className="px-5 py-2 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer disabled:opacity-60 shadow-xs"
                 >
-                  {isCreatingProjectWithTasks || mutations.createProject.isPending
+                  {mutations.createProject.isPending
                     ? "Creating..."
                     : "Create Project"}
                 </button>
