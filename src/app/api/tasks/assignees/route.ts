@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
   const fetchEmployeesWithClient = async (client: any) => {
     let query = client
       .from("employees")
-      .select("id, organization_id, full_name, email, manager_id, status")
+      .select("id, organization_id, full_name, email, manager_id, department_id, status")
       .eq("status", "active")
       .order("full_name", { ascending: true });
     if (orgId) {
@@ -100,6 +100,13 @@ export async function GET(request: NextRequest) {
     }
 
     let res = await query;
+    if (res?.error && isMissingColumnOrRel(res.error)) {
+      res = await client
+        .from("employees")
+        .select("id, full_name, email, manager_id, department_id, status")
+        .eq("status", "active")
+        .order("full_name", { ascending: true });
+    }
     if (res?.error && isMissingColumnOrRel(res.error)) {
       res = await client
         .from("employees")
@@ -153,6 +160,7 @@ export async function GET(request: NextRequest) {
     full_name: emp.full_name || null,
     email: emp.email || "",
     manager_id: emp.manager_id || null,
+    department_id: emp.department_id || null,
     status: emp.status || "active",
     role: roleMap.get(emp.id) || "employee",
   }));

@@ -9,6 +9,12 @@ import { isDemoModeEnabled } from "@/lib/config/demo";
 import { TaskType, TaskRecurrence } from "@/features/tasks/types";
 import { sanitizeAndDedupeAssignees } from "@/features/tasks/assignees";
 import {
+  ProjectAssignmentType,
+  getHeadedDepartmentIds,
+  isProjectAssignedToUser,
+  resolveDepartmentInchargeLock,
+} from "@/features/tasks/project-access";
+import {
   getStoredDepartments,
   getStoredProjects,
   getStoredTasks,
@@ -23,6 +29,9 @@ export interface ProjectRecord {
   id: string;
   organization_id: string;
   department_id: string | null;
+  department_ids?: string[];
+  incharge_id?: string | null;
+  assignment_type?: ProjectAssignmentType;
   name: string;
   code: string | null;
   description: string | null;
@@ -99,6 +108,7 @@ export interface VisibleEmployeeOption {
   full_name: string | null;
   email: string;
   manager_id: string | null;
+  department_id?: string | null;
   status: string;
   role?: string;
 }
@@ -107,6 +117,7 @@ export interface DepartmentOption {
   id: string;
   name: string;
   code: string | null;
+  department_head_id?: string | null;
 }
 
 export type TaskDueState = "overdue" | "due_soon" | "upcoming" | "none";
@@ -196,37 +207,76 @@ export function useTasksData(enabled = true) {
           )
           .order("created_at", { ascending: false });
 
-        const [tasksResAttempt, projectsRes, assigneesApiRes, departmentsRes, typesRes, recurrencesRes] =
-          await Promise.all([
-            tasksResPromise,
-            supabase
-              .from("projects")
-              .select("id, organization_id, department_id, name, code, description, status, created_by, created_at")
-              .order("name", { ascending: true }),
-            fetch("/api/tasks/assignees", {
-              cache: "no-store",
-              headers: {
-                Authorization: `Bearer ${session.access_token}`,
-              },
-            })
-              .then(async (r) => (r.ok ? await r.json() : null))
-              .catch(() => null),
-            supabase
-              .from("departments")
-              .select("id, name, code")
-              .order("name", { ascending: true }),
-            fetch("/api/tasks/types").then((r) => (r.ok ? r.json() : { types: [] })).catch(() => ({ types: [] })),
-            fetch("/api/tasks/recurrences").then((r) => (r.ok ? r.json() : { recurrences: [] })).catch(() => ({ recurrences: [] })),
-          ]);
+        const [
+          workspaceApiRes,
+          tasksResAttempt,
+          projectsRes,
+          assigneesApiRes,
+          departmentsRes,
+          typesRes,
+          recurrencesRes,
+        ] = await Promise.all([
+          fetch("/api/tasks/workspace", {
+            cache: "no-store",
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          })
+            .then(async (r) => (r.ok ? await r.json() : null))
+            .catch(() => null),
+          tasksResPromise,
+          supabase
+            .from("projects")
+            .select(
+              "id, organization_id, department_id, department_ids, incharge_id, assignment_type, name, code, description, status, created_by, created_at"
+            )
+            .order("name", { ascending: true }),
+          fetch("/api/tasks/assignees", {
+            cache: "no-store",
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          })
+            .then(async (r) => (r.ok ? await r.json() : null))
+            .catch(() => null),
+          supabase
+            .from("departments")
+            .select("id, name, code, department_head_id")
+            .order("name", { ascending: true }),
+          fetch("/api/tasks/types")
+            .then((r) => (r.ok ? r.json() : { types: [] }))
+            .catch(() => ({ types: [] })),
+          fetch("/api/tasks/recurrences")
+            .then((r) => (r.ok ? r.json() : { recurrences: [] }))
+            .catch(() => ({ recurrences: [] })),
+        ]);
 
         let finalTasksRes = tasksResAttempt;
-        if (tasksResAttempt?.error) {
+        if (!Array.isArray(workspaceApiRes?.tasks) && tasksResAttempt?.error) {
           finalTasksRes = await supabase
             .from("tasks")
             .select(
               "id, organization_id, project_id, parent_task_id, title, description, creator_id, assignee_id, status, priority, due_date, estimated_minutes, started_at, completed_at, cancelled_at, created_at, updated_at"
             )
             .order("created_at", { ascending: false });
+        }
+
+        let finalProjectsRes = projectsRes;
+        if (!Array.isArray(workspaceApiRes?.projects) && projectsRes?.error) {
+          finalProjectsRes = await supabase
+            .from("projects")
+            .select(
+              "id, organization_id, department_id, name, code, description, status, created_by, created_at"
+            )
+            .order("name", { ascending: true });
+        }
+
+        let finalDepartmentsRes = departmentsRes;
+        if (!Array.isArray(workspaceApiRes?.departments) && departmentsRes?.error) {
+          finalDepartmentsRes = await supabase
+            .from("departments")
+            .select("id, name, code")
+            .order("name", { ascending: true });
         }
 
         if (Array.isArray(assigneesApiRes?.assignees)) {
@@ -254,7 +304,7 @@ export function useTasksData(enabled = true) {
 
           let empQuery = supabase
             .from("employees")
-            .select("id, full_name, email, manager_id, status")
+            .select("id, full_name, email, manager_id, department_id, status")
             .eq("status", "active")
             .order("full_name", { ascending: true });
           if (callerOrgId) {
@@ -293,6 +343,7 @@ export function useTasksData(enabled = true) {
                 (currentUserEmail ? currentUserEmail.split("@")[0] : null),
               email: currentUserEmail || "",
               manager_id: null,
+              department_id: null,
               status: "active",
               role:
                 roleMap.get(currentUser.id) ||
@@ -309,9 +360,23 @@ export function useTasksData(enabled = true) {
           });
         }
 
-        if (finalTasksRes?.data) tasksData = finalTasksRes.data;
-        if (projectsRes?.data) projectsData = projectsRes.data;
-        if (departmentsRes?.data) departmentsData = departmentsRes.data;
+        if (Array.isArray(workspaceApiRes?.tasks)) {
+          tasksData = workspaceApiRes.tasks;
+        } else if (finalTasksRes?.data) {
+          tasksData = finalTasksRes.data;
+        }
+
+        if (Array.isArray(workspaceApiRes?.projects)) {
+          projectsData = workspaceApiRes.projects;
+        } else if (finalProjectsRes?.data) {
+          projectsData = finalProjectsRes.data;
+        }
+
+        if (Array.isArray(workspaceApiRes?.departments)) {
+          departmentsData = workspaceApiRes.departments;
+        } else if (finalDepartmentsRes?.data) {
+          departmentsData = finalDepartmentsRes.data;
+        }
         if (typesRes?.types) taskTypesData = typesRes.types;
         if (recurrencesRes?.recurrences) recurrencesData = recurrencesRes.recurrences;
       } catch {
@@ -323,11 +388,21 @@ export function useTasksData(enabled = true) {
       const storedTasks = isDemoModeEnabled() ? getStoredTasks() : [];
 
       // Active departments (prioritizes user-created demo store to honor deletions)
-      let mergedDepts: DepartmentOption[] = storedDepts.map((d) => ({ id: d.id, name: d.name, code: d.code }));
+      let mergedDepts: DepartmentOption[] = storedDepts.map((d) => ({
+        id: d.id,
+        name: d.name,
+        code: d.code,
+        department_head_id: d.headId || null,
+      }));
       if (!isDemoModeEnabled()) {
         for (const d of departmentsData) {
           if (!mergedDepts.some((md) => md.id === d.id || md.name === d.name)) {
-            mergedDepts.push(d);
+            mergedDepts.push({
+              id: d.id,
+              name: d.name,
+              code: d.code || null,
+              department_head_id: d.department_head_id || null,
+            });
           }
         }
       }
@@ -337,6 +412,13 @@ export function useTasksData(enabled = true) {
         id: p.id,
         organization_id: "",
         department_id: p.department_id || null,
+        department_ids: Array.isArray(p.department_ids)
+          ? p.department_ids
+          : p.department_id
+          ? [p.department_id]
+          : [],
+        incharge_id: p.incharge_id || null,
+        assignment_type: p.assignment_type || (p.department_id ? "department" : "company"),
         name: p.name,
         code: p.code,
         description: p.description || null,
@@ -560,19 +642,83 @@ export function useTaskMutations(
     mutationFn: async (input: {
       name: string;
       departmentId?: string | null;
+      departmentIds?: string[];
+      inchargeId?: string | null;
+      assignmentType?: ProjectAssignmentType;
       description?: string | null;
       code?: string | null;
       silent?: boolean;
     }) => {
-      const storedProj = isDemoModeEnabled() ? addStoredProject({
-        name: input.name,
-        department_id: input.departmentId || null,
-        description: input.description || null,
-        code: input.code || input.name.slice(0, 4).toUpperCase(),
-      }) : null;
+      const normalizedDeptIds = Array.isArray(input.departmentIds)
+        ? Array.from(new Set(input.departmentIds.filter(Boolean)))
+        : input.departmentId
+        ? [input.departmentId]
+        : [];
+      const assignmentType: ProjectAssignmentType =
+        input.assignmentType ||
+        (normalizedDeptIds.length > 0
+          ? "department"
+          : input.inchargeId
+          ? "individual"
+          : "company");
+
+      let resolvedInchargeId = input.inchargeId || null;
+      if (assignmentType === "department" && normalizedDeptIds.length > 0) {
+        const cached = queryClient.getQueryData<any>(["tasks-workspace"]);
+        const lock = resolveDepartmentInchargeLock(
+          normalizedDeptIds,
+          cached?.departments || []
+        );
+        if (lock.isLocked && lock.lockedInchargeId) {
+          resolvedInchargeId = lock.lockedInchargeId;
+        }
+      }
+
+      const storedProj = isDemoModeEnabled()
+        ? addStoredProject({
+            name: input.name,
+            department_id: normalizedDeptIds[0] || null,
+            department_ids: normalizedDeptIds,
+            incharge_id: resolvedInchargeId,
+            assignment_type: assignmentType,
+            description: input.description || null,
+            code: input.code || input.name.slice(0, 4).toUpperCase(),
+          })
+        : null;
+
+      if (!isDemoModeEnabled()) {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          const resp = await fetch("/api/tasks/projects", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              name: input.name,
+              code: input.code || null,
+              description: input.description || null,
+              assignmentType,
+              departmentIds: normalizedDeptIds,
+              inchargeId: resolvedInchargeId,
+            }),
+          });
+          if (resp.status !== 404) {
+            const json = await resp.json().catch(() => ({}));
+            if (!resp.ok) {
+              throw new Error(json?.error || "Failed to create project");
+            }
+            return json;
+          }
+        }
+      }
+
       const res = (await rpcCall("create_project", {
         p_name: input.name,
-        p_department_id: input.departmentId || null,
+        p_department_id: normalizedDeptIds[0] || null,
         p_description: input.description || null,
         p_code: input.code || null,
       })) as { success?: boolean; project?: { id?: string } } | null;
@@ -678,7 +824,37 @@ export function useTaskMutations(
       subtaskTitles?: string[];
     }) => {
       const caller = await resolveCallerIdentity();
-      if (caller.role === "employee" || caller.role === "team_lead") {
+      const cachedWorkspace = queryClient.getQueryData<any>(["tasks-workspace"]);
+      const headedDeptIds = getHeadedDepartmentIds(
+        caller.userId,
+        cachedWorkspace?.departments || []
+      );
+      const isRestrictedDeptHead =
+        headedDeptIds.length > 0 && caller.role !== "admin" && caller.role !== "hr";
+
+      if (isRestrictedDeptHead) {
+        const targetProj = (cachedWorkspace?.projects || []).find(
+          (p: any) => p.id === input.projectId
+        );
+        if (!input.projectId || (targetProj && !isProjectAssignedToUser(targetProj, caller.userId, headedDeptIds))) {
+          throw new Error(
+            "Department heads can only create tasks inside projects assigned to them"
+          );
+        }
+        if (input.assigneeId && input.assigneeId !== caller.userId) {
+          const targetEmp = (cachedWorkspace?.employees || []).find(
+            (e: any) => e.id === input.assigneeId
+          );
+          if (
+            targetEmp &&
+            (!targetEmp.department_id || !headedDeptIds.includes(targetEmp.department_id))
+          ) {
+            throw new Error(
+              "Department heads can only assign tasks to members of their department"
+            );
+          }
+        }
+      } else if (caller.role === "employee" || caller.role === "team_lead") {
         if (input.assigneeId && (!caller.userId || input.assigneeId !== caller.userId)) {
           throw new Error("Employees cannot assign tasks to other employees");
         }
@@ -733,34 +909,75 @@ export function useTaskMutations(
       });
 
       let res: any = null;
-      try {
-        res = (await rpcCall("create_task", {
-          p_title: input.title,
-          p_description: input.description || null,
-          p_assignee_id: input.assigneeId || null,
-          p_priority: input.priority || "medium",
-          p_due_date: input.dueDate || null,
-          p_estimated_minutes:
-            typeof input.estimatedMinutes === "number" ? input.estimatedMinutes : null,
-          p_project_id: input.projectId || null,
-          p_parent_task_id: input.parentTaskId || null,
-          p_task_type_id: input.taskTypeId || null,
-          p_recurrence_id: activeRecurrenceId,
-          p_auto_due_suggested: Boolean(input.autoDueSuggested),
-        })) as { success?: boolean; task?: { id?: string }; id?: string } | null;
-      } catch (err: any) {
-        // Fallback to 8-param RPC signature if extended function not active yet
-        res = (await rpcCall("create_task", {
-          p_title: input.title,
-          p_description: input.description || null,
-          p_assignee_id: input.assigneeId || null,
-          p_priority: input.priority || "medium",
-          p_due_date: input.dueDate || null,
-          p_estimated_minutes:
-            typeof input.estimatedMinutes === "number" ? input.estimatedMinutes : null,
-          p_project_id: input.projectId || null,
-          p_parent_task_id: input.parentTaskId || null,
-        })) as { success?: boolean; task?: { id?: string }; id?: string } | null;
+      let createdViaApi = false;
+      if (!isDemoModeEnabled()) {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          const resp = await fetch("/api/tasks", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              title: input.title,
+              description: input.description || null,
+              assigneeId: input.assigneeId || null,
+              priority: input.priority || "medium",
+              dueDate: input.dueDate || null,
+              estimatedMinutes:
+                typeof input.estimatedMinutes === "number" ? input.estimatedMinutes : null,
+              projectId: input.projectId || null,
+              parentTaskId: input.parentTaskId || null,
+              taskTypeId: input.taskTypeId || null,
+              recurrenceId: activeRecurrenceId,
+              autoDueSuggested: Boolean(input.autoDueSuggested),
+              goalId: input.goalId || null,
+            }),
+          });
+          if (resp.status !== 404) {
+            const json = await resp.json().catch(() => ({}));
+            if (!resp.ok) {
+              throw new Error(json?.error || "Failed to create task");
+            }
+            res = json;
+            createdViaApi = true;
+          }
+        }
+      }
+
+      if (!createdViaApi) {
+        try {
+          res = (await rpcCall("create_task", {
+            p_title: input.title,
+            p_description: input.description || null,
+            p_assignee_id: input.assigneeId || null,
+            p_priority: input.priority || "medium",
+            p_due_date: input.dueDate || null,
+            p_estimated_minutes:
+              typeof input.estimatedMinutes === "number" ? input.estimatedMinutes : null,
+            p_project_id: input.projectId || null,
+            p_parent_task_id: input.parentTaskId || null,
+            p_task_type_id: input.taskTypeId || null,
+            p_recurrence_id: activeRecurrenceId,
+            p_auto_due_suggested: Boolean(input.autoDueSuggested),
+          })) as { success?: boolean; task?: { id?: string }; id?: string } | null;
+        } catch (err: any) {
+          // Fallback to 8-param RPC signature if extended function not active yet
+          res = (await rpcCall("create_task", {
+            p_title: input.title,
+            p_description: input.description || null,
+            p_assignee_id: input.assigneeId || null,
+            p_priority: input.priority || "medium",
+            p_due_date: input.dueDate || null,
+            p_estimated_minutes:
+              typeof input.estimatedMinutes === "number" ? input.estimatedMinutes : null,
+            p_project_id: input.projectId || null,
+            p_parent_task_id: input.parentTaskId || null,
+          })) as { success?: boolean; task?: { id?: string }; id?: string } | null;
+        }
       }
 
       const createdTaskId = res?.task?.id || res?.id;
@@ -776,27 +993,51 @@ export function useTaskMutations(
 
       // 3. Create subtasks from checklist if selected
       if (createdTaskId && Array.isArray(input.subtaskTitles) && input.subtaskTitles.length > 0) {
+        const {
+          data: { session },
+        } = !isDemoModeEnabled() ? await supabase.auth.getSession() : { data: { session: null } };
+
         for (const subTitle of input.subtaskTitles) {
           if (!subTitle || !subTitle.trim()) continue;
           try {
-            await rpcCall("create_task", {
-              p_title: subTitle.trim(),
-              p_description: null,
-              p_assignee_id: input.assigneeId || null,
-              p_priority: input.priority || "medium",
-              p_due_date: input.dueDate || null,
-              p_estimated_minutes: null,
-              p_project_id: input.projectId || null,
-              p_parent_task_id: createdTaskId,
-            });
+            if (createdViaApi && session?.access_token) {
+              await fetch("/api/tasks", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({
+                  title: subTitle.trim(),
+                  description: null,
+                  assigneeId: input.assigneeId || null,
+                  priority: input.priority || "medium",
+                  dueDate: input.dueDate || null,
+                  estimatedMinutes: null,
+                  projectId: input.projectId || null,
+                  parentTaskId: createdTaskId,
+                }),
+              });
+            } else {
+              await rpcCall("create_task", {
+                p_title: subTitle.trim(),
+                p_description: null,
+                p_assignee_id: input.assigneeId || null,
+                p_priority: input.priority || "medium",
+                p_due_date: input.dueDate || null,
+                p_estimated_minutes: null,
+                p_project_id: input.projectId || null,
+                p_parent_task_id: createdTaskId,
+              });
+            }
           } catch (subErr) {
             console.warn("Failed to create checklist subtask:", subTitle, subErr);
           }
         }
       }
 
-      // If self-assigned, automatically advance status to in_progress!
-      if (isSelf) {
+      // If self-assigned and created via legacy RPC, advance status to in_progress
+      if (isSelf && !createdViaApi) {
         if (createdTaskId) {
           try {
             await rpcCall("update_task_status", {
@@ -810,8 +1051,8 @@ export function useTaskMutations(
         }
       }
 
-      // If goal linked, associate with task
-      if (createdTaskId && input.goalId) {
+      // If goal linked and created via legacy RPC, associate with task
+      if (createdTaskId && input.goalId && !createdViaApi) {
         try {
           await (supabase as any).from("tasks").update({ goal_id: input.goalId }).eq("id", createdTaskId);
         } catch (e) {
@@ -873,10 +1114,16 @@ export function useTaskMutations(
       silent?: boolean;
     }) => {
       const caller = await resolveCallerIdentity();
+      const cachedWorkspace = queryClient.getQueryData<any>(["tasks-workspace"]);
+      const headedDeptIds = getHeadedDepartmentIds(
+        caller.userId,
+        cachedWorkspace?.departments || []
+      );
+      const isDeptHead = headedDeptIds.length > 0;
       const current = isDemoModeEnabled() ? getStoredTasks() : [];
       const target = current.find((t) => t.id === input.taskId);
 
-      if (caller.role === "employee" || caller.role === "team_lead") {
+      if (!isDeptHead && (caller.role === "employee" || caller.role === "team_lead")) {
         if (!caller.userId || !input.assigneeId || input.assigneeId !== caller.userId) {
           throw new Error("Employees can only assign tasks to themselves");
         }
@@ -900,6 +1147,32 @@ export function useTaskMutations(
           assignee_id: input.assigneeId || null,
         });
       }
+
+      if (!isDemoModeEnabled()) {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          const resp = await fetch(`/api/tasks/${input.taskId}/assign`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              assigneeId: input.assigneeId || null,
+            }),
+          });
+          if (resp.status !== 404) {
+            const json = await resp.json().catch(() => ({}));
+            if (!resp.ok) {
+              throw new Error(json?.error || "Failed to update task assignee");
+            }
+            return json;
+          }
+        }
+      }
+
       return rpcCall("assign_task", {
         p_task_id: input.taskId,
         p_assignee_id: input.assigneeId || null,

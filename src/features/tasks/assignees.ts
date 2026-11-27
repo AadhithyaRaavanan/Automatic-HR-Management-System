@@ -3,6 +3,7 @@ export interface AssigneeCandidate {
   full_name: string | null;
   email: string;
   manager_id: string | null;
+  department_id?: string | null;
   status: string;
   role?: string;
 }

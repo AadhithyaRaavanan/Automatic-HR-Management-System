@@ -85,6 +85,9 @@ export interface DemoProject {
   name: string;
   code: string;
   department_id?: string | null;
+  department_ids?: string[];
+  incharge_id?: string | null;
+  assignment_type?: "company" | "department" | "individual";
   description?: string | null;
   status?: string;
   created_at?: string;

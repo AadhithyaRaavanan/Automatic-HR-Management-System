@@ -15,9 +15,18 @@ import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { CheckSquare, Plus, LayoutGrid, List, Search, AlertTriangle, MessageSquare, FolderPlus, X, Calendar, Timer, Send, UserCheck, Repeat, Sparkles, Layers, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Target, Users, Download, Trash2, Play, RotateCcw } from "lucide-react";
+import { CheckSquare, Plus, LayoutGrid, List, Search, AlertTriangle, MessageSquare, FolderPlus, X, Calendar, Timer, Send, UserCheck, Repeat, Sparkles, Layers, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Target, Users, Download, Trash2, Play, RotateCcw, Lock } from "lucide-react";
 
 import { DueBadge, TaskTypeBadge, getInitials, FilterDropdownMenu, TableSortColumn, STATUS_SORT_ORDER, PRIORITY_SORT_ORDER, SortableTableHeader, TaskTableRow, KanbanTaskCard } from "./task-views";
+import {
+  ProjectAssignmentType,
+  canDepartmentHeadManageTask,
+  filterDepartmentPeople,
+  getHeadedDepartmentIds,
+  getProjectDepartmentIds,
+  isProjectAssignedToUser,
+  resolveDepartmentInchargeLock,
+} from "@/features/tasks/project-access";
 
 const STATUS_COLUMNS: Array<{ key: TaskStatus; label: string; hint: string }> = [
   { key: "todo", label: "To Do", hint: "Queued work" },
@@ -255,7 +264,9 @@ function TasksWorkspaceContent() {
   // Create project form state
   const [projName, setProjName] = React.useState("");
   const [projCode, setProjCode] = React.useState("");
-  const [projDeptId, setProjDeptId] = React.useState("");
+  const [projAssignmentType, setProjAssignmentType] = React.useState<ProjectAssignmentType>("company");
+  const [projDepartmentIds, setProjDepartmentIds] = React.useState<string[]>([]);
+  const [projInchargeId, setProjInchargeId] = React.useState("");
   const [projDesc, setProjDesc] = React.useState("");
 
   // Drawer interactions state
@@ -276,14 +287,6 @@ function TasksWorkspaceContent() {
     }
   }, []);
 
-  React.useEffect(() => {
-    if (userRole === "employee") {
-      setScope("mine");
-    } else if (userRole === "manager" || userRole === "hr" || userRole === "admin") {
-      setScope("team");
-    }
-  }, [userRole]);
-
   const tasks = React.useMemo(() => data?.tasks || [], [data?.tasks]);
   const projects = React.useMemo(() => data?.projects || [], [data?.projects]);
   const employees = React.useMemo(() => data?.employees || [], [data?.employees]);
@@ -298,6 +301,24 @@ function TasksWorkspaceContent() {
     }
     return map;
   }, [employees]);
+
+  const employeeDeptMap = React.useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const emp of employees) {
+      map.set(emp.id, emp.department_id || null);
+    }
+    return map;
+  }, [employees]);
+
+  const projectLookup = React.useMemo(
+    () => new Map(projects.map((p) => [p.id, p])),
+    [projects]
+  );
+
+  const departmentNameMap = React.useMemo(
+    () => new Map(departments.map((d) => [d.id, d.name])),
+    [departments]
+  );
 
   const typeNameMap = React.useMemo(() => {
     const map = new Map<string, string>();
@@ -336,6 +357,55 @@ function TasksWorkspaceContent() {
   }, [employees, userId, currentUserName, currentUserEmail]);
 
   const currentEmployeeId = currentUserEmp?.id || null;
+
+  const headedDeptIds = React.useMemo(
+    () => getHeadedDepartmentIds([userId, currentEmployeeId], departments),
+    [userId, currentEmployeeId, departments]
+  );
+  const isDepartmentHead = headedDeptIds.length > 0;
+  const isAdminOrHr = userRole === "admin" || userRole === "hr";
+  const isRestrictedDeptHead = isDepartmentHead && !isAdminOrHr;
+
+  React.useEffect(() => {
+    if (isDepartmentHead || userRole === "manager" || userRole === "hr" || userRole === "admin") {
+      setScope("team");
+    } else if (userRole === "employee") {
+      setScope("mine");
+    }
+  }, [userRole, isDepartmentHead]);
+
+  const myAssignedProjects = React.useMemo(() => {
+    if (!isRestrictedDeptHead) return projects;
+    return projects.filter(
+      (p) =>
+        isProjectAssignedToUser(p, userId, headedDeptIds) ||
+        isProjectAssignedToUser(p, currentEmployeeId, headedDeptIds)
+    );
+  }, [isRestrictedDeptHead, projects, userId, currentEmployeeId, headedDeptIds]);
+
+  const myAssignedProjectIds = React.useMemo(
+    () => new Set(myAssignedProjects.map((p) => p.id)),
+    [myAssignedProjects]
+  );
+
+  const projectInchargeLock = React.useMemo(
+    () =>
+      projAssignmentType === "department"
+        ? resolveDepartmentInchargeLock(projDepartmentIds, departments)
+        : { isLocked: false, lockedInchargeId: null, headIds: [], headEntries: [] },
+    [projAssignmentType, projDepartmentIds, departments]
+  );
+
+  React.useEffect(() => {
+    if (projAssignmentType !== "department") return;
+    if (projectInchargeLock.isLocked && projectInchargeLock.lockedInchargeId) {
+      setProjInchargeId(projectInchargeLock.lockedInchargeId);
+    } else if (projectInchargeLock.headIds.length > 1) {
+      if (!projectInchargeLock.headIds.includes(projInchargeId)) {
+        setProjInchargeId(projectInchargeLock.headIds[0]);
+      }
+    }
+  }, [projAssignmentType, projectInchargeLock, projInchargeId]);
 
   const actualCurrentUserName = React.useMemo(() => {
     const empName = currentUserEmp?.full_name?.trim();
@@ -446,6 +516,9 @@ function TasksWorkspaceContent() {
           e.role === "hr" ||
           e.role === "manager"
       );
+    } else if (isDepartmentHead) {
+      // Department heads assign tasks to people within their headed department(s) + self
+      list = filterDepartmentPeople(employees, headedDeptIds, userId);
     } else if (userRole === "manager") {
       list = employees.filter(
         (e) =>
@@ -496,6 +569,8 @@ function TasksWorkspaceContent() {
     actualCurrentUserName,
     currentUserEmail,
     isCurrentUserEmployee,
+    isDepartmentHead,
+    headedDeptIds,
   ]);
 
   // Workload calculations: open tasks and due this week
@@ -964,11 +1039,45 @@ function TasksWorkspaceContent() {
   }, [paginatedListTasks, formatPerson]);
 
   const groupedByProjectTasks = React.useMemo(() => {
-    const projectLookup = new Map(projects.map((p) => [p.id, p]));
     const groups = new Map<
       string,
-      { key: string; code: string | null; label: string; isUnassignedProject: boolean; tasks: TaskRecord[] }
+      {
+        key: string;
+        code: string | null;
+        label: string;
+        inchargeLabel: string | null;
+        deptLabel: string | null;
+        canCreateTaskInProject: boolean;
+        isUnassignedProject: boolean;
+        tasks: TaskRecord[];
+      }
     >();
+
+    const buildProjectMeta = (proj: (typeof projects)[number] | undefined) => {
+      if (!proj) {
+        return {
+          inchargeLabel: null,
+          deptLabel: null,
+          canCreateTaskInProject: !isRestrictedDeptHead,
+        };
+      }
+      const inchargeLabel = proj.incharge_id ? formatPerson(proj.incharge_id) : null;
+      const dIds = getProjectDepartmentIds(proj);
+      const deptNames = dIds
+        .map((id) => departmentNameMap.get(id))
+        .filter((n): n is string => Boolean(n));
+      const deptLabel =
+        deptNames.length > 0
+          ? deptNames.join(", ")
+          : proj.assignment_type === "individual"
+          ? "Individual"
+          : null;
+      return {
+        inchargeLabel,
+        deptLabel,
+        canCreateTaskInProject: !isRestrictedDeptHead || myAssignedProjectIds.has(proj.id),
+      };
+    };
 
     for (const task of paginatedListTasks) {
       const key = task.project_id || "__no_project__";
@@ -977,10 +1086,12 @@ function TasksWorkspaceContent() {
         existing.tasks.push(task);
       } else if (task.project_id) {
         const proj = projectLookup.get(task.project_id);
+        const meta = buildProjectMeta(proj);
         groups.set(key, {
           key,
           code: proj?.code || null,
           label: proj ? (proj.code ? `${proj.code} · ${proj.name}` : proj.name) : "Project",
+          ...meta,
           isUnassignedProject: false,
           tasks: [task],
         });
@@ -989,6 +1100,9 @@ function TasksWorkspaceContent() {
           key,
           code: null,
           label: "No Project",
+          inchargeLabel: null,
+          deptLabel: null,
+          canCreateTaskInProject: !isRestrictedDeptHead,
           isUnassignedProject: true,
           tasks: [task],
         });
@@ -1006,10 +1120,12 @@ function TasksWorkspaceContent() {
           !allSortedProjectIds.has(proj.id) &&
           !groups.has(proj.id)
         ) {
+          const meta = buildProjectMeta(proj);
           groups.set(proj.id, {
             key: proj.id,
             code: proj.code || null,
             label: proj.code ? `${proj.code} · ${proj.name}` : proj.name,
+            ...meta,
             isUnassignedProject: false,
             tasks: [],
           });
@@ -1198,8 +1314,13 @@ function TasksWorkspaceContent() {
   };
   const handleOpenCreateModal = (defaultProjectId?: string | React.MouseEvent) => {
     createTaskOpener.current = document.activeElement as HTMLElement;
-    const resolvedProjectId =
+    const requestedProjectId =
       typeof defaultProjectId === "string" ? defaultProjectId : "";
+    const resolvedProjectId = isRestrictedDeptHead
+      ? (requestedProjectId && myAssignedProjectIds.has(requestedProjectId)
+          ? requestedProjectId
+          : myAssignedProjects[0]?.id || "")
+      : requestedProjectId;
     editedFields.current.clear();
     setSelectedTypeId("");
     setNewTitle("");
@@ -1235,7 +1356,23 @@ function TasksWorkspaceContent() {
     const totalMinutes =
       (parseInt(estHours || "0", 10) * 60) + parseInt(estMinutes || "0", 10);
     const effectiveAssigneeId = newAssigneeId || null;
-    if (
+    if (isRestrictedDeptHead) {
+      if (!newProjectId || !myAssignedProjectIds.has(newProjectId)) {
+        toast.error(
+          "Department heads can only create tasks inside projects assigned to them"
+        );
+        return;
+      }
+      if (effectiveAssigneeId && !isAssignedToMe({ assignee_id: effectiveAssigneeId })) {
+        const empDept = employeeDeptMap.get(effectiveAssigneeId);
+        if (!empDept || !headedDeptIds.includes(empDept)) {
+          toast.error(
+            "Department heads can only assign tasks to members of their department"
+          );
+          return;
+        }
+      }
+    } else if (
       isRegularEmployee &&
       effectiveAssigneeId &&
       !isAssignedToMe({ assignee_id: effectiveAssigneeId })
@@ -1284,17 +1421,39 @@ function TasksWorkspaceContent() {
     e.preventDefault();
     if (projName.trim().length < 2 || mutations.createProject.isPending) return;
 
+    if (projAssignmentType === "department" && projDepartmentIds.length === 0) {
+      toast.error("Select at least one department for a department project");
+      return;
+    }
+    if (projAssignmentType === "individual" && !projInchargeId) {
+      toast.error("Select an individual Incharge for an individual project");
+      return;
+    }
+
+    const resolvedIncharge =
+      projAssignmentType === "department" &&
+      projectInchargeLock.isLocked &&
+      projectInchargeLock.lockedInchargeId
+        ? projectInchargeLock.lockedInchargeId
+        : projInchargeId || null;
+
     try {
       await mutations.createProject.mutateAsync({
         name: projName.trim(),
         code: projCode.trim() || null,
-        departmentId: projDeptId || null,
+        assignmentType: projAssignmentType,
+        departmentId:
+          projAssignmentType === "department" ? projDepartmentIds[0] || null : null,
+        departmentIds: projAssignmentType === "department" ? projDepartmentIds : [],
+        inchargeId: resolvedIncharge,
         description: projDesc.trim() || null,
       });
 
       setProjName("");
       setProjCode("");
-      setProjDeptId("");
+      setProjAssignmentType("company");
+      setProjDepartmentIds([]);
+      setProjInchargeId("");
       setProjDesc("");
       setCreateProjectOpen(false);
     } catch {
@@ -1344,6 +1503,18 @@ function TasksWorkspaceContent() {
   const canReassignTask = (task: TaskRecord) => {
     if (task.status === "done" || task.status === "cancelled") return false;
     if (userRole === "admin" || userRole === "hr" || userRole === "manager") return true;
+    if (isDepartmentHead) {
+      return (
+        canDepartmentHeadManageTask(task, userId, headedDeptIds, projectLookup, employeeDeptMap) ||
+        canDepartmentHeadManageTask(
+          task,
+          currentEmployeeId,
+          headedDeptIds,
+          projectLookup,
+          employeeDeptMap
+        )
+      );
+    }
     return false;
   };
 
@@ -2240,7 +2411,7 @@ function TasksWorkspaceContent() {
                     </DropdownMenu.Root>
 
                     {/* Reassign */}
-                    {!isRegularEmployee && (
+                    {(!isRegularEmployee || isDepartmentHead) && (
                       <select
                         aria-label="Bulk assign to employee"
                         value=""
@@ -2490,23 +2661,35 @@ function TasksWorkspaceContent() {
                                     {group.tasks.length}{" "}
                                     {group.tasks.length === 1 ? "task" : "tasks"}
                                   </span>
+                                  {group.deptLabel && (
+                                    <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium bg-white border border-[#E6E6E6] text-[#4D4D4D] shrink-0 max-w-[160px] truncate">
+                                      {group.deptLabel}
+                                    </span>
+                                  )}
+                                  {group.inchargeLabel && (
+                                    <span className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white border border-[#E6E6E6] text-black shrink-0 max-w-[170px] truncate">
+                                      Incharge: {group.inchargeLabel}
+                                    </span>
+                                  )}
                                 </div>
                                 {!group.isUnassignedProject && (
                                   <div className="flex items-center gap-1.5 shrink-0">
-                                    <button
-                                      type="button"
-                                      aria-label={`Add task to ${group.label}`}
-                                      title={`Add task to ${group.label}`}
-                                      onMouseDown={(e) => e.preventDefault()}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleOpenCreateModal(group.key);
-                                      }}
-                                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-[#E6E6E6] bg-white hover:bg-[#F5F5F5] text-[11px] font-semibold text-black transition-colors cursor-pointer shrink-0"
-                                    >
-                                      <Plus className="w-3 h-3" />
-                                      <span>Add task</span>
-                                    </button>
+                                    {group.canCreateTaskInProject && (
+                                      <button
+                                        type="button"
+                                        aria-label={`Add task to ${group.label}`}
+                                        title={`Add task to ${group.label}`}
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOpenCreateModal(group.key);
+                                        }}
+                                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-[#E6E6E6] bg-white hover:bg-[#F5F5F5] text-[11px] font-semibold text-black transition-colors cursor-pointer shrink-0"
+                                      >
+                                        <Plus className="w-3 h-3" />
+                                        <span>Add task</span>
+                                      </button>
+                                    )}
                                     <button
                                       type="button"
                                       aria-label={`Delete project ${group.label}`}
@@ -2537,7 +2720,7 @@ function TasksWorkspaceContent() {
                                 <td colSpan={7} className="py-3 px-4">
                                   <div className="flex items-center justify-between gap-3 text-xs text-[#808080]">
                                     <span>No tasks in this project yet.</span>
-                                    {!group.isUnassignedProject && (
+                                    {!group.isUnassignedProject && group.canCreateTaskInProject && (
                                       <button
                                         type="button"
                                         onClick={() => handleOpenCreateModal(group.key)}
@@ -2739,7 +2922,7 @@ function TasksWorkspaceContent() {
                 <label className="block text-xs font-bold text-black mb-1">
                   Assignee
                 </label>
-                {isRegularEmployee ? (
+                {isRegularEmployee && !isDepartmentHead ? (
                   <select
                     aria-label="Task Assignee"
                     value={newAssigneeId}
@@ -3032,10 +3215,37 @@ function TasksWorkspaceContent() {
                 )}
               </div>
 
+              {isRestrictedDeptHead && (
+                <div>
+                  <label className="block text-xs font-bold text-black mb-1">
+                    Project *
+                  </label>
+                  {myAssignedProjects.length > 0 ? (
+                    <select
+                      required
+                      aria-label="Task Project"
+                      value={newProjectId}
+                      onChange={(e) => setNewProjectId(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black focus:outline-none focus:border-black"
+                    >
+                      {myAssignedProjects.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.code ? `${p.code} · ${p.name}` : p.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900">
+                      You can only create tasks inside a project assigned to you or your department. Ask an admin or HR to assign a project first.
+                    </div>
+                  )}
+                </div>
+              )}
+
               <details className="rounded-xl border border-[#E6E6E6] p-3">
                 <summary className="cursor-pointer text-sm font-semibold">Additional options
                   <span className="ml-2 text-xs font-normal text-[#666]">
-                    {[isRepeating ? repeatFrequency : "", projectNameMap.get(newProjectId), assigneeGoals.find(goal => goal.id === newGoalId)?.title].filter(Boolean).join(" · ") || "Schedule, project and performance goal"}
+                    {[isRepeating ? repeatFrequency : "", !isRestrictedDeptHead ? projectNameMap.get(newProjectId) : "", assigneeGoals.find(goal => goal.id === newGoalId)?.title].filter(Boolean).join(" · ") || "Schedule, project and performance goal"}
                   </span>
                 </summary>
               <div className="pt-2 border-t border-[#E6E6E6] space-y-2">
@@ -3142,24 +3352,26 @@ function TasksWorkspaceContent() {
               </div>
 
               {/* Project Grouping */}
-              <div>
-                <label className="block text-xs font-bold text-black mb-1">
-                  Project (optional)
-                </label>
-                <select
-                  aria-label="Task Project"
-                  value={newProjectId}
-                  onChange={(e) => setNewProjectId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
-                >
-                  <option value="">No Project</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.code ? `${p.code} · ${p.name}` : p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {!isRestrictedDeptHead && (
+                <div>
+                  <label className="block text-xs font-bold text-black mb-1">
+                    Project (optional)
+                  </label>
+                  <select
+                    aria-label="Task Project"
+                    value={newProjectId}
+                    onChange={(e) => setNewProjectId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
+                  >
+                    <option value="">No Project</option>
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.code ? `${p.code} · ${p.name}` : p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Linked KPI Goal (Phase 5) */}
               {FEATURES.KPI && assigneeGoals.length > 0 && (
@@ -3195,7 +3407,10 @@ function TasksWorkspaceContent() {
                 </button>
                 <button
                   type="submit"
-                  disabled={mutations.createTask.isPending}
+                  disabled={
+                    mutations.createTask.isPending ||
+                    (isRestrictedDeptHead && myAssignedProjects.length === 0)
+                  }
                   className="px-5 py-2 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold cursor-pointer disabled:opacity-60 shadow-xs"
                 >
                   {mutations.createTask.isPending ? "Creating..." : "Create task"}
@@ -3323,21 +3538,206 @@ function TasksWorkspaceContent() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-black mb-1">Department</label>
-                <select
-                  aria-label="Project Department"
-                  value={projDeptId}
-                  onChange={(e) => setProjDeptId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
-                >
-                  <option value="">Company-Wide (All Teams)</option>
-                  {departments.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
+                <label className="block text-xs font-bold text-black mb-1.5">Assign Project To</label>
+                <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6]">
+                  {(
+                    [
+                      { key: "company", label: "Company-Wide" },
+                      { key: "department", label: "Department" },
+                      { key: "individual", label: "Individual" },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      aria-pressed={projAssignmentType === opt.key}
+                      onClick={() => {
+                        setProjAssignmentType(opt.key);
+                        if (opt.key !== "department") {
+                          setProjDepartmentIds([]);
+                        }
+                        if (opt.key === "department" && projDepartmentIds.length === 0 && departments.length > 0) {
+                          const firstId = departments[0].id;
+                          setProjDepartmentIds([firstId]);
+                          const lock = resolveDepartmentInchargeLock([firstId], departments);
+                          setProjInchargeId(lock.isLocked && lock.lockedInchargeId ? lock.lockedInchargeId : "");
+                        } else if (opt.key !== "department") {
+                          setProjInchargeId("");
+                        }
+                      }}
+                      className={cn(
+                        "px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer",
+                        projAssignmentType === opt.key
+                          ? "bg-black text-white shadow-xs"
+                          : "text-[#4D4D4D] hover:text-black hover:bg-white"
+                      )}
+                    >
+                      {opt.label}
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
+
+              {projAssignmentType === "department" && (
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-xs font-bold text-black mb-1">
+                      Departments *
+                    </label>
+                    <select
+                      aria-label="Project Department"
+                      value=""
+                      onChange={(e) => {
+                        const deptId = e.target.value;
+                        if (!deptId) return;
+                        setProjDepartmentIds((prev) =>
+                          prev.includes(deptId) ? prev : [...prev, deptId]
+                        );
+                      }}
+                      className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
+                    >
+                      <option value="">
+                        {projDepartmentIds.length === 0
+                          ? "Select department..."
+                          : "Add another department..."}
+                      </option>
+                      {departments
+                        .filter((d) => !projDepartmentIds.includes(d.id))
+                        .map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.name}
+                            {d.department_head_id
+                              ? ` (Head: ${formatPerson(d.department_head_id)})`
+                              : ""}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  {projDepartmentIds.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {projDepartmentIds.map((deptId) => {
+                        const dept = departments.find((d) => d.id === deptId);
+                        return (
+                          <span
+                            key={deptId}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#F5F5F5] border border-[#E6E6E6] text-[11px] font-semibold text-black"
+                          >
+                            <span>{dept?.name || "Department"}</span>
+                            <button
+                              type="button"
+                              aria-label={`Remove ${dept?.name || "department"}`}
+                              onClick={() => {
+                                const next = projDepartmentIds.filter((id) => id !== deptId);
+                                setProjDepartmentIds(next);
+                                const nextLock = resolveDepartmentInchargeLock(next, departments);
+                                if (nextLock.isLocked && nextLock.lockedInchargeId) {
+                                  setProjInchargeId(nextLock.lockedInchargeId);
+                                } else {
+                                  setProjInchargeId("");
+                                }
+                              }}
+                              className="text-[#808080] hover:text-black cursor-pointer"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-bold text-black mb-1">
+                      Incharge
+                    </label>
+                    {projectInchargeLock.isLocked && projectInchargeLock.lockedInchargeId ? (
+                      <div
+                        aria-label="Locked Project Incharge"
+                        className="w-full px-3 py-2 rounded-lg bg-[#F5F5F5] border border-[#E6E6E6] text-xs font-semibold text-black flex items-center justify-between gap-2"
+                      >
+                        <span className="truncate">
+                          {formatPerson(projectInchargeLock.lockedInchargeId)}
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-[#E6E6E6] text-[10px] font-bold text-[#4D4D4D] shrink-0">
+                          <Lock className="w-3 h-3" />
+                          Department Head
+                        </span>
+                      </div>
+                    ) : projectInchargeLock.headIds.length > 1 ? (
+                      <select
+                        aria-label="Project Incharge"
+                        value={projInchargeId}
+                        onChange={(e) => setProjInchargeId(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
+                      >
+                        {projectInchargeLock.headIds.map((headId) => (
+                          <option key={headId} value={headId}>
+                            {formatPerson(headId)} (Department Head)
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <select
+                        aria-label="Project Incharge"
+                        value={projInchargeId}
+                        onChange={(e) => setProjInchargeId(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
+                      >
+                        <option value="">No Incharge Assigned (Optional)</option>
+                        {employees.map((emp) => (
+                          <option key={emp.id} value={emp.id}>
+                            {formatAssigneeOptionLabel(emp)}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {projAssignmentType === "individual" && (
+                <div>
+                  <label className="block text-xs font-bold text-black mb-1">
+                    Individual (Incharge) *
+                  </label>
+                  <select
+                    required
+                    aria-label="Project Incharge"
+                    value={projInchargeId}
+                    onChange={(e) => setProjInchargeId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
+                  >
+                    <option value="">Select individual...</option>
+                    {employees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {formatAssigneeOptionLabel(emp)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {projAssignmentType === "company" && (
+                <div>
+                  <label className="block text-xs font-bold text-black mb-1">
+                    Incharge (optional)
+                  </label>
+                  <select
+                    aria-label="Project Incharge"
+                    value={projInchargeId}
+                    onChange={(e) => setProjInchargeId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-white border border-[#E6E6E6] text-xs text-black"
+                  >
+                    <option value="">No specific incharge (All Teams)</option>
+                    {employees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {formatAssigneeOptionLabel(emp)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-black mb-1">Description</label>
@@ -3690,7 +4090,7 @@ function TasksWorkspaceContent() {
                     )}
                 </div>
 
-                {!isRegularEmployee && canReassignTask(selectedTask) ? (
+                {canReassignTask(selectedTask) ? (
                   <select
                     aria-label="Reassign task"
                     value={
