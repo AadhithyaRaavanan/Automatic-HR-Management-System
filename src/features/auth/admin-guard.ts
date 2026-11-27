@@ -14,6 +14,15 @@ export interface AuthenticatedCallerContext {
   email?: string;
 }
 
+function normalizeCallerRole(raw: unknown): EmployeeRole {
+  const lower = String(raw || "").trim().toLowerCase();
+  if (lower === "super_admin" || lower === "admin") return "admin";
+  if (lower === "hr" || lower === "manager" || lower === "employee") {
+    return lower as EmployeeRole;
+  }
+  return "employee";
+}
+
 /**
  * Validates that an incoming API request comes from an authenticated user
  * with an active membership in the specified roles, enforcing AAL2 MFA for admin/hr
@@ -120,7 +129,7 @@ export async function verifyAdminRouteCaller(
       baseRole = isDemo ? "admin" : "employee";
     }
 
-    const resolvedRole = baseRole.toLowerCase() as EmployeeRole;
+    const resolvedRole = normalizeCallerRole(baseRole);
     if (!allowedRoles.includes(resolvedRole)) {
       return {
         response: NextResponse.json(
@@ -195,7 +204,7 @@ export async function verifyAdminRouteCaller(
     };
   }
 
-  const role = member.role as EmployeeRole;
+  const role = normalizeCallerRole(member.role);
   if (!allowedRoles.includes(role)) {
     if (
       isDemo &&

@@ -57,18 +57,25 @@ const config: Config = {
           light: "var(--border-light)",
           focus: "var(--border-focus)",
         },
+        destructive: {
+          DEFAULT: "var(--destructive)",
+          foreground: "var(--destructive-foreground)",
+        },
         status: {
           success: {
+            DEFAULT: "rgb(var(--status-success-rgb) / <alpha-value>)",
             bg: "var(--status-success-bg)",
             text: "var(--status-success-text)",
             dot: "var(--status-success-dot)",
           },
           warning: {
+            DEFAULT: "rgb(var(--status-warning-rgb) / <alpha-value>)",
             bg: "var(--status-warning-bg)",
             text: "var(--status-warning-text)",
             dot: "var(--status-warning-dot)",
           },
           danger: {
+            DEFAULT: "rgb(var(--status-danger-rgb) / <alpha-value>)",
             bg: "var(--status-danger-bg)",
             text: "var(--status-danger-text)",
             dot: "var(--status-danger-dot)",

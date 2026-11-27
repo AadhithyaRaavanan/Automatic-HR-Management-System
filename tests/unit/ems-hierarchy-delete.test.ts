@@ -136,6 +136,12 @@ describe("EMS Hierarchy Admin DELETE endpoints", () => {
       payload: undefined,
       filters: [["id", "dept-mkt"], ["organization_id", "org-1"]],
     });
+    expect(ops).toContainEqual({
+      table: "department_head_assignments",
+      op: "delete",
+      payload: undefined,
+      filters: [["department_id", "dept-mkt"]],
+    });
     expect(mockRevalidatePath).toHaveBeenCalledWith("/ems/departments");
     expect(mockRevalidatePath).toHaveBeenCalledWith("/employees");
   });

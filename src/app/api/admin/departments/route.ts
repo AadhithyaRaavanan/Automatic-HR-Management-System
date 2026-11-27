@@ -35,15 +35,37 @@ export async function GET(request: NextRequest) {
 
     let orgId: string | null = null;
     let userRole = "employee";
+    const adminReader = getAdminClient() as any;
     if (user) {
-      const { data: member } = await supabaseAdmin
+      const { data: member } = await adminReader
         .from("organization_members")
         .select("organization_id, role, status")
         .eq("user_id", user.id)
         .eq("status", "active")
         .maybeSingle();
       if (member?.organization_id) orgId = member.organization_id;
-      userRole = (member?.role || user.user_metadata?.role || user.user_metadata?.user_role || "employee").toLowerCase();
+      let rawRole =
+        member?.role ||
+        (user.app_metadata as any)?.user_role ||
+        (user.app_metadata as any)?.role ||
+        (user.user_metadata as any)?.role ||
+        (user.user_metadata as any)?.user_role ||
+        "employee";
+
+      if (String(rawRole).toLowerCase() === "employee") {
+        try {
+          const { data: urRow } = await adminReader
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", user.id)
+            .limit(1)
+            .maybeSingle();
+          if (urRow?.role) rawRole = urRow.role;
+        } catch {}
+      }
+
+      userRole = String(rawRole).trim().toLowerCase();
+      if (userRole === "super_admin") userRole = "admin";
     }
 
     if (userRole === "employee") {
@@ -146,7 +168,11 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({ departments: mapped });
+    return NextResponse.json({
+      departments: mapped,
+      callerRole: userRole,
+      canDelete: userRole === "admin",
+    });
   } catch (err: any) {
     return NextResponse.json({ departments: [], error: err.message }, { status: 500 });
   }
@@ -331,6 +357,12 @@ export async function DELETE(request: NextRequest) {
           .update({ department_id: null })
           .eq("department_id", id)
           .eq("organization_id", context.organizationId)
+      ),
+      safeDbOp(
+        adminClient
+          .from("department_head_assignments")
+          .delete()
+          .eq("department_id", id)
       ),
     ]);
 

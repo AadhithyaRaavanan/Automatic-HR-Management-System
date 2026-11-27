@@ -47,17 +47,26 @@
     --text-on-lime: #000000;          /* ALWAYS black text/icon on lime fill */
 
     /* Functional Status Colors */
+    --status-success: #16A34A;
+    --status-success-rgb: 22 163 74;
     --status-success-bg: #F5F5F5;
     --status-success-text: #000000;
     --status-success-dot: #B7FF00;     /* Lime dot for positive status */
 
+    --status-warning: #D97706;
+    --status-warning-rgb: 217 119 6;
     --status-warning-bg: #F5F5F5;
     --status-warning-text: #000000;
     --status-warning-dot: #F59E0B;     /* Amber dot for due soon / pending */
 
+    --status-danger: #DC2626;
+    --status-danger-rgb: 220 38 38;
     --status-danger-bg: #F5F5F5;
     --status-danger-text: #000000;
     --status-danger-dot: #FF1493;      /* Magenta dot for overdue / rejected / absent */
+
+    --destructive: #DC2626;
+    --destructive-foreground: #FFFFFF;
 
     --status-info-bg: #F5F5F5;
     --status-info-text: #000000;

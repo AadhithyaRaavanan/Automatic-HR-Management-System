@@ -76,8 +76,11 @@ interface HistoryItem {
 
 export default function EmsDepartmentsPage() {
   const router = useRouter();
-  const { userRole, isLoaded } = useAppSession();
-  const isAdmin = isLoaded && userRole === "admin";
+  const { userRole } = useAppSession();
+  const [canDeleteFromServer, setCanDeleteFromServer] = React.useState(false);
+  const normalizedRole = String(userRole || "").trim().toLowerCase();
+  const isAdmin =
+    canDeleteFromServer || normalizedRole === "admin" || normalizedRole === "super_admin";
   const [departments, setDepartments] = React.useState<DepartmentRecord[]>([]);
   const [activeEmployees, setActiveEmployees] = React.useState<ActiveEmployee[]>([]);
   const [designations, setDesignations] = React.useState<string[]>([]);
@@ -116,8 +119,11 @@ export default function EmsDepartmentsPage() {
   const loadDepartments = React.useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/departments");
+      const res = await fetch("/api/admin/departments", { cache: "no-store" });
       const json = await res.json();
+      if (typeof json?.canDelete === "boolean") {
+        setCanDeleteFromServer(json.canDelete);
+      }
       if (Array.isArray(json.departments)) {
         setDepartments(json.departments);
       }
@@ -455,7 +461,7 @@ export default function EmsDepartmentsPage() {
                   {/* Actions Footer */}
                   <div className="pt-1 flex items-center justify-between gap-1.5 border-t border-border-light/30 min-w-0">
                     {hasHead ? (
-                      <div className="flex items-center gap-1.5 w-full min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5 w-full min-w-0">
                         <button
                           type="button"
                           onClick={() => openAssignModal(dept, true)}
@@ -493,12 +499,13 @@ export default function EmsDepartmentsPage() {
                             title={`Delete ${dept.name}`}
                             className="px-2.5 py-1.5 rounded-xl bg-card border border-rose-200 hover:bg-rose-500/10 text-rose-600 text-[11px] font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer shrink-0"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-3 h-3 shrink-0" />
+                            <span>Delete</span>
                           </button>
                         )}
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1.5 w-full min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5 w-full min-w-0">
                         <button
                           type="button"
                           onClick={() => openAssignModal(dept, false)}
@@ -525,7 +532,8 @@ export default function EmsDepartmentsPage() {
                             title={`Delete ${dept.name}`}
                             className="px-2.5 py-1.5 rounded-xl bg-card border border-rose-200 hover:bg-rose-500/10 text-rose-600 text-[11px] font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer shrink-0"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-3 h-3 shrink-0" />
+                            <span>Delete</span>
                           </button>
                         )}
                       </div>
@@ -759,14 +767,14 @@ export default function EmsDepartmentsPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div className="w-full max-w-md rounded-3xl bg-card border border-border-light p-6 shadow-2xl space-y-4">
               <div className="flex items-start justify-between border-b border-border-light pb-3">
-                <h3 className="text-base font-bold text-text-primary text-status-danger flex items-center gap-2">
-                  <UserMinus className="w-5 h-5 text-status-danger" />
+                <h3 className="text-base font-bold text-red-600 flex items-center gap-2">
+                  <UserMinus className="w-5 h-5 text-red-600" />
                   <span>Remove Department Head</span>
                 </h3>
                 <button
                   type="button"
                   onClick={() => setRemoveModalOpen(false)}
-                  className="p-1 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-card-subtle"
+                  className="p-1 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-card-subtle cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -792,7 +800,7 @@ export default function EmsDepartmentsPage() {
                 <button
                   type="button"
                   onClick={() => setRemoveModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-card-subtle text-text-secondary hover:text-text-primary font-semibold"
+                  className="px-4 py-2 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -800,7 +808,7 @@ export default function EmsDepartmentsPage() {
                   type="button"
                   onClick={handleConfirmRemoveHead}
                   disabled={removingHead}
-                  className="px-5 py-2 rounded-xl bg-status-danger text-white font-bold hover:bg-status-danger/90 flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
                 >
                   {removingHead ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserMinus className="w-3.5 h-3.5" />}
                   <span>{removingHead ? "Removing..." : "Remove Head"}</span>

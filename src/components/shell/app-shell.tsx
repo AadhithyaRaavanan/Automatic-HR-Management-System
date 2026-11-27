@@ -61,11 +61,21 @@ interface AppShellProps {
 
 let cachedSession: AppSessionState | null = null;
 
+function normalizeAppRole(rawRole: unknown): AppUserRole | null {
+  if (typeof rawRole !== "string") return null;
+  const cleaned = rawRole.trim().toLowerCase();
+  if (cleaned === "super_admin" || cleaned === "admin") return "admin";
+  if (["employee", "team_lead", "manager", "hr"].includes(cleaned)) {
+    return cleaned as AppUserRole;
+  }
+  return null;
+}
+
 function getCookieRole(): AppUserRole | null {
   if (typeof document === "undefined") return null;
   const match = document.cookie.match(/(?:^|;\s*)remotehr_role=([^;]*)/);
   const val = match ? decodeURIComponent(match[1]) : null;
-  return val && ["employee", "team_lead", "manager", "hr", "admin"].includes(val) ? (val as AppUserRole) : null;
+  return normalizeAppRole(val);
 }
 
 export function clearAppSessionCache() {
@@ -142,7 +152,7 @@ export function AppShell({
             fullName: cached?.fullName || prev.fullName,
             userEmail: cached?.userEmail || prev.userEmail,
             timezone: cached?.timezone || prev.timezone,
-            isLoaded: Boolean(cached?.fullName),
+            isLoaded: Boolean(cached?.fullName || cached?.userRole),
             departmentName: cached?.departmentName || prev.departmentName,
             jobTitleName: cached?.jobTitleName || prev.jobTitleName,
           }));
@@ -215,11 +225,14 @@ export function AppShell({
           resolvedEmail = user.email ?? null;
 
           if (!propUserRole) {
-            const metaRole =
+            const metaRoleRaw =
               (user.app_metadata as any)?.user_role ||
-              (user.user_metadata as any)?.user_role;
-            if (metaRole && ["employee", "manager", "hr", "admin"].includes(metaRole)) {
-              resolvedRole = metaRole as AppUserRole;
+              (user.app_metadata as any)?.role ||
+              (user.user_metadata as any)?.user_role ||
+              (user.user_metadata as any)?.role;
+            const normalizedMetaRole = normalizeAppRole(metaRoleRaw);
+            if (normalizedMetaRole) {
+              resolvedRole = normalizedMetaRole;
             } else if (user.email === "admin@remotehr.io") {
               resolvedRole = "admin";
             } else if (user.email === "hr@remotehr.io") {
@@ -230,8 +243,9 @@ export function AppShell({
               resolvedRole = "employee";
             } else {
               const { data: rpcRole } = await (supabase.rpc as any)("current_user_role");
-              if (rpcRole && ["employee", "manager", "hr", "admin"].includes(rpcRole)) {
-                resolvedRole = rpcRole as AppUserRole;
+              const normalizedRpcRole = normalizeAppRole(rpcRole);
+              if (normalizedRpcRole) {
+                resolvedRole = normalizedRpcRole;
               } else {
                 const { data: member } = await (supabase as any)
                   .from("organization_members")
@@ -239,8 +253,9 @@ export function AppShell({
                   .eq("user_id", user.id)
                   .eq("status", "active")
                   .maybeSingle();
-                if (member?.role && ["employee", "manager", "hr", "admin"].includes(member.role)) {
-                  resolvedRole = member.role as AppUserRole;
+                const normalizedMemberRole = normalizeAppRole(member?.role);
+                if (normalizedMemberRole) {
+                  resolvedRole = normalizedMemberRole;
                 }
                 if (member?.organization_id) {
                   resolvedOrgId = member.organization_id;
