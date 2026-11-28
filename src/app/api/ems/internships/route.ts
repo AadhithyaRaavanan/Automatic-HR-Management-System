@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { isDemoModeEnabled } from "@/lib/config/demo";
-import { requireApprovedUser } from "@/features/auth/require-approved-user";
+import { verifyAdminRouteCaller } from "@/features/auth/admin-guard";
+import { verifyTargetEmployeeInOrg } from "@/features/auth/tenant-context";
 
 export const dynamic = "force-dynamic";
 
@@ -16,12 +16,14 @@ function calculateEndDate(startDateStr: string | null | undefined, months = 3): 
 }
 
 export async function GET(request: NextRequest) {
-  const approvedCheck = await requireApprovedUser(request);
-  if ("response" in approvedCheck) {
-    return approvedCheck.response;
+  const authResult = await verifyAdminRouteCaller(request, ["admin", "hr", "manager"]);
+  if ("response" in authResult) {
+    return authResult.response;
   }
+  const orgId = authResult.context.organizationId;
+
   try {
-    // 1. Try querying dedicated internships table if it exists
+    // 1. Query dedicated internships table scoped to caller's organization
     let tableInternships: any[] = [];
     try {
       const { data, error } = await (supabaseAdmin as any)
@@ -31,6 +33,7 @@ export async function GET(request: NextRequest) {
           employee:employee_id(id, full_name, email, employee_number, work_mode, departments:department_id(name)),
           mentor:mentor_id(id, full_name, email)
         `)
+        .eq("organization_id", orgId)
         .order("start_date", { ascending: false });
 
       if (!error && Array.isArray(data)) {
@@ -40,18 +43,19 @@ export async function GET(request: NextRequest) {
 
     const recordedEmployeeIds = new Set(tableInternships.map((i: any) => i.employee_id));
 
-    // 2. Query job titles matching "intern"
+    // 2. Query job titles matching "intern" in caller's organization
     const { data: internTitles } = await (supabaseAdmin as any)
       .from("job_titles")
       .select("id, title_name")
+      .eq("organization_id", orgId)
       .ilike("title_name", "%intern%");
 
     const internTitleIds = (internTitles || []).map((t: any) => t.id);
 
-    // 3. Query all employees provisioned with an intern job title
+    // 3. Query employees provisioned with an intern job title in caller's organization
     let internEmployees: any[] = [];
     if (internTitleIds.length > 0) {
-      const { data: emps, error: empErr } = await (supabaseAdmin as any)
+      let empQuery = (supabaseAdmin as any)
         .from("employees")
         .select(`
           id,
@@ -68,8 +72,14 @@ export async function GET(request: NextRequest) {
           job_titles:job_title_id(id, title_name),
           manager:manager_id(id, full_name, email)
         `)
+        .eq("organization_id", orgId)
         .in("job_title_id", internTitleIds);
 
+      if (authResult.context.role === "manager") {
+        empQuery = empQuery.eq("manager_id", authResult.context.userId);
+      }
+
+      const { data: emps, error: empErr } = await empQuery;
       if (!empErr && Array.isArray(emps)) {
         internEmployees = emps;
       }
@@ -83,7 +93,7 @@ export async function GET(request: NextRequest) {
           emp.joined_on || emp.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10);
         return {
           id: `intern-${emp.id}`,
-          organization_id: "00000000-0000-0000-0000-000000000001",
+          organization_id: orgId,
           employee_id: emp.id,
           employee: {
             id: emp.id,
@@ -122,6 +132,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const authResult = await verifyAdminRouteCaller(request, ["admin", "hr"]);
+  if ("response" in authResult) {
+    return authResult.response;
+  }
+  const orgId = authResult.context.organizationId;
+
   try {
     const body = await request.json();
     const { employeeId, mentorId, startDate, endDate, durationMonths, trainingPlan, assignedSkills } =
@@ -131,12 +147,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required internship dates" }, { status: 400 });
     }
 
+    const empCheck = await verifyTargetEmployeeInOrg(authResult.context, employeeId, { allowSelf: false });
+    if (!empCheck.allowed) {
+      return NextResponse.json({ error: "Forbidden: Employee does not belong to your organization." }, { status: 403 });
+    }
+    if (mentorId) {
+      const mentorCheck = await verifyTargetEmployeeInOrg(authResult.context, mentorId, { allowSelf: true });
+      if (!mentorCheck.allowed) {
+        return NextResponse.json({ error: "Forbidden: Mentor does not belong to your organization." }, { status: 403 });
+      }
+    }
+
     try {
       const { data, error } = await (supabaseAdmin as any)
         .from("internships")
         .upsert(
           {
-            organization_id: "00000000-0000-0000-0000-000000000001",
+            organization_id: orgId,
             employee_id: employeeId,
             mentor_id: mentorId || null,
             start_date: startDate,
@@ -162,7 +189,8 @@ export async function POST(request: NextRequest) {
       await (supabaseAdmin as any)
         .from("employees")
         .update({ manager_id: mentorId })
-        .eq("id", employeeId);
+        .eq("id", employeeId)
+        .eq("organization_id", orgId);
     }
 
     return NextResponse.json({

@@ -92,14 +92,14 @@ export async function POST(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const callerId = user?.id || (isDemoModeEnabled() ? "00000000-0000-0000-0000-000000000001" : null);
-  if (!callerId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { resolveTenantCaller } = await import("@/features/auth/tenant-context");
+  const caller = await resolveTenantCaller(request, { requireAal2ForPrivileged: false });
+  if ("response" in caller) {
+    return caller.response;
   }
+
+  const callerId = caller.context.userId;
+  const orgId = caller.context.organizationId;
 
   try {
     const body = await request.json();
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await (supabaseAdmin as any)
       .from("permission_requests")
       .insert({
-        organization_id: "00000000-0000-0000-0000-000000000001",
+        organization_id: orgId,
         employee_id: callerId,
         permission_date: permissionDate,
         start_time: startTime,

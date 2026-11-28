@@ -1,42 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { verifyAdminRouteCaller } from "@/features/auth/admin-guard";
+import { resolveTenantCaller } from "@/features/auth/tenant-context";
 import { getAdminClient, supabaseAdmin } from "@/lib/supabase/admin";
 import { getSupabaseAdminConfigError } from "@/lib/supabase/admin-config";
-import { createClient } from "@/lib/supabase/server";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const caller = await resolveTenantCaller(request, { requireAal2ForPrivileged: false });
+  if ("response" in caller) {
+    return caller.response;
+  }
+
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    let orgId: string | null = null;
-    const { data: member, error: memberErr } = await supabaseAdmin
-      .from("organization_members")
-      .select("organization_id, status")
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .maybeSingle();
-
-    if (member?.organization_id) {
-      orgId = member.organization_id;
-    } else if (isDemoModeEnabled()) {
-      orgId = "00000000-0000-0000-0000-000000000001";
-    }
-
-    if (!orgId) {
-      return NextResponse.json({ error: "Forbidden: Active organization membership required." }, { status: 403 });
-    }
+    const orgId = caller.context.organizationId;
 
     const deptFilter = request.nextUrl.searchParams.get("department_id");
 

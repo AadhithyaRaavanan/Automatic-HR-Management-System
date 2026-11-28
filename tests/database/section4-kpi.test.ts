@@ -91,7 +91,7 @@ describe("Section 4: KPI System", () => {
       await client.query(`
         INSERT INTO public.organization_members (organization_id, user_id, role, status)
         VALUES ('${ORG_1_ID}', '${u.id}', '${u.role}', 'active')
-        ON CONFLICT (user_id) DO UPDATE SET organization_id = '${ORG_1_ID}', role = '${u.role}', status = 'active';
+        ON CONFLICT (organization_id, user_id) DO UPDATE SET organization_id = '${ORG_1_ID}', role = '${u.role}', status = 'active';
       `);
       await client.query(`
         INSERT INTO public.employees (id, organization_id, email, full_name, manager_id, status, work_mode, timezone)
@@ -118,7 +118,7 @@ describe("Section 4: KPI System", () => {
     await client.query(`
       INSERT INTO public.organization_members (organization_id, user_id, role, status)
       VALUES ('${ORG_2_ID}', '${ORG_2.admin}', 'admin', 'active')
-      ON CONFLICT (user_id) DO UPDATE SET organization_id = '${ORG_2_ID}', role = 'admin', status = 'active';
+      ON CONFLICT (organization_id, user_id) DO UPDATE SET organization_id = '${ORG_2_ID}', role = 'admin', status = 'active';
     `);
     await client.query(`
       INSERT INTO public.employees (id, organization_id, email, full_name, status, work_mode, timezone)
@@ -866,7 +866,7 @@ describe("Section 4: KPI System", () => {
     await client.query(`
       INSERT INTO public.organization_members (organization_id, user_id, role, status)
       VALUES ('${ORG_1_ID}', '${IST_EMP_ID}', 'employee', 'active')
-      ON CONFLICT (user_id) DO UPDATE SET organization_id = '${ORG_1_ID}', role = 'employee', status = 'active';
+      ON CONFLICT (organization_id, user_id) DO UPDATE SET organization_id = '${ORG_1_ID}', role = 'employee', status = 'active';
     `);
     await client.query(`
       INSERT INTO public.employees (id, organization_id, email, full_name, manager_id, status, work_mode, timezone)
@@ -1063,7 +1063,7 @@ describe("Section 4: KPI System", () => {
     await client.query(`
       INSERT INTO public.organization_members (organization_id, user_id, role, status)
       VALUES ('${ORG_1_ID}', '${STRADDLE_EMP_ID}', 'employee', 'active')
-      ON CONFLICT (user_id) DO UPDATE SET organization_id = '${ORG_1_ID}', role = 'employee', status = 'active';
+      ON CONFLICT (organization_id, user_id) DO UPDATE SET organization_id = '${ORG_1_ID}', role = 'employee', status = 'active';
     `);
     await client.query(`
       INSERT INTO public.employees (id, organization_id, email, full_name, manager_id, status, work_mode, timezone)

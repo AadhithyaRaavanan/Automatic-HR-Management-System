@@ -43,16 +43,22 @@ export async function getOnboardingGate(
       const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
       if (authUser?.user) {
         const u = authUser.user;
-        role =
-          (u.app_metadata?.user_role ||
-            u.user_metadata?.role ||
-            u.user_metadata?.user_role ||
-            "employee") as string;
+        role = (u.app_metadata?.user_role || "employee") as string;
         mustChange = Boolean(
           u.app_metadata?.must_change_password ||
             u.user_metadata?.must_change_password
         );
         onboardingApprovedClaim = u.app_metadata?.onboarding_approved === true;
+      }
+      if (!role || role === "employee") {
+        const { data: memRole } = await (supabaseAdmin as any)
+          .from("organization_members")
+          .select("role")
+          .eq("user_id", userId)
+          .eq("status", "active")
+          .limit(1)
+          .maybeSingle();
+        if (memRole?.role) role = String(memRole.role);
       }
     } catch (err) {
       console.warn("[getOnboardingGate] Error loading auth user:", err);

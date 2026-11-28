@@ -356,6 +356,7 @@ export async function inviteSingleEmployee(
   let actionInviteLink = "";
   let createdNewAuthUser = false;
 
+  // Check if user already exists by email in Auth or employees/organization_members BEFORE mutating Auth state
   const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
     type: "invite",
     email: normalizedEmail,
@@ -375,44 +376,33 @@ export async function inviteSingleEmployee(
     invitedUserId = linkData.user.id;
     actionInviteLink = linkData.properties?.action_link || "";
     createdNewAuthUser = true;
-  } else if (preExistingEmployee?.id) {
-    invitedUserId = preExistingEmployee.id;
-    const { data: recoveryData } = await supabaseAdmin.auth.admin.generateLink({
-      type: "magiclink",
-      email: normalizedEmail,
-      options: { redirectTo: inviteRedirectTo },
-    });
-    actionInviteLink = recoveryData?.properties?.action_link || "";
   } else {
-    let foundUser: any = null;
-    let page = 1;
-    const perPage = 100;
-    while (!foundUser) {
-      const { data: listData, error: listErr } = await supabaseAdmin.auth.admin.listUsers({
-        page,
-        perPage,
-      });
-      if (listErr || !listData?.users || listData.users.length === 0) break;
-      foundUser = listData.users.find((u) => u.email?.toLowerCase() === normalizedEmail) || null;
-      if (listData.users.length < perPage) break;
-      page += 1;
-    }
+    if (preExistingEmployee?.id) {
+      invitedUserId = preExistingEmployee.id;
+    } else {
+      let foundUser: any = null;
+      let page = 1;
+      const perPage = 100;
+      while (!foundUser) {
+        const { data: listData, error: listErr } = await supabaseAdmin.auth.admin.listUsers({
+          page,
+          perPage,
+        });
+        if (listErr || !listData?.users || listData.users.length === 0) break;
+        foundUser = listData.users.find((u) => u.email?.toLowerCase() === normalizedEmail) || null;
+        if (listData.users.length < perPage) break;
+        page += 1;
+      }
 
-    if (!foundUser?.id) {
-      return {
-        ok: false,
-        status: 400,
-        error: `Auth invite failed: ${linkError?.message || "Unable to create or locate Supabase Auth user."}`,
-      };
+      if (!foundUser?.id) {
+        return {
+          ok: false,
+          status: 400,
+          error: `Auth invite failed: ${linkError?.message || "Unable to create or locate Supabase Auth user."}`,
+        };
+      }
+      invitedUserId = foundUser.id;
     }
-
-    invitedUserId = foundUser.id;
-    const { data: recoveryData } = await supabaseAdmin.auth.admin.generateLink({
-      type: "magiclink",
-      email: normalizedEmail,
-      options: { redirectTo: inviteRedirectTo },
-    });
-    actionInviteLink = recoveryData?.properties?.action_link || "";
   }
 
   const rollbackNewlyCreatedAuthUser = async () => {
@@ -424,7 +414,10 @@ export async function inviteSingleEmployee(
       await (supabaseAdmin.from("employees") as any).delete().eq("id", invitedUserId);
     } catch {}
     try {
-      await (supabaseAdmin.from("organization_members") as any).delete().eq("user_id", invitedUserId);
+      await (supabaseAdmin.from("organization_members") as any)
+        .delete()
+        .eq("user_id", invitedUserId)
+        .eq("organization_id", context.organizationId);
     } catch {}
     try {
       await (supabaseAdmin.from("user_roles") as any).delete().eq("user_id", invitedUserId);
@@ -435,6 +428,70 @@ export async function inviteSingleEmployee(
       console.error("[inviteSingleEmployee] Rollback deleteUser failed:", delErr?.message || delErr);
     }
   };
+
+  // Verify cross-tenant boundaries BEFORE generating a magic link or updating Auth credentials/metadata
+  const { data: otherMembers, error: exMemErr } = await supabaseAdmin
+    .from("organization_members")
+    .select("organization_id, role, status")
+    .eq("user_id", invitedUserId);
+
+  const hasOrgMembersTable = !exMemErr || !isMissingRelationError(exMemErr);
+
+  if (exMemErr && !isMissingRelationError(exMemErr)) {
+    await rollbackNewlyCreatedAuthUser();
+    return {
+      ok: false,
+      status: 500,
+      error: `Failed to verify organization membership: ${exMemErr.message}`,
+    };
+  }
+
+  const conflictingMembership = (otherMembers || []).find(
+    (m: any) => m.organization_id && m.organization_id !== context.organizationId
+  );
+  if (conflictingMembership) {
+    await rollbackNewlyCreatedAuthUser();
+    return {
+      ok: false,
+      status: 409,
+      error: "Conflict: User already belongs to another organization.",
+    };
+  }
+
+  let existingEmployeeOrgId: string | null = null;
+  const existingEmpCheck = await supabaseAdmin
+    .from("employees")
+    .select("organization_id")
+    .eq("id", invitedUserId)
+    .maybeSingle();
+
+  if (existingEmpCheck.error && !isMissingColumnOrRelError(existingEmpCheck.error)) {
+    await rollbackNewlyCreatedAuthUser();
+    return {
+      ok: false,
+      status: 500,
+      error: `Failed to verify employee uniqueness: ${existingEmpCheck.error.message}`,
+    };
+  }
+  existingEmployeeOrgId = (existingEmpCheck.data as any)?.organization_id || null;
+
+  if (existingEmployeeOrgId && existingEmployeeOrgId !== context.organizationId) {
+    await rollbackNewlyCreatedAuthUser();
+    return {
+      ok: false,
+      status: 409,
+      error: "Conflict: Employee record already belongs to another organization.",
+    };
+  }
+
+  if (!createdNewAuthUser) {
+    const { data: recoveryData } = await supabaseAdmin.auth.admin.generateLink({
+      type: "magiclink",
+      email: normalizedEmail,
+      options: { redirectTo: inviteRedirectTo },
+    });
+    actionInviteLink = recoveryData?.properties?.action_link || "";
+  }
 
   if (actionInviteLink) {
     try {
@@ -483,57 +540,6 @@ export async function inviteSingleEmployee(
     };
   }
 
-  // Check cross-tenant uniqueness across organization_members (when table exists) and employees
-  const { data: existingMember, error: exMemErr } = await supabaseAdmin
-    .from("organization_members")
-    .select("organization_id, role, status")
-    .eq("user_id", invitedUserId)
-    .maybeSingle();
-
-  const hasOrgMembersTable = !exMemErr || !isMissingRelationError(exMemErr);
-
-  if (exMemErr && !isMissingRelationError(exMemErr)) {
-    await rollbackNewlyCreatedAuthUser();
-    return {
-      ok: false,
-      status: 500,
-      error: `Failed to verify organization membership: ${exMemErr.message}`,
-    };
-  }
-
-  if (existingMember && existingMember.organization_id !== context.organizationId) {
-    return {
-      ok: false,
-      status: 409,
-      error: "Conflict: User already belongs to another organization.",
-    };
-  }
-
-  let existingEmployeeOrgId: string | null = null;
-  const existingEmpCheck = await supabaseAdmin
-    .from("employees")
-    .select("organization_id")
-    .eq("id", invitedUserId)
-    .maybeSingle();
-
-  if (existingEmpCheck.error && !isMissingColumnOrRelError(existingEmpCheck.error)) {
-    await rollbackNewlyCreatedAuthUser();
-    return {
-      ok: false,
-      status: 500,
-      error: `Failed to verify employee uniqueness: ${existingEmpCheck.error.message}`,
-    };
-  }
-  existingEmployeeOrgId = (existingEmpCheck.data as any)?.organization_id || null;
-
-  if (existingEmployeeOrgId && existingEmployeeOrgId !== context.organizationId) {
-    return {
-      ok: false,
-      status: 409,
-      error: "Conflict: Employee record already belongs to another organization.",
-    };
-  }
-
   // 2. Persist membership/role + employees record with schema-adaptive fallbacks & strict error checks
   const startVal = sanitizeTime(shiftStartTime, "09:00:00");
   const endVal = sanitizeTime(shiftEndTime, "17:00:00");
@@ -574,7 +580,7 @@ export async function inviteSingleEmployee(
         job_title_id: jobTitleId,
         updated_at: nowIso,
       },
-      { onConflict: "user_id" }
+      { onConflict: "organization_id,user_id" }
     );
 
     if (omUpsertErr && isMissingColumnOrRelError(omUpsertErr)) {
@@ -586,7 +592,7 @@ export async function inviteSingleEmployee(
           status: "active",
           updated_at: nowIso,
         },
-        { onConflict: "user_id" }
+        { onConflict: "organization_id,user_id" }
       );
       omUpsertErr = retryOm.error;
     }

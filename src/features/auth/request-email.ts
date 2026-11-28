@@ -1,6 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { sendMagicLinkEmail, sendPasswordResetEmail } from "@/lib/email/resend";
+import {
+  isSmtpTransportConfigured,
+  sendMagicLinkEmail,
+  sendPasswordResetEmail,
+} from "@/lib/email/resend";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 type Flow = "magic-link" | "forgot-password";
@@ -21,8 +25,7 @@ function providerFailure(error: { status?: number; code?: string; message: strin
 
 export async function requestAuthEmail(flow: Flow, email: string, redirectTo: string, captchaToken?: string) {
   const recovery = flow === "forgot-password";
-  const customTransport = process.env.RESEND_API_KEY ||
-    (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+  const customTransport = Boolean(process.env.RESEND_API_KEY) || isSmtpTransportConfigured();
 
   if (customTransport) {
     const { data, error } = await supabaseAdmin.auth.admin.generateLink({

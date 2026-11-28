@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { verifyAdminRouteCaller } from "@/features/auth/admin-guard";
+import { verifyTargetEmployeeInOrg } from "@/features/auth/tenant-context";
 import { requireApprovedUser } from "@/features/auth/require-approved-user";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +24,13 @@ export async function POST(
     return approvedCheck.response;
   }
 
+  const callerOrgId = approvedCheck.organizationId;
+  const callerRole = approvedCheck.role;
+  const callerUserId = approvedCheck.user.id;
+  if (!callerOrgId) {
+    return NextResponse.json({ error: "Forbidden: Active organization context required." }, { status: 403 });
+  }
+
   const rawId = params?.id || "";
   const cleanId = decodeURIComponent(rawId).trim().replace(/\s+/g, "-");
   if (!cleanId) {
@@ -35,21 +43,32 @@ export async function POST(
     if (isUuid) {
       const { data } = await (supabaseAdmin as any)
         .from("employees")
-        .select("id, full_name, email")
+        .select("id, full_name, email, organization_id")
         .eq("id", cleanId)
+        .eq("organization_id", callerOrgId)
         .maybeSingle();
       emp = data;
     } else {
       const { data } = await (supabaseAdmin as any)
         .from("employees")
-        .select("id, full_name, email")
+        .select("id, full_name, email, organization_id")
+        .eq("organization_id", callerOrgId)
         .ilike("id", `${cleanId}%`)
         .maybeSingle();
       emp = data;
     }
 
     if (!emp) {
-      return NextResponse.json({ error: "Employee not found." }, { status: 404 });
+      return NextResponse.json({ error: "Employee not found in your organization." }, { status: 404 });
+    }
+
+    const isSelf = emp.id === callerUserId;
+    const isPrivileged = callerRole === "admin" || callerRole === "hr";
+    if (!isSelf && !isPrivileged) {
+      return NextResponse.json(
+        { error: "Forbidden: Only HR/Admin or the employee can upload documents." },
+        { status: 403 }
+      );
     }
 
     const targetUserId = emp.id;
@@ -182,6 +201,14 @@ export async function PATCH(
 
     if (docErr || !doc) {
       return NextResponse.json({ error: "Document not found." }, { status: 404 });
+    }
+
+    const targetCheck = await verifyTargetEmployeeInOrg(authResult.context, doc.user_id, { allowSelf: false });
+    if (!targetCheck.allowed) {
+      return NextResponse.json(
+        { error: "Forbidden: Document belongs to another organization." },
+        { status: 403 }
+      );
     }
 
     // Fetch onboarding profile

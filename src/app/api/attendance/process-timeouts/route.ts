@@ -33,18 +33,20 @@ async function handleProcessTimeouts(request: NextRequest) {
         return approvedCheck.response;
       }
       callerUserId = approvedCheck.user.id;
+      organizationId = approvedCheck.organizationId;
 
-      // Resolve organization scope so dashboard/attendance loads sweep stale sessions org-wide
-      try {
-        const { data: emp } = await adminClient
-          .from("employees")
-          .select("organization_id")
-          .eq("id", callerUserId)
-          .maybeSingle();
-        if (emp?.organization_id) {
-          organizationId = String(emp.organization_id);
-        }
-      } catch {}
+      if (!organizationId) {
+        try {
+          const { data: emp } = await adminClient
+            .from("employees")
+            .select("organization_id")
+            .eq("id", callerUserId)
+            .maybeSingle();
+          if (emp?.organization_id) {
+            organizationId = String(emp.organization_id);
+          }
+        } catch {}
+      }
     }
 
     const result = await processSessionTimeouts({

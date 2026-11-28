@@ -1,9 +1,9 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { notify } from "./notify";
-import { sendNotificationEmail } from "@/lib/email/resend";
 
 export interface BirthdayEmployee {
   employeeId: string;
+  organizationId: string;
   fullName: string;
   email: string;
   avatarUrl?: string | null;
@@ -27,27 +27,33 @@ export function getKolkataDateString(refDate: Date = new Date()): string {
 }
 
 /**
- * Fetches all verified/approved employees with their date of birth.
- * Combines data from onboarding_profiles and employees directory.
+ * Fetches verified/approved employees with DOB, scoped to an organization when provided.
  */
-export async function getVerifiedEmployeeBirthdays(): Promise<BirthdayEmployee[]> {
+export async function getVerifiedEmployeeBirthdays(
+  organizationId?: string | null
+): Promise<BirthdayEmployee[]> {
   try {
     const todayKolkata = getKolkataDateString();
     const currentYear = parseInt(todayKolkata.slice(0, 4), 10);
 
-    // 1. Fetch active employees
-    const { data: emps, error: empErr } = await (supabaseAdmin.from("employees") as any)
-      .select("id, full_name, email, avatar_url, status")
+    let empQuery = (supabaseAdmin.from("employees") as any)
+      .select("id, organization_id, full_name, email, avatar_url, status")
       .eq("status", "active");
 
-    if (empErr || !emps) {
-      console.warn("[getVerifiedEmployeeBirthdays] Could not load employees:", empErr);
+    if (organizationId) {
+      empQuery = empQuery.eq("organization_id", organizationId);
+    }
+
+    const { data: emps, error: empErr } = await empQuery;
+    if (empErr || !emps || emps.length === 0) {
       return [];
     }
 
-    // 2. Fetch approved onboarding profiles with dob
-    const { data: onbProfiles } = await ((supabaseAdmin as any).from("onboarding_profiles"))
+    const empIds = emps.map((e: any) => e.id);
+    const { data: onbProfiles } = await (supabaseAdmin as any)
+      .from("onboarding_profiles")
       .select("user_id, full_name, dob, status")
+      .in("user_id", empIds)
       .not("dob", "is", null);
 
     const dobMap = new Map<string, string>();
@@ -58,24 +64,19 @@ export async function getVerifiedEmployeeBirthdays(): Promise<BirthdayEmployee[]
     });
 
     const birthdays: BirthdayEmployee[] = [];
-
     for (const emp of emps) {
       const dob = dobMap.get(emp.id);
       if (!dob) continue;
-
-      // Parse YYYY-MM-DD
       const parts = dob.split("-");
       if (parts.length < 3) continue;
-
       const birthMonth = parseInt(parts[1], 10);
       const birthDay = parseInt(parts[2], 10);
       if (isNaN(birthMonth) || isNaN(birthDay)) continue;
 
       const dateKeyThisYear = `${currentYear}-${String(birthMonth).padStart(2, "0")}-${String(birthDay).padStart(2, "0")}`;
-      const isToday = dateKeyThisYear === todayKolkata;
-
       birthdays.push({
         employeeId: emp.id,
+        organizationId: emp.organization_id,
         fullName: emp.full_name,
         email: emp.email,
         avatarUrl: emp.avatar_url,
@@ -83,7 +84,7 @@ export async function getVerifiedEmployeeBirthdays(): Promise<BirthdayEmployee[]
         birthMonth,
         birthDay,
         dateKeyThisYear,
-        isToday,
+        isToday: dateKeyThisYear === todayKolkata,
       });
     }
 
@@ -95,11 +96,12 @@ export async function getVerifiedEmployeeBirthdays(): Promise<BirthdayEmployee[]
 }
 
 /**
- * Checks for birthdays matching targetDate and dispatches:
- * 1. Celebratory in-app notification & email to the birthday celebrant.
- * 2. In-app announcement & email to all other colleagues.
+ * Checks for birthdays matching targetDate and dispatches strictly WITHIN each celebrant's own organization.
  */
-export async function dispatchBirthdayNotifications(targetDateIso?: string): Promise<{
+export async function dispatchBirthdayNotifications(
+  targetDateIso?: string,
+  organizationId?: string | null
+): Promise<{
   dateChecked: string;
   birthdaysCount: number;
   celebrantsNotified: string[];
@@ -109,7 +111,7 @@ export async function dispatchBirthdayNotifications(targetDateIso?: string): Pro
   const currentMonth = parseInt(dateStr.slice(5, 7), 10);
   const currentDay = parseInt(dateStr.slice(8, 10), 10);
 
-  const allBirthdays = await getVerifiedEmployeeBirthdays();
+  const allBirthdays = await getVerifiedEmployeeBirthdays(organizationId);
   const todaysCelebrants = allBirthdays.filter(
     (b) => b.birthMonth === currentMonth && b.birthDay === currentDay
   );
@@ -123,11 +125,13 @@ export async function dispatchBirthdayNotifications(targetDateIso?: string): Pro
     };
   }
 
-  // Fetch all active employees
-  const { data: allActiveEmps } = await (supabaseAdmin.from("employees") as any)
-    .select("id, full_name, email")
+  let empQuery = (supabaseAdmin.from("employees") as any)
+    .select("id, organization_id, full_name, email")
     .eq("status", "active");
-
+  if (organizationId) {
+    empQuery = empQuery.eq("organization_id", organizationId);
+  }
+  const { data: allActiveEmps } = await empQuery;
   const activeEmployees = allActiveEmps || [];
   const celebrantsNotified: string[] = [];
   let totalColleaguesNotified = 0;
@@ -136,16 +140,13 @@ export async function dispatchBirthdayNotifications(targetDateIso?: string): Pro
     const firstName = celebrant.fullName.split(" ")[0];
     celebrantsNotified.push(celebrant.fullName);
 
-    // 1. Send Celebrant Self Notification & Email
     try {
-      const selfTitle = `🎂 Happy Birthday, ${firstName}!`;
-      const selfBody = `Wishing you a wonderful and joyful birthday from everyone at Zen Xea! Have an extraordinary year ahead! 🎉`;
-
       await notify({
         userIds: [celebrant.employeeId],
+        organizationId: celebrant.organizationId,
         type: "reminder",
-        title: selfTitle,
-        body: selfBody,
+        title: `🎂 Happy Birthday, ${firstName}!`,
+        body: "Wishing you a wonderful and joyful birthday from everyone on your team! 🎉",
         link: "/dashboard",
         entityType: "birthday",
         entityId: celebrant.employeeId,
@@ -153,34 +154,31 @@ export async function dispatchBirthdayNotifications(targetDateIso?: string): Pro
         forceEmail: true,
       });
     } catch (selfErr) {
-      console.error(`[dispatchBirthdayNotifications] Failed to notify celebrant ${celebrant.fullName}:`, selfErr);
+      console.error(`[dispatchBirthdayNotifications] Self notify failed:`, selfErr);
     }
 
-    // 2. Send Colleague Announcements & Emails
+    // Colleagues STRICTLY in the SAME organization as the celebrant
     const colleagueIds = activeEmployees
-      .filter((e: any) => e.id !== celebrant.employeeId)
+      .filter((e: any) => e.organization_id === celebrant.organizationId && e.id !== celebrant.employeeId)
       .map((e: any) => e.id);
 
     if (colleagueIds.length > 0) {
       try {
-        const announcementTitle = `🎉 Today is ${celebrant.fullName}'s Birthday!`;
-        const announcementBody = `Today is ${celebrant.fullName}'s Birthday! Join the team in wishing them a very Happy Birthday! 🎂 Let's celebrate together!`;
-
         await notify({
           userIds: colleagueIds,
+          organizationId: celebrant.organizationId,
           type: "reminder",
-          title: announcementTitle,
-          body: announcementBody,
+          title: `🎉 Today is ${celebrant.fullName}'s Birthday!`,
+          body: `Today is ${celebrant.fullName}'s Birthday! Join the team in wishing them a very Happy Birthday! 🎂`,
           link: "/attendance",
           entityType: "birthday",
           entityId: celebrant.employeeId,
           dedupeKey: `birthday-colleague:${celebrant.employeeId}:${dateStr}`,
           forceEmail: true,
         });
-
         totalColleaguesNotified += colleagueIds.length;
       } catch (colleagueErr) {
-        console.error(`[dispatchBirthdayNotifications] Failed to notify colleagues for ${celebrant.fullName}:`, colleagueErr);
+        console.error(`[dispatchBirthdayNotifications] Colleague notify failed:`, colleagueErr);
       }
     }
   }
@@ -194,53 +192,44 @@ export async function dispatchBirthdayNotifications(targetDateIso?: string): Pro
 }
 
 /**
- * Sends the Admin an example in-app notification of BOTH scenarios (only on app).
+ * Sends example notifications scoped strictly to caller's organization.
  */
-export async function sendAdminExampleBirthdayNotifications(adminUserId: string): Promise<boolean> {
+export async function sendAdminExampleBirthdayNotifications(
+  adminUserId: string,
+  organizationId: string
+): Promise<boolean> {
   try {
+    if (!organizationId) return false;
     const { data: adminUser } = await (supabaseAdmin.from("employees") as any)
       .select("full_name")
       .eq("id", adminUserId)
+      .eq("organization_id", organizationId)
       .maybeSingle();
 
     const adminName = adminUser?.full_name?.split(" ")[0] || "Admin";
-
-    // Scenario 1: Self Birthday Notification
     const notif1 = {
       user_id: adminUserId,
       type: "reminder",
       title: `🎂 Happy Birthday, ${adminName}!`,
-      body: "Wishing you a wonderful and joyful birthday from everyone at Zen Xea! Have an extraordinary year ahead! 🎉 (Example Notification: Scenario 1 - Self)",
+      body: "Example birthday celebration notification.",
       link: "/dashboard",
-      organization_id: "00000000-0000-0000-0000-000000000001",
-      metadata: {
-        subType: "birthday_celebration",
-        isExample: true,
-      },
+      organization_id: organizationId,
+      metadata: { subType: "birthday_celebration", isExample: true },
     };
 
-    // Scenario 2: Colleague Birthday Announcement
     const notif2 = {
       user_id: adminUserId,
       type: "reminder",
-      title: "🎉 Today is James Aathithyan's Birthday!",
-      body: "Today is James Aathithyan's Birthday! Join the team in wishing them a very Happy Birthday! 🎂 (Example Notification: Scenario 2 - Colleague)",
+      title: "🎉 Team Birthday Reminder",
+      body: "Example colleague birthday announcement notification.",
       link: "/attendance",
-      organization_id: "00000000-0000-0000-0000-000000000001",
-      metadata: {
-        subType: "birthday_announcement",
-        isExample: true,
-      },
+      organization_id: organizationId,
+      metadata: { subType: "birthday_announcement", isExample: true },
     };
 
     const { error } = await (supabaseAdmin.from("notifications") as any).insert([notif1, notif2]);
-    if (error) {
-      console.error("[sendAdminExampleBirthdayNotifications] Failed to insert notifications:", error);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("[sendAdminExampleBirthdayNotifications] Error:", err);
+    return !error;
+  } catch {
     return false;
   }
 }

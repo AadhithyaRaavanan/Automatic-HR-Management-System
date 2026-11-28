@@ -102,10 +102,31 @@ export async function updateSession(request: NextRequest) {
   const isTokenValid = !!claims && (!claims.exp || claims.exp * 1000 > Date.now());
   const aal = claims?.aal || "aal1";
   const userEmail = (claims?.email || "") as string;
+  // Never trust mutable user_metadata for roles; use verified JWT/app_metadata or authoritative DB lookup below
   let userRole = (claims?.user_role ||
-    claims?.app_metadata?.user_role ||
-    claims?.user_metadata?.role ||
-    claims?.user_metadata?.user_role) as EmployeeRole | undefined;
+    claims?.app_metadata?.user_role) as EmployeeRole | undefined;
+  let resolvedOrgId: string | undefined =
+    request.cookies.get("pulse_org_id")?.value ||
+    claims?.organization_id ||
+    claims?.app_metadata?.organization_id;
+
+  if (isTokenValid && (!userRole || request.cookies.get("pulse_org_id")?.value) && claims?.sub) {
+    try {
+      const selectedCookieOrg = request.cookies.get("pulse_org_id")?.value;
+      const memberQ = (supabase as any)
+        .from("organization_members")
+        .select("role, organization_id")
+        .eq("user_id", claims.sub)
+        .eq("status", "active");
+      const { data: memRows } = selectedCookieOrg
+        ? await memberQ.eq("organization_id", selectedCookieOrg).limit(1)
+        : await memberQ.limit(2);
+      if (Array.isArray(memRows) && memRows.length === 1 && memRows[0]?.role) {
+        userRole = String(memRows[0].role).toLowerCase() as EmployeeRole;
+        resolvedOrgId = memRows[0].organization_id;
+      }
+    } catch {}
+  }
 
   // In demo mode: if role claim is missing from JWT, resolve dynamically from demo preset email
   if (!userRole && isDemoModeEnabled() && userEmail) {
@@ -333,7 +354,7 @@ export async function updateSession(request: NextRequest) {
       } else if (userRole === "hr" || userRole === "admin") {
         let reqMfa = !isDemoModeEnabled();
         try {
-          const orgId = claims?.organization_id || claims?.app_metadata?.organization_id;
+          const orgId = resolvedOrgId || claims?.organization_id || claims?.app_metadata?.organization_id;
           if (orgId) {
             const { data: org } = await (supabase as any)
               .from("organizations")

@@ -6,23 +6,17 @@ import { dispatchBirthdayNotifications } from "@/features/notifications/birthday
 import { enforceBreakTimeouts } from "@/features/attendance/break-timeout";
 import { processSessionTimeouts } from "@/features/attendance/session-timeout";
 import { calculateWorkingDaysAhead, countWorkingDaysBetween } from "@/lib/date/working-days";
+import { requireCronAuthorization } from "@/features/auth/tenant-context";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  try {
-    // 1. Authorize via CRON_SECRET if configured
-    const cronSecret = process.env.CRON_SECRET;
-    const authHeader = request.headers.get("authorization");
-    const secretHeader = request.headers.get("x-cron-secret");
+  const authError = requireCronAuthorization(request);
+  if (authError) {
+    return authError;
+  }
 
-    if (cronSecret) {
-      const isAuthorized =
-        authHeader === `Bearer ${cronSecret}` || secretHeader === cronSecret;
-      if (!isAuthorized) {
-        return NextResponse.json({ error: "Unauthorized cron execution" }, { status: 401 });
-      }
-    }
+  try {
 
     const now = new Date();
     // Resolve date in Asia/Kolkata
@@ -71,7 +65,7 @@ export async function GET(request: NextRequest) {
     // ------------------------------------------------------------------------
     try {
       const { data: tasks } = await (supabaseAdmin.from("tasks") as any)
-        .select("id, title, assignee_id, creator_id, due_date, status")
+        .select("id, organization_id, title, assignee_id, creator_id, due_date, status")
         .in("status", ["todo", "in_progress"])
         .not("due_date", "is", null);
 
@@ -84,6 +78,7 @@ export async function GET(request: NextRequest) {
             // Due within 24h
             await notify({
               userIds: [t.assignee_id],
+              organizationId: t.organization_id,
               type: "reminder_task_due",
               typeGroup: "reminders",
               title: "Task Due Today",
@@ -98,6 +93,7 @@ export async function GET(request: NextRequest) {
             // Overdue -> Assignee
             await notify({
               userIds: [t.assignee_id],
+              organizationId: t.organization_id,
               type: "reminder_task_overdue",
               typeGroup: "reminders",
               title: "Task Overdue",
@@ -108,11 +104,12 @@ export async function GET(request: NextRequest) {
               dedupeKey: `task-overdue-emp:${t.id}:${kolkataDate}`,
             });
 
-            // Overdue -> Manager (once per task)
-            const managers = await getManagersOf(t.assignee_id);
+            // Overdue -> Manager (scoped strictly to task's organization)
+            const managers = await getManagersOf(t.assignee_id, t.organization_id);
             if (managers.length > 0) {
               await notify({
                 userIds: managers,
+                organizationId: t.organization_id,
                 type: "reminder_task_overdue_manager",
                 typeGroup: "reminders",
                 title: "Team Task Overdue Notice",
@@ -139,19 +136,20 @@ export async function GET(request: NextRequest) {
 
       // Pending Leave Requests
       const { data: pendingLeaves } = await (supabaseAdmin.from("leave_requests") as any)
-        .select("id, employee_id, start_date, end_date, created_at")
+        .select("id, organization_id, employee_id, start_date, end_date, created_at")
         .eq("status", "pending")
         .lt("created_at", twoDaysAgoIso);
 
       if (pendingLeaves) {
         for (const lr of pendingLeaves) {
-          const managers = await getManagersOf(lr.employee_id);
-          const hrUsers = await getHrUsers();
+          const managers = await getManagersOf(lr.employee_id, lr.organization_id);
+          const hrUsers = await getHrUsers(lr.organization_id);
           const reviewers = Array.from(new Set([...managers, ...hrUsers]));
 
           if (reviewers.length > 0) {
             await notify({
               userIds: reviewers,
+              organizationId: lr.organization_id,
               type: "reminder_leave_pending_48h",
               typeGroup: "reminders",
               title: "Leave Request Awaiting Review (>48h)",
@@ -168,19 +166,20 @@ export async function GET(request: NextRequest) {
 
       // Pending Regularization Requests
       const { data: pendingRegs } = await (supabaseAdmin.from("regularization_requests") as any)
-        .select("id, employee_id, work_date, created_at")
+        .select("id, organization_id, employee_id, work_date, created_at")
         .eq("status", "pending")
         .lt("created_at", twoDaysAgoIso);
 
       if (pendingRegs) {
         for (const rr of pendingRegs) {
-          const managers = await getManagersOf(rr.employee_id);
-          const hrUsers = await getHrUsers();
+          const managers = await getManagersOf(rr.employee_id, rr.organization_id);
+          const hrUsers = await getHrUsers(rr.organization_id);
           const reviewers = Array.from(new Set([...managers, ...hrUsers]));
 
           if (reviewers.length > 0) {
             await notify({
               userIds: reviewers,
+              organizationId: rr.organization_id,
               type: "reminder_reg_pending_48h",
               typeGroup: "reminders",
               title: "Attendance Regularization Awaiting Review (>48h)",
@@ -352,11 +351,17 @@ export async function GET(request: NextRequest) {
     }
 
     // ------------------------------------------------------------------------
-    // Rule 7: Daily Birthday Celebration & Announcements
+    // Rule 7: Daily Birthday Celebration & Announcements per Active Organization
     // ------------------------------------------------------------------------
     try {
-      const bdayResult = await dispatchBirthdayNotifications(kolkataDate);
-      stats.birthdaysCelebrated = bdayResult.birthdaysCount;
+      const { data: activeOrgs } = await (supabaseAdmin.from("organizations") as any)
+        .select("id")
+        .in("status", ["active", "trial"]);
+
+      for (const org of activeOrgs || []) {
+        const bdayResult = await dispatchBirthdayNotifications(kolkataDate, org.id);
+        stats.birthdaysCelebrated += bdayResult.birthdaysCount;
+      }
     } catch (err) {
       console.error("[Cron: Birthday Dispatch Error]:", err);
     }

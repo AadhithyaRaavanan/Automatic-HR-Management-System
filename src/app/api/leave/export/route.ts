@@ -14,11 +14,19 @@ export async function GET(request: NextRequest) {
   }
   const { context } = authResult;
 
-  // Fetch leave requests for caller organization
-  const { data: requests, error: reqErr } = await supabaseAdmin
+  const { searchParams } = new URL(request.url);
+  const statusFilter = searchParams.get("status")?.trim().toLowerCase() || "";
+  const startDateFilter = searchParams.get("startDate")?.trim() || "";
+  const endDateFilter = searchParams.get("endDate")?.trim() || "";
+  const employeeIdFilter = searchParams.get("employeeId")?.trim() || "";
+  const searchFilter = searchParams.get("search")?.trim().toLowerCase() || "";
+
+  // Fetch leave requests for caller organization respecting active filters
+  let reqQuery = supabaseAdmin
     .from("leave_requests")
     .select(`
       id,
+      employee_id,
       start_date,
       end_date,
       day_part,
@@ -32,9 +40,32 @@ export async function GET(request: NextRequest) {
     .eq("organization_id", context.organizationId)
     .order("created_at", { ascending: false });
 
+  if (statusFilter && statusFilter !== "all") {
+    reqQuery = reqQuery.eq("status", statusFilter);
+  }
+  if (startDateFilter) {
+    reqQuery = reqQuery.gte("end_date", startDateFilter);
+  }
+  if (endDateFilter) {
+    reqQuery = reqQuery.lte("start_date", endDateFilter);
+  }
+  if (employeeIdFilter) {
+    reqQuery = reqQuery.eq("employee_id", employeeIdFilter);
+  }
+
+  const { data: rawRequests, error: reqErr } = await reqQuery;
+
   if (reqErr) {
     return NextResponse.json({ error: reqErr.message }, { status: 500 });
   }
+
+  const requests = (rawRequests || []).filter((r: any) => {
+    if (!searchFilter) return true;
+    const empName = String(r.employees?.full_name || "").toLowerCase();
+    const empEmail = String(r.employees?.email || "").toLowerCase();
+    const ltName = String(r.leave_types?.name || r.leave_types?.code || "").toLowerCase();
+    return empName.includes(searchFilter) || empEmail.includes(searchFilter) || ltName.includes(searchFilter);
+  });
 
   // Build Excel Workbook with ExcelJS
   const workbook = new ExcelJS.Workbook();

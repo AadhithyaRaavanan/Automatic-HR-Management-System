@@ -218,7 +218,7 @@ export async function PATCH(
     );
   }
 
-  const effectiveOrgId = existingTask.organization_id || orgId || "00000000-0000-0000-0000-000000000001";
+  const effectiveOrgId = existingTask.organization_id || orgId;
 
   try {
     await dbClient.from("task_events").insert({

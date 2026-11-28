@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     return approvedCheck.response;
   }
 
-  const { user, supabase: callerSupabase, role: approvedRole } = approvedCheck;
+  const { user, supabase: callerSupabase, role: approvedRole, organizationId } = approvedCheck;
   const adminConfigured = isSupabaseAdminConfigured();
   const dbClient: any = adminConfigured ? getAdminClient() : callerSupabase;
 
@@ -50,15 +50,10 @@ export async function GET(request: NextRequest) {
     (user?.user_metadata?.name as string | undefined) ||
     null;
 
-  let orgId: string | null =
-    (user?.app_metadata?.organization_id as string | undefined) ||
-    (user?.user_metadata?.organization_id as string | undefined) ||
-    null;
+  let orgId: string | null = organizationId || null;
+  let resolvedCallerRole: string = String(approvedRole || "employee").toLowerCase();
 
-  let resolvedCallerRole: string = approvedRole || "employee";
-
-  // Resolve active organization_id and role for the signed-in caller
-  if (user?.id) {
+  if (!orgId && user?.id) {
     const memberRes: any = await safeQuery(
       dbClient
         .from("organization_members")
@@ -73,19 +68,10 @@ export async function GET(request: NextRequest) {
     if (memberRes?.data?.role) {
       resolvedCallerRole = String(memberRes.data.role).toLowerCase();
     }
+  }
 
-    if (!orgId) {
-      const selfEmpRes: any = await safeQuery(
-        dbClient
-          .from("employees")
-          .select("organization_id")
-          .eq("id", user.id)
-          .maybeSingle()
-      );
-      if (selfEmpRes?.data?.organization_id) {
-        orgId = selfEmpRes.data.organization_id;
-      }
-    }
+  if (!orgId) {
+    return NextResponse.json({ error: "Forbidden: Active organization context required." }, { status: 403 });
   }
 
   // Query organization-scoped active employees with clean starter-schema fallback
@@ -127,31 +113,18 @@ export async function GET(request: NextRequest) {
 
   const metaClient = empRes?.error ? callerSupabase : dbClient;
 
-  const orgMembersPromise = orgId
-    ? metaClient
-        .from("organization_members")
-        .select("user_id, role, status")
-        .eq("organization_id", orgId)
-        .eq("status", "active")
-    : metaClient
-        .from("organization_members")
-        .select("user_id, role, status")
-        .eq("status", "active");
-
-  const [orgMembersRes, userRolesRes] = await Promise.all([
-    safeQuery(orgMembersPromise),
-    safeQuery(metaClient.from("user_roles").select("user_id, role")),
-  ]);
+  const orgMembersRes = await safeQuery(
+    metaClient
+      .from("organization_members")
+      .select("user_id, role, status")
+      .eq("organization_id", orgId)
+      .eq("status", "active")
+  );
 
   const roleMap = new Map<string, string>();
   for (const m of orgMembersRes?.data || []) {
     if (m?.user_id && m?.role) {
       roleMap.set(m.user_id, String(m.role).toLowerCase());
-    }
-  }
-  for (const ur of userRolesRes?.data || []) {
-    if (ur?.user_id && ur?.role && !roleMap.has(ur.user_id)) {
-      roleMap.set(ur.user_id, String(ur.role).toLowerCase());
     }
   }
 

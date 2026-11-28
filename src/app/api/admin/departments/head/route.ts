@@ -22,7 +22,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // 1. Fetch Department & Current Head
+    const orgId = authResult.context.organizationId;
+
+    // 1. Fetch Department & Current Head scoped to caller's organization
     const { data: dept, error: deptErr } = await (supabaseAdmin as any)
       .from("departments")
       .select(`
@@ -39,6 +41,7 @@ export async function GET(request: NextRequest) {
         )
       `)
       .eq("id", departmentId)
+      .eq("organization_id", orgId)
       .maybeSingle();
 
     if (deptErr || !dept) {
@@ -49,20 +52,24 @@ export async function GET(request: NextRequest) {
     const { data: auditRecords } = await (supabaseAdmin as any)
       .from("audit_logs")
       .select("*")
+      .eq("organization_id", orgId)
       .eq("table_name", "departments")
       .eq("record_id", departmentId)
       .in("action", ["DEPARTMENT_HEAD_ASSIGNED", "DEPARTMENT_HEAD_REASSIGNED", "DEPARTMENT_HEAD_REMOVED"])
       .order("created_at", { ascending: false });
 
-    // 3. Resolve actors for history
+    // 3. Resolve actors for history within organization
     const actorIds = new Set<string>();
     for (const r of auditRecords || []) {
       if (r.actor_id) actorIds.add(r.actor_id);
     }
-    const { data: actors } = await (supabaseAdmin as any)
-      .from("employees")
-      .select("id, full_name, email")
-      .in("id", Array.from(actorIds));
+    const { data: actors } = actorIds.size > 0
+      ? await (supabaseAdmin as any)
+          .from("employees")
+          .select("id, full_name, email")
+          .eq("organization_id", orgId)
+          .in("id", Array.from(actorIds))
+      : { data: [] };
 
     const actorMap = new Map<string, string>();
     for (const a of actors || []) {
@@ -133,7 +140,7 @@ export async function POST(request: NextRequest) {
 
     const startDate = effectiveStartDate || new Date().toISOString().slice(0, 10);
 
-    // 1. Validate employee: must exist and be ACTIVE
+    // 1. Validate employee: must exist in caller's org and be ACTIVE
     const { data: emp, error: empErr } = await (supabaseAdmin as any)
       .from("employees")
       .select(`
@@ -146,10 +153,11 @@ export async function POST(request: NextRequest) {
         job_titles:job_title_id(id, title_name)
       `)
       .eq("id", employeeId)
+      .eq("organization_id", context.organizationId)
       .maybeSingle();
 
     if (empErr || !emp) {
-      return NextResponse.json({ error: "Employee not found." }, { status: 404 });
+      return NextResponse.json({ error: "Employee not found in your organization." }, { status: 404 });
     }
 
     if (emp.status !== "active") {
@@ -159,7 +167,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Validate department
+    // 2. Validate department in caller's org
     const { data: dept, error: deptErr } = await (supabaseAdmin as any)
       .from("departments")
       .select(`
@@ -170,6 +178,7 @@ export async function POST(request: NextRequest) {
         head:department_head_id(id, full_name, job_titles:job_title_id(title_name))
       `)
       .eq("id", departmentId)
+      .eq("organization_id", context.organizationId)
       .maybeSingle();
 
     if (deptErr || !dept) {
@@ -206,7 +215,8 @@ export async function POST(request: NextRequest) {
         department_head_id: employeeId,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", departmentId);
+      .eq("id", departmentId)
+      .eq("organization_id", context.organizationId);
 
     if (updateDeptErr) {
       return NextResponse.json({ error: updateDeptErr.message }, { status: 400 });
@@ -220,7 +230,8 @@ export async function POST(request: NextRequest) {
           department_id: departmentId,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", employeeId);
+        .eq("id", employeeId)
+        .eq("organization_id", context.organizationId);
     }
 
     // 6. Record Historical Audit Event
@@ -294,10 +305,11 @@ export async function DELETE(request: NextRequest) {
         head:department_head_id(id, full_name, job_titles:job_title_id(title_name))
       `)
       .eq("id", departmentId)
+      .eq("organization_id", context.organizationId)
       .maybeSingle();
 
     if (fetchErr || !dept) {
-      return NextResponse.json({ error: "Department not found." }, { status: 404 });
+      return NextResponse.json({ error: "Department not found in your organization." }, { status: 404 });
     }
 
     if (!dept.department_head_id) {
@@ -316,7 +328,8 @@ export async function DELETE(request: NextRequest) {
         department_head_id: null,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", departmentId);
+      .eq("id", departmentId)
+      .eq("organization_id", context.organizationId);
 
     if (updateErr) {
       return NextResponse.json({ error: updateErr.message }, { status: 400 });

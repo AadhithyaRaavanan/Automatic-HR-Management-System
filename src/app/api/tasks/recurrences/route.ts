@@ -11,8 +11,7 @@ export async function GET(request: NextRequest) {
       return authResult.response;
     }
 
-    const { employee, user, role } = authResult;
-    const orgId = employee?.organization_id || user?.user_metadata?.organization_id;
+    const { user, role, organizationId: orgId } = authResult;
     if (!orgId) return NextResponse.json({ recurrences: [] });
 
     let query = (supabaseAdmin as any)
@@ -48,8 +47,10 @@ export async function POST(request: NextRequest) {
       return authResult.response;
     }
 
-    const { employee, user } = authResult;
-    const orgId = employee?.organization_id || user?.user_metadata?.organization_id;
+    const { user, organizationId: orgId } = authResult;
+    if (!orgId) {
+      return NextResponse.json({ error: "Forbidden: Active organization required." }, { status: 403 });
+    }
     const body = await request.json().catch(() => ({}));
 
     const {

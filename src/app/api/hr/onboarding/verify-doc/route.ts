@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRouteCaller } from "@/features/auth/admin-guard";
+import { verifyTargetEmployeeInOrg } from "@/features/auth/tenant-context";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { notify } from "@/features/notifications/notify";
 
@@ -40,6 +41,14 @@ export async function POST(request: NextRequest) {
 
     if (fetchErr || !doc) {
       return NextResponse.json({ error: "Document not found." }, { status: 404 });
+    }
+
+    const targetCheck = await verifyTargetEmployeeInOrg(authResult.context, doc.user_id, { allowSelf: false });
+    if (!targetCheck.allowed) {
+      return NextResponse.json(
+        { error: "Forbidden: Document belongs to another organization." },
+        { status: 403 }
+      );
     }
 
     // Block modifying documents if candidate profile is already approved
@@ -121,6 +130,7 @@ export async function POST(request: NextRequest) {
       // Audit Log
       try {
         await (supabaseAdmin as any).from("employee_onboarding_audit").insert({
+          organization_id: authResult.context.organizationId,
           employee_id: doc.user_id,
           action: "DOCUMENT_REJECTED",
           performed_by: reviewerId,
@@ -150,6 +160,7 @@ export async function POST(request: NextRequest) {
       // Document Approved
       try {
         await (supabaseAdmin as any).from("employee_onboarding_audit").insert({
+          organization_id: authResult.context.organizationId,
           employee_id: doc.user_id,
           action: "DOCUMENT_APPROVED",
           performed_by: reviewerId,

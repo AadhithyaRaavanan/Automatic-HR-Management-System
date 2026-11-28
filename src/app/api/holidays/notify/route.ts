@@ -1,24 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getNotificationCaller } from "@/features/notifications/auth";
+import { verifyAdminRouteCaller } from "@/features/auth/admin-guard";
 import { getAllActiveEmployees } from "@/features/notifications/recipients";
 import { notify } from "@/features/notifications/notify";
-import { requireApprovedUser } from "@/features/auth/require-approved-user";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
-    const approvedCheck = await requireApprovedUser(request);
-    if ("response" in approvedCheck) {
-      return approvedCheck.response;
+    const authResult = await verifyAdminRouteCaller(request, ["admin", "hr"]);
+    if ("response" in authResult) {
+      return authResult.response;
     }
 
-    const user = approvedCheck.user;
+    const { userId, organizationId } = authResult.context;
 
     const body = await request.json().catch(() => ({}));
     const { action, holidayName, holidayDate, count } = body;
 
-    const allEmployees = await getAllActiveEmployees();
+    const allEmployees = await getAllActiveEmployees(organizationId);
     if (allEmployees.length === 0) {
       return NextResponse.json({ success: true, count: 0 });
     }
@@ -35,13 +34,14 @@ export async function POST(request: NextRequest) {
 
     await notify({
       userIds: allEmployees,
+      organizationId,
       type: "holiday_scheduled",
       typeGroup: "announcements",
       title,
       body: bodyText,
       link: "/holidays",
       entityType: "holidays",
-      actorId: user.id,
+      actorId: userId,
     });
 
     return NextResponse.json({ success: true, count: allEmployees.length });

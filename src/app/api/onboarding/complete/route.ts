@@ -395,6 +395,7 @@ export async function POST(request: NextRequest) {
     // 6. Record Audit Log
     try {
       await (supabaseAdmin as any).from("employee_onboarding_audit").insert({
+        organization_id: empRecord?.organization_id || null,
         employee_id: user.id,
         action: nextStatus === "RESUBMITTED" ? "RESUBMITTED_FOR_VERIFICATION" : "SUBMITTED_FOR_VERIFICATION",
         performed_by: user.id,

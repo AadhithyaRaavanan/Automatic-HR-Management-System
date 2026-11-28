@@ -631,12 +631,12 @@ describe("Intra-Tenant Authorization & Privilege Boundary Suite", () => {
       await client.query(`
         INSERT INTO public.organization_members (organization_id, user_id, role, status)
         VALUES ('${ORG_ID}', '${secondAdmin}', 'admin', 'active')
-        ON CONFLICT (user_id) DO UPDATE SET role = 'admin', status = 'active';
+        ON CONFLICT (organization_id, user_id) DO UPDATE SET role = 'admin', status = 'active';
       `);
       await client.query(`
         INSERT INTO public.organization_members (organization_id, user_id, role, status)
         VALUES ('${ORG_ID}', '${USERS.admin}', 'admin', 'active')
-        ON CONFLICT (user_id) DO UPDATE SET role = 'admin', status = 'active';
+        ON CONFLICT (organization_id, user_id) DO UPDATE SET role = 'admin', status = 'active';
       `);
 
       // Verify two active admins exist initially
@@ -745,7 +745,7 @@ describe("Intra-Tenant Authorization & Privilege Boundary Suite", () => {
           ('${ORG_ID}', '${admin1}', 'admin', 'active'),
           ('${ORG_ID}', '${admin2}', 'admin', 'active'),
           ('${ORG_ID}', '${admin3}', 'admin', 'active')
-        ON CONFLICT (user_id) DO UPDATE SET role = 'admin', status = 'active';
+        ON CONFLICT (organization_id, user_id) DO UPDATE SET role = 'admin', status = 'active';
       `);
 
       // Verify 3 admins
@@ -824,7 +824,7 @@ describe("Intra-Tenant Authorization & Privilege Boundary Suite", () => {
       await client.query(`
         INSERT INTO public.organization_members (organization_id, user_id, role, status)
         VALUES ('${ORG_ID}', '${tempHrId}', 'hr', 'active')
-        ON CONFLICT (user_id) DO UPDATE SET role = 'hr', status = 'active';
+        ON CONFLICT (organization_id, user_id) DO UPDATE SET role = 'hr', status = 'active';
       `);
 
       // 2. Demote temp HR user in database to employee

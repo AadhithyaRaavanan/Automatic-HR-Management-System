@@ -163,7 +163,7 @@ describe("Section 1: Core Architecture & Multi-Tenancy", () => {
     await client.query(
       `INSERT INTO public.organization_members (organization_id, user_id, role, status)
        VALUES ($1, $2, 'employee', 'active')
-       ON CONFLICT (user_id) DO NOTHING;`,
+       ON CONFLICT (organization_id, user_id) DO NOTHING;`,
       [suspendedOrgId, suspendedUserId]
     );
 
@@ -254,7 +254,7 @@ describe("Section 1: Core Architecture & Multi-Tenancy", () => {
     await client.query(
       `INSERT INTO public.organization_members (organization_id, user_id, role, status)
        VALUES ($1, $2, 'employee', 'active')
-       ON CONFLICT (user_id) DO NOTHING;`,
+       ON CONFLICT (organization_id, user_id) DO NOTHING;`,
       [tempOrgId, tempUserId]
     );
 

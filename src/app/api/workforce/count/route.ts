@@ -1,30 +1,33 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { resolveTenantCaller } from "@/features/auth/tenant-context";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const caller = await resolveTenantCaller(request, {
+      skipOnboardingCheck: true,
+      requireAal2ForPrivileged: false,
+    });
+    if ("response" in caller) {
+      return caller.response;
+    }
 
-    // Query active employees count via supabaseAdmin
-    const { count, error } = await supabaseAdmin
+    const { count, error } = await (supabaseAdmin as any)
       .from("employees")
       .select("id", { count: "exact", head: true })
+      .eq("organization_id", caller.context.organizationId)
       .eq("status", "active");
 
     if (error) {
-      return NextResponse.json({ count: user ? 1 : 0 });
+      return NextResponse.json({ count: 0 });
     }
 
-    return NextResponse.json({ count: typeof count === "number" ? count : 1 });
+    return NextResponse.json({ count: typeof count === "number" ? count : 0 });
   } catch {
-    return NextResponse.json({ count: 1 });
+    return NextResponse.json({ count: 0 }, { status: 500 });
   }
 }

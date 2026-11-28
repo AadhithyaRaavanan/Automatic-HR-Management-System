@@ -1,60 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { Database } from "@/types/database.types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { notify } from "@/features/notifications/notify";
-import { requireApprovedUser } from "@/features/auth/require-approved-user";
+import { resolveTenantCaller } from "@/features/auth/tenant-context";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
-  const approvedCheck = await requireApprovedUser(request);
-  if ("response" in approvedCheck) {
-    return approvedCheck.response;
+  const caller = await resolveTenantCaller(request, {
+    allowedRoles: ["admin", "hr", "manager"],
+  });
+  if ("response" in caller) {
+    return caller.response;
   }
+
+  const { context } = caller;
+
   try {
-    let response = NextResponse.next();
-    const authHeader = request.headers.get("authorization");
-    let user: any = null;
-
-    if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
-      const token = authHeader.slice(7).trim();
-      const { data: authData, error: tokenErr } = await supabaseAdmin.auth.getUser(token);
-      if (!tokenErr && authData?.user) {
-        user = authData.user;
-      }
-    }
-
-    if (!user) {
-      const supabase = createServerClient<Database>(
-        process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
-        {
-          cookies: {
-            getAll() {
-              return request.cookies.getAll();
-            },
-            setAll(cookiesToSet: Array<{ name: string; value: string; options?: any }>) {
-              cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-              response = NextResponse.next();
-              cookiesToSet.forEach(({ name, value, options }) =>
-                response.cookies.set(name, value, options)
-              );
-            },
-          },
-        }
-      );
-
-      const { data: authData } = await supabase.auth.getUser();
-      user = authData?.user;
-    }
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const body = await request.json().catch(() => ({}));
-    const { requestId, action, reviewNote } = body;
+    const { requestId, action, reviewNote, idempotencyKey: bodyIdempKey } = body;
+    const idempotencyKey =
+      request.headers.get("Idempotency-Key") ||
+      request.headers.get("x-idempotency-key") ||
+      (typeof bodyIdempKey === "string" && bodyIdempKey.trim() ? bodyIdempKey.trim() : null);
 
     if (!requestId || !action || !["approve", "reject"].includes(action)) {
       return NextResponse.json(
@@ -71,135 +38,57 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Fetch the leave request
-    const { data: leaveReq, error: fetchErr } = await (supabaseAdmin.from("leave_requests") as any)
-      .select("*")
-      .eq("id", requestId)
-      .maybeSingle();
-
-    if (fetchErr || !leaveReq) {
-      return NextResponse.json({ error: "Leave request not found." }, { status: 404 });
-    }
-
-    if (leaveReq.employee_id === user.id) {
-      return NextResponse.json(
-        { error: "Separation of duties: You cannot approve or reject your own leave request." },
-        { status: 403 }
-      );
-    }
-
-    // Role-based review permission scoping
-    const { data: member } = await (supabaseAdmin.from("organization_members") as any)
-      .select("role")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    const callerRole = member?.role || "employee";
-    if (callerRole === "employee") {
-      return NextResponse.json(
-        { error: "Forbidden: Employees cannot review leave requests." },
-        { status: 403 }
-      );
-    }
-
-    if (callerRole === "manager") {
-      const { data: empRecord } = await (supabaseAdmin.from("employees") as any)
-        .select("manager_id")
-        .eq("id", leaveReq.employee_id)
-        .maybeSingle();
-
-      if (!empRecord || empRecord.manager_id !== user.id) {
-        return NextResponse.json(
-          { error: "Forbidden: Managers can only review leave requests for their direct reports." },
-          { status: 403 }
-        );
+    const { data: rpcResult, error: rpcErr } = await (supabaseAdmin.rpc as any)(
+      "service_review_leave_request",
+      {
+        p_actor_id: context.userId,
+        p_organization_id: context.organizationId,
+        p_request_id: requestId,
+        p_action: action,
+        p_review_note: trimmedNote,
+        p_idempotency_key: idempotencyKey,
       }
+    );
+
+    if (rpcErr) {
+      const msg = String(rpcErr.message || "Failed to review leave request.");
+      const status =
+        rpcErr.code === "P0002" || /not found/i.test(msg)
+          ? 404
+          : rpcErr.code === "42501" || /forbidden|separation of duties|authorized|membership/i.test(msg)
+          ? 403
+          : rpcErr.code === "P0001" || /conflict|already been|concurrently/i.test(msg)
+          ? 409
+          : 400;
+      return NextResponse.json({ error: msg }, { status });
     }
 
-    const nowIso = new Date().toISOString();
-    const targetStatus = action === "approve" ? "approved" : "rejected";
-
-    // Update leave request
-    const { error: updateErr } = await (supabaseAdmin.from("leave_requests") as any)
-      .update({
-        status: targetStatus,
-        review_note: trimmedNote,
-        reviewed_by: user.id,
-        reviewed_at: nowIso,
-      })
-      .eq("id", requestId);
-
-    if (updateErr) {
-      return NextResponse.json(
-        { error: `Failed to update leave request: ${updateErr.message}` },
-        { status: 500 }
-      );
-    }
-
-    // If approved, deduct balance
-    if (action === "approve") {
+    if (!rpcResult?.idempotent_replay && rpcResult?.employee_id) {
+      const targetStatus = rpcResult.status || (action === "approve" ? "approved" : "rejected");
       try {
-        const { data: balance } = await (supabaseAdmin.from("leave_balances") as any)
-          .select("used")
-          .eq("employee_id", leaveReq.employee_id)
-          .eq("leave_type_id", leaveReq.leave_type_id)
-          .maybeSingle();
-
-        if (balance) {
-          const newUsed = Number(balance.used || 0) + Number(leaveReq.total_days);
-          await (supabaseAdmin.from("leave_balances") as any)
-            .update({
-              used: newUsed,
-              updated_at: nowIso,
-            })
-            .eq("employee_id", leaveReq.employee_id)
-            .eq("leave_type_id", leaveReq.leave_type_id);
-        }
-      } catch (balErr) {
-        console.warn("[Leave Review Balance Update]:", balErr);
+        await notify({
+          userIds: [rpcResult.employee_id],
+          organizationId: context.organizationId,
+          type: targetStatus === "approved" ? "leave_approved" : "leave_rejected",
+          typeGroup: "leave",
+          title: targetStatus === "approved" ? "Leave Request Approved" : "Leave Request Rejected",
+          body: `Your leave request for ${rpcResult.start_date || "requested dates"} to ${rpcResult.end_date || "end"} has been ${targetStatus}.\nReviewer note: "${trimmedNote}"`,
+          link: "/leave",
+          entityType: "leave_requests",
+          entityId: requestId,
+          actorId: context.userId,
+          dedupeKey: `leave-review:${requestId}:${targetStatus}`,
+        });
+      } catch (notifErr) {
+        console.warn("[Leave Review Notification Error]:", notifErr);
       }
-    }
-
-    // Write audit log
-    const orgId = leaveReq.organization_id || leaveReq.employees?.organization_id;
-    if (orgId) {
-      await supabaseAdmin.from("audit_logs").insert({
-        organization_id: orgId,
-        actor_id: user.id,
-        action: action === "approve" ? "LEAVE_APPROVED" : "LEAVE_REJECTED",
-        table_name: "leave_requests",
-        record_id: requestId,
-        old_data: { status: leaveReq.status },
-        new_data: {
-          status: targetStatus,
-          review_note: trimmedNote,
-          reviewed_by: user.id,
-          reviewed_at: nowIso,
-        },
-      });
-    }
-
-    // Trigger Notification to Employee
-    try {
-      await notify({
-        userIds: [leaveReq.employee_id],
-        type: targetStatus === "approved" ? "leave_approved" : "leave_rejected",
-        typeGroup: "leave",
-        title: targetStatus === "approved" ? "Leave Request Approved" : "Leave Request Rejected",
-        body: `Your leave request for ${leaveReq.start_date || "requested dates"} to ${leaveReq.end_date || "end"} has been ${targetStatus}.\nReviewer note: "${trimmedNote}"`,
-        link: "/leave",
-        entityType: "leave_requests",
-        entityId: requestId,
-        actorId: user.id,
-      });
-    } catch (notifErr) {
-      console.warn("[Leave Review Notification Error]:", notifErr);
     }
 
     return NextResponse.json({
       success: true,
-      status: targetStatus,
-      review_note: trimmedNote,
+      status: rpcResult?.status,
+      review_note: rpcResult?.review_note || trimmedNote,
+      idempotentReplay: Boolean(rpcResult?.idempotent_replay),
     });
   } catch (err: any) {
     return NextResponse.json(

@@ -13,8 +13,7 @@ export async function GET(request: NextRequest) {
       return authResult.response;
     }
 
-    const { employee, user, role } = authResult;
-    const orgId = employee?.organization_id || user?.user_metadata?.organization_id;
+    const { role, organizationId: orgId } = authResult;
 
     if (!orgId) {
       return NextResponse.json({ types: [] });

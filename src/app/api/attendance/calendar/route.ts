@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { Database } from "@/types/database.types";
+import { resolveTenantCaller } from "@/features/auth/tenant-context";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import { getVerifiedEmployeeBirthdays } from "@/features/notifications/birthdays";
@@ -14,52 +13,14 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
-    // 1. Authenticate caller
-    let user: any = null;
-    const authHeader = request.headers.get("authorization");
-
-    if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
-      const token = authHeader.slice(7).trim();
-      const { data: authData, error: tokenErr } = await supabaseAdmin.auth.getUser(token);
-      if (!tokenErr && authData?.user) {
-        user = authData.user;
-      }
+    const authResult = await resolveTenantCaller(request, { requireAal2ForPrivileged: false });
+    if ("response" in authResult) {
+      return authResult.response;
     }
 
-    if (!user) {
-      const supabase = createServerClient<Database>(
-        process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
-        {
-          cookies: {
-            getAll() {
-              return request.cookies.getAll();
-            },
-            setAll() {},
-          },
-        }
-      );
-      const { data: authData } = await supabase.auth.getUser();
-      user = authData?.user;
-    }
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // 2. Resolve caller's role
-    const { data: member } = await supabaseAdmin
-      .from("organization_members")
-      .select("role")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    const callerRole = (
-      member?.role ||
-      user.user_metadata?.role ||
-      user.user_metadata?.user_role ||
-      "employee"
-    ).toLowerCase();
+    const { user, context } = authResult;
+    const callerRole = context.role;
+    const orgId = context.organizationId;
 
     // 3. Parse query parameters
     const { searchParams } = new URL(request.url);
@@ -68,7 +29,19 @@ export async function GET(request: NextRequest) {
     const year = parseInt(searchParams.get("year") || String(now.getFullYear()), 10);
     const requestedEmpId = searchParams.get("employeeId") || user.id;
 
-    // 4. Resolve manager's department or reports if manager
+    // Verify target employee belongs to caller's organization
+    const { data: targetEmp } = await (supabaseAdmin as any)
+      .from("employees")
+      .select("id, organization_id, department_id, manager_id")
+      .eq("id", requestedEmpId)
+      .eq("organization_id", orgId)
+      .maybeSingle();
+
+    if (!targetEmp) {
+      return NextResponse.json({ error: "Employee not found in your organization." }, { status: 404 });
+    }
+
+    // 4. Resolve manager's department or reports within organization
     let managerDeptId: string | null = null;
     let managerReportIds: string[] = [];
 
@@ -77,6 +50,7 @@ export async function GET(request: NextRequest) {
         .from("employees")
         .select("id, department_id")
         .eq("id", user.id)
+        .eq("organization_id", orgId)
         .maybeSingle();
 
       managerDeptId = callerEmp?.department_id || null;
@@ -84,6 +58,7 @@ export async function GET(request: NextRequest) {
       const { data: directReports } = await (supabaseAdmin as any)
         .from("employees")
         .select("id")
+        .eq("organization_id", orgId)
         .eq("manager_id", user.id);
 
       managerReportIds = (directReports || []).map((r: any) => r.id);
@@ -96,14 +71,7 @@ export async function GET(request: NextRequest) {
       callerRole === "manager" &&
       (isSelf ||
         managerReportIds.includes(requestedEmpId) ||
-        (managerDeptId &&
-          (
-            await (supabaseAdmin as any)
-              .from("employees")
-              .select("department_id")
-              .eq("id", requestedEmpId)
-              .maybeSingle()
-          )?.data?.department_id === managerDeptId));
+        (managerDeptId && targetEmp.department_id === managerDeptId));
 
     if (!isSelf && !isPrivileged && !isManagerAuthorized) {
       return NextResponse.json(
@@ -124,12 +92,14 @@ export async function GET(request: NextRequest) {
       (supabaseAdmin as any)
         .from("holidays")
         .select("date, name, local_name, region")
+        .eq("organization_id", orgId)
         .eq("is_active", true)
         .gte("date", startDate)
         .lte("date", endDate),
       (supabaseAdmin as any)
         .from("attendance_days")
         .select("work_date, status, total_minutes, is_late, locked")
+        .eq("organization_id", orgId)
         .eq("employee_id", targetEmpId)
         .gte("work_date", startDate)
         .lte("work_date", endDate),
@@ -169,7 +139,7 @@ export async function GET(request: NextRequest) {
     }> = [];
 
     if (callerRole === "admin" || callerRole === "hr") {
-      // Admin and HR can see EVERYONE in the organization
+      // Admin and HR can see everyone in their active organization only
       const { data: allEmps } = await (supabaseAdmin as any)
         .from("employees")
         .select(`
@@ -180,12 +150,14 @@ export async function GET(request: NextRequest) {
           departments:department_id(name),
           job_titles:job_title_id(title_name)
         `)
+        .eq("organization_id", orgId)
         .eq("status", "active")
         .order("full_name", { ascending: true });
 
       const { data: allRoles } = await (supabaseAdmin as any)
         .from("organization_members")
-        .select("user_id, role");
+        .select("user_id, role")
+        .eq("organization_id", orgId);
 
       const roleLookup = new Map<string, string>();
       for (const r of allRoles || []) {
@@ -201,7 +173,7 @@ export async function GET(request: NextRequest) {
         job_title: e.job_titles?.title_name || "Employee",
       }));
     } else if (callerRole === "manager") {
-      // Manager can see their team members (reports / department) + themselves
+      // Manager can see their team members (reports / department) + themselves within org
       let managerQuery = (supabaseAdmin as any)
         .from("employees")
         .select(`
@@ -212,6 +184,7 @@ export async function GET(request: NextRequest) {
           departments:department_id(name),
           job_titles:job_title_id(title_name)
         `)
+        .eq("organization_id", orgId)
         .eq("status", "active");
 
       if (managerDeptId) {

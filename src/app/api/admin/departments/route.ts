@@ -3,7 +3,6 @@ import { revalidatePath } from "next/cache";
 import { verifyAdminRouteCaller } from "@/features/auth/admin-guard";
 import { getAdminClient, supabaseAdmin } from "@/lib/supabase/admin";
 import { getSupabaseAdminConfigError } from "@/lib/supabase/admin-config";
-import { createClient } from "@/lib/supabase/server";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 
 async function safeDbOp(op: PromiseLike<{ error?: any }>): Promise<{ error?: any }> {
@@ -17,51 +16,23 @@ async function safeDbOp(op: PromiseLike<{ error?: any }>): Promise<{ error?: any
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const authResult = await verifyAdminRouteCaller(request, ["admin", "hr", "manager"]);
+  if ("response" in authResult) {
+    return authResult.response;
+  }
+
   try {
-    const authHeader = request.headers.get("Authorization");
-    let user = null;
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      const token = authHeader.replace("Bearer ", "").trim();
-      const { data: userData } = await supabaseAdmin.auth.getUser(token);
-      user = userData?.user || null;
-    }
-    if (!user) {
-      const supabase = await createClient();
-      const {
-        data: { user: cookieUser },
-      } = await supabase.auth.getUser();
-      user = cookieUser || null;
-    }
-
-    let orgId: string | null = null;
-    let userRole = "employee";
-    if (user) {
-      const { data: member } = await supabaseAdmin
-        .from("organization_members")
-        .select("organization_id, role, status")
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .maybeSingle();
-      if (member?.organization_id) orgId = member.organization_id;
-      userRole = (member?.role || user.user_metadata?.role || user.user_metadata?.user_role || "employee").toLowerCase();
-    }
-
-    if (userRole === "employee") {
-      return NextResponse.json({ error: "Forbidden: Employee access denied." }, { status: 403 });
-    }
+    const { organizationId: orgId, role: userRole, userId } = authResult.context;
 
     let managerDeptId: string | null = null;
-    if (userRole === "manager" && user) {
+    if (userRole === "manager") {
       const { data: empRecord } = await (supabaseAdmin as any)
         .from("employees")
         .select("department_id")
-        .eq("id", user.id)
+        .eq("id", userId)
+        .eq("organization_id", orgId)
         .maybeSingle();
       managerDeptId = empRecord?.department_id || null;
-    }
-
-    if (!orgId) {
-      orgId = "00000000-0000-0000-0000-000000000001";
     }
 
     // 1. Fetch departments
@@ -81,10 +52,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ departments: [] });
     }
 
-    // 2. Fetch employees for headcount & head names & designations
+    // 2. Fetch employees for headcount & head names & designations (scoped to caller's organization)
     const { data: emps } = await (supabaseAdmin as any)
       .from("employees")
       .select("id, full_name, email, department_id, job_titles:job_title_id(title_name)")
+      .eq("organization_id", orgId)
       .eq("status", "active");
 
     // 3. Fetch roles/job_titles count per department

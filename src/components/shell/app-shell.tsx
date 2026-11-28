@@ -3,7 +3,8 @@
 import * as React from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { AlertTriangle, Laptop } from "lucide-react";
+import { QueryClientContext } from "@tanstack/react-query";
+import { AlertTriangle, Building2, Laptop } from "lucide-react";
 import { CurvedSidebar } from "@/components/shell/curved-sidebar";
 import { TopNavBar } from "@/components/shell/top-nav-bar";
 import { BottomTabBar } from "@/components/shell/bottom-tab-bar";
@@ -21,9 +22,21 @@ import { FEATURES } from "@/lib/features";
 
 export type AppUserRole = "employee" | "team_lead" | "manager" | "hr" | "admin";
 
+export interface AppOrganizationSummary {
+  organizationId: string;
+  organizationName: string;
+  slug?: string | null;
+  timezone?: string;
+  role: string;
+}
+
 export interface AppSessionState {
   userId: string | null;
   organizationId: string | null;
+  organizationName?: string | null;
+  organizations?: AppOrganizationSummary[];
+  requiresOrgSelection?: boolean;
+  switchOrganization?: (orgId: string) => Promise<void>;
   userRole: AppUserRole;
   fullName: string | null;
   userEmail?: string | null;
@@ -37,6 +50,9 @@ export interface AppSessionState {
 const AppSessionContext = React.createContext<AppSessionState>({
   userId: null,
   organizationId: null,
+  organizationName: null,
+  organizations: [],
+  requiresOrgSelection: false,
   userRole: "employee",
   fullName: null,
   userEmail: null,
@@ -116,12 +132,35 @@ export function AppShell({
   className,
 }: AppShellProps) {
   const [mounted, setMounted] = React.useState(false);
+  const queryClient = React.useContext(QueryClientContext);
   const [sessionState, setSessionState] = React.useState<AppSessionState>(() =>
     getInitialSession(propUserRole)
   );
   const [userTutorialVersion, setUserTutorialVersion] = React.useState<number>(0);
   const [isExistingUserTour, setIsExistingUserTour] = React.useState<boolean>(false);
   const [tourOpen, setTourOpen] = React.useState<boolean>(false);
+
+  const switchOrganization = React.useCallback(
+    async (nextOrgId: string) => {
+      if (!nextOrgId || nextOrgId === sessionState.organizationId) return;
+      const res = await fetch("/api/auth/organizations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ organizationId: nextOrgId }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || "Unable to switch organization.");
+      }
+      clearAppSessionCache();
+      queryClient?.clear();
+      if (typeof window !== "undefined") {
+        window.location.reload();
+      }
+    },
+    [sessionState.organizationId, queryClient]
+  );
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
@@ -198,6 +237,9 @@ export function AppShell({
       let resolvedOrgId: string | null = null;
       let resolvedName: string | null = null;
       let resolvedEmail: string | null = null;
+      let resolvedOrgName: string | null = null;
+      let resolvedOrgs: AppOrganizationSummary[] = [];
+      let requiresOrgSelection = false;
       let resolvedDeptName: string | null = null;
       let resolvedJobTitle: string | null = null;
       let resolvedReqMfa: boolean = true;
@@ -214,37 +256,42 @@ export function AppShell({
           resolvedUserId = user.id;
           resolvedEmail = user.email ?? null;
 
-          if (!propUserRole) {
-            const metaRole =
-              (user.app_metadata as any)?.user_role ||
-              (user.user_metadata as any)?.user_role;
-            if (metaRole && ["employee", "manager", "hr", "admin"].includes(metaRole)) {
-              resolvedRole = metaRole as AppUserRole;
-            } else if (user.email === "admin@remotehr.io") {
-              resolvedRole = "admin";
-            } else if (user.email === "hr@remotehr.io") {
-              resolvedRole = "hr";
-            } else if (user.email === "manager@remotehr.io") {
-              resolvedRole = "manager";
-            } else if (user.email === "employee@remotehr.io") {
-              resolvedRole = "employee";
+          // Fetch authoritative organization memberships & selected workspace from server
+          try {
+            const orgsRes = await fetch("/api/auth/organizations", {
+              credentials: "same-origin",
+              headers: session?.access_token
+                ? { Authorization: `Bearer ${session.access_token}` }
+                : {},
+            });
+            if (orgsRes.ok) {
+              const orgsData = await orgsRes.json();
+              resolvedOrgs = Array.isArray(orgsData.organizations) ? orgsData.organizations : [];
+              requiresOrgSelection = Boolean(orgsData.requiresSelection);
+              const selectedId = orgsData.selectedOrganizationId || null;
+              const activeOrgObj = selectedId
+                ? resolvedOrgs.find((o) => o.organizationId === selectedId)
+                : resolvedOrgs.length === 1
+                ? resolvedOrgs[0]
+                : null;
+              if (activeOrgObj) {
+                resolvedOrgId = activeOrgObj.organizationId;
+                resolvedOrgName = activeOrgObj.organizationName;
+                if (!propUserRole && ["employee", "team_lead", "manager", "hr", "admin"].includes(activeOrgObj.role)) {
+                  resolvedRole = activeOrgObj.role as AppUserRole;
+                }
+              }
+            }
+          } catch {}
+
+          if (!propUserRole && resolvedOrgs.length === 0) {
+            const appMetaRole = (user.app_metadata as any)?.user_role;
+            if (appMetaRole && ["employee", "team_lead", "manager", "hr", "admin"].includes(appMetaRole)) {
+              resolvedRole = appMetaRole as AppUserRole;
             } else {
               const { data: rpcRole } = await (supabase.rpc as any)("current_user_role");
-              if (rpcRole && ["employee", "manager", "hr", "admin"].includes(rpcRole)) {
+              if (rpcRole && ["employee", "team_lead", "manager", "hr", "admin"].includes(rpcRole)) {
                 resolvedRole = rpcRole as AppUserRole;
-              } else {
-                const { data: member } = await (supabase as any)
-                  .from("organization_members")
-                  .select("role, organization_id")
-                  .eq("user_id", user.id)
-                  .eq("status", "active")
-                  .maybeSingle();
-                if (member?.role && ["employee", "manager", "hr", "admin"].includes(member.role)) {
-                  resolvedRole = member.role as AppUserRole;
-                }
-                if (member?.organization_id) {
-                  resolvedOrgId = member.organization_id;
-                }
               }
             }
           }
@@ -395,6 +442,10 @@ export function AppShell({
       const nextSession: AppSessionState = {
         userId: resolvedUserId,
         organizationId: resolvedOrgId,
+        organizationName: resolvedOrgName,
+        organizations: resolvedOrgs,
+        requiresOrgSelection,
+        switchOrganization,
         userRole: finalRole,
         fullName: resolvedName,
         userEmail: resolvedEmail,
@@ -430,16 +481,23 @@ export function AppShell({
     }
 
     resolveSession();
+    const { data: authSub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        clearAppSessionCache();
+        queryClient?.clear();
+      }
+    });
     return () => {
       active = false;
+      authSub?.subscription?.unsubscribe?.();
     };
-  }, [propUserRole]);
+  }, [propUserRole, switchOrganization, queryClient]);
 
   const userRole = propUserRole || sessionState.userRole;
 
   return (
     <SidebarProvider>
-      <AppSessionContext.Provider value={{ ...sessionState, userRole }}>
+      <AppSessionContext.Provider value={{ ...sessionState, switchOrganization, userRole }}>
         <div
           className="min-h-screen w-full bg-[#000000] flex flex-col md:flex-row transition-colors duration-300 relative"
           suppressHydrationWarning
@@ -485,6 +543,50 @@ export function AppShell({
                     )}
                   </div>
                 )}
+              {mounted &&
+                sessionState.isLoaded &&
+                sessionState.requiresOrgSelection &&
+                (sessionState.organizations?.length || 0) > 1 && (
+                  <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="org-select-heading"
+                    className="fixed inset-0 z-[10001] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+                  >
+                    <div className="bg-white border border-[#E6E6E6] rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-black text-[#B7FF00] flex items-center justify-center">
+                          <Building2 className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h2 id="org-select-heading" className="text-base font-bold text-black">
+                            Select Active Organization
+                          </h2>
+                          <p className="text-xs text-[#666666]">
+                            You belong to multiple organizations. Choose one workspace to continue.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {sessionState.organizations?.map((org) => (
+                          <button
+                            key={org.organizationId}
+                            type="button"
+                            onClick={() => switchOrganization(org.organizationId)}
+                            className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-[#E6E6E6] hover:border-black hover:bg-[#F5F5F5] text-left transition-colors cursor-pointer"
+                          >
+                            <span className="text-sm font-semibold text-black">
+                              {org.organizationName}
+                            </span>
+                            <span className="text-[11px] font-medium uppercase px-2 py-0.5 rounded bg-black text-[#B7FF00]">
+                              {org.role}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               {children}
             </main>
           </div>
@@ -507,7 +609,10 @@ export function AppShell({
           <AutoSignoutListener />
 
           {/* First-Login Onboarding Tour (Employee, Manager, HR only - Admin gets NO tour) */}
-          {mounted && sessionState.userId && sessionState.userRole !== "admin" && (
+          {mounted &&
+            sessionState.userId &&
+            !sessionState.requiresOrgSelection &&
+            sessionState.userRole !== "admin" && (
             <OnboardingTour
               open={tourOpen}
               onOpenChange={handleTourOpenChange}

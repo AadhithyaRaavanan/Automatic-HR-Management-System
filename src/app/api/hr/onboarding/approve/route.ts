@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRouteCaller } from "@/features/auth/admin-guard";
+import { verifyTargetEmployeeInOrg } from "@/features/auth/tenant-context";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { notify } from "@/features/notifications/notify";
 import { QUALIFICATION_DOC_MAP, HighestQualification } from "@/features/onboarding/types";
@@ -34,7 +35,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check candidate role hierarchy:
+    // Enforce same-organization isolation BEFORE reading candidate PII or mutating status
+    const targetCheck = await verifyTargetEmployeeInOrg(authResult.context, userId, { allowSelf: false });
+    if (!targetCheck.allowed) {
+      return NextResponse.json(
+        { error: "Forbidden: Candidate does not belong to your active organization." },
+        { status: 403 }
+      );
+    }
+
+    // Check candidate role hierarchy within active org:
     // If candidate is HR, ONLY an Admin can approve! For employee & manager, HR or Admin can approve.
     const reviewerRole = authResult.context.role;
     let candidateRole = "employee";
@@ -43,6 +53,7 @@ export async function POST(request: NextRequest) {
         .from("organization_members")
         .select("role")
         .eq("user_id", userId)
+        .eq("organization_id", authResult.context.organizationId)
         .maybeSingle();
       if (memberData?.role) {
         candidateRole = memberData.role.toLowerCase();
@@ -50,7 +61,6 @@ export async function POST(request: NextRequest) {
         const { data: candAuth } = await supabaseAdmin.auth.admin.getUserById(userId);
         candidateRole = (
           candAuth?.user?.app_metadata?.user_role ||
-          candAuth?.user?.user_metadata?.role ||
           "employee"
         ).toLowerCase();
       }
@@ -170,6 +180,8 @@ export async function POST(request: NextRequest) {
       updated_at: nowIso,
     };
 
+    const orgId = authResult.context.organizationId;
+
     await Promise.all([
       (supabaseAdmin as any).from("profiles").upsert(
         {
@@ -184,11 +196,13 @@ export async function POST(request: NextRequest) {
       (supabaseAdmin as any)
         .from("employees")
         .update(empUpdatePayload)
-        .eq("id", userId),
+        .eq("id", userId)
+        .eq("organization_id", authResult.context.organizationId),
       (supabaseAdmin as any)
         .from("organization_members")
         .update(memUpdatePayload)
-        .eq("user_id", userId),
+        .eq("user_id", userId)
+        .eq("organization_id", authResult.context.organizationId),
       supabaseAdmin.auth.admin.updateUserById(userId, {
         app_metadata: {
           onboarding_approved: true,
@@ -204,6 +218,7 @@ export async function POST(request: NextRequest) {
     // 5. Audit Log
     try {
       await (supabaseAdmin as any).from("employee_onboarding_audit").insert({
+        organization_id: authResult.context.organizationId,
         employee_id: userId,
         action: "ONBOARDING_APPROVED_AND_ACTIVATED",
         performed_by: reviewerId,
@@ -283,21 +298,35 @@ export async function POST(request: NextRequest) {
     // so the approval endpoint responds instantly (< 300ms) without keeping the reviewer waiting.
     (async () => {
       try {
-        // Find all Super Admin emails (defaults to aadhithya.raavanan@gmail.com)
-        let adminEmails = ["aadhithya.raavanan@gmail.com"];
+        // Find Admin emails scoped strictly to the candidate's organization
+        let adminEmails: string[] = [];
         try {
-          const { data: adminList } = await supabaseAdmin.auth.admin.listUsers();
-          const found = (adminList?.users || [])
-            .filter(
-              (u: any) =>
-                u.app_metadata?.user_role === "admin" ||
-                u.user_metadata?.role === "admin" ||
-                u.email === "aadhithya.raavanan@gmail.com"
-            )
-            .map((u: any) => u.email)
+          const { data: orgAdminMembers } = await (supabaseAdmin as any)
+            .from("organization_members")
+            .select("user_id")
+            .eq("organization_id", orgId)
+            .eq("role", "admin")
+            .eq("status", "active");
+
+          const adminUserIds = (orgAdminMembers || [])
+            .map((m: any) => m.user_id)
             .filter(Boolean);
-          if (found.length > 0) {
-            adminEmails = Array.from(new Set(found));
+
+          if (adminUserIds.length > 0) {
+            const { data: adminEmployees } = await (supabaseAdmin as any)
+              .from("employees")
+              .select("email")
+              .eq("organization_id", orgId)
+              .in("id", adminUserIds);
+            const found = (adminEmployees || [])
+              .map((e: any) => e.email)
+              .filter(Boolean);
+            if (found.length > 0) {
+              adminEmails = Array.from(new Set(found));
+            }
+          }
+          if (adminEmails.length === 0 && authResult.context?.email) {
+            adminEmails = [authResult.context.email];
           }
         } catch {}
 
@@ -415,7 +444,7 @@ export async function POST(request: NextRequest) {
           const todayMonthDay = todayKolkata.slice(5); // "MM-DD"
           const candidateDobMonthDay = profile.dob.slice(5); // "MM-DD"
           if (todayMonthDay === candidateDobMonthDay) {
-            await dispatchBirthdayNotifications(todayKolkata);
+            await dispatchBirthdayNotifications(todayKolkata, orgId);
           }
         }
       } catch (bdayErr) {
@@ -440,10 +469,11 @@ export async function POST(request: NextRequest) {
           .limit(1);
 
         if (!existingTasks || existingTasks.length === 0) {
-          // Fetch holidays for working days calculation (2 working days)
+          // Fetch holidays for working days calculation (2 working days), scoped to organization
           const { data: holidays } = await (supabaseAdmin as any)
             .from("holidays")
             .select("date")
+            .eq("organization_id", orgId)
             .eq("is_active", true);
           const holidaysList = holidays || [];
           const dueInfo = calculateWorkingDaysAhead(2, holidaysList);

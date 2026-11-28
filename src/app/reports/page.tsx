@@ -133,8 +133,11 @@ function ReportsPageContent() {
   const loadReportsData = React.useCallback(async () => {
     setLoading(true);
     try {
-      const [daysRes, empsRes] = await Promise.all([
-        (supabase as any)
+      const allDays: any[] = [];
+      const PAGE_SIZE = 500;
+      let offset = 0;
+      while (true) {
+        const pageRes = await (supabase as any)
           .from("attendance_days")
           .select(
             "employee_id, work_date, status, total_minutes, is_late, locked, employees:employee_id(full_name, timezone, departments:department_id(name))"
@@ -142,7 +145,19 @@ function ReportsPageContent() {
           .gte("work_date", periodRange.start)
           .lte("work_date", periodRange.end)
           .order("work_date", { ascending: false })
-          .limit(300),
+          .range(offset, offset + PAGE_SIZE - 1);
+        if (pageRes.error) {
+          allDays.length = 0;
+          break;
+        }
+        const chunk = pageRes.data || [];
+        allDays.push(...chunk);
+        if (chunk.length < PAGE_SIZE) break;
+        offset += PAGE_SIZE;
+      }
+
+      const [daysRes, empsRes] = await Promise.all([
+        Promise.resolve({ error: null, data: allDays }),
         (supabase as any)
           .from("employees")
           .select("id, full_name, timezone, departments:department_id(name)")
@@ -388,14 +403,22 @@ function ReportsPageContent() {
     }
   };
 
+  const buildExportUrl = (fmt: "csv" | "xlsx") => {
+    const monthParam = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
+    const qs = new URLSearchParams({ format: fmt, month: monthParam });
+    if (selectedDept && selectedDept !== "All") qs.set("department", selectedDept);
+    if (searchQuery.trim()) qs.set("search", searchQuery.trim());
+    return `/api/attendance/export?${qs.toString()}`;
+  };
+
   const handleExportXlsx = () => {
-    window.open("/api/attendance/export?format=xlsx", "_blank");
-    toast.success("Downloading attendance report (.xlsx)");
+    window.open(buildExportUrl("xlsx"), "_blank");
+    toast.success("Downloading filtered attendance report (.xlsx)");
   };
 
   const handleExportCsv = () => {
-    window.open("/api/attendance/export?format=csv", "_blank");
-    toast.success("Downloading attendance report (.csv)");
+    window.open(buildExportUrl("csv"), "_blank");
+    toast.success("Downloading filtered attendance report (.csv)");
   };
 
   const eligibleOtherEmployees = employees.filter((e) => e.id !== userId);

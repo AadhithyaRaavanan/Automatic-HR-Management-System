@@ -197,33 +197,56 @@ export async function PATCH(request: NextRequest) {
     if (typeof phone === "string") empUpdates.phone = phone.trim() || null;
     if (typeof emergencyContact === "string") empUpdates.emergency_contact = emergencyContact.trim() || null;
 
-    await ((supabaseAdmin as any).from("employees"))
+    const { error: empUpdateErr } = await ((supabaseAdmin as any).from("employees"))
       .update(empUpdates)
       .eq("id", user.id);
 
+    if (empUpdateErr) {
+      return NextResponse.json(
+        { error: empUpdateErr.message || "Failed to update employee profile." },
+        { status: 500 }
+      );
+    }
+
     const onbUpdates: Record<string, any> = { updated_at: new Date().toISOString() };
     if (empUpdates.full_name) onbUpdates.full_name = empUpdates.full_name;
-    if (empUpdates.phone) onbUpdates.phone = empUpdates.phone;
-    if (typeof emergencyContact === "string" && emergencyContact.trim()) {
-      // Parse "Name (Relationship) • Phone" or "Name - Phone"
+    if (typeof phone === "string") onbUpdates.phone = empUpdates.phone;
+    if (typeof emergencyContact === "string") {
       const cleanEm = emergencyContact.trim();
-      const relMatch = cleanEm.match(/^(.*?)\s*\((.*?)\)\s*[•\-]\s*(.*?)$/);
-      const dashMatch = cleanEm.match(/^(.*?)\s*[•\-]\s*(.*?)$/);
-      if (relMatch) {
-        onbUpdates.emergency_contact_name = relMatch[1]?.trim() || null;
-        onbUpdates.emergency_contact_relationship = relMatch[2]?.trim() || null;
-        onbUpdates.emergency_contact_phone = relMatch[3]?.trim() || null;
-      } else if (dashMatch) {
-        onbUpdates.emergency_contact_name = dashMatch[1]?.trim() || null;
-        onbUpdates.emergency_contact_phone = dashMatch[2]?.trim() || null;
+      if (!cleanEm) {
+        onbUpdates.emergency_contact_name = null;
+        onbUpdates.emergency_contact_relationship = null;
+        onbUpdates.emergency_contact_phone = null;
       } else {
-        onbUpdates.emergency_contact_name = cleanEm;
+        // Parse "Name (Relationship) • Phone" or "Name - Phone"
+        const relMatch = cleanEm.match(/^(.*?)\s*\((.*?)\)\s*[•\-]\s*(.*?)$/);
+        const dashMatch = cleanEm.match(/^(.*?)\s*[•\-]\s*(.*?)$/);
+        if (relMatch) {
+          onbUpdates.emergency_contact_name = relMatch[1]?.trim() || null;
+          onbUpdates.emergency_contact_relationship = relMatch[2]?.trim() || null;
+          onbUpdates.emergency_contact_phone = relMatch[3]?.trim() || null;
+        } else if (dashMatch) {
+          onbUpdates.emergency_contact_name = dashMatch[1]?.trim() || null;
+          onbUpdates.emergency_contact_relationship = null;
+          onbUpdates.emergency_contact_phone = dashMatch[2]?.trim() || null;
+        } else {
+          onbUpdates.emergency_contact_name = cleanEm;
+          onbUpdates.emergency_contact_relationship = null;
+          onbUpdates.emergency_contact_phone = null;
+        }
       }
     }
 
-    await ((supabaseAdmin as any).from("onboarding_profiles"))
+    const { error: onbUpdateErr } = await ((supabaseAdmin as any).from("onboarding_profiles"))
       .update(onbUpdates)
       .eq("user_id", user.id);
+
+    if (onbUpdateErr) {
+      return NextResponse.json(
+        { error: onbUpdateErr.message || "Failed to persist onboarding profile changes." },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ success: true, updates: empUpdates });
   } catch (err: any) {

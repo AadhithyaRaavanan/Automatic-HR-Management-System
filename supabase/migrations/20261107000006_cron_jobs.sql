@@ -2,7 +2,12 @@
 -- Description: Automated Background Jobs for Auto-Checkout and Nightly Attendance Finalization
 
 -- Enable pg_cron if available on the PostgreSQL instance
-CREATE EXTENSION IF NOT EXISTS "pg_cron";
+DO $$
+BEGIN
+    CREATE EXTENSION IF NOT EXISTS "pg_cron";
+EXCEPTION WHEN OTHERS THEN
+    NULL;
+END $$;
 
 ---------------------------------------------------------
 -- 1. AUTO-CHECKOUT BACKGROUND PROCEDURE

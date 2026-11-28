@@ -217,7 +217,7 @@ describe("Section 2: Retention, Archival & Admin System Health", () => {
       await pg.query(
         `INSERT INTO public.organization_members (organization_id, user_id, role, status)
          VALUES ($1, $2, $3, 'active')
-         ON CONFLICT (user_id) DO UPDATE SET organization_id = $1, role = $3, status = 'active';`,
+         ON CONFLICT (organization_id, user_id) DO UPDATE SET organization_id = $1, role = $3, status = 'active';`,
         [ORG_2_ID, userId, role]
       );
       await pg.query(

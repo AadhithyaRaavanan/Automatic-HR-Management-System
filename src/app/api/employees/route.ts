@@ -118,42 +118,9 @@ export async function GET(request: NextRequest) {
     const adminConfigured = isSupabaseAdminConfigured();
     const dbClient: any = adminConfigured ? supabaseAdmin : callerSupabase;
 
-    // Resolve authoritative membership, role, and organization_id
-    let userRole: string = approvedRole || "employee";
-    let orgId: string | null =
-      (user?.app_metadata?.organization_id as string | undefined) ||
-      (user?.user_metadata?.organization_id as string | undefined) ||
-      null;
-
-    if (user?.id) {
-      const memberRes: any = await safeQuery(
-        dbClient
-          .from("organization_members")
-          .select("role, organization_id, department_id")
-          .eq("user_id", user.id)
-          .eq("status", "active")
-          .maybeSingle()
-      );
-
-      if (memberRes?.data?.role) {
-        userRole = String(memberRes.data.role).toLowerCase();
-      } else {
-        const roleRes: any = await safeQuery(
-          dbClient
-            .from("user_roles")
-            .select("role")
-            .eq("user_id", user.id)
-            .limit(1)
-            .maybeSingle()
-        );
-        if (roleRes?.data?.role) {
-          userRole = String(roleRes.data.role).toLowerCase();
-        }
-      }
-      if (memberRes?.data?.organization_id) {
-        orgId = memberRes.data.organization_id;
-      }
-    }
+    // Resolve authoritative membership, role, and organization_id from tenant-scoped guard
+    const userRole: string = String(approvedRole || "employee").toLowerCase();
+    const orgId: string | null = approvedCheck.organizationId || null;
 
     if (userRole === "employee") {
       return NextResponse.json(
@@ -162,22 +129,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Resolve caller's orgId from employees if not on organization_members
-    if (!orgId && user?.id) {
-      const selfEmpRes: any = await safeQuery(
-        dbClient
-          .from("employees")
-          .select("organization_id, department_id")
-          .eq("id", user.id)
-          .maybeSingle()
+    if (!orgId) {
+      return NextResponse.json(
+        { error: "Forbidden: Active organization context is required." },
+        { status: 403 }
       );
-      if (selfEmpRes?.data?.organization_id) {
-        orgId = selfEmpRes.data.organization_id;
-      }
-    }
-
-    if (!orgId && isDemo) {
-      orgId = "00000000-0000-0000-0000-000000000001";
     }
 
     let managerDeptId: string | null = null;
@@ -187,6 +143,7 @@ export async function GET(request: NextRequest) {
           .from("employees")
           .select("department_id")
           .eq("id", user.id)
+          .eq("organization_id", orgId)
           .maybeSingle()
       );
       managerDeptId = empRecordRes?.data?.department_id || null;
@@ -211,7 +168,13 @@ export async function GET(request: NextRequest) {
           let starterQuery = client
             .from("employees")
             .select(STARTER_EMPLOYEE_SELECT)
+            .eq("organization_id", filters.orgId)
             .order("joined_on", { ascending: false });
+          if (filters.managerDeptId) {
+            starterQuery = starterQuery.eq("department_id", filters.managerDeptId);
+          } else if (filters.departmentId) {
+            starterQuery = starterQuery.eq("department_id", filters.departmentId);
+          }
           if (filters.status) {
             starterQuery = starterQuery.eq("status", filters.status);
           }
@@ -249,26 +212,14 @@ export async function GET(request: NextRequest) {
     // Fetch authoritative active org memberships, onboarding categories, and legacy roles
     const queryClientForMeta = empQueryRes?.error ? callerSupabase : dbClient;
 
-    const orgMembersPromise = orgId
-      ? queryClientForMeta
-          .from("organization_members")
-          .select(
-            "user_id, role, status, department_id, job_title_id, shift_start_time, shift_end_time, departments:department_id(id, name, code, parent_department_id), job_titles:job_title_id(id, title_name)"
-          )
-          .eq("organization_id", orgId)
-      : queryClientForMeta
-          .from("organization_members")
-          .select("user_id, role, status, department_id, job_title_id");
-
-    const [orgMembersRes, userRolesRes, onbProfilesRes] = await Promise.all([
-      safeQuery(orgMembersPromise),
-      safeQuery(queryClientForMeta.from("user_roles").select("user_id, role")),
-      safeQuery(
-        queryClientForMeta
-          .from("onboarding_profiles")
-          .select("user_id, full_name, personal_email, candidate_type, education_details, phone")
-      ),
-    ]);
+    const orgMembersRes = await safeQuery(
+      queryClientForMeta
+        .from("organization_members")
+        .select(
+          "user_id, role, status, department_id, job_title_id, shift_start_time, shift_end_time, departments:department_id(id, name, code, parent_department_id), job_titles:job_title_id(id, title_name)"
+        )
+        .eq("organization_id", orgId)
+    );
 
     const orgMembers: any[] = orgMembersRes?.data || [];
     const roleMap = new Map<string, string>();
@@ -277,22 +228,23 @@ export async function GET(request: NextRequest) {
         roleMap.set(m.user_id, String(m.role).toLowerCase());
       }
     }
-    for (const ur of userRolesRes?.data || []) {
-      if (ur.user_id && ur.role && !roleMap.has(ur.user_id)) {
-        roleMap.set(ur.user_id, String(ur.role).toLowerCase());
-      }
-    }
 
-    // Enrich missing phone / employment_category / role from Auth user_metadata in starter schema
+    const orgUserIdsForOnb = Array.from(
+      new Set<string>([
+        ...emps.map((e: any) => e.id).filter(Boolean),
+        ...orgMembers.map((m: any) => m.user_id).filter(Boolean),
+      ])
+    );
+    const onbProfilesRes = orgUserIdsForOnb.length > 0
+      ? await safeQuery(
+          queryClientForMeta
+            .from("onboarding_profiles")
+            .select("user_id, full_name, personal_email, candidate_type, education_details, phone")
+            .in("user_id", orgUserIdsForOnb)
+        )
+      : { data: [] };
+
     const authUserMetaMap = new Map<string, any>();
-    if (adminConfigured && orgMembers.length === 0) {
-      try {
-        const { data: authList } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 200 });
-        for (const au of authList?.users || []) {
-          if (au?.id) authUserMetaMap.set(au.id, au);
-        }
-      } catch {}
-    }
 
     const onboardingMap = new Map<string, any>();
     for (const p of onbProfilesRes?.data || []) {
@@ -378,11 +330,11 @@ export async function GET(request: NextRequest) {
 
       return {
         ...e,
-        phone: e.phone || onb?.phone || authMeta?.phone || null,
+        phone: e.phone || onb?.phone || null,
         employment_category: resolvedCategory,
         role:
           roleMap.get(e.id) ||
-          (authAppMeta?.user_role || authMeta?.user_role || "employee").toLowerCase(),
+          (authAppMeta?.user_role || "employee").toLowerCase(),
       };
     });
 

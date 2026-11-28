@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const todayKolkata = getKolkataDateString();
-    const birthdays = await getVerifiedEmployeeBirthdays();
+    const birthdays = await getVerifiedEmployeeBirthdays(authResult.context.organizationId);
 
     return NextResponse.json({
       success: true,
@@ -45,15 +45,15 @@ export async function POST(request: NextRequest) {
     const { action, targetDate } = body;
 
     if (action === "send_example_notifications") {
-      const ok = await sendAdminExampleBirthdayNotifications(callerId);
+      const ok = await sendAdminExampleBirthdayNotifications(callerId, authResult.context.organizationId);
       return NextResponse.json({
         success: ok,
         message: "Example birthday notifications sent to your app notification inbox.",
       });
     }
 
-    // Default action: dispatch birthday notifications
-    const result = await dispatchBirthdayNotifications(targetDate);
+    // Default action: dispatch birthday notifications scoped to caller's org
+    const result = await dispatchBirthdayNotifications(targetDate, authResult.context.organizationId);
     return NextResponse.json({
       success: true,
       result,

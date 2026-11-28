@@ -71,7 +71,7 @@ describe("Section 0b: Suspended Member Behavior Isolation Suite", () => {
     await client.query(`
       INSERT INTO public.organization_members (organization_id, user_id, role, status)
       VALUES ('${ORG_1_ID}', '${SUSPENDED_ADMIN_ID}', 'admin', 'active')
-      ON CONFLICT (user_id) DO UPDATE SET organization_id = '${ORG_1_ID}', role = 'admin', status = 'active';
+      ON CONFLICT (organization_id, user_id) DO UPDATE SET organization_id = '${ORG_1_ID}', role = 'admin', status = 'active';
     `);
     await client.query(`
       INSERT INTO public.employees (id, organization_id, email, full_name, status)

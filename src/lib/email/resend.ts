@@ -9,23 +9,34 @@ const resendApiKey = process.env.RESEND_API_KEY;
 
 export const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
+export function isSmtpTransportConfigured(): boolean {
+  const host = process.env.SMTP_HOST?.trim() || "";
+  if (!host) return false;
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) return true;
+  if (
+    process.env.SMTP_ALLOW_UNAUTHENTICATED === "true" ||
+    host === "127.0.0.1" ||
+    host === "localhost"
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function getSmtpTransporter() {
-  const host = process.env.SMTP_HOST || "smtp.hostinger.com";
+  if (!isSmtpTransportConfigured() || !nodemailer) return null;
+
+  const host = process.env.SMTP_HOST!.trim();
   const port = Number(process.env.SMTP_PORT || "465");
   const secure = process.env.SMTP_SECURE === "true" || port === 465;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
 
-  if (!user || !pass) return null;
-
   return nodemailer.createTransport({
     host,
     port,
     secure,
-    auth: {
-      user,
-      pass,
-    },
+    ...(user && pass ? { auth: { user, pass } } : {}),
     family: 4, // Force IPv4 to prevent serverless IPv6 connection hangs on Vercel/AWS
     connectionTimeout: 10000,
     greetingTimeout: 5000,
@@ -342,7 +353,7 @@ export async function sendWelcomeCredentialsEmail(params: SendInviteEmailParams)
   const htmlContent = buildWelcomeEmailHtml(params);
 
   // 1. Prioritize Hostinger / Custom SMTP if configured
-  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+  if (isSmtpTransportConfigured()) {
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {
@@ -581,7 +592,7 @@ export async function sendOnboardingSubmittedEmail(params: SendOnboardingSubmitt
 </html>`;
 
   // 1. Prioritize Hostinger / Custom SMTP if configured
-  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+  if (isSmtpTransportConfigured()) {
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {
@@ -634,7 +645,7 @@ export async function sendPasswordResetEmail(params: SendPasswordResetParams): P
   const htmlContent = buildPasswordResetEmailHtml(params);
 
   // 1. Prioritize Hostinger SMTP if configured
-  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+  if (isSmtpTransportConfigured()) {
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {
@@ -688,7 +699,7 @@ export async function sendMfaResetEmail(params: SendMfaResetParams): Promise<{
   const textContent = `Your Pulse two-factor authentication recovery code is: ${otpCode}\n\nThis 6-digit code expires in 10 minutes. Enter this code on the screen to unbind your lost device and configure a replacement.\n\nIf you did not initiate this request, please contact your workplace administrator immediately.`;
 
   // 1. Prioritize Hostinger SMTP if configured
-  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+  if (isSmtpTransportConfigured()) {
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {
@@ -800,7 +811,7 @@ export async function sendNotificationEmail(params: SendNotificationEmailParams)
   const htmlContent = buildNotificationEmailHtml(params);
 
   // 1. Hostinger SMTP
-  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+  if (isSmtpTransportConfigured()) {
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {
@@ -946,7 +957,7 @@ export async function sendEarlyCheckoutEmail(params: SendEarlyCheckoutEmailParam
   const subject = `[Pulse] Early Sign-Out Alert: ${employeeName} (${workedFormatted} / ${targetFormatted})`;
   const htmlContent = buildEarlyCheckoutEmailHtml(params);
 
-  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+  if (isSmtpTransportConfigured()) {
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {
@@ -1083,7 +1094,7 @@ export async function sendBreakTimeoutEmail(params: SendBreakTimeoutEmailParams)
   const subject = `[Pulse] Reminder: Auto Logged Out After Exceeding Break Limit`;
   const htmlContent = buildBreakTimeoutEmailHtml(params);
 
-  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+  if (isSmtpTransportConfigured()) {
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {
@@ -1219,7 +1230,7 @@ export async function sendInactivityAutoLogoutEmail(
   const subject = `[Pulse] Automatic Sign-Out Notice`;
   const htmlContent = buildInactivityAutoLogoutEmailHtml(params);
 
-  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+  if (isSmtpTransportConfigured()) {
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {
@@ -1471,7 +1482,7 @@ export async function sendOnboardingApprovalEmail(params: SendApprovalEmailParam
   const htmlContent = buildApprovalEmailHtml(params);
 
   // 1. Hostinger / SMTP
-  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+  if (isSmtpTransportConfigured()) {
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {
@@ -1693,7 +1704,7 @@ export async function sendAdminOnboardingDossierEmail(params: SendAdminDossierEm
   const htmlContent = buildAdminDossierEmailHtml(params);
 
   // 1. Hostinger / SMTP
-  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+  if (isSmtpTransportConfigured()) {
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {
@@ -1824,7 +1835,7 @@ export async function sendMagicLinkEmail(params: SendMagicLinkParams): Promise<{
   const htmlContent = buildMagicLinkEmailHtml(params);
 
   // 1. Hostinger SMTP
-  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+  if (isSmtpTransportConfigured()) {
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {

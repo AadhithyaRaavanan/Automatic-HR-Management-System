@@ -17,6 +17,10 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const formatType = (searchParams.get("format") || "xlsx").toLowerCase();
   const rawMonth = searchParams.get("month");
+  const deptFilter = searchParams.get("department")?.trim() || "";
+  const searchFilter = searchParams.get("search")?.trim().toLowerCase() || "";
+  const employeeIdFilter = searchParams.get("employeeId")?.trim() || "";
+  const statusFilter = searchParams.get("status")?.trim().toLowerCase() || "";
 
   let monthParam = format(new Date(), "yyyy-MM");
   let monthStart = format(startOfMonth(new Date()), "yyyy-MM-dd");
@@ -31,8 +35,8 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Query real tenant-scoped attendance_days records for the selected month
-  const { data: days, error: queryError } = await supabaseAdmin
+  // Query real tenant-scoped attendance_days records for the selected month & filters
+  let daysQuery = supabaseAdmin
     .from("attendance_days")
     .select(`
       employee_id,
@@ -41,12 +45,21 @@ export async function GET(request: NextRequest) {
       total_minutes,
       is_late,
       locked,
-      employees!attendance_days_employee_id_fkey(full_name, email)
+      employees!attendance_days_employee_id_fkey(full_name, email, departments:department_id(name))
     `)
     .eq("organization_id", context.organizationId)
     .gte("work_date", monthStart)
     .lte("work_date", monthEnd)
     .order("work_date", { ascending: true });
+
+  if (employeeIdFilter) {
+    daysQuery = daysQuery.eq("employee_id", employeeIdFilter);
+  }
+  if (statusFilter && statusFilter !== "all") {
+    daysQuery = daysQuery.eq("status", statusFilter);
+  }
+
+  const { data: days, error: queryError } = await daysQuery;
 
   if (queryError) {
     return NextResponse.json(
@@ -55,15 +68,31 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const records = (days || []).map((row: any) => ({
-    name: row.employees?.full_name || "Unknown Employee",
-    email: row.employees?.email || "",
-    date: row.work_date,
-    status: row.status,
-    totalMinutes: Number(row.total_minutes || 0),
-    isLate: row.is_late ? "Yes" : "No",
-    locked: row.locked ? "Yes" : "No",
-  }));
+  const records = (days || [])
+    .map((row: any) => ({
+      name: row.employees?.full_name || "Unknown Employee",
+      email: row.employees?.email || "",
+      department: row.employees?.departments?.name || "General",
+      date: row.work_date,
+      status: row.status,
+      totalMinutes: Number(row.total_minutes || 0),
+      isLate: row.is_late ? "Yes" : "No",
+      locked: row.locked ? "Yes" : "No",
+    }))
+    .filter((r) => {
+      if (deptFilter && deptFilter !== "All" && r.department !== deptFilter) {
+        return false;
+      }
+      if (
+        searchFilter &&
+        !r.name.toLowerCase().includes(searchFilter) &&
+        !r.department.toLowerCase().includes(searchFilter) &&
+        !r.date.includes(searchFilter)
+      ) {
+        return false;
+      }
+      return true;
+    });
 
   // Record audit trail entry
   await supabaseAdmin.from("audit_logs").insert({

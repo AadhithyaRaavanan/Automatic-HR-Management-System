@@ -19,13 +19,26 @@
 -- SECTION 1: FIVE SYSTEM ROLES EXPANSION
 -- ----------------------------------------------------------------------------
 
--- A. Update public.user_roles constraint
-ALTER TABLE public.user_roles
-    DROP CONSTRAINT IF EXISTS user_roles_role_check;
+-- A. Update public.user_roles constraint ONLY if it is still a base table
+-- (`20261107000008` converted it into a compatibility view over `organization_members`).
+DO $$
+DECLARE
+    v_relkind CHAR;
+BEGIN
+    SELECT c.relkind INTO v_relkind
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relname = 'user_roles';
 
-ALTER TABLE public.user_roles
-    ADD CONSTRAINT user_roles_role_check
-    CHECK (role IN ('employee', 'team_lead', 'manager', 'hr', 'admin'));
+    IF v_relkind IN ('r', 'p') THEN
+        ALTER TABLE public.user_roles
+            DROP CONSTRAINT IF EXISTS user_roles_role_check;
+
+        ALTER TABLE public.user_roles
+            ADD CONSTRAINT user_roles_role_check
+            CHECK (role IN ('employee', 'team_lead', 'manager', 'hr', 'admin'));
+    END IF;
+END $$;
 
 -- B. Update public.organization_members constraint
 ALTER TABLE public.organization_members

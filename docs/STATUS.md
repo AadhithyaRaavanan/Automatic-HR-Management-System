@@ -1,29 +1,33 @@
 # Current handoff
 
-Updated 27 November 2026.
+Updated 28 November 2026.
 
-## Tasks integration
+## Multi-tenant release hardening summary
 
-The Tasks route delegates to the feature workspace. Riya’s project builder, bulk actions, sortable list, employee assignment rules and admin delete workflows share the same screen as the task filters, blocker reasons and recurring-task controls. Project and task deletion use the database routines for both browser and API requests. Apply the three 26 November Tasks migrations through the normal database release process.
+All five phases of [PER_TENANT_RELEASE_PROMPT.md](PER_TENANT_RELEASE_PROMPT.md) are implemented across migrations, server authorization, atomic Postgres review RPCs, multi-instance recovery challenges, reports/exports, and the workspace switcher UI.
 
-Chromium with fixture data verified search, opening a list result, closing its drawer with Escape, retaining the query and preserving the project selection when additional options collapse. All three Tasks migrations applied to a disposable copy of the existing development schema. With synthetic records, deleting one project removed its linked task, preserved an independent task and wrote the audit record. A separate fresh-install replay still stops at the historical employee migration described below.
+### Verified release checks (local clean environment)
 
-## Earlier modular migration checks
+1. **Unit & TypeScript check**
+   - `npx tsc --noEmit --incremental false`: passed (exit `0`).
+   - `npx vitest run tests/unit`: `45` test files passed, `272` tests passed (`multi-tenant-release.test.ts` + all existing suites).
+   - `npm run verify:docs`: passed (`scripts/verify-docs.mjs`).
+2. **Clean production build**
+   - `Remove-Item -Recurse -Force .next; npm run build`: passed cleanly (exit `0`, `54` static routes + dynamic API handlers).
+3. **Database migrations & DB isolation suites**
+   - `verify-migrations.mjs` passed both full **fresh replay** (`pulse_fresh_check`: `20261107000001` through `20261128000001_atomic_reviews_and_auth_challenges.sql`) and **upgrade replay** from pre-`20261116` backup/restore (`pulse_upgrade_check`, preserving legacy `kpi_reviews` row `22222222-2222-2222-2222-222222222222`). Temporary DBs cleaned up.
+   - Local Docker DB suites executed after migration fixes (`cross-tenant-isolation` 32/32, `leave-rpcs` 28/28, `phase3-rpc-matrix` 37/37, `section4-kpi` 8/8, `suspended-member-isolation` 3/3, `section1-hr-tools` 9/9, `cron-timezone-isolation` 4/4, `f1-multitenancy` 9/9, `f4-shifts` 7/7, `f5-leave` 9/9, `f6-tasks` 7/7, `f7-kpi` 7/7, `f12-persona-matrix` 30/30, `mfa-policy-matrix` 6/6, `f1.5-job-titles` 5/5, `section5-shifts-and-night-shifts` 4/4 passed).
+   - Pre-existing DB test suite drift unrelated to this release remains in legacy snapshot/design specs (`f11-design` old indigo tokens, `f9-retention` comment assertion, `policy-inventory`/`grants-snapshot`/`rpc-reconciliation`/`uuid-tenant-isolation` pre-Nov 17 snapshots, `section3-tasks` old `create_task` return wrapper, `f1.4` no-temp-password check, `admin-routes-integration` old `kpi/export` AAL2 / hyphenated name rules, `schema-meta` global `user_id`-keyed profile/notification tables, `intra-tenant-authorization` / `section2-retention` / `f8-admin` local seed state).
+4. **Two-organization, dual-instance E2E suite** (`node .../scratch/verify-two-org-e2e.mjs` against `:3101` & `:3102` with `NEXT_PUBLIC_DEMO_MODE=false` + local Supabase `127.0.0.1:54321`)
+   - Verified `Org Alpha` & `Org Beta` isolation with overlapping employee names (`Aarav Sharma`), delegated manager approvals, deactivated user `403` blocks, multi-org `409` guard, concurrent leave & partial-shift regularization approvals (`[200, 409]` + idempotency + `270m` recalculation), locked-period `400` refusal, idempotent cron accrual, org-scoped CSV export & `/reports` `320`-row pagination, field clearing on onboarding profile, dual mail transports (Nodemailer SMTP sink + Supabase GoTrue/Mailpit `127.0.0.1:54324`), fail-closed mail transport error handling, password change re-auth + durable audit logs, and Playwright multi-org switcher + cross-instance MFA recovery challenge consumption (`:3101` -> `:3102` -> replay `400`).
 
-The HR application now uses the feature-directory and handoff pattern from the Digital Twin final-year project. Start a new feature task at its row in the [module map](MODULES.md). Use the [document index](INDEX.md) for requirements or prior decisions.
+### Migration, rollback, and staging notes
 
-### Verification
+- **Apply migrations in order**: ensure `supabase/migrations/20261128000001_atomic_reviews_and_auth_challenges.sql` is applied (plus all fixed November migrations).
+- **Backup before deploy**: take a logical snapshot (`pg_dump`) prior to running migrations; rollback restores pre-migration `organization_members_user_id_key` only if no multi-org user rows exist yet, and drops new RPCs/`auth_recovery_challenges` if reverting.
+- **Required production env vars**: set `CRON_SECRET`, `MFA_RECOVERY_HMAC_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_DEMO_MODE=false`, and either `RESEND_API_KEY` or authenticated `SMTP_*` credentials.
+- **Remaining staging verification**: exercise live Resend webhook/production SMTP provider delivery, production Upstash Redis rate limiting (`UPSTASH_REDIS_REST_*`), and cron scheduler triggers against the staging environment.
 
-- `npm run build` and `npx tsc --noEmit --incremental false` passed. All 126 source page and route-handler paths survived the move. All 128 entries in the built route manifest matched the previous build.
-- Local Chromium rendered sign-in, loaded its stylesheet and opened the password-recovery form. The production server served the web manifest, icon, privacy and terms pages, redirected a signed-out request for `/settings` to `/login`, and returned HTTP 401 for unauthenticated notifications.
-- `npm run verify:docs` passed. All 69 concrete source, test and documentation paths listed in the module guide resolved.
-- All 211 unit tests passed on a clean install using `npm ci --legacy-peer-deps`. The four previously failing assertions now exercise the Pulse email branding, the sidebar search button and the collapse/expand commands. The React tests declare their Testing Library DOM dependency explicitly so a clean CI installation can collect them.
-- Comparing all 274 relocated source files against the previous commit showed identical contents after resolving import paths. The branch contains no changes to SQL migrations, seeds or deployed database configuration.
+## Module & feature references
 
-## Database release blocker
-
-The checked-in migrations fail on a fresh Supabase installation. The [multi-tenancy migration](../supabase/migrations/20261107000008_multi_tenancy_and_workforce.sql) makes `user_roles` a read-only compatibility view. The later [employee migration](../supabase/migrations/20261117000002_complete_employee_and_attendance.sql) attempts to apply a table constraint to it. PostgreSQL stops with SQLSTATE `42809`.
-
-An isolated diagnostic replay then reached a second conflict. The [original KPI migration](../supabase/migrations/20261108000015_kpi_system.sql) creates reviews with a period ID, one rating and a comment. The [KPI redesign](../supabase/migrations/20261118000001_kpi_redesign.sql) assumes dated reviews with structured ratings, and fails on the missing `period_start` column. The existing local development database also has the older columns. Migration experiments ran only on a disposable database.
-
-For a clean database release, reconcile both schema versions using a data-preserving upgrade tested against representative historical reviews. Verify old review values and tenant permissions before and after the upgrade, then run the database integration and authenticated browser suites against that disposable instance. Those suites remain unverified.
+Start feature changes at [the module map](MODULES.md) and check [the document index](INDEX.md) for architecture and security requirements.

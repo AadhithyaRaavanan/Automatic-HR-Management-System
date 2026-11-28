@@ -3,6 +3,10 @@
 
 DO $$
 BEGIN
+    -- 0. Ensure department_id column exists on job_titles
+    ALTER TABLE public.job_titles
+        ADD COLUMN IF NOT EXISTS department_id UUID REFERENCES public.departments(id) ON DELETE CASCADE;
+
     -- 1. Drop the legacy global (organization_id, title_name) unique constraint if present
     ALTER TABLE public.job_titles DROP CONSTRAINT IF EXISTS uq_job_titles_org_title;
 

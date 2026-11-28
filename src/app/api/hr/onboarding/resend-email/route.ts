@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRouteCaller } from "@/features/auth/admin-guard";
+import { verifyTargetEmployeeInOrg } from "@/features/auth/tenant-context";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { sendOnboardingApprovalEmail } from "@/lib/email/resend";
 
@@ -19,6 +20,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Missing required parameter 'userId'." },
         { status: 400 }
+      );
+    }
+
+    const targetCheck = await verifyTargetEmployeeInOrg(authResult.context, userId, { allowSelf: false });
+    if (!targetCheck.allowed) {
+      return NextResponse.json(
+        { error: "Forbidden: Candidate does not belong to your organization." },
+        { status: 403 }
       );
     }
 

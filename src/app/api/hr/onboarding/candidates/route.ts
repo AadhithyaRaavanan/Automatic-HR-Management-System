@@ -7,38 +7,42 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
 
+function maskSensitiveValue(value: unknown): string | null {
+  if (!value) return null;
+  const str = String(value).trim();
+  if (!str) return null;
+  if (str.length <= 4) return "*".repeat(str.length);
+  return `${"*".repeat(str.length - 4)}${str.slice(-4)}`;
+}
+
 export async function GET(request: NextRequest) {
   const authResult = await verifyAdminRouteCaller(request, ["admin", "hr"]);
   if ("response" in authResult) {
     return authResult.response;
   }
 
+  const orgId = authResult.context.organizationId;
+
   try {
-    // Fetch onboarding profiles and employees separately to avoid missing foreign key relation cache errors
-    const { data: candidates, error: fetchErr } = await (supabaseAdmin as any)
-      .from("onboarding_profiles")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const [{ data: empList }, { data: orgMembers }] = await Promise.all([
+      (supabaseAdmin.from("employees") as any)
+        .select(`
+          id,
+          full_name,
+          email,
+          phone,
+          emergency_contact,
+          status,
+          onboarding_completed,
+          departments:department_id(name),
+          job_titles:job_title_id(title_name)
+        `)
+        .eq("organization_id", orgId),
+      (supabaseAdmin.from("organization_members") as any)
+        .select("user_id, role")
+        .eq("organization_id", orgId),
+    ]);
 
-    if (fetchErr) {
-      return NextResponse.json({ error: fetchErr.message }, { status: 500 });
-    }
-
-    const { data: empList } = await (supabaseAdmin.from("employees") as any)
-      .select(`
-        id,
-        full_name,
-        email,
-        phone,
-        emergency_contact,
-        status,
-        onboarding_completed,
-        departments:department_id(name),
-        job_titles:job_title_id(title_name)
-      `);
-
-    const { data: orgMembers } = await (supabaseAdmin.from("organization_members") as any)
-      .select("user_id, role");
     const roleMap = new Map<string, string>();
     for (const m of orgMembers || []) {
       if (m.user_id && m.role) {
@@ -51,10 +55,36 @@ export async function GET(request: NextRequest) {
       empMap.set(emp.id, emp);
     }
 
-    const { data: allDocs } = await (supabaseAdmin as any)
-      .from("onboarding_documents")
-      .select("*")
-      .order("uploaded_at", { ascending: true });
+    const orgUserIds = Array.from(
+      new Set<string>([
+        ...(empList || []).map((e: any) => e.id).filter(Boolean),
+        ...(orgMembers || []).map((m: any) => m.user_id).filter(Boolean),
+      ])
+    );
+
+    if (orgUserIds.length === 0) {
+      return NextResponse.json({
+        candidates: [],
+        summary: { total: 0, pending: 0, under_review: 0, changes_requested: 0, approved: 0 },
+      });
+    }
+
+    const [{ data: candidates, error: fetchErr }, { data: allDocs }] = await Promise.all([
+      (supabaseAdmin as any)
+        .from("onboarding_profiles")
+        .select("*")
+        .in("user_id", orgUserIds)
+        .order("created_at", { ascending: false }),
+      (supabaseAdmin as any)
+        .from("onboarding_documents")
+        .select("*")
+        .in("user_id", orgUserIds)
+        .order("uploaded_at", { ascending: true }),
+    ]);
+
+    if (fetchErr) {
+      return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+    }
 
     const docsByUserId = new Map<string, any[]>();
     for (const doc of allDocs || []) {
@@ -67,12 +97,7 @@ export async function GET(request: NextRequest) {
     const existingCandidateUserIds = new Set((candidates || []).map((c: any) => c.user_id));
     for (const emp of empList || []) {
       const role = (roleMap.get(emp.id) || "").toLowerCase();
-      const email = (emp.email || "").toLowerCase();
-      if (
-        role === "admin" ||
-        emp.id === "952a33f0-3af4-4a69-a382-26fef3b7fa11" ||
-        email.includes("aadhithya.raavanan")
-      ) {
+      if (role === "admin") {
         continue;
       }
 
@@ -257,37 +282,28 @@ export async function GET(request: NextRequest) {
           },
           bank_details: {
             bank_account_holder: c.bank_account_holder,
-            bank_account_number: c.bank_account_number,
-            bank_ifsc: c.bank_ifsc,
+            bank_account_number: maskSensitiveValue(c.bank_account_number),
+            bank_ifsc: maskSensitiveValue(c.bank_ifsc),
             bank_name: c.bank_name,
             bank_branch: c.bank_branch,
-            uan_number: c.uan_number,
-            pan_number: c.pan_number,
-            aadhaar_number: c.aadhaar_number,
+            uan_number: maskSensitiveValue(c.uan_number),
+            pan_number: maskSensitiveValue(c.pan_number),
+            aadhaar_number: maskSensitiveValue(c.aadhaar_number),
+            has_bank_account: Boolean(c.bank_account_number),
+            has_pan: Boolean(c.pan_number),
+            has_aadhaar: Boolean(c.aadhaar_number),
           },
         };
       })
     );
 
-    const callerRole = (authResult.context.role || "").toLowerCase();
-
     // Filter candidate list:
-    // - All non-admin onboarding profiles (HR, Manager, Employee, Team Lead) are visible
-    // - Super Admin account is never an onboarding candidate
+    // - All non-admin onboarding profiles in the caller's organization
     const candidateList = enhancedCandidates.filter((c) => {
-      const emp = empMap.get(c.user_id);
       const memberRole = (roleMap.get(c.user_id) || c.candidate_role || "").toLowerCase();
-      const email = (c.email || emp?.email || "").toLowerCase();
-
-      // Super Admin is never an onboarding candidate
-      if (
-        memberRole === "admin" ||
-        c.user_id === "952a33f0-3af4-4a69-a382-26fef3b7fa11" ||
-        email.includes("aadhithya.raavanan")
-      ) {
+      if (memberRole === "admin") {
         return false;
       }
-
       return true;
     });
 

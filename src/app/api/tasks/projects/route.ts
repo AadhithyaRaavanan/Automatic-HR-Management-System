@@ -133,7 +133,13 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const effectiveOrgId = orgId || "00000000-0000-0000-0000-000000000001";
+  if (!orgId) {
+    return NextResponse.json(
+      { error: "Forbidden: Active organization context is required." },
+      { status: 403 }
+    );
+  }
+  const effectiveOrgId = orgId;
 
   const fullInsertPayload: Record<string, any> = {
     organization_id: effectiveOrgId,

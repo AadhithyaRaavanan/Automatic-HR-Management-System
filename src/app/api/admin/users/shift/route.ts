@@ -39,9 +39,10 @@ export async function POST(request: NextRequest) {
       .from("organization_members")
       .select("organization_id")
       .eq("user_id", userId)
+      .eq("organization_id", context.organizationId)
       .maybeSingle();
 
-    if (targetError || !targetMember || targetMember.organization_id !== context.organizationId) {
+    if (targetError || !targetMember) {
       return NextResponse.json(
         { error: "Forbidden: Target member does not belong to your organization." },
         { status: 403 }

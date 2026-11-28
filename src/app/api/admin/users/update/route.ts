@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRouteCaller } from "@/features/auth/admin-guard";
+import { verifyTargetEmployeeInOrg } from "@/features/auth/tenant-context";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import { notify } from "@/features/notifications/notify";
@@ -31,6 +32,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Validation Error: 'userId' is required." },
         { status: 400 }
+      );
+    }
+
+    const targetCheck = await verifyTargetEmployeeInOrg(context, userId, { allowSelf: true });
+    if (!targetCheck.allowed) {
+      return NextResponse.json(
+        { error: "Forbidden: Target user does not belong to your organization." },
+        { status: 403 }
       );
     }
 
@@ -81,7 +90,8 @@ export async function POST(request: NextRequest) {
     // 1. Authoritative update to employees
     const { error: empErr } = await (supabaseAdmin.from("employees") as any)
       .update(employeeUpdates)
-      .eq("id", userId);
+      .eq("id", userId)
+      .eq("organization_id", context.organizationId);
 
     if (empErr) {
       console.error("Failed to update employees:", empErr.message);
@@ -93,7 +103,8 @@ export async function POST(request: NextRequest) {
     // 2. Authoritative update to organization_members
     const { error: memErr } = await (supabaseAdmin.from("organization_members") as any)
       .update(memberUpdates)
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .eq("organization_id", context.organizationId);
 
     if (memErr) {
       console.error("Failed to update organization_members:", memErr.message);
@@ -120,6 +131,7 @@ export async function POST(request: NextRequest) {
       if (role !== undefined) {
         await notify({
           userIds: [userId],
+          organizationId: context.organizationId,
           type: "security_role_changed",
           typeGroup: "security",
           title: "Workplace Role Updated",
@@ -133,6 +145,7 @@ export async function POST(request: NextRequest) {
       } else if (status !== undefined) {
         await notify({
           userIds: [userId],
+          organizationId: context.organizationId,
           type: "security_status_changed",
           typeGroup: "security",
           title: `Account Status Changed: ${status}`,

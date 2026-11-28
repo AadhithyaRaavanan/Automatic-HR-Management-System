@@ -18,6 +18,13 @@ export async function GET(
   if ("response" in approvedCheck) {
     return approvedCheck.response;
   }
+  const callerOrgId = approvedCheck.organizationId;
+  const callerRole = approvedCheck.role;
+  const callerUserId = approvedCheck.user.id;
+  if (!callerOrgId) {
+    return NextResponse.json({ error: "Forbidden: Active organization context required." }, { status: 403 });
+  }
+
   const rawId = params?.id || "";
   const cleanId = decodeURIComponent(rawId).trim().replace(/\s+/g, "-");
   if (!cleanId) {
@@ -25,7 +32,7 @@ export async function GET(
   }
 
   try {
-    // 1. Employee Core Details
+    // 1. Employee Core Details strictly within caller's organization
     let emp: any = null;
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
     if (isUuid) {
@@ -38,6 +45,7 @@ export async function GET(
           manager:manager_id(id, full_name, email)
         `)
         .eq("id", cleanId)
+        .eq("organization_id", callerOrgId)
         .maybeSingle();
       if (!empErr) {
         emp = data;
@@ -46,6 +54,7 @@ export async function GET(
           .from("employees")
           .select("*")
           .eq("id", cleanId)
+          .eq("organization_id", callerOrgId)
           .maybeSingle();
         emp = baseEmp;
       }
@@ -58,6 +67,7 @@ export async function GET(
           job_titles:job_title_id(id, title_name),
           manager:manager_id(id, full_name, email)
         `)
+        .eq("organization_id", callerOrgId)
         .ilike("id", `${cleanId}%`)
         .maybeSingle();
       if (!empErr) {
@@ -66,13 +76,40 @@ export async function GET(
         const { data: baseEmp } = await (supabaseAdmin as any)
           .from("employees")
           .select("*")
+          .eq("organization_id", callerOrgId)
           .ilike("id", `${cleanId}%`)
           .maybeSingle();
         emp = baseEmp;
       }
     }
 
-    const targetUserId = emp?.id || cleanId;
+    if (!emp) {
+      return NextResponse.json({ error: "Employee not found in your organization." }, { status: 404 });
+    }
+
+    const isSelf = emp.id === callerUserId;
+    const isPrivileged = callerRole === "admin" || callerRole === "hr";
+    let isScopedManager = callerRole === "manager" && emp.manager_id === callerUserId;
+    if (callerRole === "manager" && !isSelf && !isScopedManager && emp.department_id) {
+      const { data: headedDept } = await (supabaseAdmin as any)
+        .from("departments")
+        .select("id")
+        .eq("organization_id", callerOrgId)
+        .eq("id", emp.department_id)
+        .eq("department_head_id", callerUserId)
+        .maybeSingle();
+      isScopedManager = Boolean(headedDept?.id);
+    }
+
+    if (!isSelf && !isPrivileged && !isScopedManager) {
+      return NextResponse.json(
+        { error: "Forbidden: You do not have permission to view this employee profile." },
+        { status: 403 }
+      );
+    }
+
+    const canViewSensitivePii = isSelf || isPrivileged;
+    const targetUserId = emp.id;
 
     // 2. Onboarding profile & documents
     let { data: onb } = await (supabaseAdmin as any)
@@ -245,31 +282,35 @@ export async function GET(
       permissions = onb.education_details.hourly_permissions;
     }
 
-    // 8. Tasks
+    // 8. Tasks scoped to caller's org
     let tasks: any[] = [];
     try {
       const { data: t } = await (supabaseAdmin as any)
         .from("tasks")
         .select("*")
+        .eq("organization_id", callerOrgId)
         .eq("assignee_id", targetUserId)
         .order("created_at", { ascending: false });
       tasks = t || [];
     } catch {}
 
-    // 9. Department and Job Title Lists for Edit Form
+    // 9. Department and Job Title Lists for Edit Form scoped to caller's org
     const { data: allDepartments } = await (supabaseAdmin as any)
       .from("departments")
       .select("id, name, code, parent_department_id")
+      .eq("organization_id", callerOrgId)
       .order("name", { ascending: true });
 
     const { data: allJobTitles } = await (supabaseAdmin as any)
       .from("job_titles")
       .select("id, title_name, department_id")
+      .eq("organization_id", callerOrgId)
       .order("title_name", { ascending: true });
 
     const { data: allManagers } = await (supabaseAdmin as any)
       .from("employees")
       .select("id, full_name, email")
+      .eq("organization_id", callerOrgId)
       .eq("status", "active")
       .order("full_name", { ascending: true });
 
@@ -277,14 +318,15 @@ export async function GET(
     const enhancedEmp = emp
       ? {
           ...emp,
+          emergency_contact: canViewSensitivePii ? emp.emergency_contact : null,
           employment_category: emp.employment_category || resolvedCategory,
         }
       : null;
 
     return NextResponse.json({
       employee: enhancedEmp,
-      onboarding: onb,
-      documents: docs || [],
+      onboarding: canViewSensitivePii ? onb : null,
+      documents: canViewSensitivePii ? (docs || []) : [],
       internship: internship || null,
       careerHistory: careerHistory || [],
       recentAttendance: recentAttendance || [],
@@ -325,12 +367,14 @@ export async function PATCH(
         .from("employees")
         .select("*, job_titles:job_title_id(title_name), departments:department_id(name)")
         .eq("id", cleanId)
+        .eq("organization_id", authResult.context.organizationId)
         .maybeSingle();
       emp = data;
     } else {
       const { data } = await (supabaseAdmin as any)
         .from("employees")
         .select("*, job_titles:job_title_id(title_name), departments:department_id(name)")
+        .eq("organization_id", authResult.context.organizationId)
         .ilike("id", `${cleanId}%`)
         .maybeSingle();
       emp = data;
@@ -396,7 +440,8 @@ export async function PATCH(
     const { error: empErr } = await (supabaseAdmin as any)
       .from("employees")
       .update(empUpdates)
-      .eq("id", targetUserId);
+      .eq("id", targetUserId)
+      .eq("organization_id", authResult.context.organizationId);
 
     if (empErr) {
       return NextResponse.json({ error: empErr.message }, { status: 400 });

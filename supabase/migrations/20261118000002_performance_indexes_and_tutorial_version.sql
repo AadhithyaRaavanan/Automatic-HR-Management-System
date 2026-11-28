@@ -13,8 +13,8 @@ CREATE INDEX IF NOT EXISTS idx_attendance_sessions_emp_date
 CREATE INDEX IF NOT EXISTS idx_tasks_assignee_status
     ON public.tasks (assignee_id, status);
 
-CREATE INDEX IF NOT EXISTS idx_leave_applications_emp_status
-    ON public.leave_applications (employee_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_leave_requests_emp_status
+    ON public.leave_requests (employee_id, status, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_regularization_requests_emp_status
     ON public.regularization_requests (employee_id, status);

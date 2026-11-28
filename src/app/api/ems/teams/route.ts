@@ -21,10 +21,13 @@ export async function GET(request: NextRequest) {
   if ("response" in approvedCheck) {
     return approvedCheck.response;
   }
+  if (!approvedCheck.organizationId) {
+    return NextResponse.json({ error: "Forbidden: Active organization context required." }, { status: 403 });
+  }
   try {
     const isDemo = isDemoModeEnabled();
 
-    // Query real Supabase database
+    // Query real Supabase database strictly scoped to caller's organization
     const { data: dbTeams, error } = await (supabaseAdmin as any)
       .from("teams")
       .select(`
@@ -33,6 +36,7 @@ export async function GET(request: NextRequest) {
         team_lead:team_lead_id(id, full_name, email),
         team_members(id, employee_id, employees:employee_id(id, full_name, email, employment_category))
       `)
+      .eq("organization_id", approvedCheck.organizationId)
       .order("created_at", { ascending: false });
 
     let teamsList = dbTeams || [];

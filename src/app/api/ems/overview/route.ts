@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 import { getStoredUsers, getStoredDepartments, getStoredTeams } from "@/lib/storage/demo-store";
-import { requireApprovedUser } from "@/features/auth/require-approved-user";
+import { verifyAdminRouteCaller } from "@/features/auth/admin-guard";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -11,74 +10,57 @@ export const fetchCache = "force-no-store";
 
 export async function GET(request: NextRequest) {
   try {
-    const approvedCheck = await requireApprovedUser(request);
-    if ("response" in approvedCheck) {
-      return approvedCheck.response;
+    const authResult = await verifyAdminRouteCaller(request, ["admin", "hr", "manager"]);
+    if ("response" in authResult) {
+      return authResult.response;
     }
 
+    const { organizationId: orgId, role: userRole, userId } = authResult.context;
     const isDemo = isDemoModeEnabled();
 
-    // Authenticate caller
-    let user = null;
-    let userRole = "employee";
-    const authHeader = request.headers.get("Authorization");
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      const token = authHeader.replace("Bearer ", "").trim();
-      const { data: userData } = await supabaseAdmin.auth.getUser(token);
-      user = userData?.user || null;
-    }
-    if (!user) {
-      const supabase = await createClient();
-      const { data: cookieUser } = await supabase.auth.getUser();
-      user = cookieUser?.user || null;
-    }
-
-    if (user) {
-      const { data: member } = await supabaseAdmin
-        .from("organization_members")
-        .select("role")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      userRole = (member?.role || user.user_metadata?.role || user.user_metadata?.user_role || "employee").toLowerCase();
-    }
-
-    // Role gate: employee denied
-    if (userRole === "employee") {
-      return NextResponse.json({ error: "Forbidden: Employee access denied." }, { status: 403 });
-    }
-
     let managerDeptId: string | null = null;
-    if (userRole === "manager" && user) {
+    if (userRole === "manager") {
       const { data: empRecord } = await (supabaseAdmin as any)
         .from("employees")
         .select("department_id")
-        .eq("id", user.id)
+        .eq("id", userId)
+        .eq("organization_id", orgId)
         .maybeSingle();
       managerDeptId = empRecord?.department_id || null;
     }
 
-    // 1. Fetch counts from real database
-    const [empsRes, deptsRes, teamsRes, onbRes, internsRes, titlesRes] = await Promise.all([
+    // 1. Fetch counts strictly scoped to caller's organization
+    const [empsRes, deptsRes, teamsRes, internsRes, titlesRes] = await Promise.all([
       (supabaseAdmin as any)
         .from("employees")
-        .select("id, status, department_id, manager_id, work_mode, job_title_id"),
+        .select("id, status, department_id, manager_id, work_mode, job_title_id")
+        .eq("organization_id", orgId),
       (supabaseAdmin as any)
         .from("departments")
-        .select("id, name, department_head_id, parent_department_id"),
+        .select("id, name, department_head_id, parent_department_id")
+        .eq("organization_id", orgId),
       (supabaseAdmin as any)
         .from("teams")
-        .select("id, name, team_lead_id, department_id"),
-      (supabaseAdmin as any)
-        .from("onboarding_profiles")
-        .select("id, status")
-        .eq("status", "submitted"),
+        .select("id, name, team_lead_id, department_id")
+        .eq("organization_id", orgId),
       (supabaseAdmin as any)
         .from("internships")
-        .select("id, status, end_date"),
+        .select("id, status, end_date")
+        .eq("organization_id", orgId),
       (supabaseAdmin as any)
         .from("job_titles")
-        .select("id, title_name"),
+        .select("id, title_name")
+        .eq("organization_id", orgId),
     ]);
+
+    const orgEmpIds = (empsRes.data || []).map((e: any) => e.id).filter(Boolean);
+    const onbRes = orgEmpIds.length > 0
+      ? await (supabaseAdmin as any)
+          .from("onboarding_profiles")
+          .select("id, status")
+          .in("user_id", orgEmpIds)
+          .eq("status", "submitted")
+      : { data: [] };
 
     let emps = empsRes.data || [];
     let depts = deptsRes.data || [];

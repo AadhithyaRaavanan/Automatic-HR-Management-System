@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
       let baseQuery = client
         .from("employees")
         .select("id, full_name, email, timezone")
+        .eq("organization_id", context.organizationId)
         .eq("status", "active")
         .order("full_name");
       if (context.role === "manager") {
@@ -49,10 +50,15 @@ export async function GET(request: NextRequest) {
       const baseRes = await baseQuery;
       if (!baseRes.error) return baseRes;
 
-      return await client
+      let minimalQuery = client
         .from("employees")
         .select("id, full_name, email")
+        .eq("organization_id", context.organizationId)
         .order("full_name");
+      if (context.role === "manager") {
+        minimalQuery = minimalQuery.eq("manager_id", context.userId);
+      }
+      return await minimalQuery;
     };
 
     const adminClient: any = isSupabaseAdminConfigured() ? getAdminClient() : callerSupabase;
@@ -68,21 +74,29 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: empErr.message }, { status: 400 });
     }
 
-    // Fetch today sessions or any currently active session directly from Supabase
-    const sessClient: any = adminClient;
-    let { data: sessions } = await sessClient
-      .from("attendance_sessions")
-      .select("id, employee_id, check_in_at, check_out_at, work_date")
-      .or(`work_date.eq.${todayIso},check_out_at.is.null`)
-      .order("check_in_at", { ascending: true });
-
-    if (!sessions && sessClient !== callerSupabase) {
-      const fallbackSess = await (callerSupabase as any)
+    const empIds = (employees || []).map((e: any) => e.id).filter(Boolean);
+    let sessions: any[] = [];
+    if (empIds.length > 0) {
+      const sessClient: any = adminClient;
+      let { data: sessData } = await sessClient
         .from("attendance_sessions")
         .select("id, employee_id, check_in_at, check_out_at, work_date")
+        .eq("organization_id", context.organizationId)
+        .in("employee_id", empIds)
         .or(`work_date.eq.${todayIso},check_out_at.is.null`)
         .order("check_in_at", { ascending: true });
-      sessions = fallbackSess?.data || [];
+
+      if (!sessData && sessClient !== callerSupabase) {
+        const fallbackSess = await (callerSupabase as any)
+          .from("attendance_sessions")
+          .select("id, employee_id, check_in_at, check_out_at, work_date")
+          .eq("organization_id", context.organizationId)
+          .in("employee_id", empIds)
+          .or(`work_date.eq.${todayIso},check_out_at.is.null`)
+          .order("check_in_at", { ascending: true });
+        sessData = fallbackSess?.data || [];
+      }
+      sessions = sessData || [];
     }
 
     const empList = employees || [];

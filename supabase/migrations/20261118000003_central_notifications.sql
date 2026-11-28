@@ -19,6 +19,13 @@ CREATE TABLE IF NOT EXISTS public.notifications (
     dedupe_key TEXT NULL
 );
 
+ALTER TABLE public.notifications
+    ADD COLUMN IF NOT EXISTS link TEXT,
+    ADD COLUMN IF NOT EXISTS entity_type TEXT,
+    ADD COLUMN IF NOT EXISTS entity_id TEXT,
+    ADD COLUMN IF NOT EXISTS actor_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS dedupe_key TEXT NULL;
+
 -- Partial Unique Index for deduplication per user
 CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_user_dedupe
     ON public.notifications (user_id, dedupe_key)

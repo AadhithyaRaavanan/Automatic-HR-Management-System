@@ -8,6 +8,7 @@ import {
 
 export interface NotifyParams {
   userIds: string[];
+  organizationId?: string | null;
   type: string;
   typeGroup?: NotificationTypeGroup;
   title: string;
@@ -54,6 +55,7 @@ export async function notify(params: NotifyParams): Promise<NotifyResult> {
   try {
     const {
       userIds,
+      organizationId,
       type,
       typeGroup: explicitGroup,
       title,
@@ -70,10 +72,24 @@ export async function notify(params: NotifyParams): Promise<NotifyResult> {
       return { success: true, inAppCount: 0, emailCount: 0 };
     }
 
-    // 1. Filter out the actor (never notify yourself for your own action)
-    const targetUserIds = Array.from(
+    // 1. Filter out the actor and optionally enforce active membership within organizationId
+    let targetUserIds = Array.from(
       new Set(userIds.filter((id) => id && id !== actorId))
     );
+
+    if (organizationId && targetUserIds.length > 0) {
+      try {
+        const { data: orgMembers } = await (supabaseAdmin.from("organization_members") as any)
+          .select("user_id")
+          .eq("organization_id", organizationId)
+          .eq("status", "active")
+          .in("user_id", targetUserIds);
+        if (Array.isArray(orgMembers)) {
+          const validSet = new Set(orgMembers.map((m: any) => m.user_id));
+          targetUserIds = targetUserIds.filter((uid) => validSet.has(uid));
+        }
+      } catch {}
+    }
 
     if (targetUserIds.length === 0) {
       return { success: true, inAppCount: 0, emailCount: 0 };
@@ -133,6 +149,7 @@ export async function notify(params: NotifyParams): Promise<NotifyResult> {
     if (allowedInAppUserIds.length > 0) {
       try {
         const rows = allowedInAppUserIds.map((uid) => ({
+          ...(organizationId ? { organization_id: organizationId } : {}),
           user_id: uid,
           type,
           title,
@@ -209,19 +226,32 @@ export async function notify(params: NotifyParams): Promise<NotifyResult> {
             } catch {}
           }
 
-          // Dispatch emails
+          // Dispatch emails with single transient retry
           for (const [, recipient] of Array.from(emailMap.entries())) {
             if (recipient.email) {
-              await sendNotificationEmail({
+              const payload = {
                 to: recipient.email,
                 recipientName: recipient.name,
                 title,
                 body,
                 link,
-              }).catch((err) => {
-                console.error(`[notify] Failed to send email to ${recipient.email}:`, err);
-              });
-              emailCount++;
+              };
+              let res = await sendNotificationEmail(payload).catch((err) => ({
+                success: false,
+                error: err?.message || String(err),
+              }));
+              if (!res?.success) {
+                await new Promise((r) => setTimeout(r, 250));
+                res = await sendNotificationEmail(payload).catch((err) => ({
+                  success: false,
+                  error: err?.message || String(err),
+                }));
+              }
+              if (res?.success) {
+                emailCount++;
+              } else {
+                console.error(`[notify] Email delivery failed for ${recipient.email}:`, (res as any)?.error || "unknown error");
+              }
             }
           }
         } catch (emailErr) {

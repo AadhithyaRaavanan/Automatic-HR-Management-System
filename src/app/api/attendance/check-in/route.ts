@@ -124,7 +124,13 @@ export async function POST(request: NextRequest) {
     // 4. Create new attendance session with initial last_seen_at heartbeat
     const effectiveWorkDate = getEmployeeWorkDate(timezone, new Date(), shiftStartTime, shiftEndTime);
     const nowIso = new Date().toISOString();
-    const orgId = emp?.organization_id || "00000000-0000-0000-0000-000000000001";
+    const orgId = emp?.organization_id;
+    if (!orgId) {
+      return NextResponse.json(
+        { error: "Forbidden: Employee organization membership not found." },
+        { status: 403 }
+      );
+    }
     const initialNote = JSON.stringify({
       originalNote: body.note || "",
       breaks: [],

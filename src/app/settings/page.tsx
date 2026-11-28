@@ -26,12 +26,13 @@ import { isDemoModeEnabled } from "@/lib/config/demo";
 
 function SettingsPageContent() {
   const router = useRouter();
-  const { userId, userRole } = useAppSession();
+  const { userId, userRole, organizationId, organizationName } = useAppSession();
   const supabase = React.useMemo(() => createClient(), []);
   const [timezone, setTimezone] = React.useState("Asia/Kolkata");
   const [workTargetMinutes, setWorkTargetMinutes] = React.useState(480);
 
   // Password Update State
+  const [currentPassword, setCurrentPassword] = React.useState("");
   const [newPassword, setNewPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
   const [isChangingPassword, setIsChangingPassword] = React.useState(false);
@@ -95,39 +96,33 @@ function SettingsPageContent() {
       toast.error("New Password and Confirm Password do not match.");
       return;
     }
+    if (!showMustChangeBanner && !currentPassword) {
+      toast.error("Current password is required to update your password.");
+      return;
+    }
 
     setIsChangingPassword(true);
     try {
-      const nowIso = new Date().toISOString();
-
-      // 1. Direct Supabase Auth client update
-      const { error: clientErr } = await supabase.auth.updateUser({
-        password: newPassword,
-        data: {
-          must_change_password: false,
-          temp_password_expires_at: null,
-          password_last_changed_at: nowIso,
-        },
-      });
-
-      // 2. Server API fallback to ensure metadata is cleared in Supabase
       const { data: sessionData } = await supabase.auth.getSession();
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (sessionData?.session?.access_token) {
         headers["Authorization"] = `Bearer ${sessionData.session.access_token}`;
       }
 
-      await fetch("/api/auth/update-password", {
+      const updateRes = await fetch("/api/auth/update-password", {
         method: "POST",
         headers,
-        body: JSON.stringify({ password: newPassword }),
-      }).catch(() => {});
-
-      if (clientErr && !sessionData?.session) {
-        console.warn("[Password Update] Note:", clientErr.message);
+        body: JSON.stringify({
+          password: newPassword,
+          currentPassword: currentPassword || undefined,
+        }),
+      });
+      const updateJson = await updateRes.json().catch(() => ({}));
+      if (!updateRes.ok) {
+        throw new Error(updateJson?.error || "Failed to update password.");
       }
 
-      // 3. Immediately kick user out: clear session and sign out
+      // Immediately kick user out: clear session and sign out
       toast.success("Password updated successfully! Please sign in with your new password.");
 
       if (typeof window !== "undefined") {
@@ -140,7 +135,6 @@ function SettingsPageContent() {
 
       await supabase.auth.signOut().catch(() => {});
 
-      // 4. Force reload and kick out to login page
       setTimeout(() => {
         window.location.href = "/login?password_updated=true";
       }, 500);
@@ -153,24 +147,19 @@ function SettingsPageContent() {
   React.useEffect(() => {
     async function loadOrgPolicy() {
       try {
-        const { data: member } = await (supabase as any)
-          .from("organization_members")
-          .select("organization_id")
+        if (!organizationId) return;
+        const { data: org } = await (supabase as any)
+          .from("organizations")
+          .select("require_mfa_for_privileged")
+          .eq("id", organizationId)
           .maybeSingle();
-        if (member?.organization_id) {
-          const { data: org } = await (supabase as any)
-            .from("organizations")
-            .select("require_mfa_for_privileged")
-            .eq("id", member.organization_id)
-            .maybeSingle();
-          if (org && typeof org.require_mfa_for_privileged === "boolean") {
-            setRequireMfaPolicy(org.require_mfa_for_privileged);
-          }
+        if (org && typeof org.require_mfa_for_privileged === "boolean") {
+          setRequireMfaPolicy(org.require_mfa_for_privileged);
         }
       } catch {}
     }
     loadOrgPolicy();
-  }, [supabase]);
+  }, [supabase, organizationId]);
 
   const handleToggleMfaPolicy = async () => {
     if (isDemoModeEnabled()) {
@@ -350,10 +339,13 @@ function SettingsPageContent() {
             title={
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-brand-purple" />
-                <span>Organization Security & MFA Enforcement</span>
+                <span>
+                  Organization Governance &amp; MFA Policy
+                  {organizationName ? ` — ${organizationName}` : ""}
+                </span>
               </div>
             }
-            subtitle="Admin-governed policy for mandatory Two-Factor Authentication across privileged roles (HR & Admin)"
+            subtitle="Organization-wide policy (distinct from personal settings above): mandatory Two-Factor Authentication for HR & Admins"
             className="lg:col-span-12 p-6"
           >
             <div className="space-y-4">
@@ -495,6 +487,28 @@ function SettingsPageContent() {
           className="lg:col-span-12 p-6"
         >
           <form onSubmit={handlePasswordChange} className="space-y-4 max-w-xl">
+            {!showMustChangeBanner && (
+              <div>
+                <label
+                  htmlFor="current-password"
+                  className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1.5"
+                >
+                  Current Password
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-text-tertiary absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    id="current-password"
+                    type="password"
+                    required={!showMustChangeBanner}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Enter current password"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-card-subtle border border-border-light text-xs font-medium text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-brand-purple focus:ring-2 focus:ring-brand-purple/20 transition-all"
+                  />
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label

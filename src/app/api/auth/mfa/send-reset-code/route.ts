@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { isDemoModeEnabled } from "@/lib/config/demo";
-import { generateRecoveryOtp, createRecoveryProof } from "@/features/auth/mfa-recovery-store";
+import {
+  generateRecoveryOtp,
+  createPersistentRecoveryChallenge,
+} from "@/features/auth/mfa-recovery-store";
+import { ORG_SELECTION_COOKIE } from "@/features/auth/tenant-context";
 import { sendMfaResetEmail } from "@/lib/email/resend";
 import { checkRateLimit, recordFailure, getRateLimitKey } from "@/features/auth/rate-limiter";
 
@@ -29,7 +34,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Rate limiting
     const forwardedFor = request.headers.get("x-forwarded-for");
     const clientIp = forwardedFor ? forwardedFor.split(",")[0].trim() : "127.0.0.1";
     const ipLimitKey = getRateLimitKey(clientIp, user.email, "mfa_reset");
@@ -42,11 +46,31 @@ export async function POST(request: NextRequest) {
     }
     await recordFailure(ipLimitKey);
 
+    let organizationId: string | null = null;
+    try {
+      const requestedOrg = request.cookies.get(ORG_SELECTION_COOKIE)?.value || null;
+      const { data: memberships } = await (supabaseAdmin as any)
+        .from("organization_members")
+        .select("organization_id")
+        .eq("user_id", user.id)
+        .eq("status", "active");
+      const list = memberships || [];
+      if (requestedOrg && list.some((m: any) => m.organization_id === requestedOrg)) {
+        organizationId = requestedOrg;
+      } else if (list.length > 0) {
+        organizationId = list[0].organization_id;
+      }
+    } catch {}
+
     const isDemo = isDemoModeEnabled();
     const code = generateRecoveryOtp();
-    const { proofToken } = createRecoveryProof(user.id, code);
+    const { proofToken } = await createPersistentRecoveryChallenge({
+      userId: user.id,
+      organizationId,
+      purpose: "mfa_recovery",
+      code,
+    });
 
-    // Send recovery email
     const emailResult = await sendMfaResetEmail({
       to: user.email,
       otpCode: code,
@@ -68,15 +92,14 @@ export async function POST(request: NextRequest) {
       success: true,
       message: "A 6-digit recovery code has been delivered to your email.",
       maskedEmail: maskEmail(user.email),
-      demoCode: isDemo ? code : undefined,
+      demoCode: isDemo && process.env.NODE_ENV !== "production" ? code : undefined,
     });
 
-    // Set signed proof token in HTTP-only cookie for stateless serverless verification
     response.cookies.set("pulse_mfa_proof", proofToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 600, // 10 minutes
+      maxAge: 600,
       path: "/",
     });
 

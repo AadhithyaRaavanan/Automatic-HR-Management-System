@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
-import { Bell, Download } from "lucide-react";
+import { Bell, Building2, Download } from "lucide-react";
 import { CommandPalette } from "@/components/shared/command-palette";
 import { NotificationCenter } from "@/features/notifications/components/notification-center";
 import { useNotifications } from "@/features/notifications/hooks/use-notifications";
@@ -74,8 +74,43 @@ export function TopNavBar({
           <div className="flex-1 min-w-0" />
         )}
 
-        {/* Right: Actions (Notification bell with magenta dot, quiet Export, user chip) */}
+        {/* Right: Organization Context/Switcher + Actions */}
         <div className="flex items-center gap-2.5 shrink-0">
+          {session.isLoaded && (session.organizations?.length || 0) > 1 ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-[#E6E6E6]">
+              <Building2 className="w-3.5 h-3.5 text-black shrink-0" />
+              <select
+                aria-label="Active organization"
+                value={session.organizationId || ""}
+                onChange={(e) => {
+                  const nextId = e.target.value;
+                  if (nextId && session.switchOrganization) {
+                    session.switchOrganization(nextId).catch((err) => {
+                      toast.error(err?.message || "Failed to switch organization");
+                    });
+                  }
+                }}
+                className="bg-transparent text-xs font-semibold text-black focus:outline-none cursor-pointer pr-1"
+              >
+                {!session.organizationId && <option value="">Select workspace...</option>}
+                {session.organizations?.map((org) => (
+                  <option key={org.organizationId} value={org.organizationId}>
+                    {org.organizationName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : session.isLoaded && session.organizationName ? (
+            <div
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-[#E6E6E6] text-xs font-semibold text-black"
+              title="Active organization"
+              data-testid="active-organization-badge"
+            >
+              <Building2 className="w-3.5 h-3.5 text-[#4D4D4D] shrink-0" />
+              <span className="max-w-[160px] truncate">{session.organizationName}</span>
+            </div>
+          ) : null}
+
           {/* Notification Bell */}
           <button
             id="notification-bell"

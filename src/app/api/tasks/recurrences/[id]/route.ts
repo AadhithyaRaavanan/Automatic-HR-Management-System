@@ -14,8 +14,10 @@ export async function PATCH(
       return authResult.response;
     }
 
-    const { employee, user, role } = authResult;
-    const orgId = employee?.organization_id || user?.user_metadata?.organization_id;
+    const { user, role, organizationId: orgId } = authResult;
+    if (!orgId) {
+      return NextResponse.json({ error: "Forbidden: Active organization required." }, { status: 403 });
+    }
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
 
@@ -101,9 +103,29 @@ export async function DELETE(
       return authResult.response;
     }
 
-    const { user, role, employee } = authResult;
-    const orgId = employee?.organization_id || user?.user_metadata?.organization_id;
+    const { user, role, organizationId: orgId } = authResult;
+    if (!orgId) {
+      return NextResponse.json({ error: "Forbidden: Active organization required." }, { status: 403 });
+    }
     const { id } = await params;
+
+    const { data: existingRec } = await (supabaseAdmin as any)
+      .from("task_recurrences")
+      .select("id, created_by")
+      .eq("id", id)
+      .eq("organization_id", orgId)
+      .maybeSingle();
+
+    if (!existingRec) {
+      return NextResponse.json({ error: "Recurrence not found." }, { status: 404 });
+    }
+
+    if (existingRec.created_by !== user.id && !["admin", "hr"].includes(role)) {
+      return NextResponse.json(
+        { error: "Forbidden: Only the creator, HR, or Admin can stop this recurrence." },
+        { status: 403 }
+      );
+    }
 
     // Soft delete / deactivate recurrence to preserve foreign keys
     const { data: rec, error } = await (supabaseAdmin as any)

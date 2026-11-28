@@ -106,7 +106,7 @@ describe("Cross-Tenant Multi-Tenancy Isolation Suite", () => {
         await client.query(`
           INSERT INTO public.organization_members (organization_id, user_id, role, status)
           VALUES ('${ORG_2_ID}', '${uid}', '${role}', 'active')
-          ON CONFLICT (user_id) DO UPDATE SET organization_id = '${ORG_2_ID}', role = '${role}', status = 'active';
+          ON CONFLICT (organization_id, user_id) DO UPDATE SET organization_id = '${ORG_2_ID}', role = '${role}', status = 'active';
         `);
 
         // 4. Insert into public.employees

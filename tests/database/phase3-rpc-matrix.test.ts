@@ -87,7 +87,7 @@ describe("Phase 3 RPC Security & Privilege Matrix Suite", () => {
       await client.query(`
         INSERT INTO public.organization_members (organization_id, user_id, role, status)
         VALUES ('${ORG_2_ID}', '${uid}', '${role}', 'active')
-        ON CONFLICT (user_id) DO UPDATE SET organization_id = '${ORG_2_ID}', role = '${role}', status = 'active';
+        ON CONFLICT (organization_id, user_id) DO UPDATE SET organization_id = '${ORG_2_ID}', role = '${role}', status = 'active';
       `);
       await client.query(`
         INSERT INTO public.employees (id, organization_id, email, full_name, work_mode, timezone)

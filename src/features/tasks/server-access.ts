@@ -56,36 +56,19 @@ export async function resolveTaskCallerContext(
     return approved;
   }
 
-  const { user, supabase: callerSupabase, role: approvedRole } = approved;
+  const { user, supabase: callerSupabase, role: approvedRole, organizationId } = approved;
   const dbClient: any = isSupabaseAdminConfigured() ? getAdminClient() : callerSupabase;
 
-  let orgId: string | null =
-    (user?.app_metadata?.organization_id as string | undefined) ||
-    (user?.user_metadata?.organization_id as string | undefined) ||
-    null;
-  let role: string = String(approvedRole || "employee").toLowerCase();
-
-  try {
-    const { data: member } = await dbClient
-      .from("organization_members")
-      .select("organization_id, role, status")
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .maybeSingle();
-
-    if (member?.organization_id) orgId = member.organization_id;
-    if (member?.role) role = String(member.role).toLowerCase();
-  } catch {}
+  const orgId: string | null = organizationId || null;
+  const role: string = String(approvedRole || "employee").toLowerCase();
 
   if (!orgId) {
-    try {
-      const { data: empRow } = await dbClient
-        .from("employees")
-        .select("organization_id")
-        .eq("id", user.id)
-        .maybeSingle();
-      if (empRow?.organization_id) orgId = empRow.organization_id;
-    } catch {}
+    return {
+      response: NextResponse.json(
+        { error: "Forbidden: Active organization context is required." },
+        { status: 403 }
+      ),
+    };
   }
 
   let departments: DepartmentHeadShape[] = [];

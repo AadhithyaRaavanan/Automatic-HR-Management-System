@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRouteCaller } from "@/features/auth/admin-guard";
+import { verifyTargetEmployeeInOrg } from "@/features/auth/tenant-context";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { notify } from "@/features/notifications/notify";
 
@@ -33,6 +34,14 @@ export async function POST(request: NextRequest) {
 
     const trimmedNote = note.trim();
 
+    const targetCheck = await verifyTargetEmployeeInOrg(authResult.context, userId, { allowSelf: false });
+    if (!targetCheck.allowed) {
+      return NextResponse.json(
+        { error: "Forbidden: Candidate does not belong to your organization." },
+        { status: 403 }
+      );
+    }
+
     // 1. Fetch candidate profile
     const { data: profile, error: profErr } = await (supabaseAdmin as any)
       .from("onboarding_profiles")
@@ -65,6 +74,7 @@ export async function POST(request: NextRequest) {
     // 3. Audit Log
     try {
       await (supabaseAdmin as any).from("employee_onboarding_audit").insert({
+        organization_id: authResult.context.organizationId,
         employee_id: userId,
         action: "ONBOARDING_CHANGES_REQUESTED",
         performed_by: reviewerId,

@@ -1,11 +1,11 @@
 // ============================================================================
 // KPI Server API Authentication & Scoping Helper
+// Unified on resolveTenantCaller + strict organization isolation.
 // ============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { Database } from "@/types/database.types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { resolveTenantCaller } from "@/features/auth/tenant-context";
 
 export interface CallerContext {
   userId: string;
@@ -19,111 +19,28 @@ export async function getKpiCallerContext(
   request: NextRequest
 ): Promise<{ caller: CallerContext | null; errorResponse: NextResponse | null }> {
   try {
-    let response = NextResponse.next();
-    const supabase = createServerClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll();
-          },
-          setAll(cookiesToSet: Array<{ name: string; value: string; options?: any }>) {
-            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-            response = NextResponse.next();
-            cookiesToSet.forEach(({ name, value, options }) =>
-              response.cookies.set(name, value, options)
-            );
-          },
-        },
-      }
-    );
+    const result = await resolveTenantCaller(request, {
+      skipOnboardingCheck: false,
+      requireAal2ForPrivileged: false,
+    });
 
-    // 1. Bearer Token Auth first
-    const authHeader = request.headers.get("Authorization");
-    let user = null;
-    if (authHeader?.startsWith("Bearer ")) {
-      const token = authHeader.substring(7);
-      const { data: tokenUser } = await supabaseAdmin.auth.getUser(token);
-      user = tokenUser?.user || null;
+    if ("response" in result) {
+      return { caller: null, errorResponse: result.response };
     }
 
-    // 2. Fallback to session cookie
-    if (!user) {
-      const { data: cookieUser } = await supabase.auth.getUser();
-      user = cookieUser?.user || null;
-    }
+    const mappedRole =
+      result.context.role === "team_lead" ? "manager" : (result.context.role as CallerContext["role"]);
 
-    if (!user) {
-      return {
-        caller: null,
-        errorResponse: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
-      };
-    }
-
-    // Fetch caller employee & organization member details
-    const [empRes, memberRes] = await Promise.all([
-      (supabaseAdmin.from("employees") as any)
-        .select("id, email, status, department_id, organization_id")
-        .eq("id", user.id)
-        .maybeSingle(),
-      (supabaseAdmin.from("organization_members") as any)
-        .select("role, organization_id, status")
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .maybeSingle(),
-    ]);
-
-    const role = (memberRes.data?.role || "employee").toLowerCase() as CallerContext["role"];
-    const orgId = memberRes.data?.organization_id || empRes.data?.organization_id || "";
-
-    if (!orgId) {
-      return {
-        caller: null,
-        errorResponse: NextResponse.json(
-          { error: "Organization context is missing for this account." },
-          { status: 403 }
-        ),
-      };
-    }
-
-    // Onboarding Gate: Non-admin/HR users must have approved onboarding
-    if (role !== "admin" && role !== "hr") {
-      const isClaimApproved = user.app_metadata?.onboarding_approved === true;
-      if (!isClaimApproved) {
-        const { data: onbProf } = await (supabaseAdmin as any)
-          .from("onboarding_profiles")
-          .select("status")
-          .eq("user_id", user.id)
-          .maybeSingle();
-
-        const isDbApproved =
-          onbProf?.status === "approved" && empRes.data?.status === "active";
-
-        if (!isDbApproved) {
-          return {
-            caller: null,
-            errorResponse: NextResponse.json(
-              {
-                error: "Onboarding not approved. Wait until approval.",
-                code: "ONBOARDING_NOT_APPROVED",
-              },
-              { status: 403 }
-            ),
-          };
-        }
-      }
-    }
-
-    const caller: CallerContext = {
-      userId: user.id,
-      email: user.email || "",
-      role,
-      departmentId: empRes.data?.department_id || null,
-      organizationId: orgId,
+    return {
+      caller: {
+        userId: result.context.userId,
+        email: result.context.email,
+        role: mappedRole,
+        departmentId: result.context.departmentId,
+        organizationId: result.context.organizationId,
+      },
+      errorResponse: null,
     };
-
-    return { caller, errorResponse: null };
   } catch {
     return {
       caller: null,
@@ -140,7 +57,6 @@ export async function verifyEmployeeAccess(
     return false;
   }
 
-  // Employee can only access themselves
   if (caller.userId === targetEmployeeId) {
     return true;
   }
@@ -149,7 +65,7 @@ export async function verifyEmployeeAccess(
     return false;
   }
 
-  // Enforce organization isolation for every non-self access (including admin & HR)
+  // Strictly enforce organization isolation for every non-self access (including admin & HR)
   const { data: targetEmp } = await (supabaseAdmin.from("employees") as any)
     .select("id, manager_id, department_id, organization_id")
     .eq("id", targetEmployeeId)
@@ -163,7 +79,6 @@ export async function verifyEmployeeAccess(
     return true;
   }
 
-  // Manager: direct reports or same department within same organization
   if (caller.role === "manager") {
     if (targetEmp.manager_id === caller.userId) return true;
     if (caller.departmentId && targetEmp.department_id === caller.departmentId) return true;

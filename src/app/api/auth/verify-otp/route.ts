@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const token = typeof body.token === "string" ? body.token.trim().replace(/\s+/g, "") : "";
+    const purpose = typeof body.purpose === "string" ? body.purpose.trim().toLowerCase() : "any";
     const turnstileToken = typeof body.turnstileToken === "string" ? body.turnstileToken : undefined;
 
     if (!email || !token) {
@@ -92,45 +93,62 @@ export async function POST(request: NextRequest) {
 
     let authData: any = null;
     let verifyError: any = null;
+    let verifiedType: "email" | "recovery" | "magiclink" | null = null;
 
-    const emailOtpRes = await supabase.auth.verifyOtp({
-      email,
-      token,
-      type: "email",
-      options: turnstileToken ? { captchaToken: turnstileToken } : undefined,
-    });
-
-    if (!emailOtpRes.error && emailOtpRes.data.user) {
-      authData = emailOtpRes.data;
-    } else {
-      // Also attempt recovery type verification
+    if (purpose === "password_reset" || purpose === "recovery") {
       const recOtpRes = await supabase.auth.verifyOtp({
         email,
         token,
         type: "recovery",
         options: turnstileToken ? { captchaToken: turnstileToken } : undefined,
       });
-
       if (!recOtpRes.error && recOtpRes.data.user) {
         authData = recOtpRes.data;
+        verifiedType = "recovery";
       } else {
-        // Also attempt magiclink type verification
-        const mlOtpRes = await supabase.auth.verifyOtp({
+        verifyError = recOtpRes.error;
+      }
+    } else {
+      const emailOtpRes = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: "email",
+        options: turnstileToken ? { captchaToken: turnstileToken } : undefined,
+      });
+
+      if (!emailOtpRes.error && emailOtpRes.data.user) {
+        authData = emailOtpRes.data;
+        verifiedType = "email";
+      } else {
+        const recOtpRes = await supabase.auth.verifyOtp({
           email,
           token,
-          type: "magiclink",
+          type: "recovery",
           options: turnstileToken ? { captchaToken: turnstileToken } : undefined,
         });
 
-        if (!mlOtpRes.error && mlOtpRes.data.user) {
-          authData = mlOtpRes.data;
+        if (!recOtpRes.error && recOtpRes.data.user) {
+          authData = recOtpRes.data;
+          verifiedType = "recovery";
         } else {
-          verifyError = mlOtpRes.error || recOtpRes.error || emailOtpRes.error;
+          const mlOtpRes = await supabase.auth.verifyOtp({
+            email,
+            token,
+            type: "magiclink",
+            options: turnstileToken ? { captchaToken: turnstileToken } : undefined,
+          });
+
+          if (!mlOtpRes.error && mlOtpRes.data.user) {
+            authData = mlOtpRes.data;
+            verifiedType = "magiclink";
+          } else {
+            verifyError = mlOtpRes.error || recOtpRes.error || emailOtpRes.error;
+          }
         }
       }
     }
 
-    if (verifyError || !authData.user) {
+    if (verifyError || !authData?.user) {
       await Promise.all([
         recordFailure(ipLimitKey),
         recordFailure(emailLimitKey),
@@ -147,12 +165,14 @@ export async function POST(request: NextRequest) {
       clearRateLimit(emailLimitKey),
     ]);
 
-    // Force must_change_password on user metadata after OTP login
-    await supabase.auth.updateUser({
-      data: {
-        must_change_password: true,
-      },
-    });
+    // Force must_change_password on user metadata after password recovery OTP login
+    if (verifiedType !== "magiclink") {
+      await supabase.auth.updateUser({
+        data: {
+          must_change_password: true,
+        },
+      });
+    }
 
     // Check if user has an enrolled MFA factor
     const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
