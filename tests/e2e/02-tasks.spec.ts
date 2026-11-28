@@ -1,12 +1,7 @@
 import { test, expect } from "@playwright/test";
-import { getStorageStatePath, loginAndGetSession, loadEnvTest } from "../helpers/auth";
-import { createClient } from "@supabase/supabase-js";
+import { getStorageStatePath, loginAndGetSession, createAllowedSupabaseAdmin, createAllowedSupabaseUserClient } from "../helpers/auth";
 
-const env = loadEnvTest();
-const supabaseAdmin = createClient(
-  env.NEXT_PUBLIC_SUPABASE_URL || "https://bycyebxvxhmhelrvglvf.supabase.co",
-  env.SUPABASE_SERVICE_ROLE_KEY || ""
-);
+const supabaseAdmin = createAllowedSupabaseAdmin();
 
 const TEST_ADMIN_ID = "2552130d-cf00-4fdd-a676-e800c11937ce";
 const TEST_HR_ID = "3c3c8829-7902-470c-be62-297dccb3e382";
@@ -193,17 +188,7 @@ test.describe("Module 2: Tasks - CRUD, Status Flow & Scoping", () => {
     expect(insertedTask).toBeTruthy();
 
     // Attempt to update task status using employee's client token
-    const empClient = createClient(
-      env.NEXT_PUBLIC_SUPABASE_URL || "https://bycyebxvxhmhelrvglvf.supabase.co",
-      env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
-      {
-        global: {
-          headers: {
-            Authorization: `Bearer ${empSession.access_token}`,
-          },
-        },
-      }
-    );
+    const empClient = createAllowedSupabaseUserClient(empSession.access_token);
 
     const { error } = await empClient.rpc("update_task_status", {
       p_task_id: insertedTask?.id,

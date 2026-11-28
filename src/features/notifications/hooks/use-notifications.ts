@@ -3,12 +3,14 @@
 import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { useAppSession } from "@/components/shell/app-shell";
 import { toast } from "sonner";
 import { playNotificationTone } from "@/features/notifications/sound";
 
 export interface NotificationItemRecord {
   id: string;
   user_id: string;
+  organization_id?: string | null;
   type: string;
   title: string;
   body: string;
@@ -19,6 +21,17 @@ export interface NotificationItemRecord {
   read_at: string | null;
   created_at: string;
   dedupe_key?: string | null;
+}
+
+interface NotificationsFeedData {
+  notifications: NotificationItemRecord[];
+  unreadCount: number;
+}
+
+export function readOrgSelectionCookie(): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(/(?:^|;\s*)pulse_org_id=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 export function formatRelativeTime(dateString?: string | null): string {
@@ -44,9 +57,11 @@ export function formatRelativeTime(dateString?: string | null): string {
 export function useNotifications() {
   const supabase = React.useMemo(() => createClient(), []);
   const queryClient = useQueryClient();
+  const sessionContext = typeof useAppSession === "function" ? useAppSession() : null;
   const [userId, setUserId] = React.useState<string | null>(null);
+  const activeOrgId = sessionContext?.organizationId || readOrgSelectionCookie();
+  const requiresOrgSelection = Boolean(sessionContext?.requiresOrgSelection);
 
-  // Initialize active user ID outside queryFn and track auth state transitions
   React.useEffect(() => {
     let active = true;
     async function initUser() {
@@ -79,84 +94,114 @@ export function useNotifications() {
     };
   }, [supabase]);
 
-  // 1. Fetch user notifications with 15-second polling once auth session is ready
-  const query = useQuery<NotificationItemRecord[]>({
-    queryKey: ["notifications"],
-    enabled: Boolean(userId),
+  const effectiveUserId = userId || sessionContext?.userId || null;
+  const notificationsQueryKey = React.useMemo(
+    () => ["notifications", effectiveUserId, activeOrgId] as const,
+    [effectiveUserId, activeOrgId]
+  );
+
+  // 1. Fetch user notifications + true workspace unread count
+  const query = useQuery<NotificationsFeedData>({
+    queryKey: notificationsQueryKey,
+    enabled: Boolean(effectiveUserId) && !requiresOrgSelection,
     queryFn: async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const user = session?.user ?? (await supabase.auth.getUser()).data.user;
-        if (!user) {
-          return [];
-        }
-
-        const headers: Record<string, string> = {};
-        if (session?.access_token) {
-          headers.Authorization = `Bearer ${session.access_token}`;
-        }
-
-        const res = await fetch("/api/notifications?limit=30", {
-          cache: "no-store",
-          headers,
-        });
-        if (res.ok) {
-          const json = await res.json();
-          const list: NotificationItemRecord[] = Array.isArray(json?.notifications) ? json.notifications : [];
-          return list.filter(
-            (n) =>
-              Boolean(n && (!n.body || !n.body.toLowerCase().includes("example notification")) && !(n as any).metadata?.isExample)
-          );
-        }
-
-        // Only attempt browser REST fallback when a valid bearer session token is present
-        if (!session?.access_token) {
-          return [];
-        }
-
-        const { data, error } = await supabase
-          .from("notifications")
-          .select("*")
-          .eq("user_id", user.id)
-          .not("body", "ilike", "%Example Notification%")
-          .order("created_at", { ascending: false })
-          .limit(30);
-
-        if (error) return [];
-        const fallbackList = (Array.isArray(data) ? data : []) as NotificationItemRecord[];
-        return fallbackList.filter(
-          (n) =>
-            Boolean(n && (!n.body || !n.body.toLowerCase().includes("example notification")) && !(n as any).metadata?.isExample)
-        );
-      } catch (err) {
-        console.error("[useNotifications] Query error:", err);
-        return [];
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const user = session?.user ?? (await supabase.auth.getUser()).data.user;
+      if (!user) {
+        return { notifications: [], unreadCount: 0 };
       }
+
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
+      if (activeOrgId) {
+        headers["x-organization-id"] = activeOrgId;
+      }
+
+      const [listRes, countRes] = await Promise.all([
+        fetch("/api/notifications?limit=30", { cache: "no-store", headers }),
+        fetch("/api/notifications/unread-count", { cache: "no-store", headers }),
+      ]);
+
+      if (listRes.ok) {
+        const json = await listRes.json();
+        const list: NotificationItemRecord[] = Array.isArray(json?.notifications)
+          ? json.notifications
+          : [];
+        let unreadCount = list.filter((n) => Boolean(n && !n.read_at)).length;
+        if (countRes.ok) {
+          const countJson = await countRes.json().catch(() => null);
+          if (typeof countJson?.unreadCount === "number") {
+            unreadCount = countJson.unreadCount;
+          }
+        }
+        return { notifications: list, unreadCount };
+      }
+
+      // Only attempt browser REST fallback when a valid bearer session token & activeOrgId are present
+      if (!session?.access_token || !activeOrgId) {
+        return { notifications: [], unreadCount: 0 };
+      }
+
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("organization_id", activeOrgId)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(30);
+
+      if (error) {
+        return { notifications: [], unreadCount: 0 };
+      }
+      const fallbackList = (Array.isArray(data) ? data : []) as NotificationItemRecord[];
+      return {
+        notifications: fallbackList,
+        unreadCount: fallbackList.filter((n) => Boolean(n && !n.read_at)).length,
+      };
     },
     staleTime: 0,
     refetchOnMount: "always",
-    refetchInterval: 15000, // 15s fallback poll
+    refetchInterval: 15000,
   });
 
-  // Track known notification IDs to detect newly arrived notifications via polling or refetch
+  // Track known notification IDs per user + organization to detect newly arrived alerts
   const knownNotificationIds = React.useRef<Set<string> | null>(null);
+  const scopeKeyRef = React.useRef<string>("");
 
   React.useEffect(() => {
-    if (!query.data || !Array.isArray(query.data)) return;
+    const scopeKey = `${effectiveUserId || ""}:${activeOrgId || ""}`;
+    if (scopeKeyRef.current !== scopeKey) {
+      scopeKeyRef.current = scopeKey;
+      knownNotificationIds.current = null;
+    }
+  }, [effectiveUserId, activeOrgId]);
 
-    const currentIds = new Set(query.data.map((n) => n?.id).filter(Boolean));
+  const notifications = Array.isArray(query.data?.notifications) ? query.data.notifications : [];
+  const unreadCount =
+    typeof query.data?.unreadCount === "number"
+      ? query.data.unreadCount
+      : notifications.filter((n) => Boolean(n && !n.read_at)).length;
 
-    // On initial load (user login / session start):
+  React.useEffect(() => {
+    if (!query.data?.notifications) return;
+
+    const currentIds = new Set(query.data.notifications.map((n) => n?.id).filter(Boolean));
+
     if (knownNotificationIds.current === null) {
       knownNotificationIds.current = currentIds;
 
-      // Check if user has active unread / non-viewed notifications on login
-      const unreadNotifications = query.data.filter((n) => Boolean(n && !n.read_at));
+      const unreadNotifications = query.data.notifications.filter((n) => Boolean(n && !n.read_at));
       if (unreadNotifications.length > 0) {
-        const chimeSessionKey = userId ? `notif_login_chime_${userId}` : "notif_login_chime_user";
-        const hasPlayedForSession = typeof sessionStorage !== "undefined" && sessionStorage.getItem(chimeSessionKey);
+        const chimeSessionKey = effectiveUserId
+          ? `notif_login_chime_${effectiveUserId}_${activeOrgId || "default"}`
+          : "notif_login_chime_user";
+        const hasPlayedForSession =
+          typeof sessionStorage !== "undefined" && sessionStorage.getItem(chimeSessionKey);
 
         if (!hasPlayedForSession) {
           try {
@@ -174,8 +219,7 @@ export function useNotifications() {
       return;
     }
 
-    // Check if any NEW unread notification appeared in this query cycle
-    const newItems = query.data.filter(
+    const newItems = query.data.notifications.filter(
       (n) => n && !n.read_at && !knownNotificationIds.current!.has(n.id)
     );
 
@@ -187,7 +231,6 @@ export function useNotifications() {
         latest.id
       );
 
-      // Trigger subtle toast only if tab is currently focused / visible
       if (typeof document !== "undefined" && !document.hidden && latest?.title) {
         toast.info(latest.title, {
           description: latest.body,
@@ -198,15 +241,14 @@ export function useNotifications() {
     }
 
     knownNotificationIds.current = currentIds;
-  }, [query.data]);
+  }, [query.data, effectiveUserId, activeOrgId]);
 
-  // 2. Realtime Subscription to `notifications` table for live updates
+  // 2. Realtime Subscription scoped to user & active organization
   React.useEffect(() => {
-    if (!userId) return;
+    if (!effectiveUserId) return;
     let active = true;
 
-    // Use a unique channel name per hook instance to prevent 'cannot add callbacks after subscribe' collision
-    const channelName = `notifs_${userId}_${Math.random().toString(36).slice(2, 9)}`;
+    const channelName = `notifs_${effectiveUserId}_${activeOrgId || "all"}_${Math.random().toString(36).slice(2, 9)}`;
     let channel: any = null;
 
     try {
@@ -218,22 +260,23 @@ export function useNotifications() {
             event: "INSERT",
             schema: "public",
             table: "notifications",
-            filter: `user_id=eq.${userId}`,
+            filter: `user_id=eq.${effectiveUserId}`,
           },
           (payload) => {
             if (!active) return;
+            const newNotif = payload.new as NotificationItemRecord;
+            if (activeOrgId && newNotif?.organization_id && newNotif.organization_id !== activeOrgId) {
+              return;
+            }
             queryClient.invalidateQueries({ queryKey: ["notifications"] });
             queryClient.invalidateQueries({ queryKey: ["notifications-all"] });
 
-            const newNotif = payload.new as NotificationItemRecord;
-            // Play notification "ting" sound safely
             const nType = (newNotif?.type || "").toLowerCase();
             playNotificationTone(
               nType.includes("warning") || nType.includes("overdue") ? "warning" : "default",
               newNotif?.id
             );
 
-            // Trigger subtle toast only if tab is currently focused / visible
             if (typeof document !== "undefined" && !document.hidden && newNotif?.title) {
               toast.info(newNotif.title, {
                 description: newNotif.body,
@@ -249,10 +292,14 @@ export function useNotifications() {
             event: "UPDATE",
             schema: "public",
             table: "notifications",
-            filter: `user_id=eq.${userId}`,
+            filter: `user_id=eq.${effectiveUserId}`,
           },
-          () => {
+          (payload) => {
             if (!active) return;
+            const updated = payload.new as NotificationItemRecord;
+            if (activeOrgId && updated?.organization_id && updated.organization_id !== activeOrgId) {
+              return;
+            }
             queryClient.invalidateQueries({ queryKey: ["notifications"] });
             queryClient.invalidateQueries({ queryKey: ["notifications-all"] });
           }
@@ -271,33 +318,41 @@ export function useNotifications() {
         } catch {}
       }
     };
-  }, [userId, supabase, queryClient]);
+  }, [effectiveUserId, activeOrgId, supabase, queryClient]);
 
   // 3. Mark single notification as read
   const markSingleRead = useMutation({
     mutationFn: async (notificationId: string) => {
-      await fetch("/api/notifications/read", {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (activeOrgId) headers["x-organization-id"] = activeOrgId;
+      const res = await fetch("/api/notifications/read", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ ids: [notificationId] }),
       });
+      if (!res.ok) {
+        throw new Error("Failed to mark notification as read");
+      }
     },
     onMutate: async (notificationId) => {
-      await queryClient.cancelQueries({ queryKey: ["notifications"] });
-      const previous = queryClient.getQueryData<NotificationItemRecord[]>(["notifications"]);
-      if (Array.isArray(previous)) {
-        queryClient.setQueryData<NotificationItemRecord[]>(
-          ["notifications"],
-          previous.map((n) =>
-            n && n.id === notificationId ? { ...n, read_at: new Date().toISOString() } : n
-          )
+      await queryClient.cancelQueries({ queryKey: notificationsQueryKey });
+      const previous = queryClient.getQueryData<NotificationsFeedData>(notificationsQueryKey);
+      if (previous) {
+        const targetWasUnread = previous.notifications.some(
+          (n) => n && n.id === notificationId && !n.read_at
         );
+        queryClient.setQueryData<NotificationsFeedData>(notificationsQueryKey, {
+          notifications: previous.notifications.map((n) =>
+            n && n.id === notificationId ? { ...n, read_at: new Date().toISOString() } : n
+          ),
+          unreadCount: targetWasUnread ? Math.max(0, previous.unreadCount - 1) : previous.unreadCount,
+        });
       }
       return { previous };
     },
     onError: (_err, _id, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(["notifications"], context.previous);
+        queryClient.setQueryData(notificationsQueryKey, context.previous);
       }
     },
     onSettled: () => {
@@ -306,12 +361,14 @@ export function useNotifications() {
     },
   });
 
-  // 4. Mark all notifications as read
+  // 4. Mark all notifications in the active organization as read
   const markAllRead = useMutation({
     mutationFn: async () => {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (activeOrgId) headers["x-organization-id"] = activeOrgId;
       const res = await fetch("/api/notifications/read", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ all: true }),
       });
       if (!res.ok) {
@@ -320,14 +377,16 @@ export function useNotifications() {
       return res.json().catch(() => ({}));
     },
     onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: ["notifications"] });
-      const previous = queryClient.getQueryData<NotificationItemRecord[]>(["notifications"]);
-      if (Array.isArray(previous)) {
+      await queryClient.cancelQueries({ queryKey: notificationsQueryKey });
+      const previous = queryClient.getQueryData<NotificationsFeedData>(notificationsQueryKey);
+      if (previous) {
         const nowIso = new Date().toISOString();
-        queryClient.setQueryData<NotificationItemRecord[]>(
-          ["notifications"],
-          previous.map((n) => (n ? { ...n, read_at: n.read_at || nowIso } : n))
-        );
+        queryClient.setQueryData<NotificationsFeedData>(notificationsQueryKey, {
+          notifications: previous.notifications.map((n) =>
+            n ? { ...n, read_at: n.read_at || nowIso } : n
+          ),
+          unreadCount: 0,
+        });
       }
       return { previous };
     },
@@ -336,7 +395,7 @@ export function useNotifications() {
     },
     onError: (_err, _vars, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(["notifications"], context.previous);
+        queryClient.setQueryData(notificationsQueryKey, context.previous);
       }
       toast.error("Failed to mark all as read");
     },
@@ -345,9 +404,6 @@ export function useNotifications() {
       queryClient.invalidateQueries({ queryKey: ["notifications-all"] });
     },
   });
-
-  const notifications = Array.isArray(query.data) ? query.data : [];
-  const unreadCount = notifications.filter((n) => Boolean(n && !n.read_at)).length;
 
   return {
     notifications,

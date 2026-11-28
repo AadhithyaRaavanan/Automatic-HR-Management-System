@@ -1,33 +1,51 @@
 # Pulse Release Handoff Status
 
-Last updated: 2026-11-28 (post-`7cf59f0` hardening + verification)
+Last updated: 2026-11-28 (Pulse Product Review Items 1–10 implemented & verified locally from baseline `732bf1c`)
 
-## Summary of Latest Changes (Post-`7cf59f0`)
+## Summary of Fixes (Baseline `732bf1c` → Current Revision)
 
-- **Onboarding workspace selection (`resolveOnboardingCaller`)**:
-  - Added `resolveOnboardingCaller` in `src/features/auth/tenant-context.ts`, unifying `GET`/`PATCH /api/onboarding/profile`, `POST /api/onboarding/draft`, `POST /api/onboarding/upload`, and `POST /api/onboarding/complete`.
-  - Reads non-suspended `organization_members` (`active` or `invited`), validates `x-organization-id` / `pulse_org_id` cookie UUIDs, returns `409 ORG_SELECTION_REQUIRED` when a candidate belongs to multiple organizations without an explicit selection, and rejects non-member or suspended organizations with `403`.
-  - Updated `src/app/api/auth/organizations/route.ts` (`GET`/`POST`) to include `invited` memberships alongside `active`, `src/features/onboarding/access.ts` (`getOnboardingGate`) to require an explicit `organizationId` or single-org membership (removing arbitrary `.limit(1)` role lookup), and `src/app/onboarding/page.tsx` to prompt organization selection on `409 ORG_SELECTION_REQUIRED` and allow switching via header selector when multiple organizations exist.
-- **Deterministic historical audit ownership**:
-  - Updated `supabase/migrations/20261128000001_atomic_reviews_and_auth_challenges.sql` (Section 9) so legacy `NULL` rows in `employee_onboarding_audit` are backfilled deterministically only when `performed_by`, `employees`, or single-org `organization_members` uniquely resolves to one organization (`HAVING COUNT(DISTINCT organization_id) = 1`), leaving ambiguous historical multi-org rows `NULL` with self-only read access (`employee_id = auth.uid()`).
-  - Updated `trg_derive_audit_log_org_id()` (Section 12) to remove the placeholder default-org UUID fallback and raise SQLSTATE `23502` when `organization_id` cannot be uniquely derived.
+1. **Reproducible installs and upgrades**:
+   - Renumbered duplicate `20261120000002_kpi_improvements_phase5.sql` → `supabase/migrations/20261120000004_kpi_improvements_phase5.sql`; updated `supabase/seed.sql` to `ON CONFLICT (organization_id, user_id) DO UPDATE`.
+   - Added `supabase/migrations/20261128000002_reconcile_migrations_and_upgrades.sql` to reconcile schema versions and apply deterministic `employee_onboarding_audit` attribution and `trg_derive_audit_log_org_id()` updates on both fresh installs and existing databases.
+2. **Demo behavior & test origins out of production**:
+   - Switched `isDemoModeEnabled()` (`src/lib/config/demo.ts`) and `src/lib/env.ts` to strictly opt-in (`NEXT_PUBLIC_DEMO_MODE === "true"`), gated `/api/demo/state` (`404` when disabled) and `demo-store.ts` writes, and replaced hardcoded production hosts in `playwright.config.ts`, `tests/helpers/auth.ts`, and E2E specs with allowlisted local origins (`127.0.0.1` / `localhost`).
+3. **Employment dates in Attendance, Reports, and KPI**:
+   - Preserved explicit `"UTC"` employee timezones in `src/lib/date/timezone.ts`, checked `employees.joined_on` in `recalculate_day()` / `cron_nightly_finalize()`, intersected KPI evaluation windows with `joined_on` + empty elapsed-day messaging (`src/features/kpi/compute.ts`, KPI UI), filtered pre-hire absent anomalies from Reports denominators/exports (`src/app/reports/page.tsx`, `src/app/api/attendance/export/route.ts`), and added `attendance_repair_proposals` with `scan_pre_hire_absent_records()` / `review_pre_hire_attendance_repair()` for locked payroll periods (`supabase/migrations/20261128000003_employment_date_attendance_repairs.sql`).
+4. **Onboarding organization routing & audit durability**:
+   - Scoped `onboarding_profiles` & `onboarding_documents` by `organization_id` (`supabase/migrations/20261128000004_onboarding_org_scoping_and_durability.sql`, composite `(organization_id, user_id)` key), added `getAuthorizedOnboardingEmailRecipients(organizationId)`, removed deployment-wide fallback mailboxes in `sendOnboardingSubmittedEmail`, made `/api/onboarding/complete` audit writes durable/rollback-safe, and updated `schema-meta.test.ts` exemptions strictly for global user-keyed tables (`notification_preferences`, `profiles`).
+5. **Admin Task Types**:
+   - Enforced `verifyAdminRouteCaller(request, ["admin", "hr"])` on `/api/tasks/types?all=true`, verified `department_id` belongs to caller's organization on create/update, and refactored `src/app/admin/task-types/page.tsx` to use `<AppShell>` / `useAppSession()` cleanly.
+6. **Notifications and holidays**:
+   - Aligned `notifications_type_check` with all real notification event types (`holiday_scheduled`, review outcomes, security, reminders) and added composite keyset indexes (`supabase/migrations/20261128000005_align_notifications_type_and_indexes.sql`).
+   - Replaced dropped-item timestamp cursor with composite `(created_at, id)` keyset pagination, removed GET side-effect `"Example Notification"` deletion and body-text filtering, scoped list/unread-count/mark-read/mark-all and client query keys/Realtime listeners by active `organization_id`, added infinite history loading beyond 50 on `/notifications`, and surfaced accurate delivery counts/errors in `notify.ts` & `/api/holidays/notify`.
+7. **Reports and payroll close**:
+   - Surfaced chunk/query errors with Retry instead of empty-state success, invalidated previous month checklists on period switch with stale-request sequence guards, gated `Lock Month` on fresh `checklist.ready_to_lock` with explicit pending-item explanations, added deterministic table pagination, clearly labeled CSV (`.csv`) and Excel (`.xlsx`) downloads, and paginated `/api/attendance/export` beyond PostgREST's 1,000-row cap.
+8. **Navigation, Tasks board, Hierarchy, and Profile**:
+   - Expanded nonempty Tasks board columns on initial visit (`src/features/tasks/board-columns.ts`, `tasks-workspace.tsx`) while persisting user toggles.
+   - Replaced hardcoded `"ZEN XEA"` / `"Zenxea Headquarters"` in EMS hierarchy & navigation (`ems/organization`, `ems/departments`, `ems-navigation-header`) with the selected organization name.
+   - Rendered missing Profile education/experience as `"Unknown"`, gave exempt admins clear `"Admin Account · Onboarding Exempt"` status and review actions, fixed loaded session role precedence in `CurvedSidebar` / `BottomTabBar`, and explained role/feature-gated destinations (`FeatureOrRoleGate`).
+9. **Sign-in, MFA, and recovery**:
+   - Allowed `/login`, `/forgot-password`, `/mfa-setup`, `/mfa-challenge`, `/auth/confirm`, `/onboarding`, and `/select-organization` below 1024px in `DesktopOnlyGatekeeper` with responsive narrow padding.
+   - Added email-link-specific copy on magic-link sign-in, aligned configured 6-digit recovery codes across UI and `/api/auth/verify-otp`, preserved code-only recovery emails, and standardized loopback origin handling (`getSiteUrl(request)` + `supabase/config.toml` redirect allowlist for `127.0.0.1` and `localhost`).
 
-## Verified Checks (Latest Run)
+## Verified Local Checks (Latest Run)
 
-- **Typecheck (`npx tsc --noEmit --incremental false`)**: Passed (`0` errors).
-- **Unit suite (`npx vitest run tests/unit`)**: `46 passed (46)` files, `275 passed (275)` tests (includes `tests/unit/invite-and-onboarding-audit.test.ts` covering `409` ambiguous org, `403` forged org, and `200` selected-org audit stamping).
-- **Production build (`npm run build`)**: Clean `.next` build succeeded (`54/54` static pages generated, exit code `0`).
-- **Fresh & upgrade migration replays (`verify-migrations.mjs`)**: `ALL UPGRADE + FRESH REPLAYS PASSED AND CLEANED UP!` (against disposable local Postgres schemas on `127.0.0.1:54322`).
-- **Two-organization & multi-instance browser/API verification (`verify-two-org-e2e.mjs`)**: `ALL TWO-ORGANIZATION & MULTI-INSTANCE ACCEPTANCE CHECKS PASSED!`, including `/api/onboarding/profile` `409` on ambiguous multi-org without selection and `200` with `x-organization-id`, overlapping-name two-org policies, attendance/leave/KPI/export reconciliation, Playwright multi-org switcher, and cross-instance Mailpit MFA recovery.
-- **Database schema/contract check (`tests/database/schema-meta.test.ts`)**: `9 passed | 1 failed (10)` — `trg_derive_audit_log_org_id()` and `SECURITY DEFINER` grant checks passed; fails on global `user_id`-keyed table `notification_preferences` (plus `onboarding_documents`, `onboarding_profiles`, `profiles`) missing `organization_id` / exemption in `ORG_ID_EXEMPTIONS`.
+- **TypeScript (`npx tsc --noEmit --incremental false`)**: Passed (`0` errors).
+- **Full Unit Suite (`npx vitest run tests/unit`)**: Passed (`52` files, `295` tests).
+- **Production Build (`npm run build` with `NEXT_PUBLIC_DEMO_MODE=false` / disabled)**: Clean `.next` build (`54` static/dynamic pages, exit code `0`).
+- **Fresh Install & Upgrade Replay (`npx supabase db reset --local`, `verify-item1.mjs`, `verify-item3.mjs`)**: Passed — fresh reset applied all migrations through `20261128000005` + `seed.sql`; legacy upgrade replay preserved historical records and applied all target schema/trigger effects; pre-hire attendance repair scan & review passed.
+- **Database Schema Contract (`tests/database/schema-meta.test.ts`)**: Passed (`10/10`). Also passed cleanly on local DB: `cross-tenant-isolation.test.ts` (`32/32`) and `cron-timezone-isolation.test.ts` (`4/4`).
+- **Two-Organization & Production E2E (`verify-item10-journeys.mjs` & `verify-two-org-e2e.mjs`)**: Both passed end to end against `next start` with demo routes disabled (`404` on `/api/demo/state` and `/gallery`), narrow-width auth screens (`420x800`), Task Types, dynamic Org Hierarchy, Exempt Profile/`Unknown`, EMS Employee search→detail→Back, expanded Tasks board, Notifications/holiday publish, KPI `?date=` correction link, multi-org switcher, and cross-instance Mailpit MFA recovery.
+- **Documentation & Secrets (`npm run verify:docs`, `npm run scan:secrets`)**: Passed cleanly.
 
-## Remaining Release Blockers (Local / Codebase)
+## Remaining Local / Legacy Classification
 
-- **Pre-existing local database test suite failures**: `tests/database/schema-meta.test.ts` (`9/10`, global user-keyed tables vs `ORG_ID_EXEMPTIONS`), `tests/database/admin-routes-integration.test.ts` (legacy `kpi/export` expectation), `tests/database/f8-admin.test.ts` (`[F8.2.5]` leftover fixture rows in `ORG_1_ID`), and legacy policy/grant/RLS inventory suites (`f11-design`, `f9-retention`, `policy-inventory`, `grants-snapshot`, `rpc-reconciliation`, `uuid-tenant-isolation`, `rls-database-matrix`, `section3-tasks`, `f1.4-provisioning-without-passwords`, `intra-tenant-authorization`, `section2-retention`) were not part of a clean 100% green `tests/database` pass.
-- **Full `tests/database` re-run after Section 12 migration edit**: Prior passing DB suites (`cross-tenant-isolation`, `leave-rpcs`, `phase3-rpc-matrix`, `section4-kpi`, `suspended-member-isolation`, `section1-hr-tools`, `cron-timezone-isolation`, `f1-multitenancy`, `f4-shifts`, `f5-leave`, `f6-tasks`, `f7-kpi`, `f12-persona-matrix`, `mfa-policy-matrix`, `f1.5-job-titles`, `section5-shifts-and-night-shifts`) passed before the final Section 12 trigger update; re-running the clean DB suite after pushing is recommended.
+- `tests/database/leave-rpcs.test.ts` ran `26/28`; 2 cases fail against the refreshed late-November seed fixtures because `2026-11-23` is already locked/punched in `seed.sql` (date-coupled legacy fixture expectation, not an approval regression — atomic two-org concurrent leave/correction checks passed in `verify-two-org-e2e.mjs`).
+- `tests/database/admin-routes-integration.test.ts` requires `NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321` in shell env so its localhost safety guard does not match `.env.local`'s staging API URL.
+- Legacy policy/grant/RLS snapshot DB tests (`f8-admin`, `f9-retention`, `f11-design`, `grants-snapshot`, `policy-inventory`, `rpc-reconciliation`, etc.) were not re-run in full after the late-November migrations.
 
-## Staging-Only Requirements (Not Runnable Locally)
+## Staging-Only Checks Required Before Cutover
 
-- Apply `supabase/migrations/20261128000001_atomic_reviews_and_auth_challenges.sql` (and inspect any legacy ambiguous `NULL` rows in `employee_onboarding_audit` in staging data) during staged cutover.
-- Verify real SMTP/SES delivery (`AUTH_MAILBOX_URL` / Resend / Supabase Auth hooks), Supabase hosted JWT/MFA AAL2 session behavior, and production cron scheduler secrets (`CRON_SECRET`) against staging infrastructure.
-- Set production `NEXT_PUBLIC_DEMO_MODE=false` and staging Supabase URL/anon key in deployment environment variables before building release artifacts.
+- Apply migrations `20261128000001` through `20261128000005` on staging and inspect/run `scan_pre_hire_absent_records(org_id, true)` for any pre-hire locked payroll absence repair proposals.
+- Confirm build/deployment env omits `NEXT_PUBLIC_DEMO_MODE` (or keeps `"false"`), sets staging Supabase URL/keys, `CRON_SECRET`, `MFA_RECOVERY_HMAC_SECRET`, Upstash Redis rate-limit store, and real SMTP/Resend credentials.
+- Exercise in staging with a real inbox: fresh, expired, and reused magic links; separate password-reset 6-digit OTP verification and subsequent password login; email delivery/bounce handling; hosted Supabase MFA (TOTP setup, challenge, and lost-device reset); and cron schedules (`/api/cron/notifications`, `/api/cron/leave-accrual`).

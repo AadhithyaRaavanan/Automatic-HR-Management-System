@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       recordFailure(emailLimitKey),
     ]);
 
-    const siteUrl = getSiteUrl();
+    const siteUrl = getSiteUrl(request);
     const callbackRedirect = `${siteUrl}/auth/confirm?redirect=${encodeURIComponent(redirectPath)}`;
     const failure = await requestAuthEmail("magic-link", email, callbackRedirect, turnstileToken);
     if (failure) return failure;

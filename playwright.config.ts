@@ -1,8 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
 import * as dotenv from "dotenv";
 import * as path from "path";
+import { getAllowedTestBaseUrl } from "./tests/helpers/auth";
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env.test") });
+
+const baseURL = getAllowedTestBaseUrl();
 
 export default defineConfig({
   globalSetup: "./tests/helpers/global-setup.ts",
@@ -13,7 +16,7 @@ export default defineConfig({
   workers: 1,
   reporter: [["list"]],
   use: {
-    baseURL: process.env.PLAYWRIGHT_TEST_BASE_URL || "https://pulse.zenxea.com",
+    baseURL,
     trace: "off",
     screenshot: "only-on-failure",
     headless: true,

@@ -741,10 +741,11 @@ export async function inviteSingleEmployee(
     };
   }
 
-  // 3. Ensure draft onboarding profile exists when onboarding_profiles table is present
+  // 3. Ensure org-scoped draft onboarding profile exists when onboarding_profiles table is present
   const { data: existingOnb, error: onbSelectErr } = await (supabaseAdmin as any)
     .from("onboarding_profiles")
     .select("id, status, education_details")
+    .eq("organization_id", context.organizationId)
     .eq("user_id", invitedUserId)
     .maybeSingle();
 
@@ -758,6 +759,7 @@ export async function inviteSingleEmployee(
 
     const { error: onbErr } = await (supabaseAdmin as any).from("onboarding_profiles").upsert(
       {
+        organization_id: context.organizationId,
         user_id: invitedUserId,
         full_name: normalizedName,
         personal_email: normalizedEmail,
@@ -770,7 +772,7 @@ export async function inviteSingleEmployee(
         created_at: existingOnb ? undefined : nowIso,
         updated_at: nowIso,
       },
-      { onConflict: "user_id" }
+      { onConflict: "organization_id,user_id" }
     );
 
     if (onbErr && !isMissingRelationError(onbErr)) {

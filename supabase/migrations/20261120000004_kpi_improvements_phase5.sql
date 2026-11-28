@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration: 20261120000002_kpi_improvements_phase5.sql
+-- Migration: 20261120000004_kpi_improvements_phase5.sql
 -- Description: KPI Self-Reviews, Goal Links on Tasks, and Versioned KPI Configs
 -- ============================================================================
 

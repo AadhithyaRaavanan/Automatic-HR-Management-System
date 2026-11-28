@@ -76,7 +76,7 @@ interface HistoryItem {
 
 export default function EmsDepartmentsPage() {
   const router = useRouter();
-  const { userRole, isLoaded } = useAppSession();
+  const { userRole, isLoaded, organizationName } = useAppSession();
   const isAdmin = isLoaded && userRole === "admin";
   const [departments, setDepartments] = React.useState<DepartmentRecord[]>([]);
   const [activeEmployees, setActiveEmployees] = React.useState<ActiveEmployee[]>([]);
@@ -357,7 +357,10 @@ export default function EmsDepartmentsPage() {
               const hasHead = Boolean(dept.headName || dept.head?.full_name);
               const headDisplayName = dept.headName || dept.head?.full_name || "Vacant";
               const headDesignation = dept.headDesignation || dept.head?.designation || (hasHead ? "Department Head" : null);
-              const parentTreeName = dept.parentName || dept.parent?.name || "ZEN XEA Root";
+              const parentTreeName =
+                dept.parentName ||
+                dept.parent?.name ||
+                `${organizationName?.trim() || "Organization"} Root`;
               const isChild = Boolean(dept.parentId || dept.parent_department_id);
               const isProtectedRoot =
                 dept.name.trim().toLowerCase() === "zen xea root" ||

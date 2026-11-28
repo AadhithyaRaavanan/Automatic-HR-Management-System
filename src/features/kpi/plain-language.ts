@@ -163,6 +163,8 @@ export function getScoreSummaryInfo(params: {
   customWeights?: Record<string, number> | null;
   isSelfView?: boolean;
   subjectName?: string;
+  hasElapsedEligibleDays?: boolean;
+  joinedOn?: string | null;
 }): ScoreSummaryInfo {
   const {
     overallScore,
@@ -171,6 +173,8 @@ export function getScoreSummaryInfo(params: {
     customWeights,
     isSelfView = true,
     subjectName = "Employee",
+    hasElapsedEligibleDays = true,
+    joinedOn = null,
   } = params;
 
   const actor = isSelfView ? "You" : subjectName;
@@ -181,7 +185,11 @@ export function getScoreSummaryInfo(params: {
     const hasTasks = currentMetrics?.tasks_completed_vs_assigned?.value != null;
     let explanationLine =
       "Not enough check-in or task activity in this period to calculate a weighted score yet.";
-    if (hasDays && !hasTasks) {
+    if (!hasElapsedEligibleDays && !hasDays && !hasTasks) {
+      explanationLine = joinedOn
+        ? `No eligible workdays have elapsed yet in this period (joined ${joinedOn}). Scheduled tracking starts on the first workday on or after ${joinedOn}.`
+        : "No eligible workdays have elapsed yet in this period.";
+    } else if (hasDays && !hasTasks) {
       explanationLine =
         "Only partial attendance data is logged so far; at least two active measures are required for a score.";
     } else if (!hasDays && hasTasks) {

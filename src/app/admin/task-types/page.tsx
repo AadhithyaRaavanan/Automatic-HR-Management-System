@@ -2,8 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { AppShell } from "@/components/shell/app-shell";
-import { createClient } from "@/lib/supabase/client";
+import { AppShell, useAppSession } from "@/components/shell/app-shell";
 import {
   Plus,
   Edit2,
@@ -23,11 +22,12 @@ import { toast } from "sonner";
 import { TaskType } from "@/features/tasks/types";
 import { cn } from "@/lib/utils";
 
-export default function AdminTaskTypesPage() {
+function AdminTaskTypesContent() {
+  const { userRole, organizationId, isLoaded } = useAppSession();
   const [types, setTypes] = React.useState<TaskType[]>([]);
   const [departments, setDepartments] = React.useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = React.useState(true);
-  const [role, setRole] = React.useState<string | null>(null);
+  const [serverDeniedReason, setServerDeniedReason] = React.useState<string | null>(null);
 
   // Modal State
   const [modalOpen, setModalOpen] = React.useState(false);
@@ -44,42 +44,44 @@ export default function AdminTaskTypesPage() {
   const [newChecklistItem, setNewChecklistItem] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
 
-  const supabase = React.useMemo(() => createClient(), []);
-
   const loadData = React.useCallback(async () => {
+    if (!isLoaded) return;
+
+    if (!["admin", "hr"].includes(userRole)) {
+      setServerDeniedReason(null);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
+      setServerDeniedReason(null);
 
-      // Check current user role
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      const [deptRes, res] = await Promise.all([
+        fetch("/api/admin/departments"),
+        fetch("/api/tasks/types?all=true"),
+      ]);
+
+      if (deptRes.ok) {
+        const deptJson = await deptRes.json().catch(() => ({}));
+        if (Array.isArray(deptJson.departments)) {
+          setDepartments(deptJson.departments.map((d: any) => ({ id: d.id, name: d.name })));
+        }
+      }
+
+      if (res.status === 401) {
         window.location.href = "/login";
         return;
       }
 
-      const { data: emp } = await (supabase as any)
-        .from("employees")
-        .select("role, organization_id")
-        .eq("id", user.id)
-        .single();
-
-      const userRole = emp?.role || (user.user_metadata?.role as string) || "employee";
-      setRole(userRole);
-
-      if (!["admin", "hr"].includes(userRole)) {
-        toast.error("Access restricted to HR and Administrators.");
+      if (res.status === 403) {
+        const errJson = await res.json().catch(() => ({}));
+        setServerDeniedReason(
+          errJson.error || "Workspace HR or Administrator verification (including MFA) is required."
+        );
         return;
       }
 
-      // Fetch departments
-      const { data: deptData } = await supabase
-        .from("departments")
-        .select("id, name")
-        .order("name", { ascending: true });
-      if (deptData) setDepartments(deptData);
-
-      // Fetch all task types
-      const res = await fetch("/api/tasks/types?all=true");
       if (res.ok) {
         const json = await res.json();
         setTypes(json.types || []);
@@ -91,7 +93,7 @@ export default function AdminTaskTypesPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, [isLoaded, userRole, organizationId]);
 
   React.useEffect(() => {
     loadData();
@@ -243,27 +245,25 @@ export default function AdminTaskTypesPage() {
     }
   };
 
-  if (!loading && role && !["admin", "hr"].includes(role)) {
+  if (isLoaded && (!["admin", "hr"].includes(userRole) || serverDeniedReason)) {
     return (
-      <AppShell>
-        <div className="p-8 max-w-xl mx-auto text-center space-y-4">
-          <h1 className="text-xl font-bold text-black">Access Denied</h1>
-          <p className="text-sm text-[#4D4D4D]">
-            Task types and workflow templates are managed exclusively by HR and System Administrators.
-          </p>
-          <Link
-            href="/tasks"
-            className="inline-flex items-center px-4 py-2 text-sm font-semibold text-black bg-[#B7FF00] rounded hover:opacity-90"
-          >
-            Back to Tasks
-          </Link>
-        </div>
-      </AppShell>
+      <div className="p-8 max-w-xl mx-auto text-center space-y-4">
+        <h1 className="text-xl font-bold text-black">Access Denied</h1>
+        <p className="text-sm text-[#4D4D4D]">
+          {serverDeniedReason ||
+            "Task types and workflow templates are managed exclusively by HR and System Administrators."}
+        </p>
+        <Link
+          href="/tasks"
+          className="inline-flex items-center px-4 py-2 text-sm font-semibold text-black bg-[#B7FF00] rounded hover:opacity-90"
+        >
+          Back to Tasks
+        </Link>
+      </div>
     );
   }
 
   return (
-    <AppShell>
       <div className="space-y-6 pb-12">
         {/* Navigation & Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#E6E6E6] pb-4">
@@ -733,6 +733,13 @@ export default function AdminTaskTypesPage() {
           </div>
         )}
       </div>
+  );
+}
+
+export default function AdminTaskTypesPage() {
+  return (
+    <AppShell>
+      <AdminTaskTypesContent />
     </AppShell>
   );
 }

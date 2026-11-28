@@ -20,26 +20,33 @@ export async function GET(request: NextRequest) {
       .eq("id", user.id)
       .maybeSingle();
 
-    // Fetch onboarding profile data
-    const { data: onboardingProfile } = await (supabaseAdmin as any)
+    // Fetch onboarding profile data (strictly scoped to selected organization)
+    let onbProfQ = (supabaseAdmin as any)
       .from("onboarding_profiles")
       .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle();
+      .eq("user_id", user.id);
+    if (context.organizationId) {
+      onbProfQ = onbProfQ.eq("organization_id", context.organizationId);
+    }
+    const { data: onboardingProfile } = await onbProfQ.maybeSingle();
 
     const employee = context.employee;
 
-    // Fetch uploaded documents with signed URLs and status (with direct DB fallback)
+    // Fetch uploaded documents with signed URLs and status (strictly org-scoped)
     let documents: any[] = [];
     try {
-      documents = await listCandidateDocs(user.id);
+      documents = await listCandidateDocs(user.id, context.organizationId);
     } catch (docErr: any) {
       console.warn("[GET /api/onboarding/profile] listCandidateDocs failed, trying direct db fallback:", docErr?.message);
       try {
-        const { data: rawDocs } = await (supabaseAdmin as any)
+        let fbDocsQ = (supabaseAdmin as any)
           .from("onboarding_documents")
           .select("*")
           .eq("user_id", user.id);
+        if (context.organizationId) {
+          fbDocsQ = fbDocsQ.eq("organization_id", context.organizationId);
+        }
+        const { data: rawDocs } = await fbDocsQ;
         if (rawDocs && rawDocs.length > 0) {
           documents = rawDocs.map((d: any) => ({
             id: d.id,

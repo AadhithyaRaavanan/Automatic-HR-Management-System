@@ -1,12 +1,7 @@
 import { test, expect } from "@playwright/test";
-import { getStorageStatePath, loginAndGetSession, loadEnvTest } from "../helpers/auth";
-import { createClient } from "@supabase/supabase-js";
+import { getStorageStatePath, loginAndGetSession, createAllowedSupabaseAdmin } from "../helpers/auth";
 
-const env = loadEnvTest();
-const supabaseAdmin = createClient(
-  env.NEXT_PUBLIC_SUPABASE_URL || "https://bycyebxvxhmhelrvglvf.supabase.co",
-  env.SUPABASE_SERVICE_ROLE_KEY || ""
-);
+const supabaseAdmin = createAllowedSupabaseAdmin();
 
 const TEST_USER_IDS = [
   "2552130d-cf00-4fdd-a676-e800c11937ce", // admin

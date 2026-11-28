@@ -73,22 +73,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Fetch candidate onboarding profile
+    const orgId = authResult.context.organizationId;
+
+    // 1. Fetch candidate onboarding profile (strictly org-scoped)
     const { data: profile, error: profErr } = await (supabaseAdmin as any)
       .from("onboarding_profiles")
       .select("*")
       .eq("user_id", userId)
+      .eq("organization_id", orgId)
       .maybeSingle();
 
     if (profErr || !profile) {
       return NextResponse.json({ error: "Onboarding profile not found." }, { status: 404 });
     }
 
-    // 2. Fetch candidate's uploaded documents
+    // 2. Fetch candidate's uploaded documents (strictly org-scoped)
     const { data: docs } = await (supabaseAdmin as any)
       .from("onboarding_documents")
       .select("*")
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .eq("organization_id", orgId);
 
     const uploadedDocs = docs || [];
 
@@ -138,7 +142,8 @@ export async function POST(request: NextRequest) {
         education_details: updatedEducation,
         updated_at: nowIso,
       })
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .eq("organization_id", orgId);
 
     if (profUpdateErr) {
       console.error("[approve] Failed to update onboarding_profile:", profUpdateErr);
@@ -152,11 +157,13 @@ export async function POST(request: NextRequest) {
         .from("employees")
         .select("shift_start_time, shift_end_time, timezone")
         .eq("id", userId)
+        .eq("organization_id", orgId)
         .maybeSingle(),
       (supabaseAdmin as any)
         .from("organization_members")
         .select("shift_start_time, shift_end_time")
         .eq("user_id", userId)
+        .eq("organization_id", orgId)
         .maybeSingle(),
     ]);
 
@@ -179,8 +186,6 @@ export async function POST(request: NextRequest) {
       shift_end_time: resolvedShiftEnd,
       updated_at: nowIso,
     };
-
-    const orgId = authResult.context.organizationId;
 
     await Promise.all([
       (supabaseAdmin as any).from("profiles").upsert(

@@ -7,6 +7,49 @@ import { format, startOfMonth, endOfMonth, parseISO, isValid } from "date-fns";
 
 export const dynamic = "force-dynamic";
 
+const EXPORT_PAGE_SIZE = 500;
+
+function filterAndNormalizeExportDays(
+  days: any[],
+  opts: { department?: string; search?: string }
+) {
+  const deptFilter = opts.department?.trim() || "";
+  const searchFilter = opts.search?.trim().toLowerCase() || "";
+
+  return (days || [])
+    .filter((row: any) => {
+      const joinedOn = row.employees?.joined_on ? String(row.employees.joined_on).slice(0, 10) : null;
+      if (row.status === "absent" && Number(row.total_minutes || 0) === 0 && joinedOn && row.work_date < joinedOn) {
+        return false;
+      }
+      return true;
+    })
+    .map((row: any) => ({
+      name: row.employees?.full_name || "Unknown Employee",
+      email: row.employees?.email || "",
+      department: row.employees?.departments?.name || "General",
+      date: row.work_date,
+      status: row.status,
+      totalMinutes: Number(row.total_minutes || 0),
+      isLate: row.is_late ? "Yes" : "No",
+      locked: row.locked ? "Yes" : "No",
+    }))
+    .filter((r) => {
+      if (deptFilter && deptFilter !== "All" && r.department !== deptFilter) {
+        return false;
+      }
+      if (
+        searchFilter &&
+        !r.name.toLowerCase().includes(searchFilter) &&
+        !r.department.toLowerCase().includes(searchFilter) &&
+        !r.date.includes(searchFilter)
+      ) {
+        return false;
+      }
+      return true;
+    });
+}
+
 export async function GET(request: NextRequest) {
   const authResult = await verifyAdminRouteCaller(request, ["hr", "admin"]);
   if ("response" in authResult) {
@@ -35,31 +78,61 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Query real tenant-scoped attendance_days records for the selected month & filters
-  let daysQuery = supabaseAdmin
-    .from("attendance_days")
-    .select(`
-      employee_id,
-      work_date,
-      status,
-      total_minutes,
-      is_late,
-      locked,
-      employees!attendance_days_employee_id_fkey(full_name, email, departments:department_id(name))
-    `)
-    .eq("organization_id", context.organizationId)
-    .gte("work_date", monthStart)
-    .lte("work_date", monthEnd)
-    .order("work_date", { ascending: true });
+  // Deterministic pagination across all matching rows (avoids PostgREST 1,000-row cap)
+  const buildDaysQuery = () => {
+    let q: any = (supabaseAdmin.from("attendance_days") as any)
+      .select(`
+        employee_id,
+        work_date,
+        status,
+        total_minutes,
+        is_late,
+        locked,
+        employees!attendance_days_employee_id_fkey(full_name, email, joined_on, departments:department_id(name))
+      `)
+      .eq("organization_id", context.organizationId)
+      .gte("work_date", monthStart)
+      .lte("work_date", monthEnd);
 
-  if (employeeIdFilter) {
-    daysQuery = daysQuery.eq("employee_id", employeeIdFilter);
-  }
-  if (statusFilter && statusFilter !== "all") {
-    daysQuery = daysQuery.eq("status", statusFilter);
-  }
+    if (employeeIdFilter && typeof q.eq === "function") {
+      q = q.eq("employee_id", employeeIdFilter);
+    }
+    if (statusFilter && statusFilter !== "all" && typeof q.eq === "function") {
+      q = q.eq("status", statusFilter);
+    }
+    if (q && typeof q.order === "function") {
+      q = q.order("work_date", { ascending: true });
+    }
+    if (q && typeof q.order === "function") {
+      q = q.order("employee_id", { ascending: true });
+    }
+    return q;
+  };
 
-  const { data: days, error: queryError } = await daysQuery;
+  const allDays: any[] = [];
+  let offset = 0;
+  let queryError: any = null;
+
+  while (true) {
+    const pageQuery = buildDaysQuery();
+    const supportsRange = Boolean(pageQuery && typeof pageQuery.range === "function");
+    const pageRes = supportsRange
+      ? await pageQuery.range(offset, offset + EXPORT_PAGE_SIZE - 1)
+      : await pageQuery;
+
+    if (pageRes?.error) {
+      queryError = pageRes.error;
+      break;
+    }
+
+    const chunk = Array.isArray(pageRes?.data) ? pageRes.data : [];
+    allDays.push(...chunk);
+
+    if (!supportsRange || chunk.length < EXPORT_PAGE_SIZE) {
+      break;
+    }
+    offset += EXPORT_PAGE_SIZE;
+  }
 
   if (queryError) {
     return NextResponse.json(
@@ -68,31 +141,10 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const records = (days || [])
-    .map((row: any) => ({
-      name: row.employees?.full_name || "Unknown Employee",
-      email: row.employees?.email || "",
-      department: row.employees?.departments?.name || "General",
-      date: row.work_date,
-      status: row.status,
-      totalMinutes: Number(row.total_minutes || 0),
-      isLate: row.is_late ? "Yes" : "No",
-      locked: row.locked ? "Yes" : "No",
-    }))
-    .filter((r) => {
-      if (deptFilter && deptFilter !== "All" && r.department !== deptFilter) {
-        return false;
-      }
-      if (
-        searchFilter &&
-        !r.name.toLowerCase().includes(searchFilter) &&
-        !r.department.toLowerCase().includes(searchFilter) &&
-        !r.date.includes(searchFilter)
-      ) {
-        return false;
-      }
-      return true;
-    });
+  const records = filterAndNormalizeExportDays(allDays, {
+    department: deptFilter,
+    search: searchFilter,
+  });
 
   // Record audit trail entry
   await supabaseAdmin.from("audit_logs").insert({
@@ -112,12 +164,13 @@ export async function GET(request: NextRequest) {
 
   // 1. CSV Stream Format
   if (formatType === "csv") {
-    const csvHeader = "Employee Name,Work Email,Work Date,Status,Total Minutes,Total Hours,Is Late,Locked\n";
+    const csvHeader = "Employee Name,Work Email,Department,Work Date,Status,Total Minutes,Total Hours,Is Late,Locked\n";
     const csvRows = records
       .map((r) =>
         [
           sanitizeCsvCell(r.name),
           sanitizeCsvCell(r.email),
+          sanitizeCsvCell(r.department),
           sanitizeCsvCell(r.date),
           sanitizeCsvCell(r.status),
           String(r.totalMinutes),
@@ -149,76 +202,61 @@ export async function GET(request: NextRequest) {
   worksheet.columns = [
     { header: "Employee Name", key: "name", width: 24 },
     { header: "Work Email", key: "email", width: 28 },
+    { header: "Department", key: "department", width: 18 },
     { header: "Date", key: "date", width: 14 },
-    { header: "Day Status", key: "status", width: 16 },
-    { header: "Total Minutes", key: "totalMinutes", width: 16 },
-    { header: "Hours", key: "hours", width: 12 },
+    { header: "Status", key: "status", width: 14 },
+    { header: "Logged Hours", key: "hours", width: 14 },
     { header: "Late Arrival", key: "isLate", width: 14 },
-    { header: "Payroll Locked", key: "locked", width: 16 },
+    { header: "Month Lock", key: "locked", width: 14 },
   ];
 
+  // Style Header Row
   const headerRow = worksheet.getRow(1);
-  headerRow.height = 28;
-  headerRow.eachCell((cell) => {
-    cell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FF14123A" },
-    };
-    cell.font = {
-      name: "Arial",
-      color: { argb: "FFFFFFFF" },
-      bold: true,
-      size: 11,
-    };
-    cell.alignment = { vertical: "middle", horizontal: "center" };
-    cell.border = {
-      bottom: { style: "medium", color: { argb: "FF6C5CE7" } },
-    };
-  });
+  headerRow.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+  headerRow.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF0F172A" },
+  };
+  headerRow.alignment = { vertical: "middle", horizontal: "center" };
+  headerRow.height = 24;
 
-  records.forEach((rec, idx) => {
-    const row = worksheet.addRow({
+  // Add Rows with Spreadsheet Formula Neutralization
+  records.forEach((rec) => {
+    worksheet.addRow({
       name: sanitizeSpreadsheetCell(rec.name),
       email: sanitizeSpreadsheetCell(rec.email),
-      date: rec.date,
-      status: sanitizeSpreadsheetCell(rec.status),
-      totalMinutes: rec.totalMinutes,
-      hours: Number((rec.totalMinutes / 60).toFixed(1)),
-      isLate: rec.isLate,
-      locked: rec.locked,
+      department: sanitizeSpreadsheetCell(rec.department),
+      date: sanitizeSpreadsheetCell(rec.date),
+      status: sanitizeSpreadsheetCell(String(rec.status || "").toUpperCase()),
+      hours: rec.totalMinutes > 0 ? `${(rec.totalMinutes / 60).toFixed(1)} hrs` : "0.0 hrs",
+      isLate: sanitizeSpreadsheetCell(rec.isLate),
+      locked: sanitizeSpreadsheetCell(rec.locked),
     });
+  });
 
-    row.height = 20;
-
-    if (idx % 2 === 1) {
-      row.eachCell((cell) => {
-        cell.fill = {
+  // Conditional Formatting / Alternate row striping
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber > 1) {
+      row.alignment = { vertical: "middle", horizontal: "left" };
+      row.height = 20;
+      if (rowNumber % 2 === 0) {
+        row.fill = {
           type: "pattern",
           pattern: "solid",
-          fgColor: { argb: "FFF6F7FB" },
+          fgColor: { argb: "FFF8FAFC" },
         };
-      });
+      }
     }
-
-    row.eachCell((cell) => {
-      cell.font = { name: "Arial", size: 10 };
-      cell.alignment = { vertical: "middle" };
-      cell.border = {
-        bottom: { style: "thin", color: { argb: "FFE2E4F0" } },
-      };
-    });
   });
 
   const buffer = await workbook.xlsx.writeBuffer();
 
-  return new NextResponse(buffer, {
+  return new NextResponse(Buffer.from(buffer), {
     status: 200,
     headers: {
-      "Content-Type":
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="attendance-${monthParam}.xlsx"`,
     },
   });
 }
-

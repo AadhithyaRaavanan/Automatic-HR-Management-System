@@ -447,11 +447,11 @@ export function buildPasswordResetEmailHtml(params: SendPasswordResetParams): st
         <div class="body">
           <h1 class="title">Password Reset Verification</h1>
           <p class="paragraph">
-            We received a request to reset the password for your Pulse account. Enter this code on the password reset screen to continue.
+            We received a request to reset the password for your Pulse account. Enter this 6-digit verification code on the password reset screen to continue.
           </p>
 
           <div class="otp-box">
-            <div class="otp-label">Your verification code</div>
+            <div class="otp-label">Your 6-digit verification code</div>
             <div class="otp-number">${otpCode}</div>
           </div>
 
@@ -530,7 +530,8 @@ export function buildMfaResetEmailHtml(params: SendMfaResetParams): string {
 }
 
 export interface SendOnboardingSubmittedParams {
-  to?: string;
+  to?: string | string[];
+  organizationName?: string;
   candidateName: string;
   candidateEmail: string;
   candidateType: string;
@@ -540,10 +541,28 @@ export async function sendOnboardingSubmittedEmail(params: SendOnboardingSubmitt
   success: boolean;
   messageId?: string;
   error?: string;
-  simulated?: boolean;
+  code?: "MISSING_RECIPIENT" | "EMAIL_NOT_CONFIGURED" | "EMAIL_DELIVERY_FAILED";
 }> {
-  const hrRecipient = params.to || process.env.SMTP_USER || "hr@zenxea.com";
-  const subject = `New Candidate Onboarding Submission: ${params.candidateName}`;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const rawRecipients = Array.isArray(params.to) ? params.to : params.to ? [params.to] : [];
+  const recipients = Array.from(
+    new Set(
+      rawRecipients
+        .map((r) => String(r || "").trim())
+        .filter((r) => emailRegex.test(r))
+    )
+  );
+
+  if (recipients.length === 0) {
+    return {
+      success: false,
+      code: "MISSING_RECIPIENT",
+      error: "No authorized HR or Admin email recipient configured in the selected organization.",
+    };
+  }
+
+  const orgPrefix = params.organizationName ? `[${params.organizationName}] ` : "";
+  const subject = `${orgPrefix}New Candidate Onboarding Submission: ${params.candidateName}`;
   const siteUrl = getSiteUrl();
 
   const html = `<!DOCTYPE html>
@@ -591,22 +610,26 @@ export async function sendOnboardingSubmittedEmail(params: SendOnboardingSubmitt
   </body>
 </html>`;
 
-  // 1. Prioritize Hostinger / Custom SMTP if configured
+  const deliveryErrors: string[] = [];
+
+  // 1. Prioritize Custom SMTP if configured
   if (isSmtpTransportConfigured()) {
     try {
       const transporter = getSmtpTransporter();
       if (transporter) {
-        const fromAddress = process.env.SMTP_FROM || `Pulse <${process.env.SMTP_USER || "business@zenxea.com"}>`;
+        const fromAddress = process.env.SMTP_FROM || `Pulse <${process.env.SMTP_USER || "onboarding@remotehr.io"}>`;
         const info = await transporter.sendMail({
           from: fromAddress,
-          to: hrRecipient,
+          to: recipients.join(", "),
           subject,
           html,
         });
         return { success: true, messageId: info.messageId };
       }
+      deliveryErrors.push("SMTP transporter could not be initialized.");
     } catch (smtpErr: any) {
-      console.warn("[SMTP Error, falling back to Resend]:", smtpErr?.message || smtpErr);
+      const msg = smtpErr?.message || String(smtpErr);
+      deliveryErrors.push(`SMTP delivery failed: ${msg}`);
     }
   }
 
@@ -617,22 +640,34 @@ export async function sendOnboardingSubmittedEmail(params: SendOnboardingSubmitt
       const fromAddress = process.env.RESEND_FROM_EMAIL || "Pulse <onboarding@remotehr.io>";
       const response = await client.emails.send({
         from: fromAddress,
-        to: [hrRecipient],
+        to: recipients,
         subject,
         html,
       });
 
       if (response.error) {
-        return { success: false, error: response.error.message };
+        deliveryErrors.push(`Resend delivery failed: ${response.error.message}`);
+      } else {
+        return { success: true, messageId: response.data?.id };
       }
-
-      return { success: true, messageId: response.data?.id };
     } catch (err: any) {
-      return { success: false, error: err.message || String(err) };
+      deliveryErrors.push(`Resend delivery failed: ${err?.message || String(err)}`);
     }
   }
 
-  return { success: true, simulated: true, messageId: `sim_${Date.now()}` };
+  if (deliveryErrors.length > 0) {
+    return {
+      success: false,
+      code: "EMAIL_DELIVERY_FAILED",
+      error: deliveryErrors.join(" | "),
+    };
+  }
+
+  return {
+    success: false,
+    code: "EMAIL_NOT_CONFIGURED",
+    error: "Onboarding notification email was not sent because neither SMTP nor RESEND_API_KEY is configured.",
+  };
 }
 
 export async function sendPasswordResetEmail(params: SendPasswordResetParams): Promise<{

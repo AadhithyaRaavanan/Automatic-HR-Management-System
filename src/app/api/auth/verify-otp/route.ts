@@ -39,9 +39,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!/^\d{6,8}$/.test(token)) {
+    if (!/^\d{6}$/.test(token)) {
       return NextResponse.json(
-        { error: "Verification code must be 6 to 8 digits." },
+        { error: "Verification code must be 6 digits." },
         { status: 400 }
       );
     }

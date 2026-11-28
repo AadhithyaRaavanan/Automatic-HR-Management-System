@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     if ("response" in authResult) {
       return authResult.response;
     }
-    const { user } = authResult;
+    const { user, context } = authResult;
 
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
 
     const uploadRes = await uploadDoc({
       userId: user.id,
+      organizationId: context.organizationId,
       fullName,
       docType,
       file,

@@ -18,8 +18,15 @@ export async function POST(request: NextRequest) {
     const { action, holidayName, holidayDate, count } = body;
 
     const allEmployees = await getAllActiveEmployees(organizationId);
-    if (allEmployees.length === 0) {
-      return NextResponse.json({ success: true, count: 0 });
+    const targetEmployees = allEmployees.filter((id) => id && id !== userId);
+    if (targetEmployees.length === 0) {
+      return NextResponse.json({
+        success: true,
+        count: 0,
+        recipientCount: 0,
+        inAppCount: 0,
+        emailCount: 0,
+      });
     }
 
     const title =
@@ -32,8 +39,8 @@ export async function POST(request: NextRequest) {
         ? `The official company holiday calendar for the upcoming cycle has been updated with ${count} holidays.`
         : `${holidayName || "A holiday"} has been scheduled on ${holidayDate || "the calendar"}.`;
 
-    await notify({
-      userIds: allEmployees,
+    const notifyResult = await notify({
+      userIds: targetEmployees,
       organizationId,
       type: "holiday_scheduled",
       typeGroup: "announcements",
@@ -44,7 +51,27 @@ export async function POST(request: NextRequest) {
       actorId: userId,
     });
 
-    return NextResponse.json({ success: true, count: allEmployees.length });
+    if (!notifyResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: notifyResult.error || "Failed to dispatch holiday announcement.",
+          count: notifyResult.inAppCount,
+          recipientCount: targetEmployees.length,
+          inAppCount: notifyResult.inAppCount,
+          emailCount: notifyResult.emailCount,
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      count: notifyResult.inAppCount,
+      recipientCount: targetEmployees.length,
+      inAppCount: notifyResult.inAppCount,
+      emailCount: notifyResult.emailCount,
+    });
   } catch (err: any) {
     return NextResponse.json(
       { error: err?.message || "Internal server error" },

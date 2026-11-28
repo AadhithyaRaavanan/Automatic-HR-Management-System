@@ -39,7 +39,8 @@ export interface KpiCalendarDay {
     | "holiday"
     | "absent"
     | "weekend"
-    | "future";
+    | "future"
+    | "not_employed";
   label: string;
   workedMinutes: number;
   leaveFraction: number;
@@ -88,6 +89,9 @@ export interface KpiComputeResult {
   periodStart: string;
   periodEnd: string;
   employeeType: string;
+  joinedOn: string | null;
+  eligibleDaysElapsed: number;
+  hasElapsedEligibleDays: boolean;
   overallScore: number | null;
   overallTarget: number;
   dataStatus: "ok" | "unavailable";
@@ -575,7 +579,7 @@ export async function computeKpi(
     const empRes = await (supabaseAdmin as any)
       .from("employees")
       .select(
-        "id, organization_id, department_id, employment_category, work_target_minutes, timezone, shift_start_time, shift_end_time"
+        "id, organization_id, department_id, primary_location_id, work_mode, employment_category, work_target_minutes, timezone, shift_start_time, shift_end_time, joined_on, status, updated_at"
       )
       .eq("id", employeeId)
       .maybeSingle();
@@ -583,7 +587,7 @@ export async function computeKpi(
     if (empRes.error && isMissingSchemaError(empRes.error)) {
       const fb = await (supabaseAdmin as any)
         .from("employees")
-        .select("id, organization_id, department_id")
+        .select("id, organization_id, department_id, joined_on, status")
         .eq("id", employeeId)
         .maybeSingle();
       empProfile = fb.data || null;
@@ -598,7 +602,63 @@ export async function computeKpi(
 
   const effectiveOrgId = organizationId || empProfile?.organization_id || undefined;
   const effectiveDeptId = empProfile?.department_id || null;
-  const empTimezone = empProfile?.timezone || "Asia/Kolkata";
+
+  // Resolve effective organization/location schedule, weekly_off_days & timezone
+  let orgTimezone: string | null = null;
+  let orgWorkMode: string | null = null;
+  let locTimezone: string | null = null;
+  let locWeeklyOffs: number[] | null = null;
+  let policyWeeklyOffs: number[] | null = null;
+  let policyShiftStart: string | null = null;
+  let policyShiftEnd: string | null = null;
+
+  if (effectiveOrgId) {
+    try {
+      const [orgRes, polRes, locRes] = await Promise.all([
+        (supabaseAdmin as any)
+          .from("organizations")
+          .select("timezone, work_mode")
+          .eq("id", effectiveOrgId)
+          .maybeSingle(),
+        (supabaseAdmin as any)
+          .from("attendance_policies")
+          .select("weekly_off_days, shift_start_time, shift_end_time")
+          .eq("organization_id", effectiveOrgId)
+          .eq("is_active", true)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        empProfile?.primary_location_id
+          ? (supabaseAdmin as any)
+              .from("locations")
+              .select("timezone, weekly_off_days")
+              .eq("id", empProfile.primary_location_id)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
+      orgTimezone = orgRes?.data?.timezone || null;
+      orgWorkMode = orgRes?.data?.work_mode || null;
+      locTimezone = locRes?.data?.timezone || null;
+      locWeeklyOffs = Array.isArray(locRes?.data?.weekly_off_days) ? locRes.data.weekly_off_days : null;
+      policyWeeklyOffs = Array.isArray(polRes?.data?.weekly_off_days) ? polRes.data.weekly_off_days : null;
+      policyShiftStart = polRes?.data?.shift_start_time || null;
+      policyShiftEnd = polRes?.data?.shift_end_time || null;
+    } catch {
+      // Minimal test mocks may omit organizations/locations/attendance_policies tables
+    }
+  }
+
+  const effectiveWorkMode = empProfile?.work_mode || orgWorkMode || "remote";
+  const empTimezone =
+    effectiveWorkMode === "office"
+      ? locTimezone || empProfile?.timezone || orgTimezone || "Asia/Kolkata"
+      : empProfile?.timezone || orgTimezone || "Asia/Kolkata";
+  const effectiveWeeklyOffs: number[] =
+    (locWeeklyOffs && locWeeklyOffs.length > 0 ? locWeeklyOffs : null) ??
+    (policyWeeklyOffs && policyWeeklyOffs.length > 0 ? policyWeeklyOffs : null) ??
+    [0, 6];
+  const effectiveShiftStart = empProfile?.shift_start_time || policyShiftStart || "09:00:00";
+  const effectiveShiftEnd = empProfile?.shift_end_time || policyShiftEnd || "17:00:00";
   const normType = (
     explicitEmployeeType ||
     empProfile?.employment_category ||
@@ -746,7 +806,18 @@ export async function computeKpi(
     activeEmployeeTypes[KPI_CONFIG.defaultType] ||
     KPI_CONFIG.employeeTypes[KPI_CONFIG.defaultType];
 
-  const attendanceDays: any[] = attendanceDaysRes?.data || [];
+  const joinedOn: string | null = empProfile?.joined_on
+    ? String(empProfile.joined_on).slice(0, 10)
+    : null;
+
+  const attendanceDays: any[] = (attendanceDaysRes?.data || []).filter((d: any) => {
+    if (!d?.work_date) return false;
+    // Ignore spurious persisted 'absent' rows created prior to the employee's joined_on date
+    if (joinedOn && d.work_date < joinedOn && d.status === "absent" && (d.total_minutes || 0) === 0) {
+      return false;
+    }
+    return true;
+  });
   const attendanceSessions: any[] = attendanceSessionsRes?.data || [];
   const regularizations: any[] = regularizationsRes?.data || [];
   const leaveDaysMap = leaveRes.map;
@@ -764,10 +835,23 @@ export async function computeKpi(
     }
   }
 
-  const todayIso = empProfile?.timezone
-    ? getEmployeeWorkDate(empTimezone, new Date(), empProfile.shift_start_time, empProfile.shift_end_time)
-    : getKolkataToday();
+  const todayIso =
+    empProfile?.timezone || orgTimezone || locTimezone
+      ? getEmployeeWorkDate(empTimezone, new Date(), effectiveShiftStart, effectiveShiftEnd)
+      : getKolkataToday();
   const effectiveEnd = to > todayIso ? todayIso : to;
+
+  // Intersect period with employee employment dates (joined_on & exit bound)
+  const separatedDateRaw: string | null =
+    (empProfile?.status === "exited" || empProfile?.status === "inactive") && empProfile?.updated_at
+      ? getEmployeeWorkDate(empTimezone, new Date(empProfile.updated_at))
+      : null;
+  const employmentEnd: string | null =
+    separatedDateRaw && (!joinedOn || separatedDateRaw >= joinedOn) ? separatedDateRaw : null;
+
+  const effectiveStart = joinedOn && joinedOn > from ? joinedOn : from;
+  const effectiveScheduleEnd =
+    employmentEnd && employmentEnd < effectiveEnd ? employmentEnd : effectiveEnd;
 
   // Reconstruct tasks using employee-local boundaries & task_events
   const { periodTasks, taskPopulationNote, historicalLimitationNote } = reconstructPeriodTasks(
@@ -780,19 +864,21 @@ export async function computeKpi(
     empTimezone
   );
 
-  // 2. Build schedule expectations across [from .. effectiveEnd] with fractional half-day leave & overlap deduplication
+  // 2. Build schedule expectations across [effectiveStart .. effectiveScheduleEnd]
+  //    intersected with employment dates, effective weekly offs, holidays, and fractional leave
+  const weeklyOffSet = new Set(effectiveWeeklyOffs);
   const expectedDateFractionMap = new Map<string, number>();
   let totalCalendarWeekdays = 0;
   let holidayCreditWeekdays = 0;
   let leaveCreditWeekdays = 0;
 
-  if (effectiveEnd >= from) {
-    const curD = new Date(`${from}T00:00:00Z`);
-    const endD = new Date(`${effectiveEnd}T00:00:00Z`);
+  if (effectiveScheduleEnd >= effectiveStart) {
+    const curD = new Date(`${effectiveStart}T00:00:00Z`);
+    const endD = new Date(`${effectiveScheduleEnd}T00:00:00Z`);
     while (curD <= endD) {
       const dayOfWeek = curD.getUTCDay();
       const dateStr = curD.toISOString().slice(0, 10);
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      if (!weeklyOffSet.has(dayOfWeek)) {
         totalCalendarWeekdays++;
         if (holidayMap.has(dateStr)) {
           // Holiday takes precedence over leave on the same date: count credit once
@@ -1054,9 +1140,20 @@ export async function computeKpi(
   while (curCal <= endCal) {
     const weekday = curCal.getUTCDay();
     const dateStr = curCal.toISOString().slice(0, 10);
-    const isWeekend = weekday === 0 || weekday === 6;
+    const isWeekend = weeklyOffSet.has(weekday);
+    const isBeforeHire = Boolean(joinedOn && dateStr < joinedOn);
+    const isAfterSeparation = Boolean(employmentEnd && dateStr > employmentEnd);
 
-    if (isWeekend) {
+    if (isBeforeHire || isAfterSeparation) {
+      calendarDays.push({
+        date: dateStr,
+        weekday,
+        status: "not_employed",
+        label: isBeforeHire ? `Before join date (${joinedOn})` : "Not employed",
+        workedMinutes: 0,
+        leaveFraction: 0,
+      });
+    } else if (isWeekend) {
       calendarDays.push({
         date: dateStr,
         weekday,
@@ -1336,7 +1433,7 @@ export async function computeKpi(
 
   const dailyTargetHrsStr = (dailyTargetMinutes / 60).toFixed(1);
   const hoursDetailRows = calendarDays
-    .filter((d) => d.status !== "weekend" && d.status !== "future")
+    .filter((d) => d.status !== "weekend" && d.status !== "future" && d.status !== "not_employed")
     .filter((d) => d.workedMinutes > 0 || d.leaveFraction > 0 || d.status === "holiday")
     .map((d) => {
       const workedHrs = (d.workedMinutes / 60).toFixed(1);
@@ -1389,7 +1486,7 @@ export async function computeKpi(
   });
 
   const daysWorkedDetailRows: KpiMetricDetailData["rows"] = calendarDays
-    .filter((d) => d.status !== "weekend" && d.status !== "future")
+    .filter((d) => d.status !== "weekend" && d.status !== "future" && d.status !== "not_employed")
     .map((d) => ({
       id: d.date,
       date: d.date,
@@ -1528,11 +1625,21 @@ export async function computeKpi(
     },
   };
 
+  const hasElapsedEligibleDays =
+    expectedWorkingDays > 0 ||
+    attendedScheduledWeight > 0 ||
+    attendanceSessions.length > 0 ||
+    holidayCreditWeekdays > 0 ||
+    leaveCreditWeekdays > 0;
+
   return {
     employeeId,
     periodStart: from,
     periodEnd: to,
     employeeType: normType,
+    joinedOn,
+    eligibleDaysElapsed: expectedWorkingDays,
+    hasElapsedEligibleDays,
     overallScore,
     overallTarget,
     dataStatus: sourceErrors.length > 0 ? "unavailable" : "ok",

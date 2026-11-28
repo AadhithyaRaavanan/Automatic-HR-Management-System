@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isDemoModeEnabled } from "@/lib/config/demo";
 
 interface GlobalDemoStore {
   departments: any[];
@@ -62,11 +63,17 @@ function getStore(): GlobalDemoStore {
 }
 
 export async function GET() {
+  if (!isDemoModeEnabled()) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   const store = getStore();
   return NextResponse.json(store);
 }
 
 export async function POST(req: Request) {
+  if (!isDemoModeEnabled()) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   try {
     const body = await req.json();
     const store = getStore();

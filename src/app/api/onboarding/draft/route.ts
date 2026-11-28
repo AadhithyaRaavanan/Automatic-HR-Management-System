@@ -13,12 +13,15 @@ export async function POST(request: NextRequest) {
     }
     const { user, context } = authResult;
 
-    // Check existing onboarding profile
-    const { data: existingProfile } = await (supabaseAdmin as any)
+    // Check existing onboarding profile (scoped to resolved organization)
+    let existingProfQ = (supabaseAdmin as any)
       .from("onboarding_profiles")
-      .select("status")
-      .eq("user_id", user.id)
-      .maybeSingle();
+      .select("status, education_details, emergency_contact_name, emergency_contact_relationship, emergency_contact_phone")
+      .eq("user_id", user.id);
+    if (context.organizationId) {
+      existingProfQ = existingProfQ.eq("organization_id", context.organizationId);
+    }
+    const { data: existingProfile } = await existingProfQ.maybeSingle();
 
     const currentStatus = existingProfile?.status || "NOT_STARTED";
     // If SUBMITTED, UNDER_REVIEW, VERIFIED, or COMPLETED, lock normal draft editing
@@ -81,6 +84,7 @@ export async function POST(request: NextRequest) {
 
     const payloadToSave: Record<string, any> = {
       user_id: user.id,
+      ...(context.organizationId ? { organization_id: context.organizationId } : {}),
       candidate_type: has_experience ? "EXPERIENCED" : "GRADUATE_FRESHER",
       full_name: resolvedName,
       dob: dob || null,
@@ -115,7 +119,9 @@ export async function POST(request: NextRequest) {
 
     const { data: savedProfile, error: upsertErr } = await (supabaseAdmin as any)
       .from("onboarding_profiles")
-      .upsert(payloadToSave, { onConflict: "user_id" })
+      .upsert(payloadToSave, {
+        onConflict: context.organizationId ? "organization_id,user_id" : "user_id",
+      })
       .select()
       .maybeSingle();
 

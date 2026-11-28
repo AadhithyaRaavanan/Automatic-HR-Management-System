@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { notify } from "@/features/notifications/notify";
-import { getHrUsers } from "@/features/notifications/recipients";
+import { getHrUsers, getAuthorizedOnboardingEmailRecipients } from "@/features/notifications/recipients";
 import { sendOnboardingSubmittedEmail } from "@/lib/email/resend";
 import { QUALIFICATION_DOC_MAP, HighestQualification } from "@/features/onboarding/types";
 import { resolveOnboardingCaller } from "@/features/auth/tenant-context";
@@ -26,12 +26,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Fetch current profile
-    let { data: onbProfile } = await (supabaseAdmin as any)
+    const resolvedOrgId: string | null = context.organizationId;
+
+    // 1. Fetch current profile (strictly scoped to resolved organization)
+    let profSelectQ = (supabaseAdmin as any)
       .from("onboarding_profiles")
       .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle();
+      .eq("user_id", user.id);
+    if (resolvedOrgId) {
+      profSelectQ = profSelectQ.eq("organization_id", resolvedOrgId);
+    }
+    let { data: onbProfile } = await profSelectQ.maybeSingle();
 
     if (!onbProfile) {
       // If draft was not saved in DB yet, auto-create it from payload now
@@ -46,8 +51,9 @@ export async function POST(request: NextRequest) {
         experience_explanation: payload.experience_explanation || null,
       };
 
-      const initialPayload = {
+      const initialPayload: Record<string, any> = {
         user_id: user.id,
+        ...(resolvedOrgId ? { organization_id: resolvedOrgId } : {}),
         candidate_type: payload.has_experience ? "EXPERIENCED" : "GRADUATE_FRESHER",
         full_name: initialName,
         dob: payload.dob || null,
@@ -78,21 +84,30 @@ export async function POST(request: NextRequest) {
 
       const { data: createdProf, error: createErr } = await (supabaseAdmin as any)
         .from("onboarding_profiles")
-        .upsert(initialPayload, { onConflict: "user_id" })
+        .upsert(initialPayload, {
+          onConflict: resolvedOrgId ? "organization_id,user_id" : "user_id",
+        })
         .select()
         .maybeSingle();
 
       if (createErr) {
-        console.error("[POST /api/onboarding/complete] Auto-create draft profile failed:", createErr.message);
+        return NextResponse.json(
+          { error: `Failed to initialize onboarding profile: ${createErr.message}` },
+          { status: 500 }
+        );
       }
       onbProfile = createdProf || initialPayload;
     }
 
-    // 2. Fetch uploaded documents
-    const { data: docs } = await (supabaseAdmin as any)
+    // 2. Fetch uploaded documents (strictly scoped to resolved organization)
+    let docsSelectQ = (supabaseAdmin as any)
       .from("onboarding_documents")
       .select("*")
       .eq("user_id", user.id);
+    if (resolvedOrgId) {
+      docsSelectQ = docsSelectQ.eq("organization_id", resolvedOrgId);
+    }
+    const { data: docs } = await docsSelectQ;
 
     const uploadedDocs = docs || [];
     const docTypesUploaded = new Set(uploadedDocs.map((d: any) => d.doc_type));
@@ -249,8 +264,35 @@ export async function POST(request: NextRequest) {
     }
 
     const nowIso = new Date().toISOString();
+    const rawStatusLower = String(onbProfile.status || "").toLowerCase();
+    const rawOnboardingStatusUpper = String(onbProfile.onboarding_status || "").toUpperCase();
     const currentStatus = onbProfile.onboarding_status || onbProfile.status || "NOT_STARTED";
-    const nextStatus = currentStatus === "CORRECTION_REQUIRED" ? "RESUBMITTED" : "SUBMITTED";
+    const isAlreadySubmitted =
+      (rawStatusLower === "submitted" || rawOnboardingStatusUpper === "UNDER_REVIEW") &&
+      rawStatusLower !== "changes_requested" &&
+      rawOnboardingStatusUpper !== "CORRECTION_REQUIRED";
+    const nextStatus =
+      rawStatusLower === "changes_requested" || rawOnboardingStatusUpper === "CORRECTION_REQUIRED"
+        ? "RESUBMITTED"
+        : "SUBMITTED";
+
+    // Idempotent retry protection: if an approved/already-submitted non-rejected retry arrives,
+    // verify durable audit exists rather than silently duplicating audit entries.
+    let auditAlreadyRecorded = false;
+    if (isAlreadySubmitted) {
+      let existingAuditQ = (supabaseAdmin as any)
+        .from("employee_onboarding_audit")
+        .select("id")
+        .eq("employee_id", user.id)
+        .in("action", ["SUBMITTED_FOR_VERIFICATION", "RESUBMITTED_FOR_VERIFICATION"]);
+      if (resolvedOrgId) {
+        existingAuditQ = existingAuditQ.eq("organization_id", resolvedOrgId);
+      }
+      const { data: existingAudit } = await existingAuditQ.limit(1).maybeSingle();
+      if (existingAudit?.id) {
+        auditAlreadyRecorded = true;
+      }
+    }
 
     const mergedEdu = {
       ...edu,
@@ -301,20 +343,37 @@ export async function POST(request: NextRequest) {
         "cert_other",
       ].filter((dt) => dt !== requiredQualDoc);
 
-      await (supabaseAdmin as any)
+      let delOtherQualQ = (supabaseAdmin as any)
         .from("onboarding_documents")
         .delete()
         .eq("user_id", user.id)
         .in("doc_type", otherQualDocTypes);
+      if (resolvedOrgId) {
+        delOtherQualQ = delOtherQualQ.eq("organization_id", resolvedOrgId);
+      }
+      await delOtherQualQ;
     }
 
-    const { error: updateErr } = await (supabaseAdmin as any)
+    const previousSnapshot = {
+      status: onbProfile.status || "draft",
+      onboarding_status: onbProfile.onboarding_status || "NOT_STARTED",
+      submitted_at: onbProfile.submitted_at || null,
+    };
+
+    let profUpdQ = (supabaseAdmin as any)
       .from("onboarding_profiles")
       .update(updateProfileData)
       .eq("user_id", user.id);
+    if (resolvedOrgId) {
+      profUpdQ = profUpdQ.eq("organization_id", resolvedOrgId);
+    }
+    const { error: updateErr } = await profUpdQ;
 
     if (updateErr) {
-      console.error("[POST /api/onboarding/complete] Failed to update onboarding profile:", updateErr.message);
+      return NextResponse.json(
+        { error: `Failed to save onboarding submission: ${updateErr.message}` },
+        { status: 500 }
+      );
     }
 
     // 5. Update employees details (Note: onboarding_completed and active status are granted ONLY upon final HR approval)
@@ -331,13 +390,13 @@ export async function POST(request: NextRequest) {
       let empCompleteUpdQ = (supabaseAdmin.from("employees") as any)
         .update(empUpdatePayload)
         .eq("id", user.id);
-      if (context.organizationId) {
-        empCompleteUpdQ = empCompleteUpdQ.eq("organization_id", context.organizationId);
+      if (resolvedOrgId) {
+        empCompleteUpdQ = empCompleteUpdQ.eq("organization_id", resolvedOrgId);
       }
       await empCompleteUpdQ;
 
       // Reset any rejected documents back to 'pending' upon candidate resubmission
-      await (supabaseAdmin as any)
+      let resetDocsQ = (supabaseAdmin as any)
         .from("onboarding_documents")
         .update({
           document_status: "pending",
@@ -346,6 +405,10 @@ export async function POST(request: NextRequest) {
         })
         .eq("user_id", user.id)
         .eq("document_status", "rejected");
+      if (resolvedOrgId) {
+        resetDocsQ = resetDocsQ.eq("organization_id", resolvedOrgId);
+      }
+      await resetDocsQ;
 
       await supabaseAdmin.auth.admin.updateUserById(user.id, {
         user_metadata: {
@@ -359,29 +422,44 @@ export async function POST(request: NextRequest) {
 
     // 6. Employee details for notification (empRecord resolved above)
     const candidateName = resolvedFullName || onbProfile.full_name || empRecord?.full_name || user.user_metadata?.full_name || "Employee";
-    const employeeIdFormatted = empRecord?.id ? `EMP-${empRecord.id.slice(0, 6).toUpperCase()}` : `EMP-${user.id.slice(0, 6).toUpperCase()}`;
     const departmentName = empRecord?.departments?.name || "General";
     const designationName = empRecord?.job_titles?.title_name || "Employee";
 
-    // 6. Record Audit Log (scoped strictly to resolved onboarding organization)
-    const resolvedOrgId: string | null = context.organizationId;
+    // 7. Record Durable Audit Log (checked explicitly; rollback submission status if audit write fails)
+    if (!auditAlreadyRecorded) {
+      const { error: auditErr } = await (supabaseAdmin as any)
+        .from("employee_onboarding_audit")
+        .insert({
+          organization_id: resolvedOrgId,
+          employee_id: user.id,
+          action: nextStatus === "RESUBMITTED" ? "RESUBMITTED_FOR_VERIFICATION" : "SUBMITTED_FOR_VERIFICATION",
+          performed_by: user.id,
+          previous_status: currentStatus,
+          new_status: nextStatus,
+          remarks: "Employee completed onboarding submission.",
+        });
 
-    try {
-      await (supabaseAdmin as any).from("employee_onboarding_audit").insert({
-        organization_id: resolvedOrgId,
-        employee_id: user.id,
-        action: nextStatus === "RESUBMITTED" ? "RESUBMITTED_FOR_VERIFICATION" : "SUBMITTED_FOR_VERIFICATION",
-        performed_by: user.id,
-        previous_status: currentStatus,
-        new_status: nextStatus,
-        remarks: "Employee completed onboarding submission.",
-      });
-    } catch {}
+      if (auditErr) {
+        let rollbackQ = (supabaseAdmin as any)
+          .from("onboarding_profiles")
+          .update(previousSnapshot)
+          .eq("user_id", user.id);
+        if (resolvedOrgId) {
+          rollbackQ = rollbackQ.eq("organization_id", resolvedOrgId);
+        }
+        await rollbackQ;
+        return NextResponse.json(
+          { error: `Failed to record onboarding audit trail: ${auditErr.message}` },
+          { status: 500 }
+        );
+      }
+    }
 
-    // 7. Trigger In-App Notification to HR Admins
+    // 8. Trigger In-App Notification to HR Admins strictly inside resolved organization
+    let inAppNotifiedCount = 0;
     try {
       const hrUserIds = resolvedOrgId ? await getHrUsers(resolvedOrgId) : [];
-      if (hrUserIds.length > 0) {
+      if (hrUserIds.length > 0 && !auditAlreadyRecorded) {
         await notify({
           userIds: hrUserIds,
           organizationId: resolvedOrgId,
@@ -394,26 +472,42 @@ export async function POST(request: NextRequest) {
           entityId: user.id,
           actorId: user.id,
         });
+        inAppNotifiedCount = hrUserIds.length;
       }
     } catch (notifErr) {
       console.warn("[Onboarding Notification Error]:", notifErr);
     }
 
-    // 8. Trigger Email Notification to HR
-    try {
-      await sendOnboardingSubmittedEmail({
-        candidateName,
-        candidateEmail: onbProfile.personal_email || user.email || "",
-        candidateType: onbProfile.candidate_type || "GRADUATE_FRESHER",
-      });
-    } catch (emailErr) {
-      console.warn("[Onboarding Email Error]:", emailErr);
+    // 9. Trigger Email Notification ONLY to authorized HR/Admin recipients in the selected organization
+    const emailRecipients = resolvedOrgId ? await getAuthorizedOnboardingEmailRecipients(resolvedOrgId) : [];
+    const emailResult = await sendOnboardingSubmittedEmail({
+      to: emailRecipients,
+      organizationName: context.organizationName || undefined,
+      candidateName,
+      candidateEmail: onbProfile.personal_email || user.email || "",
+      candidateType: onbProfile.candidate_type || "GRADUATE_FRESHER",
+    });
+
+    const warnings: string[] = [];
+    if (!emailResult.success && emailResult.error) {
+      warnings.push(emailResult.error);
     }
 
     return NextResponse.json({
       success: true,
       onboarding_status: nextStatus,
+      idempotentReplay: auditAlreadyRecorded,
       message: "Onboarding submitted successfully for HR Admin verification.",
+      notifications: {
+        inAppCount: inAppNotifiedCount,
+        email: {
+          sent: emailResult.success,
+          recipients: emailRecipients,
+          code: emailResult.code || (emailResult.success ? "SENT" : "FAILED"),
+          error: emailResult.error || null,
+        },
+      },
+      warnings,
     });
   } catch (err: any) {
     return NextResponse.json(

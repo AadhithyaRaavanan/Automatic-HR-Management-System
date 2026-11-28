@@ -234,6 +234,15 @@ function ProfilePageContent() {
                 setPhone((prev) => prev || p.phone);
               }
 
+              const rawQualification =
+                p.highest_qualification || edu.highest_qualification || edu.qualification || "";
+              const resolvedHasExperience =
+                typeof p.has_experience === "boolean"
+                  ? p.has_experience
+                  : typeof edu.has_experience === "boolean"
+                  ? edu.has_experience
+                  : undefined;
+
               setOnboardingData({
                 dob: p.dob,
                 gender: p.gender,
@@ -243,9 +252,8 @@ function ProfilePageContent() {
                 emergencyName: resEmergencyName,
                 emergencyRel: resEmergencyRel,
                 emergencyPhone: resEmergencyPhone,
-                highestQualification:
-                  p.highest_qualification || edu.highest_qualification || edu.qualification || "12th Standard",
-                hasExperience: Boolean(p.has_experience),
+                highestQualification: rawQualification.trim() || undefined,
+                hasExperience: resolvedHasExperience,
                 previousCompany: p.previous_company_name,
                 previousDesignation: p.previous_designation,
                 panNumber: p.pan_number,
@@ -526,16 +534,24 @@ function ProfilePageContent() {
     );
   }
 
+  const isAdminAccount = userRole === "admin";
+  const isAdminExempt = isAdminAccount && (!onboardingStatus || onboardingStatus === "NOT_STARTED");
+
   return (
     <div className="space-y-6">
       {/* Top Profile Header */}
       <section className="pt-1 pb-2 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight">
               My Profile
             </h1>
-            {onboardingStatus ? (
+            {isAdminExempt ? (
+              <span className="px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider border flex items-center gap-1.5 shadow-sm bg-status-success/15 text-status-success border-status-success/30">
+                <ShieldCheck className="w-4 h-4 text-status-success" />
+                <span>Admin Account · Onboarding Exempt</span>
+              </span>
+            ) : onboardingStatus ? (
               <span
                 className={cn(
                   "px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider border flex items-center gap-1.5 shadow-sm",
@@ -573,14 +589,21 @@ function ProfilePageContent() {
         </div>
 
         <div className="flex items-center gap-2">
-          {!isVerified && onboardingStatus && (
+          {isAdminExempt ? (
+            <Link
+              href="/hr/onboarding"
+              className="px-3.5 py-1.5 rounded-lg bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-medium transition-colors flex items-center gap-1.5"
+            >
+              <span>Manage onboarding reviews</span>
+            </Link>
+          ) : !isVerified && onboardingStatus ? (
             <Link
               href="/onboarding"
               className="px-3.5 py-1.5 rounded-lg bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-medium transition-colors flex items-center gap-1.5"
             >
-              <span>{isSubmitted ? "Review submission" : "Onboarding"}</span>
+              <span>{isSubmitted ? "Review submission" : "Complete onboarding"}</span>
             </Link>
-          )}
+          ) : null}
           <Link
             href="/settings"
             className="px-3.5 py-1.5 rounded-lg bg-card border border-border-light text-xs font-medium text-text-primary hover:bg-card-subtle transition-colors"
@@ -939,16 +962,18 @@ function ProfilePageContent() {
             <div className="p-3.5 rounded-xl bg-card-subtle border border-border-light space-y-1">
               <span className="text-[10px] font-bold uppercase text-text-tertiary block">Highest Qualification</span>
               <p className="font-extrabold text-sm text-text-primary">
-                {onboardingData?.highestQualification || "12th Standard"}
+                {onboardingData?.highestQualification || "Unknown"}
               </p>
             </div>
 
             <div className="p-3.5 rounded-xl bg-card-subtle border border-border-light space-y-1">
               <span className="text-[10px] font-bold uppercase text-text-tertiary block">Prior Corporate Experience</span>
               <p className="font-bold text-text-primary">
-                {onboardingData?.hasExperience
+                {onboardingData?.hasExperience === true
                   ? `Experienced • ${onboardingData.previousCompany || "Previous Employer"} (${onboardingData.previousDesignation || "Role"})`
-                  : "Fresher / Direct Graduate Entry"}
+                  : onboardingData?.hasExperience === false
+                  ? "Fresher / Direct Graduate Entry"
+                  : "Unknown"}
               </p>
             </div>
           </div>

@@ -3,6 +3,7 @@
 import * as React from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { FEATURES } from "@/lib/features";
+import { FeatureOrRoleGate } from "@/components/shared/gated-destination-guard";
 import { createClient } from "@/lib/supabase/client";
 import {
   ScrollText,
@@ -321,10 +322,13 @@ function AuditsAdminPageContent() {
 
 export default function AuditsAdminPage() {
   if (!FEATURES.AUDITS) {
-    if (typeof window !== "undefined") {
-      window.location.href = "/dashboard";
-    }
-    return null;
+    return (
+      <AppShell>
+        <FeatureOrRoleGate featureEnabled={false} featureName="Audit Viewer & Compliance">
+          {null}
+        </FeatureOrRoleGate>
+      </AppShell>
+    );
   }
   return <AuditsAdminPageContent />;
 }

@@ -227,7 +227,7 @@ function readKey<T>(key: string, fallback: T): T {
 }
 
 function writeKey<T>(key: string, value: T): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || !isDemoModeEnabled()) return;
   try {
     const prev = localStorage.getItem(key);
     const serialized = JSON.stringify(value);
@@ -236,19 +236,25 @@ function writeKey<T>(key: string, value: T): void {
     // Dispatch local change event
     window.dispatchEvent(new Event("remotehr_storage_change"));
     // Push update to server state only in demo mode
-    if (isDemoModeEnabled()) {
-      fetch("/api/demo/state", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [key.replace("remotehr_demo_", "")]: value }),
-      }).catch(() => {});
-    }
+    fetch("/api/demo/state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [key.replace("remotehr_demo_", "")]: value }),
+    }).catch(() => {});
   } catch {}
 }
 
-// Background sync from server (for cross-PC sync on Vercel)
+// Background sync from server (only active when explicitly opted into demo mode)
 export async function syncFromServer(): Promise<void> {
   if (typeof window === "undefined") return;
+  if (!isDemoModeEnabled()) {
+    try {
+      localStorage.removeItem(KEYS.tasks);
+      localStorage.removeItem(KEYS.attendanceDays);
+      localStorage.removeItem(KEYS.attendanceSessions);
+    } catch {}
+    return;
+  }
   try {
     const res = await fetch("/api/demo/state");
     if (!res.ok) return;

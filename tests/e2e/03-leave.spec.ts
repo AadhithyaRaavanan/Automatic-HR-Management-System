@@ -1,12 +1,7 @@
 import { test, expect } from "@playwright/test";
-import { getStorageStatePath, loginAndGetSession, loadEnvTest } from "../helpers/auth";
-import { createClient } from "@supabase/supabase-js";
+import { getStorageStatePath, loginAndGetSession, createAllowedSupabaseAdmin, createAllowedSupabaseUserClient, sendAllowedTestApiRequest } from "../helpers/auth";
 
-const env = loadEnvTest();
-const supabaseAdmin = createClient(
-  env.NEXT_PUBLIC_SUPABASE_URL || "https://bycyebxvxhmhelrvglvf.supabase.co",
-  env.SUPABASE_SERVICE_ROLE_KEY || ""
-);
+const supabaseAdmin = createAllowedSupabaseAdmin();
 
 const TEST_ADMIN_ID = "2552130d-cf00-4fdd-a676-e800c11937ce";
 const TEST_HR_ID = "3c3c8829-7902-470c-be62-297dccb3e382";
@@ -37,17 +32,7 @@ test.afterAll(async () => {
 test.describe("Module 3: Leave Management & Authorization", () => {
   test("Apply leave validation: end date before start, over-balance, and overlap are rejected", async () => {
     const empSession = await loginAndGetSession("employee");
-    const empClient = createClient(
-      env.NEXT_PUBLIC_SUPABASE_URL || "https://bycyebxvxhmhelrvglvf.supabase.co",
-      env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
-      {
-        global: {
-          headers: {
-            Authorization: `Bearer ${empSession.access_token}`,
-          },
-        },
-      }
-    );
+    const empClient = createAllowedSupabaseUserClient(empSession.access_token);
 
     // Seed 2 days of leave balance
     await supabaseAdmin.from("leave_balances").upsert({
@@ -141,7 +126,7 @@ test.describe("Module 3: Leave Management & Authorization", () => {
     expect(createdReq).toBeTruthy();
 
     // 1. Review without note or short note (< 5 chars) is rejected with 400
-    const resNoNote = await fetch("https://pulse.zenxea.com/api/leave/review", {
+    const resNoNote = await sendAllowedTestApiRequest("/api/leave/review", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${hrSession.access_token}`,
@@ -156,7 +141,7 @@ test.describe("Module 3: Leave Management & Authorization", () => {
     expect(resNoNote.status).toBe(400);
 
     // 2. Reject request with valid note (min 5 chars) -> balance used remains 0
-    const resReject = await fetch("https://pulse.zenxea.com/api/leave/review", {
+    const resReject = await sendAllowedTestApiRequest("/api/leave/review", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${hrSession.access_token}`,
@@ -197,7 +182,7 @@ test.describe("Module 3: Leave Management & Authorization", () => {
       .single();
 
     // 3. Approve request with valid note -> balance used is deducted (+2)
-    const resApprove = await fetch("https://pulse.zenxea.com/api/leave/review", {
+    const resApprove = await sendAllowedTestApiRequest("/api/leave/review", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${hrSession.access_token}`,
@@ -270,7 +255,7 @@ test.describe("Module 3: Leave Management & Authorization", () => {
       .single();
 
     // 1. Employee cannot review anyone's leave request (403)
-    const resEmpReview = await fetch("https://pulse.zenxea.com/api/leave/review", {
+    const resEmpReview = await sendAllowedTestApiRequest("/api/leave/review", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${empSession.access_token}`,
@@ -285,7 +270,7 @@ test.describe("Module 3: Leave Management & Authorization", () => {
     expect(resEmpReview.status).toBe(403);
 
     // 2. Manager cannot review non-team member (HR user) (403)
-    const resMgrNonTeam = await fetch("https://pulse.zenxea.com/api/leave/review", {
+    const resMgrNonTeam = await sendAllowedTestApiRequest("/api/leave/review", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${mgrSession.access_token}`,
@@ -300,7 +285,7 @@ test.describe("Module 3: Leave Management & Authorization", () => {
     expect(resMgrNonTeam.status).toBe(403);
 
     // 3. Manager CAN review own team member (employee) (200)
-    const resMgrTeam = await fetch("https://pulse.zenxea.com/api/leave/review", {
+    const resMgrTeam = await sendAllowedTestApiRequest("/api/leave/review", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${mgrSession.access_token}`,
@@ -331,7 +316,7 @@ test.describe("Module 3: Leave Management & Authorization", () => {
       .select("id")
       .single();
 
-    const resAdminSelf = await fetch("https://pulse.zenxea.com/api/leave/review", {
+    const resAdminSelf = await sendAllowedTestApiRequest("/api/leave/review", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${adminSession.access_token}`,

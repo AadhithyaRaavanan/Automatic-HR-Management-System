@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const docs = await listCandidateDocs(requestedUserId);
+    const docs = await listCandidateDocs(requestedUserId, context.organizationId);
     return NextResponse.json({ documents: docs });
   } catch (err: any) {
     return NextResponse.json(

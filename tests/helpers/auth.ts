@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { createClient } from "@supabase/supabase-js";
-import type { Session } from "@supabase/supabase-js";
+import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { createChunks } from "@supabase/ssr";
 import { generateSync } from "otplib";
 
@@ -12,6 +12,10 @@ export interface RoleCredentials {
   password: string;
   totpSecret?: string;
 }
+
+const DEFAULT_LOCAL_APP_ORIGIN = "http://127.0.0.1:3000";
+const DEFAULT_LOCAL_SUPABASE_ORIGIN = "http://127.0.0.1:54321";
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]", "0.0.0.0"]);
 
 export function loadEnvTest(): Record<string, string | undefined> {
   const envPath = path.resolve(process.cwd(), ".env.test");
@@ -32,30 +36,115 @@ export function loadEnvTest(): Record<string, string | undefined> {
   return { ...envMap, ...process.env };
 }
 
+/**
+ * Enforces that automated test credentials, fixture writes, and state-changing
+ * requests only target an explicitly allowed disposable local/test origin.
+ */
+export function assertAllowedTestOrigin(rawUrl: string, contextLabel: string = "test operation"): string {
+  const env = loadEnvTest();
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error(`[Test Origin Guard] Invalid URL "${rawUrl}" for ${contextLabel}.`);
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(`[Test Origin Guard] Unsupported protocol "${parsed.protocol}" for ${contextLabel}.`);
+  }
+
+  const normalizedOrigin = parsed.origin.replace(/\/+$/, "");
+  const hostname = parsed.hostname.toLowerCase();
+
+  // Never permit known production hosts even if misconfigured unless an explicit test sandbox allows non-loopback hosts
+  const explicitAllowlist = (env.PLAYWRIGHT_ALLOWED_TEST_ORIGINS || "")
+    .split(",")
+    .map((entry) => entry.trim().replace(/\/+$/, ""))
+    .filter(Boolean);
+
+  const isLoopback = LOOPBACK_HOSTS.has(hostname);
+  const isExplicitlyAllowed = explicitAllowlist.includes(normalizedOrigin);
+
+  if (!isLoopback && !isExplicitlyAllowed) {
+    throw new Error(
+      `[Test Origin Guard] Blocked disallowed non-test origin "${normalizedOrigin}" for ${contextLabel}. Only local loopback origins or PLAYWRIGHT_ALLOWED_TEST_ORIGINS entries are permitted.`
+    );
+  }
+
+  return normalizedOrigin;
+}
+
+export function getAllowedTestBaseUrl(): string {
+  const env = loadEnvTest();
+  const candidate = env.PLAYWRIGHT_TEST_BASE_URL || env.NEXT_PUBLIC_APP_URL || DEFAULT_LOCAL_APP_ORIGIN;
+  return assertAllowedTestOrigin(candidate, "Playwright baseURL");
+}
+
+export function getAllowedTestSupabaseUrl(): string {
+  const env = loadEnvTest();
+  const candidate = env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_LOCAL_SUPABASE_ORIGIN;
+  return assertAllowedTestOrigin(candidate, "Supabase API origin");
+}
+
+export function createAllowedSupabaseAdmin(): SupabaseClient {
+  const env = loadEnvTest();
+  const supabaseUrl = getAllowedTestSupabaseUrl();
+  const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY || "";
+  return createClient(supabaseUrl, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+export function createAllowedSupabaseUserClient(accessToken: string): SupabaseClient {
+  const env = loadEnvTest();
+  const supabaseUrl = getAllowedTestSupabaseUrl();
+  const anonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+  return createClient(supabaseUrl, anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  });
+}
+
+export async function sendAllowedTestApiRequest(
+  pathOrUrl: string,
+  init: RequestInit = {}
+): Promise<Response> {
+  const baseUrl = getAllowedTestBaseUrl();
+  const resolvedUrl = pathOrUrl.startsWith("http://") || pathOrUrl.startsWith("https://")
+    ? pathOrUrl
+    : `${baseUrl}${pathOrUrl.startsWith("/") ? "" : "/"}${pathOrUrl}`;
+  assertAllowedTestOrigin(resolvedUrl, `API request (${pathOrUrl})`);
+  return fetch(resolvedUrl, init);
+}
+
 export function getRoleCredentials(role: RoleName): RoleCredentials {
   const env = loadEnvTest();
   switch (role) {
     case "admin":
       return {
-        email: env.TEST_ADMIN_EMAIL || "test_admin@zenxea.com",
-        password: env.TEST_ADMIN_PASSWORD || "TestAdmin123!#Zen",
+        email: env.TEST_ADMIN_EMAIL || "test_admin@pulse.test",
+        password: env.TEST_ADMIN_PASSWORD || "TestAdmin123!#Local",
         totpSecret: env.TEST_ADMIN_TOTP_SECRET,
       };
     case "hr":
       return {
-        email: env.TEST_HR_EMAIL || "test_hr@zenxea.com",
-        password: env.TEST_HR_PASSWORD || "TestHr123!#Zen",
+        email: env.TEST_HR_EMAIL || "test_hr@pulse.test",
+        password: env.TEST_HR_PASSWORD || "TestHr123!#Local",
         totpSecret: env.TEST_HR_TOTP_SECRET,
       };
     case "manager":
       return {
-        email: env.TEST_MANAGER_EMAIL || "test_manager@zenxea.com",
-        password: env.TEST_MANAGER_PASSWORD || "TestManager123!#Zen",
+        email: env.TEST_MANAGER_EMAIL || "test_manager@pulse.test",
+        password: env.TEST_MANAGER_PASSWORD || "TestManager123!#Local",
       };
     case "employee":
       return {
-        email: env.TEST_EMPLOYEE_EMAIL || "test_employee@zenxea.com",
-        password: env.TEST_EMPLOYEE_PASSWORD || "TestEmployee123!#Zen",
+        email: env.TEST_EMPLOYEE_EMAIL || "test_employee@pulse.test",
+        password: env.TEST_EMPLOYEE_PASSWORD || "TestEmployee123!#Local",
       };
   }
 }
@@ -70,7 +159,7 @@ export function getStorageStatePath(role: RoleName): string {
 
 export async function loginAndGetSession(role: RoleName): Promise<Session> {
   const env = loadEnvTest();
-  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL || "https://bycyebxvxhmhelrvglvf.supabase.co";
+  const supabaseUrl = getAllowedTestSupabaseUrl();
   const anonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
   const creds = getRoleCredentials(role);
 
@@ -92,10 +181,7 @@ export async function loginAndGetSession(role: RoleName): Promise<Session> {
   // Elevate to AAL2 if TOTP secret exists
   if (creds.totpSecret) {
     try {
-      const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY || "";
-      const superAdmin = createClient(supabaseUrl, serviceKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-      });
+      const superAdmin = createAllowedSupabaseAdmin();
       const { data: factorList } = await superAdmin.auth.admin.mfa.listFactors({
         userId: signInData.user.id,
       });
@@ -123,6 +209,8 @@ export async function loginAndGetSession(role: RoleName): Promise<Session> {
 }
 
 export async function ensureStorageState(role: RoleName, force: boolean = false): Promise<string> {
+  const baseUrl = getAllowedTestBaseUrl();
+  const supabaseUrl = getAllowedTestSupabaseUrl();
   const filePath = getStorageStatePath(role);
 
   // Re-generate if force requested or older than 5 minutes
@@ -135,11 +223,14 @@ export async function ensureStorageState(role: RoleName, force: boolean = false)
   }
 
   const session = await loginAndGetSession(role);
-  const cookieBaseName = "sb-bycyebxvxhmhelrvglvf-auth-token";
+  const supaHostPrefix = new URL(supabaseUrl).hostname.split(".")[0];
+  const cookieBaseName = `sb-${supaHostPrefix}-auth-token`;
   const sessionString = JSON.stringify(session);
   const chunks = createChunks(cookieBaseName, sessionString);
 
-  const domain = "pulse.zenxea.com";
+  const parsedBase = new URL(baseUrl);
+  const domain = parsedBase.hostname;
+  const isHttps = parsedBase.protocol === "https:";
   const expires = Math.floor(Date.now() / 1000) + 86400 * 7; // 7 days
 
   const cookies = chunks.map((chunk) => ({
@@ -149,7 +240,7 @@ export async function ensureStorageState(role: RoleName, force: boolean = false)
     path: "/",
     expires,
     httpOnly: false,
-    secure: true,
+    secure: isHttps,
     sameSite: "Lax" as const,
   }));
 
@@ -157,7 +248,7 @@ export async function ensureStorageState(role: RoleName, force: boolean = false)
     cookies,
     origins: [
       {
-        origin: "https://pulse.zenxea.com",
+        origin: parsedBase.origin,
         localStorage: [
           {
             name: `${cookieBaseName}`,

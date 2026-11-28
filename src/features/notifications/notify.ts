@@ -146,6 +146,7 @@ export async function notify(params: NotifyParams): Promise<NotifyResult> {
 
     // 4. Batch Insert In-App Notifications
     let inAppCount = 0;
+    let insertErrorMessage: string | undefined;
     if (allowedInAppUserIds.length > 0) {
       try {
         const rows = allowedInAppUserIds.map((uid) => ({
@@ -161,36 +162,35 @@ export async function notify(params: NotifyParams): Promise<NotifyResult> {
           dedupe_key: dedupeKey || null,
         }));
 
-        let insertSuccess = false;
-        try {
-          const { data, error } = await (supabaseAdmin.from("notifications") as any)
-            .upsert(rows, {
-              onConflict: "user_id,dedupe_key",
-              ignoreDuplicates: true,
-            })
-            .select("id");
+        const { data, error } = await (supabaseAdmin.from("notifications") as any)
+          .upsert(rows, {
+            onConflict: "user_id,dedupe_key",
+            ignoreDuplicates: true,
+          })
+          .select("id");
 
-          if (!error && data) {
-            inAppCount = data.length;
-            insertSuccess = true;
+        if (!error) {
+          inAppCount = Array.isArray(data) ? data.length : 0;
+        } else {
+          // Only fall back to direct insert if conflict target isn't applicable (never strip org or coerce type)
+          const errMsg = String(error?.message || "");
+          if (/on conflict|no unique or exclusion constraint/i.test(errMsg)) {
+            const { data: insData, error: insErr } = await (supabaseAdmin.from("notifications") as any)
+              .insert(rows)
+              .select("id");
+            if (!insErr) {
+              inAppCount = Array.isArray(insData) ? insData.length : rows.length;
+            } else {
+              insertErrorMessage = insErr.message;
+              console.error("[notify] Direct notification insert failed:", insErr);
+            }
+          } else {
+            insertErrorMessage = errMsg || "Failed to insert notifications";
+            console.error("[notify] Notification upsert failed:", error);
           }
-        } catch {}
-
-        if (!insertSuccess) {
-          // Fallback to minimal compatible row structure supported by all schemas
-          const safeRows = allowedInAppUserIds.map((uid) => ({
-            user_id: uid,
-            type: ["missed_checkout", "request_status", "policy_update", "reminder"].includes(type)
-              ? type
-              : "reminder",
-            title,
-            body,
-            link: link || null,
-          }));
-          const { error: insErr } = await (supabaseAdmin.from("notifications") as any).insert(safeRows);
-          if (!insErr) inAppCount = safeRows.length;
         }
-      } catch (insertErr) {
+      } catch (insertErr: any) {
+        insertErrorMessage = insertErr?.message || "Failed to insert notifications";
         console.error("[notify] Failed to insert notifications:", insertErr);
       }
     }
@@ -200,10 +200,14 @@ export async function notify(params: NotifyParams): Promise<NotifyResult> {
     if (allowedEmailUserIds.length > 0) {
       (async () => {
         try {
-          // Fetch employee emails and names
-          const { data: emps } = await (supabaseAdmin.from("employees") as any)
+          // Fetch employee emails and names scoped to organizationId when provided
+          let empQuery = (supabaseAdmin.from("employees") as any)
             .select("id, email, full_name")
             .in("id", allowedEmailUserIds);
+          if (organizationId && typeof empQuery.eq === "function") {
+            empQuery = empQuery.eq("organization_id", organizationId);
+          }
+          const { data: emps } = await empQuery;
 
           const emailMap = new Map<string, { email: string; name?: string }>();
           if (emps) {
@@ -261,9 +265,10 @@ export async function notify(params: NotifyParams): Promise<NotifyResult> {
     }
 
     return {
-      success: true,
+      success: !insertErrorMessage,
       inAppCount,
       emailCount,
+      ...(insertErrorMessage ? { error: insertErrorMessage } : {}),
     };
   } catch (globalErr: any) {
     console.error("[notify] Unhandled error during notification processing:", globalErr);

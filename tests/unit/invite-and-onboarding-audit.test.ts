@@ -22,13 +22,16 @@ vi.mock("@/lib/supabase/admin-config", () => ({
   getSupabaseAdminConfigError: vi.fn(() => null),
 }));
 
+const mockSendSubmittedEmail = vi.hoisted(() => vi.fn(async () => ({ success: true })));
 vi.mock("@/lib/email/resend", () => ({
   sendWelcomeCredentialsEmail: vi.fn(async () => ({ success: false })),
-  sendOnboardingSubmittedEmail: vi.fn(async () => ({ success: true })),
+  sendOnboardingSubmittedEmail: mockSendSubmittedEmail,
 }));
 
+const mockGetAuthorizedEmails = vi.hoisted(() => vi.fn(async () => ["hr-beta@orgb.test"]));
 vi.mock("@/features/notifications/recipients", () => ({
   getHrUsers: vi.fn(async () => []),
+  getAuthorizedOnboardingEmailRecipients: mockGetAuthorizedEmails,
 }));
 
 vi.mock("@/features/notifications/notify", () => ({
@@ -49,6 +52,8 @@ const mockDb = vi.hoisted(() => ({
   employeeById: null as any,
   auditInserts: [] as any[],
   empUpsertRow: null as any,
+  failAuditInsert: false,
+  profileUpdates: [] as any[],
 }));
 
 function buildTableMock(table: string) {
@@ -88,6 +93,9 @@ function buildTableMock(table: string) {
     update: vi.fn((row: any) => {
       mode = "update";
       payload = row;
+      if (table === "onboarding_profiles") {
+        mockDb.profileUpdates.push(row);
+      }
       return q;
     }),
     delete: vi.fn(() => {
@@ -132,6 +140,9 @@ function buildTableMock(table: string) {
       return { data: null, error: null };
     }),
     then: (resolve: any) => {
+      if (table === "employee_onboarding_audit" && mode === "insert" && mockDb.failAuditInsert) {
+        return Promise.resolve({ data: null, error: { message: "audit_logs failure" } }).then(resolve);
+      }
       if (table === "organization_members" && mode === "select") {
         return Promise.resolve({ data: mockDb.membershipsForTarget, error: null }).then(resolve);
       }
@@ -191,6 +202,10 @@ describe("Invite security & onboarding audit org scoping", () => {
     mockDb.employeeById = null;
     mockDb.auditInserts = [];
     mockDb.empUpsertRow = null;
+    mockDb.failAuditInsert = false;
+    mockDb.profileUpdates = [];
+    mockGetAuthorizedEmails.mockResolvedValue(["hr-beta@orgb.test"]);
+    mockSendSubmittedEmail.mockResolvedValue({ success: true });
   });
 
   it("rejects cross-tenant invite with 409 before mutating auth user metadata or password", async () => {
@@ -250,8 +265,8 @@ describe("Invite security & onboarding audit org scoping", () => {
     });
 
     const res = await invitePost(req);
-    expect(res.status).toBe(200);
     const json = await res.json();
+    expect(res.status, JSON.stringify(json)).toBe(200);
     expect(json.success).toBe(true);
     expect(mockRevalidatePath).toHaveBeenCalled();
   });
@@ -288,6 +303,7 @@ describe("Invite security & onboarding audit org scoping", () => {
     expect(forgedRes.status).toBe(403);
 
     // 3. Explicit valid organization selection stamps selected org cleanly on audit record
+    //    and routes email strictly to authorized recipients in ORG_B
     const okReq = new NextRequest("http://localhost:3000/api/onboarding/complete", {
       method: "POST",
       headers: {
@@ -298,8 +314,51 @@ describe("Invite security & onboarding audit org scoping", () => {
     });
     const okRes = await completeOnboardingPost(okReq);
     expect(okRes.status).toBe(200);
+    const okJson = await okRes.json();
     expect(mockDb.auditInserts).toHaveLength(1);
     expect(mockDb.auditInserts[0].organization_id).toBe(ORG_B);
     expect(mockDb.auditInserts[0].employee_id).toBe("user-onb-1");
+    expect(mockGetAuthorizedEmails).toHaveBeenCalledWith(ORG_B);
+    expect(mockSendSubmittedEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: ["hr-beta@orgb.test"],
+        organizationName: "Org Beta",
+      })
+    );
+    expect(okJson.notifications.email.sent).toBe(true);
+    expect(okJson.notifications.email.recipients).toEqual(["hr-beta@orgb.test"]);
+
+    // 4. Surfaces email delivery/config failure explicitly in response
+    mockSendSubmittedEmail.mockResolvedValueOnce({
+      success: false,
+      code: "EMAIL_NOT_CONFIGURED",
+      error: "Email transport not configured",
+    } as any);
+    const warnRes = await completeOnboardingPost(
+      new NextRequest("http://localhost:3000/api/onboarding/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-organization-id": ORG_B },
+        body: JSON.stringify({ declaration: true }),
+      })
+    );
+    expect(warnRes.status).toBe(200);
+    const warnJson = await warnRes.json();
+    expect(warnJson.notifications.email.sent).toBe(false);
+    expect(warnJson.notifications.email.code).toBe("EMAIL_NOT_CONFIGURED");
+    expect(warnJson.warnings).toContain("Email transport not configured");
+
+    // 5. Fails and rolls back submission status if audit write returns DB error
+    mockDb.failAuditInsert = true;
+    const rollbackRes = await completeOnboardingPost(
+      new NextRequest("http://localhost:3000/api/onboarding/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-organization-id": ORG_B },
+        body: JSON.stringify({ declaration: true }),
+      })
+    );
+    expect(rollbackRes.status).toBe(500);
+    expect(mockDb.profileUpdates[mockDb.profileUpdates.length - 1]).toEqual(
+      expect.objectContaining({ status: "draft" })
+    );
   });
 });

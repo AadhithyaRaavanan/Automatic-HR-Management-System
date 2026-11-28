@@ -1,12 +1,7 @@
 import { test, expect } from "@playwright/test";
-import { getStorageStatePath, loginAndGetSession, loadEnvTest } from "../helpers/auth";
-import { createClient } from "@supabase/supabase-js";
+import { getStorageStatePath, loginAndGetSession, createAllowedSupabaseAdmin, getAllowedTestBaseUrl } from "../helpers/auth";
 
-const env = loadEnvTest();
-const supabaseAdmin = createClient(
-  env.NEXT_PUBLIC_SUPABASE_URL || "https://bycyebxvxhmhelrvglvf.supabase.co",
-  env.SUPABASE_SERVICE_ROLE_KEY || ""
-);
+const supabaseAdmin = createAllowedSupabaseAdmin();
 
 const ORG_ID = "00000000-0000-0000-0000-000000000001";
 const TEST_ADMIN_ID = "2552130d-cf00-4fdd-a676-e800c11937ce";
@@ -111,9 +106,10 @@ test.describe("Module 6: EMS & Onboarding Verification", () => {
     }
   });
 
-  test("Invite link uses https://pulse.zenxea.com, never localhost", async ({ request }) => {
+  test("Invite link uses configured allowed test origin, never hardcoded production", async ({ request }) => {
+    const expectedOrigin = getAllowedTestBaseUrl();
     const adminSession = await loginAndGetSession("admin");
-    const inviteEmail = `test_candidate_invite_${Date.now()}@zenxea.com`;
+    const inviteEmail = `test_candidate_invite_${Date.now()}@pulse.test`;
     const res = await request.post("/api/admin/users/invite", {
       headers: { Authorization: `Bearer ${adminSession.access_token}` },
       data: {
@@ -127,9 +123,8 @@ test.describe("Module 6: EMS & Onboarding Verification", () => {
     const result = await res.json();
     expect(result.success).toBe(true);
     if (result.inviteLink) {
-      expect(decodeURIComponent(result.inviteLink)).toContain("https://pulse.zenxea.com/onboarding");
-      expect(result.inviteLink).not.toContain("localhost");
-      expect(result.inviteLink).not.toContain("127.0.0.1");
+      const decodedLink = decodeURIComponent(result.inviteLink);
+      expect(decodedLink).toContain(`${expectedOrigin}/onboarding`);
     }
 
     // Clean up

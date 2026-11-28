@@ -209,7 +209,7 @@ VALUES
     ('00000000-0000-0000-0000-000000000006', '00000000-0000-0000-0000-000000000001', 'employee'),
     ('00000000-0000-0000-0000-000000000007', '00000000-0000-0000-0000-000000000001', 'employee'),
     ('00000000-0000-0000-0000-000000000008', '00000000-0000-0000-0000-000000000001', 'employee')
-ON CONFLICT (user_id) DO UPDATE SET role = EXCLUDED.role;
+ON CONFLICT (organization_id, user_id) DO UPDATE SET role = EXCLUDED.role, status = 'active';
 
 -- ============================================================================
 -- 3. EMPLOYEES DIRECTORY & REPORTING HIERARCHY

@@ -1,13 +1,8 @@
 import { test, expect } from "@playwright/test";
-import { getStorageStatePath, ensureStorageState, RoleName, loadEnvTest } from "./helpers/auth";
-import { createClient } from "@supabase/supabase-js";
+import { getStorageStatePath, ensureStorageState, RoleName, createAllowedSupabaseAdmin } from "./helpers/auth";
 import { ROLE_TUTORIAL_STEPS } from "../src/features/tutorial/tutorial-config";
 
-const env = loadEnvTest();
-const supabaseAdmin = createClient(
-  env.NEXT_PUBLIC_SUPABASE_URL || "https://bycyebxvxhmhelrvglvf.supabase.co",
-  env.SUPABASE_SERVICE_ROLE_KEY || ""
-);
+const supabaseAdmin = createAllowedSupabaseAdmin();
 
 const TEST_USERS: Record<RoleName, string> = {
   admin: "2552130d-cf00-4fdd-a676-e800c11937ce",

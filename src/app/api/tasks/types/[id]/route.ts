@@ -31,7 +31,22 @@ export async function PATCH(
     }
 
     if (body.department_id !== undefined) {
-      updates.department_id = body.department_id || null;
+      if (body.department_id) {
+        const { data: deptRow } = await (supabaseAdmin.from("departments") as any)
+          .select("id")
+          .eq("id", body.department_id)
+          .eq("organization_id", context.organizationId)
+          .maybeSingle();
+        if (!deptRow?.id) {
+          return NextResponse.json(
+            { error: "Selected department does not belong to your organization." },
+            { status: 400 }
+          );
+        }
+        updates.department_id = body.department_id;
+      } else {
+        updates.department_id = null;
+      }
     }
 
     if (body.default_priority !== undefined) {

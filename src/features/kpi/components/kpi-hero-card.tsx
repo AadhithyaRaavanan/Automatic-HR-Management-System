@@ -24,6 +24,8 @@ interface KpiHeroCardProps {
   userRole?: string;
   previousPeriodLabel?: string;
   periodType?: string;
+  hasElapsedEligibleDays?: boolean;
+  joinedOn?: string | null;
   className?: string;
 }
 
@@ -38,6 +40,8 @@ export function KpiHeroCard({
   subjectName = "Employee",
   userRole = "employee",
   previousPeriodLabel = "prior period",
+  hasElapsedEligibleDays = true,
+  joinedOn = null,
   className,
 }: KpiHeroCardProps) {
   const isManagerOrAdmin = userRole === "manager" || userRole === "hr" || userRole === "admin";
@@ -51,6 +55,8 @@ export function KpiHeroCard({
     customWeights,
     isSelfView,
     subjectName,
+    hasElapsedEligibleDays,
+    joinedOn,
   });
 
   const statusInfo = getStatusDisplay(summary.statusKey);
@@ -168,7 +174,13 @@ export function KpiHeroCard({
                 <span className="text-xs font-bold text-text-primary">Attendance</span>
               </div>
               <p className="text-[11px] text-text-tertiary mt-0.5">
-                {expectedDays != null ? `${expectedDays} scheduled days` : "Current window"}
+                {!hasElapsedEligibleDays
+                  ? joinedOn
+                    ? `Joined ${joinedOn} · 0 scheduled days elapsed`
+                    : "0 scheduled days elapsed"
+                  : expectedDays != null
+                  ? `${expectedDays} scheduled days`
+                  : "Current window"}
               </p>
             </div>
             <div className="text-right tabular-nums">
@@ -178,7 +190,9 @@ export function KpiHeroCard({
                   <span className="text-sm font-semibold text-text-tertiary">/{expectedDays}</span>
                 </span>
               ) : (
-                <span className="text-sm font-bold text-text-tertiary">No data</span>
+                <span className="text-sm font-bold text-text-tertiary">
+                  {!hasElapsedEligibleDays ? "0 / 0" : "No data"}
+                </span>
               )}
             </div>
           </div>
@@ -207,7 +221,9 @@ export function KpiHeroCard({
             </div>
           ) : (
             <p className="text-[11px] text-text-tertiary">
-              No attendance check-ins logged yet.
+              {!hasElapsedEligibleDays
+                ? "No eligible shifts have elapsed yet in this period."
+                : "No attendance check-ins logged yet."}
             </p>
           )}
         </div>

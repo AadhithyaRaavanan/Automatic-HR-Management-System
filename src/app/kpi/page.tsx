@@ -712,6 +712,8 @@ function KpiContent() {
             userRole={userRole}
             previousPeriodLabel={preset === "month" ? "last month" : preset === "quarter" ? "last quarter" : "previous period"}
             periodType={preset}
+            hasElapsedEligibleDays={kpiData?.current?.hasElapsedEligibleDays ?? true}
+            joinedOn={kpiData?.current?.joinedOn ?? null}
           />
 
           {/* First-screen Next Actions */}

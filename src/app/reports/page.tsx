@@ -39,25 +39,46 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import {
+  canLockPayrollMonth,
+  getPendingChecklistBlockers,
+  paginateReportRows,
+  type MonthCloseChecklistState,
+} from "@/features/reports/helpers";
 
 interface AttendanceRecordRow {
   id: string;
   employeeId: string;
   employeeName: string;
   employeeTimezone: string;
+  employeeJoinedOn: string | null;
   department: string;
   workDate: string;
   status: AttendanceDayStatus;
   totalMinutes: number;
   isLate: boolean;
   locked: boolean;
+  isPreHireAnomaly: boolean;
 }
 
 interface EmployeeOption {
   id: string;
   full_name: string;
   timezone: string;
+  joined_on: string | null;
   department: string;
+}
+
+interface PreHireRepairProposal {
+  id: string;
+  employee_id: string;
+  work_date: string;
+  original_status: string;
+  original_locked: boolean;
+  employee_joined_on: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  employeeName?: string;
 }
 
 interface MonthCloseChecklist {
@@ -95,6 +116,7 @@ function ReportsPageContent() {
   const [employees, setEmployees] = React.useState<EmployeeOption[]>([]);
   const [departments, setDepartments] = React.useState<string[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [reportsError, setReportsError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     setMounted(true);
@@ -102,14 +124,23 @@ function ReportsPageContent() {
 
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedDept, setSelectedDept] = React.useState("All");
+  const [tablePage, setTablePage] = React.useState(1);
 
   // Month-End Close checklist state
-  const [checklist, setChecklist] = React.useState<MonthCloseChecklist | null>(null);
+  const [checklist, setChecklist] = React.useState<MonthCloseChecklistState | null>(null);
   const [checklistLoading, setChecklistLoading] = React.useState(false);
+  const [checklistError, setChecklistError] = React.useState<string | null>(null);
   const [lockingMonth, setLockingMonth] = React.useState(false);
+
+  const reportsReqIdRef = React.useRef(0);
+  const checklistReqIdRef = React.useRef(0);
   const [unlockModalOpen, setUnlockModalOpen] = React.useState(false);
   const [unlockReason, setUnlockReason] = React.useState("");
   const [unlockingMonth, setUnlockingMonth] = React.useState(false);
+  const [repairProposals, setRepairProposals] = React.useState<PreHireRepairProposal[]>([]);
+  const [scanningRepairs, setScanningRepairs] = React.useState(false);
+  const [repairNotesById, setRepairNotesById] = React.useState<Record<string, string>>({});
+  const [reviewingProposalId, setReviewingProposalId] = React.useState<string | null>(null);
 
   // HR Attendance Correction Modal state
   const [correctModalOpen, setCorrectModalOpen] = React.useState(false);
@@ -131,7 +162,11 @@ function ReportsPageContent() {
   }, [selectedYear, selectedMonth]);
 
   const loadReportsData = React.useCallback(async () => {
+    const reqId = ++reportsReqIdRef.current;
     setLoading(true);
+    setReportsError(null);
+    setTablePage(1);
+
     try {
       const allDays: any[] = [];
       const PAGE_SIZE = 500;
@@ -140,15 +175,18 @@ function ReportsPageContent() {
         const pageRes = await (supabase as any)
           .from("attendance_days")
           .select(
-            "employee_id, work_date, status, total_minutes, is_late, locked, employees:employee_id(full_name, timezone, departments:department_id(name))"
+            "employee_id, work_date, status, total_minutes, is_late, locked, employees:employee_id(full_name, timezone, joined_on, departments:department_id(name))"
           )
           .gte("work_date", periodRange.start)
           .lte("work_date", periodRange.end)
           .order("work_date", { ascending: false })
+          .order("employee_id", { ascending: true })
           .range(offset, offset + PAGE_SIZE - 1);
+
+        if (reqId !== reportsReqIdRef.current) return;
+
         if (pageRes.error) {
-          allDays.length = 0;
-          break;
+          throw new Error(pageRes.error.message || "Failed to fetch attendance report records.");
         }
         const chunk = pageRes.data || [];
         allDays.push(...chunk);
@@ -156,20 +194,31 @@ function ReportsPageContent() {
         offset += PAGE_SIZE;
       }
 
-      const [daysRes, empsRes] = await Promise.all([
-        Promise.resolve({ error: null, data: allDays }),
+      const [empsRes, repairsRes] = await Promise.all([
         (supabase as any)
           .from("employees")
-          .select("id, full_name, timezone, departments:department_id(name)")
+          .select("id, full_name, timezone, joined_on, departments:department_id(name)")
           .eq("status", "active")
           .order("full_name"),
+        (supabase as any)
+          .from("attendance_repair_proposals")
+          .select("id, employee_id, work_date, original_status, original_locked, employee_joined_on, reason, status, employees:employee_id(full_name)")
+          .eq("status", "pending")
+          .order("work_date", { ascending: false }),
       ]);
 
-      if (!empsRes.error && empsRes.data) {
+      if (reqId !== reportsReqIdRef.current) return;
+
+      if (empsRes.error) {
+        throw new Error(empsRes.error.message || "Failed to load active employees.");
+      }
+
+      if (empsRes.data) {
         const empList: EmployeeOption[] = empsRes.data.map((e: any) => ({
           id: e.id,
           full_name: e.full_name,
           timezone: e.timezone || "UTC",
+          joined_on: e.joined_on ? String(e.joined_on).slice(0, 10) : null,
           department: e.departments?.name || "General",
         }));
         setEmployees(empList);
@@ -177,45 +226,83 @@ function ReportsPageContent() {
         setDepartments(deptSet);
       }
 
-      if (!daysRes.error && daysRes.data) {
-        setRecords(
-          daysRes.data.map((d: any) => ({
+      if (!repairsRes?.error && repairsRes?.data) {
+        setRepairProposals(
+          repairsRes.data.map((p: any) => ({
+            ...p,
+            employeeName: p.employees?.full_name || "Employee",
+          }))
+        );
+      } else {
+        setRepairProposals([]);
+      }
+
+      setRecords(
+        allDays.map((d: any) => {
+          const joinedOn = d.employees?.joined_on ? String(d.employees.joined_on).slice(0, 10) : null;
+          const totalMinutes = d.total_minutes || 0;
+          const isPreHireAnomaly = Boolean(
+            d.status === "absent" && totalMinutes === 0 && joinedOn && d.work_date < joinedOn
+          );
+          return {
             id: `${d.employee_id}:${d.work_date}`,
             employeeId: d.employee_id,
             employeeName: d.employees?.full_name || "Employee",
             employeeTimezone: d.employees?.timezone || "UTC",
+            employeeJoinedOn: joinedOn,
             department: d.employees?.departments?.name || "General",
             workDate: d.work_date,
             status: d.status,
-            totalMinutes: d.total_minutes || 0,
+            totalMinutes,
             isLate: Boolean(d.is_late),
             locked: Boolean(d.locked),
-          }))
-        );
-      } else {
-        setRecords([]);
-      }
-    } catch {
+            isPreHireAnomaly,
+          };
+        })
+      );
+      setReportsError(null);
+    } catch (err: any) {
+      if (reqId !== reportsReqIdRef.current) return;
       setRecords([]);
+      setReportsError(err?.message || "Failed to load attendance report data.");
     } finally {
-      setLoading(false);
+      if (reqId === reportsReqIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [supabase, periodRange]);
 
   const loadMonthChecklist = React.useCallback(async () => {
+    const reqId = ++checklistReqIdRef.current;
+    // Immediately invalidate previous month's checklist before requesting new period
+    setChecklist(null);
+    setChecklistError(null);
     setChecklistLoading(true);
     try {
       const { data, error } = await (supabase.rpc as any)("get_month_close_checklist", {
         p_year: selectedYear,
         p_month: selectedMonth,
       });
-      if (!error && data) {
-        setChecklist(data as MonthCloseChecklist);
+      if (reqId !== checklistReqIdRef.current) return;
+      if (error || !data) {
+        setChecklist(null);
+        setChecklistError(
+          error?.message || "Month-end close checklist could not be loaded."
+        );
+      } else {
+        setChecklist(data as MonthCloseChecklistState);
+        setChecklistError(null);
       }
-    } catch {
-      // Ignore if caller lacks session/AAL2 yet
+    } catch (err: any) {
+      if (reqId !== checklistReqIdRef.current) return;
+      setChecklist(null);
+      setChecklistError(
+        err?.message || "Month-end close checklist could not be loaded."
+      );
     } finally {
-      setChecklistLoading(false);
+      if (reqId === checklistReqIdRef.current) {
+        setChecklistLoading(false);
+      }
     }
   }, [supabase, selectedYear, selectedMonth]);
 
@@ -223,6 +310,10 @@ function ReportsPageContent() {
     loadReportsData();
     loadMonthChecklist();
   }, [loadReportsData, loadMonthChecklist]);
+
+  React.useEffect(() => {
+    setTablePage(1);
+  }, [searchQuery, selectedDept, selectedYear, selectedMonth]);
 
   const filteredData = records.filter((r) => {
     const matchesSearch =
@@ -233,36 +324,39 @@ function ReportsPageContent() {
     return matchesSearch && matchesDept;
   });
 
-  // Compute live summary stats
+  // Compute live summary stats (strictly intersecting employment dates; pre-hire anomalies excluded from denominator)
   const summaryStats = React.useMemo(() => {
-    const workdays = records.filter((r) => r.status !== "weekend" && r.status !== "holiday");
+    const eligibleRecords = records.filter((r) => !r.isPreHireAnomaly);
+    const workdays = eligibleRecords.filter((r) => r.status !== "weekend" && r.status !== "holiday");
     const presentOrHalf = workdays.filter((r) => r.status === "present" || r.status === "half_day");
     const absent = workdays.filter((r) => r.status === "absent");
     const onTime = presentOrHalf.filter((r) => !r.isLate);
     const totalMins = presentOrHalf.reduce((acc, r) => acc + r.totalMinutes, 0);
 
     const attendancePct =
-      workdays.length > 0 ? Math.round((presentOrHalf.length / workdays.length) * 1000) / 10 : 0;
+      workdays.length > 0 ? `${Math.round((presentOrHalf.length / workdays.length) * 1000) / 10}%` : "—";
     const avgMinutes = presentOrHalf.length > 0 ? Math.round(totalMins / presentOrHalf.length) : 0;
     const avgH = Math.floor(avgMinutes / 60);
     const avgM = avgMinutes % 60;
     const absentPct =
-      workdays.length > 0 ? Math.round((absent.length / workdays.length) * 1000) / 10 : 0;
+      workdays.length > 0 ? `${Math.round((absent.length / workdays.length) * 1000) / 10}%` : "—";
     const punctualityPct =
-      presentOrHalf.length > 0 ? Math.round((onTime.length / presentOrHalf.length) * 1000) / 10 : 0;
+      presentOrHalf.length > 0 ? `${Math.round((onTime.length / presentOrHalf.length) * 1000) / 10}%` : "—";
 
     return {
-      attendancePct: `${attendancePct}%`,
-      avgShift: `${String(avgH).padStart(2, "0")}h ${String(avgM).padStart(2, "0")}m`,
-      absentPct: `${absentPct}%`,
-      punctualityPct: `${punctualityPct}%`,
+      attendancePct,
+      avgShift: presentOrHalf.length > 0 ? `${String(avgH).padStart(2, "0")}h ${String(avgM).padStart(2, "0")}m` : "—",
+      absentPct,
+      punctualityPct,
+      hasWorkdays: workdays.length > 0,
     };
   }, [records]);
 
-  // Compute status breakdown chart
+  // Compute status breakdown chart (excludes flagged pre-hire anomalies)
   const chartData = React.useMemo(() => {
     const counts = { Present: 0, "Half Day": 0, Leave: 0, Absent: 0, Late: 0 };
     for (const r of records) {
+      if (r.isPreHireAnomaly) continue;
       if (r.status === "present") counts.Present += 1;
       else if (r.status === "half_day") counts["Half Day"] += 1;
       else if (r.status === "leave") counts.Leave += 1;
@@ -403,6 +497,48 @@ function ReportsPageContent() {
     }
   };
 
+  const handleScanPreHireAbsences = async () => {
+    setScanningRepairs(true);
+    try {
+      const { data, error } = await (supabase.rpc as any)("scan_pre_hire_absent_records", {
+        p_organization_id: null,
+        p_stage_repairs: true,
+      });
+      if (error) throw error;
+      toast.success(
+        `Scanned pre-hire records: ${data?.unlocked_cleaned ?? 0} unlocked cleaned, ${data?.locked_pending ?? 0} locked staged for review.`
+      );
+      await Promise.all([loadReportsData(), loadMonthChecklist()]);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to scan pre-hire absence records.");
+    } finally {
+      setScanningRepairs(false);
+    }
+  };
+
+  const handleReviewRepairProposal = async (proposalId: string, action: "approve" | "reject") => {
+    const note = (repairNotesById[proposalId] || "").trim();
+    if (note.length < 5) {
+      toast.error("Please enter a review note (minimum 5 characters).");
+      return;
+    }
+    setReviewingProposalId(proposalId);
+    try {
+      const { error } = await (supabase.rpc as any)("review_pre_hire_attendance_repair", {
+        p_proposal_id: proposalId,
+        p_action: action,
+        p_review_note: note,
+      });
+      if (error) throw error;
+      toast.success(action === "approve" ? "Locked pre-hire record repaired and audited." : "Repair proposal rejected.");
+      await Promise.all([loadReportsData(), loadMonthChecklist()]);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to review repair proposal.");
+    } finally {
+      setReviewingProposalId(null);
+    }
+  };
+
   const buildExportUrl = (fmt: "csv" | "xlsx") => {
     const monthParam = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
     const qs = new URLSearchParams({ format: fmt, month: monthParam });
@@ -422,6 +558,17 @@ function ReportsPageContent() {
   };
 
   const eligibleOtherEmployees = employees.filter((e) => e.id !== userId);
+  const periodDataReady = !loading && !reportsError;
+  const pendingBlockers = getPendingChecklistBlockers(checklist);
+  const lockAllowed = canLockPayrollMonth({
+    checklist,
+    checklistLoading,
+    checklistError,
+    reportsLoading: loading,
+    reportsError,
+    lockingMonth,
+  });
+  const paginatedTable = paginateReportRows(filteredData, tablePage, 50);
 
   return (
     <div className="space-y-6">
@@ -466,8 +613,8 @@ function ReportsPageContent() {
           <button
             type="button"
             onClick={() => openCorrectionForRow()}
-            disabled={eligibleOtherEmployees.length === 0}
-            className="px-3.5 py-1.5 rounded-lg bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+            disabled={!periodDataReady || eligibleOtherEmployees.length === 0}
+            className="px-3.5 py-1.5 rounded-lg bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Edit3 className="w-3.5 h-3.5" />
             <span>Correct attendance</span>
@@ -475,22 +622,120 @@ function ReportsPageContent() {
 
           <button
             type="button"
+            disabled={!periodDataReady}
             onClick={handleExportCsv}
-            className="px-3 py-1.5 rounded-lg bg-card border border-border-light text-xs font-medium text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
+            className="px-3 py-1.5 rounded-lg bg-card border border-border-light text-xs font-medium text-text-secondary hover:text-text-primary transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            CSV
+            Download CSV (.csv)
           </button>
 
           <button
             type="button"
+            disabled={!periodDataReady}
             onClick={handleExportXlsx}
-            className="px-3.5 py-1.5 rounded-lg bg-card border border-border-light hover:bg-card-subtle text-text-primary text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 py-1.5 rounded-lg bg-card border border-border-light hover:bg-card-subtle text-text-primary text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download className="w-3.5 h-3.5 text-text-secondary" />
-            <span>Export data</span>
+            <span>Download Excel (.xlsx)</span>
           </button>
         </div>
       </section>
+
+      {reportsError && (
+        <div
+          role="alert"
+          className="p-4 rounded-2xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+        >
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-bold text-red-900 dark:text-red-200">
+                Could not load attendance report for {selectedYear}-{String(selectedMonth).padStart(2, "0")}
+              </p>
+              <p className="text-xs text-red-700 dark:text-red-300 mt-0.5">{reportsError}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={loadReportsData}
+            className="px-3.5 py-1.5 rounded-xl bg-black text-white text-xs font-bold cursor-pointer hover:bg-[#222222] shrink-0"
+          >
+            Retry Report
+          </button>
+        </div>
+      )}
+
+      {/* Pre-Hire Locked Payroll Absence Repair Banner / Panel (HR/Admin AAL2 Review) */}
+      {(userRole === "admin" || userRole === "hr") &&
+        (repairProposals.length > 0 || records.some((r) => r.isPreHireAnomaly)) && (
+          <BentoCard
+            title="Locked Payroll Pre-Hire Absence Repairs"
+            subtitle="Historical absent records dated before employee join dates require explicit review before modifying locked payroll days"
+            action={
+              <button
+                type="button"
+                onClick={handleScanPreHireAbsences}
+                disabled={scanningRepairs}
+                className="px-3 py-1.5 rounded-lg bg-card-subtle border border-border-light text-xs font-bold text-text-primary hover:bg-border-light/50 cursor-pointer disabled:opacity-50"
+              >
+                {scanningRepairs ? "Scanning..." : "Scan & Stage"}
+              </button>
+            }
+            className="p-5 space-y-3 border-amber-300"
+          >
+            {repairProposals.length === 0 ? (
+              <p className="text-xs text-text-secondary">
+                {records.filter((r) => r.isPreHireAnomaly).length} pre-hire anomaly row(s) detected in this period. Click Scan &amp; Stage to clean unlocked rows and queue locked rows for audited review.
+              </p>
+            ) : (
+              <div className="space-y-2.5">
+                {repairProposals.map((p) => (
+                  <div
+                    key={p.id}
+                    className="p-3 rounded-xl bg-card-subtle border border-border-light flex flex-col lg:flex-row lg:items-center justify-between gap-3"
+                  >
+                    <div className="text-xs space-y-0.5">
+                      <p className="font-bold text-text-primary">
+                        {p.employeeName} · {p.work_date}{" "}
+                        <span className="font-normal text-text-secondary">
+                          (Joined {p.employee_joined_on} · {p.original_locked ? "Locked payroll day" : "Unlocked"})
+                        </span>
+                      </p>
+                      <p className="text-[11px] text-text-tertiary">{p.reason}</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="Mandatory review note (min 5 chars)..."
+                        value={repairNotesById[p.id] || ""}
+                        onChange={(e) =>
+                          setRepairNotesById((prev) => ({ ...prev, [p.id]: e.target.value }))
+                        }
+                        className="px-2.5 py-1.5 rounded-lg bg-card border border-border-light text-xs w-56"
+                      />
+                      <button
+                        type="button"
+                        disabled={reviewingProposalId === p.id}
+                        onClick={() => handleReviewRepairProposal(p.id, "approve")}
+                        className="px-3 py-1.5 rounded-lg bg-black text-white text-xs font-bold cursor-pointer disabled:opacity-50"
+                      >
+                        Approve Removal
+                      </button>
+                      <button
+                        type="button"
+                        disabled={reviewingProposalId === p.id}
+                        onClick={() => handleReviewRepairProposal(p.id, "reject")}
+                        className="px-3 py-1.5 rounded-lg border border-border-medium text-xs font-bold text-text-secondary cursor-pointer disabled:opacity-50"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </BentoCard>
+        )}
 
       {/* 4 Summary Stat Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -607,9 +852,11 @@ function ReportsPageContent() {
                     {checklist.locked_days_count} / {checklist.total_days_count} days locked
                   </span>
                   <p className="text-[11px] text-text-tertiary mt-0.5">
-                    {checklist.ready_to_lock
+                    {checklist.is_month_locked
+                      ? "Payroll period is locked and finalized."
+                      : checklist.ready_to_lock
                       ? "All checklist items are clear for payroll close."
-                      : "Resolve open sessions or pending requests before finalizing close."}
+                      : `Pending blockers: ${pendingBlockers.join(", ")}.`}
                   </p>
                 </div>
                 {checklist.ready_to_lock ? (
@@ -623,9 +870,16 @@ function ReportsPageContent() {
                 {!checklist.is_month_locked && (
                   <button
                     type="button"
-                    disabled={lockingMonth}
+                    disabled={!lockAllowed}
+                    title={
+                      !periodDataReady
+                        ? "Wait until attendance records finish loading"
+                        : !checklist.ready_to_lock
+                        ? `Resolve: ${pendingBlockers.join(", ")}`
+                        : "Lock payroll month"
+                    }
                     onClick={handleLockMonth}
-                    className="px-4 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    className="px-4 py-2 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Lock className="w-3.5 h-3.5" />
                     <span>{lockingMonth ? "Locking..." : "Lock Month"}</span>
@@ -635,8 +889,9 @@ function ReportsPageContent() {
                 {checklist.locked_days_count > 0 && isAdmin && (
                   <button
                     type="button"
+                    disabled={checklistLoading || Boolean(checklistError)}
                     onClick={() => setUnlockModalOpen(true)}
-                    className="px-4 py-2 rounded-xl border border-amber-400 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 py-2 rounded-xl border border-amber-400 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Unlock className="w-3.5 h-3.5" />
                     <span>Admin Unlock Month</span>
@@ -645,12 +900,23 @@ function ReportsPageContent() {
               </div>
             </>
           ) : (
-            <EmptyState
-              className="py-6 border-dashed shadow-none bg-card-subtle/40"
-              icon={<CalendarCheck2 className="w-5 h-5" />}
-              title="Checklist unavailable"
-              description="Month-end close checklist requires HR or Administrator MFA assurance (AAL2)."
-            />
+            <div className="py-5 px-4 rounded-2xl border border-dashed border-border-medium bg-card-subtle/40 text-center space-y-2.5">
+              <CalendarCheck2 className="w-5 h-5 mx-auto text-text-tertiary" />
+              <p className="text-xs font-bold text-text-primary">
+                {checklistError ? "Checklist lookup failed" : "Checklist unavailable"}
+              </p>
+              <p className="text-xs text-text-secondary">
+                {checklistError ||
+                  "Month-end close checklist requires HR or Administrator MFA assurance (AAL2)."}
+              </p>
+              <button
+                type="button"
+                onClick={loadMonthChecklist}
+                className="px-3.5 py-1.5 rounded-xl bg-black text-white text-xs font-bold cursor-pointer hover:bg-[#222222]"
+              >
+                Retry Checklist
+              </button>
+            </div>
           )}
         </BentoCard>
 
@@ -660,7 +926,19 @@ function ReportsPageContent() {
           subtitle="Live distribution across selected reporting period"
           className="lg:col-span-6 p-6"
         >
-          {records.length > 0 ? (
+          {reportsError ? (
+            <div className="py-10 text-center space-y-2">
+              <AlertTriangle className="w-5 h-5 mx-auto text-red-500" />
+              <p className="text-xs font-bold text-text-primary">Chart unavailable due to report load error</p>
+              <button
+                type="button"
+                onClick={loadReportsData}
+                className="px-3 py-1.5 rounded-xl bg-black text-white text-xs font-bold cursor-pointer"
+              >
+                Retry
+              </button>
+            </div>
+          ) : records.length > 0 ? (
             <div className="h-56 w-full mt-2">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData}>
@@ -729,7 +1007,21 @@ function ReportsPageContent() {
       >
         {!mounted || loading ? (
           <div className="h-44 rounded-2xl bg-card-subtle animate-pulse mt-2" />
+        ) : reportsError ? (
+          <div className="py-10 px-4 rounded-2xl border border-dashed border-red-300 bg-red-50/40 text-center space-y-2.5 mt-2">
+            <AlertTriangle className="w-6 h-6 mx-auto text-red-600" />
+            <p className="text-xs font-bold text-text-primary">Failed to load attendance logs</p>
+            <p className="text-xs text-text-secondary">{reportsError}</p>
+            <button
+              type="button"
+              onClick={loadReportsData}
+              className="px-4 py-2 rounded-xl bg-black text-white text-xs font-bold cursor-pointer hover:bg-[#222222]"
+            >
+              Retry loading logs
+            </button>
+          </div>
         ) : filteredData.length > 0 ? (
+          <>
           <div className="overflow-x-auto mt-2">
             <table className="w-full text-left text-xs">
               <thead className="bg-card-subtle border-b border-border-light text-text-tertiary uppercase font-bold text-[10px]">
@@ -745,7 +1037,7 @@ function ReportsPageContent() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-light/60">
-                {filteredData.map((row) => {
+                {paginatedTable.items.map((row) => {
                   const isSelf = row.employeeId === userId;
                   return (
                     <tr key={row.id} className="hover:bg-card-subtle/50 transition-colors">
@@ -767,7 +1059,14 @@ function ReportsPageContent() {
                         )}
                       </td>
                       <td className="py-3.5 px-4">
-                        <StatusPill status={row.status} />
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <StatusPill status={row.status} />
+                          {row.isPreHireAnomaly && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
+                              Pre-hire ({row.employeeJoinedOn})
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3.5 px-4">
                         {row.locked ? (
@@ -802,6 +1101,36 @@ function ReportsPageContent() {
               </tbody>
             </table>
           </div>
+          {paginatedTable.totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-4 mt-3 border-t border-border-light text-xs text-text-secondary">
+              <span>
+                Showing {paginatedTable.startDisplay}–{paginatedTable.endDisplay} of{" "}
+                {paginatedTable.totalCount} records
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={paginatedTable.currentPage <= 1}
+                  onClick={() => setTablePage((p) => Math.max(1, p - 1))}
+                  className="px-3 py-1.5 rounded-lg border border-border-light bg-card hover:bg-card-subtle font-semibold text-text-primary cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <span className="font-mono font-bold text-text-primary px-1">
+                  Page {paginatedTable.currentPage} of {paginatedTable.totalPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={paginatedTable.currentPage >= paginatedTable.totalPages}
+                  onClick={() => setTablePage((p) => Math.min(paginatedTable.totalPages, p + 1))}
+                  className="px-3 py-1.5 rounded-lg border border-border-light bg-card hover:bg-card-subtle font-semibold text-text-primary cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+          </>
         ) : (
           <EmptyState
             className="mt-3"

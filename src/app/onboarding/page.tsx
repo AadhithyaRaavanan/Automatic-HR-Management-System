@@ -688,6 +688,9 @@ export default function OnboardingPage() {
 
       const resData = await res.json();
       toast.success("Onboarding submitted successfully! Your documents are being reviewed by HR.");
+      if (Array.isArray(resData.warnings) && resData.warnings.length > 0) {
+        toast.warning(String(resData.warnings[0]));
+      }
       setWorkflowStatus(resData.onboarding_status || "SUBMITTED");
       await fetchProfileData();
       router.push("/onboarding/pending");
@@ -783,6 +786,50 @@ export default function OnboardingPage() {
     );
   }
 
+  // Admin Exemption View (Admins do not require employee onboarding to unlock workspace access)
+  if (employeeMeta.role === "admin" && !["SUBMITTED", "UNDER_REVIEW", "RESUBMITTED", "COMPLETED", "VERIFIED"].includes(workflowStatus)) {
+    return (
+      <div className="min-h-screen bg-surface-ground flex flex-col justify-center items-center p-6">
+        <div className="max-w-xl w-full bg-card rounded-3xl border border-border-light shadow-float p-8 sm:p-10 text-center space-y-6">
+          <div className="w-16 h-16 rounded-full bg-status-success/10 text-status-success flex items-center justify-center mx-auto shadow-md">
+            <ShieldCheck className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <span className="px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider bg-status-success/15 text-status-success">
+              Admin Account · Onboarding Exempt
+            </span>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-text-primary tracking-tight">
+              Organization Admin Access Ready
+            </h1>
+            <p className="text-sm text-text-secondary">
+              Administrator accounts are exempt from candidate onboarding. Use Onboarding Reviews to verify team submissions or head straight to your dashboard.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = "/hr/onboarding";
+              }}
+              className="flex-1 py-3 px-5 rounded-xl bg-brand-navy hover:bg-brand-navy-hover text-white text-sm font-bold transition-all cursor-pointer"
+            >
+              Manage Onboarding Reviews
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = "/";
+              }}
+              className="flex-1 py-3 px-5 rounded-xl bg-card border border-border-light hover:bg-card-subtle text-text-primary text-sm font-bold transition-all cursor-pointer"
+            >
+              Go to Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // A. SUBMITTED or UNDER_REVIEW state: Redirect to "Wait Until Approval" screen
   if (["SUBMITTED", "UNDER_REVIEW", "RESUBMITTED"].includes(workflowStatus)) {
     if (typeof window !== "undefined") {
@@ -805,7 +852,7 @@ export default function OnboardingPage() {
               Profile Verified & Activated
             </span>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-text-primary tracking-tight">
-              Welcome to the ZEN XEA Team!
+              Welcome to {activeOrg?.name || "your workspace"}!
             </h1>
             <p className="text-sm text-text-secondary">
               Your employee onboarding has been verified and approved by HR Admin. Your workspace access is now fully active.

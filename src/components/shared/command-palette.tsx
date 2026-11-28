@@ -415,16 +415,19 @@ export function CommandPalette({ open, onOpenChange, userRole = "employee" }: Co
                 </kbd>
               </Command.Item>
 
-              <Command.Item
-                onSelect={() => {
-                  toast.success("Exporting attendance data...");
-                  onOpenChange(false);
-                }}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-text-primary hover:bg-card-subtle cursor-pointer transition-colors"
-              >
-                <FileSpreadsheet className="w-4 h-4 text-text-secondary" />
-                <span>Export data</span>
-              </Command.Item>
+              {(userRole === "hr" || userRole === "admin") && (
+                <Command.Item
+                  onSelect={() => {
+                    toast.success("Preparing attendance export (.xlsx)...");
+                    window.open("/api/attendance/export?format=xlsx", "_blank");
+                    onOpenChange(false);
+                  }}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-text-primary hover:bg-card-subtle cursor-pointer transition-colors"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-text-secondary" />
+                  <span>Export attendance (.xlsx)</span>
+                </Command.Item>
+              )}
 
               {isDemoModeEnabled() && (
                 <Command.Item

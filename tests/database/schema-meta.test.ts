@@ -52,6 +52,8 @@ const ORG_ID_EXEMPTIONS = new Set([
   "auth_rate_limits",
   "kiosk_credentials",
   "holiday_templates", // Global shared holiday template catalog (copied per org via import_holiday_template; no tenant data)
+  "notification_preferences", // Account-wide per-user notification toggles (keyed by user_id, type_group)
+  "profiles", // Account-wide user auth/tutorial completion state (1:1 with auth.users)
 ]);
 
 describe("PostgreSQL Schema Meta-Test Suite", () => {
@@ -440,8 +442,8 @@ describe("PostgreSQL Schema Meta-Test Suite", () => {
     `, [empId]);
 
     await client.query(`
-      INSERT INTO public.employees (id, organization_id, email, full_name, work_mode, timezone, primary_location_id)
-      VALUES ($1, $2, 'hybrid@test.com', 'Hybrid User', 'hybrid', 'Asia/Tokyo', $3);
+      INSERT INTO public.employees (id, organization_id, email, full_name, work_mode, timezone, primary_location_id, joined_on)
+      VALUES ($1, $2, 'hybrid@test.com', 'Hybrid User', 'hybrid', 'Asia/Tokyo', $3, '2026-01-01');
     `, [empId, orgId, locId]);
 
     // Recalculate day for empty past day (no sessions): should use employee's personal timezone (Asia/Tokyo)

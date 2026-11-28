@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       recordFailure(emailLimitKey),
     ]);
 
-    const siteUrl = getSiteUrl();
+    const siteUrl = getSiteUrl(request);
     const confirmRedirect = `${siteUrl}/auth/confirm?redirect=${encodeURIComponent("/settings?must_change_password=true")}`;
     const failure = await requestAuthEmail("forgot-password", email, confirmRedirect, turnstileToken);
     if (failure) return failure;

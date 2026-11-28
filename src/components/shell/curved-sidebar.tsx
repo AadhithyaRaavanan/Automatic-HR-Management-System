@@ -188,11 +188,12 @@ export function CurvedSidebar({
   }, [supabase]);
 
   const privilegedRoles = ["admin", "hr", "manager", "team_lead"];
-  const effectiveRole =
-    (propRole && privilegedRoles.includes(propRole) ? propRole : null) ||
-    (session.userRole && privilegedRoles.includes(session.userRole) ? session.userRole : null) ||
-    (mountedRole && privilegedRoles.includes(mountedRole) ? mountedRole : null) ||
-    (isDemoModeEnabled() ? "admin" : (propRole || session.userRole || "employee"));
+  const effectiveRole = propRole
+    ? propRole
+    : session.isLoaded
+    ? session.userRole
+    : (mountedRole && privilegedRoles.includes(mountedRole) ? mountedRole : null) ||
+      (isDemoModeEnabled() ? "admin" : session.userRole || "employee");
 
   const navItems = React.useMemo(() => {
     const items = [...baseNavItems];

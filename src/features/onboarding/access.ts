@@ -84,20 +84,21 @@ export async function getOnboardingGate(
     return "ALLOWED";
   }
 
-  // 2. Fetch onboarding profile and employee record
+  // 2. Fetch onboarding profile and employee record (scoped cleanly to active org when provided)
   try {
-    const [profRes, empRes] = await Promise.all([
-      (supabaseAdmin as any)
-        .from("onboarding_profiles")
-        .select("status, education_details")
-        .eq("user_id", userId)
-        .maybeSingle(),
-      (supabaseAdmin as any)
-        .from("employees")
-        .select("status, onboarding_completed")
-        .eq("id", userId)
-        .maybeSingle(),
-    ]);
+    let profQ = (supabaseAdmin as any)
+      .from("onboarding_profiles")
+      .select("status, education_details")
+      .eq("user_id", userId);
+    let empQ = (supabaseAdmin as any)
+      .from("employees")
+      .select("status, onboarding_completed")
+      .eq("id", userId);
+    if (options?.organizationId) {
+      profQ = profQ.eq("organization_id", options.organizationId);
+      empQ = empQ.eq("organization_id", options.organizationId);
+    }
+    const [profRes, empRes] = await Promise.all([profQ.maybeSingle(), empQ.maybeSingle()]);
 
     const onbProf = profRes.data;
     const emp = empRes.data;

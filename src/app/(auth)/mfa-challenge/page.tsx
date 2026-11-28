@@ -241,7 +241,7 @@ function MfaChallengeForm() {
   // ----------------------------------------------------
   if (isRecoveryMode) {
     return (
-      <div className="w-full max-w-md bg-white rounded-[14px] border border-[#E6E6E6] p-8 relative overflow-hidden shadow-none">
+      <div className="w-full max-w-md bg-white rounded-[14px] border border-[#E6E6E6] p-5 sm:p-8 relative overflow-hidden shadow-none">
         {/* Top Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2.5">
@@ -410,7 +410,7 @@ function MfaChallengeForm() {
   // STANDARD TOTP CHALLENGE VIEW
   // ----------------------------------------------------
   return (
-    <div className="w-full max-w-md bg-white rounded-[14px] border border-[#E6E6E6] p-8 relative overflow-hidden shadow-none">
+    <div className="w-full max-w-md bg-white rounded-[14px] border border-[#E6E6E6] p-5 sm:p-8 relative overflow-hidden shadow-none">
       {/* Top Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2.5">

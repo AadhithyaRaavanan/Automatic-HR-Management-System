@@ -134,6 +134,7 @@ export function formatDocumentFileName(
  */
 export async function uploadDoc({
   userId,
+  organizationId,
   fullName,
   docType,
   file,
@@ -141,7 +142,7 @@ export async function uploadDoc({
   employeeId,
   salaryMonth,
   salaryYear,
-}: UploadDocParams): Promise<UploadDocResult> {
+}: UploadDocParams & { organizationId?: string | null }): Promise<UploadDocResult> {
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
 
@@ -151,18 +152,24 @@ export async function uploadDoc({
     throw new Error("Invalid file content: Document must be a valid PDF, JPG, or PNG file.");
   }
 
-  // 2. Resolve employee ID if not passed
+  // 2. Resolve employee ID & organization ID if not passed
   let resolvedEmpId = employeeId;
-  if (!resolvedEmpId) {
-    const { data: emp } = await (supabaseAdmin.from("employees") as any)
-      .select("id, full_name")
-      .eq("id", userId)
-      .maybeSingle();
-    resolvedEmpId = emp?.id;
+  let resolvedOrgId = organizationId || null;
+  if (!resolvedEmpId || !resolvedOrgId) {
+    let empQ = (supabaseAdmin.from("employees") as any)
+      .select("id, organization_id, full_name")
+      .eq("id", userId);
+    if (resolvedOrgId) {
+      empQ = empQ.eq("organization_id", resolvedOrgId);
+    }
+    const { data: emp } = await empQ.maybeSingle();
+    if (!resolvedEmpId) resolvedEmpId = emp?.id;
+    if (!resolvedOrgId) resolvedOrgId = emp?.organization_id || null;
   }
 
-  // 3. Generate standardized folder and file names
-  const folder = formatEmployeeFolderName(resolvedEmpId, fullName, userId);
+  // 3. Generate standardized org-isolated folder and file names
+  const baseFolder = formatEmployeeFolderName(resolvedEmpId, fullName, userId);
+  const folder = resolvedOrgId ? `${resolvedOrgId}/${baseFolder}` : baseFolder;
   const standardFileName = formatDocumentFileName(
     docType,
     fullName,
@@ -187,14 +194,16 @@ export async function uploadDoc({
     throw new Error(`Failed to upload ${standardFileName}: ${uploadError.message}`);
   }
 
-  // 5. Upsert document in onboarding_documents table
-  // First remove existing document for same docType (and same month/year if salary slip) to allow replacement
+  // 5. Upsert document in onboarding_documents table scoped cleanly by organization_id
   let deleteQuery = (supabaseAdmin as any)
     .from("onboarding_documents")
     .delete()
     .eq("user_id", userId)
     .eq("doc_type", docType);
 
+  if (resolvedOrgId) {
+    deleteQuery = deleteQuery.eq("organization_id", resolvedOrgId);
+  }
   if (docType === "salary_slip" && salaryMonth && salaryYear) {
     deleteQuery = deleteQuery.eq("file_name", standardFileName);
   }
@@ -205,9 +214,10 @@ export async function uploadDoc({
     docReadableName = `Salary Slip (${salaryMonth} ${salaryYear})`;
   }
 
-  // Attempt insert with v2 schema columns
+  // Attempt insert with v2 + org schema columns
   const fullPayload: any = {
     user_id: userId,
+    ...(resolvedOrgId ? { organization_id: resolvedOrgId } : {}),
     doc_type: docType,
     document_name: docReadableName,
     file_name: standardFileName,
@@ -230,10 +240,10 @@ export async function uploadDoc({
   if (insertedRow?.id) {
     documentId = insertedRow.id;
   } else if (insertErr) {
-    // If the schema hasn't had the v2 columns added yet, fall back to base schema
     console.warn("[uploadDoc] Insert with full schema failed, falling back to base schema:", insertErr.message);
-    const basePayload = {
+    const basePayload: any = {
       user_id: userId,
+      ...(resolvedOrgId ? { organization_id: resolvedOrgId } : {}),
       doc_type: docType,
       file_name: standardFileName,
       storage_path: storagePath,
@@ -254,10 +264,14 @@ export async function uploadDoc({
   }
 
   // 6. Update storage folder in onboarding_profiles
-  await (supabaseAdmin as any)
+  let profFolderQuery = (supabaseAdmin as any)
     .from("onboarding_profiles")
     .update({ storage_folder: folder })
     .eq("user_id", userId);
+  if (resolvedOrgId) {
+    profFolderQuery = profFolderQuery.eq("organization_id", resolvedOrgId);
+  }
+  await profFolderQuery;
 
   // 7. Signed URL for preview
   const signedUrl = await getSignedUrl(storagePath, 3600);
@@ -302,7 +316,7 @@ export async function getSignedUrl(storagePath: string, expiresInSeconds: number
 /**
  * Lists all uploaded onboarding documents for a candidate along with valid signed URLs.
  */
-export async function listCandidateDocs(userId: string): Promise<Array<{
+export async function listCandidateDocs(userId: string, organizationId?: string | null): Promise<Array<{
   id: string;
   doc_type: string;
   file_name: string;
@@ -315,17 +329,24 @@ export async function listCandidateDocs(userId: string): Promise<Array<{
   salary_month?: string | null;
   salary_year?: string | null;
 }>> {
+  let docsQuery = (supabaseAdmin as any)
+    .from("onboarding_documents")
+    .select("*")
+    .eq("user_id", userId)
+    .order("uploaded_at", { ascending: false });
+  let profQuery = (supabaseAdmin as any)
+    .from("onboarding_profiles")
+    .select("education_details")
+    .eq("user_id", userId);
+
+  if (organizationId) {
+    docsQuery = docsQuery.eq("organization_id", organizationId);
+    profQuery = profQuery.eq("organization_id", organizationId);
+  }
+
   const [{ data: docs, error }, { data: profile }] = await Promise.all([
-    (supabaseAdmin as any)
-      .from("onboarding_documents")
-      .select("*")
-      .eq("user_id", userId)
-      .order("uploaded_at", { ascending: false }),
-    (supabaseAdmin as any)
-      .from("onboarding_profiles")
-      .select("education_details")
-      .eq("user_id", userId)
-      .maybeSingle(),
+    docsQuery,
+    profQuery.maybeSingle(),
   ]);
 
   if (error) {

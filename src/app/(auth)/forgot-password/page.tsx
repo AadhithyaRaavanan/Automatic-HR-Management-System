@@ -61,8 +61,8 @@ function ForgotPasswordContent() {
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanCode = otpCode.replace(/\s+/g, "");
-    if (cleanCode.length < 6 || cleanCode.length > 8) {
-      toast.error("Please enter the 6 to 8 digit code received in your email.");
+    if (!/^\d{6}$/.test(cleanCode)) {
+      toast.error("Please enter the 6-digit verification code received in your email.");
       return;
     }
 
@@ -115,7 +115,7 @@ function ForgotPasswordContent() {
   };
 
   return (
-    <div className="w-full max-w-md bg-white rounded-[14px] border border-[#E6E6E6] p-8 relative overflow-hidden shadow-none">
+    <div className="w-full max-w-md bg-white rounded-[14px] border border-[#E6E6E6] p-5 sm:p-8 relative overflow-hidden shadow-none">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2.5">
@@ -141,7 +141,7 @@ function ForgotPasswordContent() {
               Forgot password
             </h1>
             <p className="text-xs text-[#4D4D4D] mt-1">
-              Enter your registered work email to receive password reset instructions.
+              Enter your registered work email to receive a 6-digit password reset code.
             </p>
           </div>
 
@@ -186,7 +186,7 @@ function ForgotPasswordContent() {
               Check your email
             </h1>
             <p className="text-xs text-[#4D4D4D] mt-1">
-              Enter the password reset code sent to <strong className="text-black font-mono">{email}</strong>.
+              Enter the 6-digit password reset code sent to <strong className="text-black font-mono break-all">{email}</strong>.
             </p>
           </div>
 
@@ -196,7 +196,7 @@ function ForgotPasswordContent() {
                 htmlFor="otp-code"
                 className="block text-xs font-semibold text-black mb-1.5"
               >
-                Verification code (6–8 digits)
+                6-digit verification code
               </label>
               <div className="relative">
                 <KeyRound className="w-4 h-4 text-[#808080] absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -204,13 +204,13 @@ function ForgotPasswordContent() {
                   id="otp-code"
                   type="text"
                   required
-                  maxLength={8}
+                  maxLength={6}
                   inputMode="numeric"
-                  pattern="[0-9]*"
+                  pattern="[0-9]{6}"
                   disabled={loading}
                   value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
-                  placeholder="12345678"
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="123456"
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-white border border-[#E6E6E6] text-center font-mono tracking-widest text-base font-semibold text-black placeholder:text-[#808080] focus:outline-none focus:border-black focus:ring-1 focus:ring-black transition-colors disabled:opacity-50"
                 />
               </div>
@@ -218,7 +218,7 @@ function ForgotPasswordContent() {
 
             <button
               type="submit"
-              disabled={loading || otpCode.length < 6}
+              disabled={loading || otpCode.length !== 6}
               className="w-full mt-2 py-2.5 px-4 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-xs"
             >
               <span>{loading ? "Verifying..." : "Verify and sign in"}</span>

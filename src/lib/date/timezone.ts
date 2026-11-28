@@ -28,7 +28,7 @@ export function getEmployeeWorkDate(
   shiftStartTime?: string,
   shiftEndTime?: string
 ): string {
-  const effectiveTz = !timezone || timezone === "UTC" ? "Asia/Kolkata" : timezone;
+  const effectiveTz = !timezone ? "Asia/Kolkata" : timezone;
   try {
     const zonedDate = toZonedTime(date, effectiveTz);
 

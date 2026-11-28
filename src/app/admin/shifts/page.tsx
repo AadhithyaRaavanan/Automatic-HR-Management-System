@@ -3,6 +3,7 @@
 import * as React from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { FEATURES } from "@/lib/features";
+import { FeatureOrRoleGate } from "@/components/shared/gated-destination-guard";
 import { createClient } from "@/lib/supabase/client";
 import { CalendarClock, Plus, Edit, Trash2, Clock, UserCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -591,10 +592,13 @@ function ShiftsAdminPageContent() {
 
 export default function ShiftsAdminPage() {
   if (!FEATURES.SHIFTS) {
-    if (typeof window !== "undefined") {
-      window.location.href = "/dashboard";
-    }
-    return null;
+    return (
+      <AppShell>
+        <FeatureOrRoleGate featureEnabled={false} featureName="Work Schedules & Shifts">
+          {null}
+        </FeatureOrRoleGate>
+      </AppShell>
+    );
   }
   return <ShiftsAdminPageContent />;
 }

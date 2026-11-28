@@ -92,7 +92,7 @@ function AuthConfirmHandler() {
 
   return (
     <div className="min-h-screen w-full bg-[#F5F5F5] flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-white rounded-[14px] border border-[#E6E6E6] p-8 text-center">
+      <div className="w-full max-w-sm bg-white rounded-[14px] border border-[#E6E6E6] p-5 sm:p-8 text-center">
         {magicToken ? (
           <>
             <h1 className="text-xl font-bold">Sign in to Pulse</h1>

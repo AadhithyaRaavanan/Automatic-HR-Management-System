@@ -1,12 +1,7 @@
 import { test, expect } from "@playwright/test";
-import { getStorageStatePath, loginAndGetSession, loadEnvTest } from "../helpers/auth";
-import { createClient } from "@supabase/supabase-js";
+import { getStorageStatePath, loginAndGetSession, createAllowedSupabaseAdmin, sendAllowedTestApiRequest } from "../helpers/auth";
 
-const env = loadEnvTest();
-const supabaseAdmin = createClient(
-  env.NEXT_PUBLIC_SUPABASE_URL || "https://bycyebxvxhmhelrvglvf.supabase.co",
-  env.SUPABASE_SERVICE_ROLE_KEY || ""
-);
+const supabaseAdmin = createAllowedSupabaseAdmin();
 
 const TEST_ADMIN_ID = "2552130d-cf00-4fdd-a676-e800c11937ce";
 const TEST_HR_ID = "3c3c8829-7902-470c-be62-297dccb3e382";
@@ -107,7 +102,7 @@ test.describe("Module 4: Regularization Requests & Authorization", () => {
     expect(regReq).toBeTruthy();
 
     // 1. Review without note or short note (< 5 chars) returns 400
-    const resNoNote = await fetch("https://pulse.zenxea.com/api/requests/review", {
+    const resNoNote = await sendAllowedTestApiRequest("/api/requests/review", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${hrSession.access_token}`,
@@ -122,7 +117,7 @@ test.describe("Module 4: Regularization Requests & Authorization", () => {
     expect(resNoNote.status).toBe(400);
 
     // 2. Reject request with valid note (min 5 chars) -> attendance_days remains 'absent'
-    const resReject = await fetch("https://pulse.zenxea.com/api/requests/review", {
+    const resReject = await sendAllowedTestApiRequest("/api/requests/review", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${hrSession.access_token}`,
@@ -169,7 +164,7 @@ test.describe("Module 4: Regularization Requests & Authorization", () => {
       .single();
 
     // Approve request with valid note -> attendance_days status updates to 'present'
-    const resApprove = await fetch("https://pulse.zenxea.com/api/requests/review", {
+    const resApprove = await sendAllowedTestApiRequest("/api/requests/review", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${hrSession.access_token}`,
@@ -237,7 +232,7 @@ test.describe("Module 4: Regularization Requests & Authorization", () => {
       .single();
 
     // 1. Employee cannot review anyone's regularization request (403)
-    const resEmpReview = await fetch("https://pulse.zenxea.com/api/requests/review", {
+    const resEmpReview = await sendAllowedTestApiRequest("/api/requests/review", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${empSession.access_token}`,
@@ -252,7 +247,7 @@ test.describe("Module 4: Regularization Requests & Authorization", () => {
     expect(resEmpReview.status).toBe(403);
 
     // 2. Manager cannot review non-team member (403)
-    const resMgrNonTeam = await fetch("https://pulse.zenxea.com/api/requests/review", {
+    const resMgrNonTeam = await sendAllowedTestApiRequest("/api/requests/review", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${mgrSession.access_token}`,
@@ -267,7 +262,7 @@ test.describe("Module 4: Regularization Requests & Authorization", () => {
     expect(resMgrNonTeam.status).toBe(403);
 
     // 3. Manager CAN review direct report (200)
-    const resMgrTeam = await fetch("https://pulse.zenxea.com/api/requests/review", {
+    const resMgrTeam = await sendAllowedTestApiRequest("/api/requests/review", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${mgrSession.access_token}`,
@@ -296,7 +291,7 @@ test.describe("Module 4: Regularization Requests & Authorization", () => {
       .select("id")
       .single();
 
-    const resAdminSelf = await fetch("https://pulse.zenxea.com/api/requests/review", {
+    const resAdminSelf = await sendAllowedTestApiRequest("/api/requests/review", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${adminSession.access_token}`,

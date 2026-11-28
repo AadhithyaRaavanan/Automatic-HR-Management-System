@@ -42,11 +42,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Fetch candidate profile
+    const orgId = authResult.context.organizationId;
+
+    // 1. Fetch candidate profile (scoped to active organization)
     const { data: profile, error: profErr } = await (supabaseAdmin as any)
       .from("onboarding_profiles")
       .select("*")
       .eq("user_id", userId)
+      .eq("organization_id", orgId)
       .maybeSingle();
 
     if (profErr || !profile) {
@@ -63,31 +66,38 @@ export async function POST(request: NextRequest) {
     const nowIso = new Date().toISOString();
 
     // 2. Update status to changes_requested
-    await (supabaseAdmin as any)
+    const { error: reqUpdErr } = await (supabaseAdmin as any)
       .from("onboarding_profiles")
       .update({
         status: "changes_requested",
         updated_at: nowIso,
       })
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .eq("organization_id", orgId);
 
-    // 3. Audit Log
-    try {
-      await (supabaseAdmin as any).from("employee_onboarding_audit").insert({
-        organization_id: authResult.context.organizationId,
-        employee_id: userId,
-        action: "ONBOARDING_CHANGES_REQUESTED",
-        performed_by: reviewerId,
-        previous_status: profile.status || "submitted",
-        new_status: "changes_requested",
-        remarks: trimmedNote,
-      });
-    } catch {}
+    if (reqUpdErr) {
+      return NextResponse.json({ error: reqUpdErr.message }, { status: 500 });
+    }
+
+    // 3. Durable Audit Log
+    const { error: auditErr } = await (supabaseAdmin as any).from("employee_onboarding_audit").insert({
+      organization_id: orgId,
+      employee_id: userId,
+      action: "ONBOARDING_CHANGES_REQUESTED",
+      performed_by: reviewerId,
+      previous_status: profile.status || "submitted",
+      new_status: "changes_requested",
+      remarks: trimmedNote,
+    });
+    if (auditErr) {
+      return NextResponse.json({ error: `Failed to record onboarding audit: ${auditErr.message}` }, { status: 500 });
+    }
 
     // 4. In-App Notification to Candidate (never include sensitive bank/id details)
     try {
       await notify({
         userIds: [userId],
+        organizationId: orgId,
         type: "onboarding_status",
         typeGroup: "onboarding",
         title: "Changes Requested on Onboarding Documents",

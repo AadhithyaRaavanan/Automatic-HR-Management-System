@@ -3,6 +3,7 @@
 import * as React from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { FEATURES } from "@/lib/features";
+import { FeatureOrRoleGate } from "@/components/shared/gated-destination-guard";
 import { createClient } from "@/lib/supabase/client";
 import { MapPin, Plus, Edit, Trash2, Globe, Clock } from "lucide-react";
 import { toast } from "sonner";
@@ -399,10 +400,13 @@ function LocationsAdminPageContent() {
 
 export default function LocationsAdminPage() {
   if (!FEATURES.LOCATIONS) {
-    if (typeof window !== "undefined") {
-      window.location.href = "/dashboard";
-    }
-    return null;
+    return (
+      <AppShell>
+        <FeatureOrRoleGate featureEnabled={false} featureName="Locations & Facilities">
+          {null}
+        </FeatureOrRoleGate>
+      </AppShell>
+    );
   }
   return <LocationsAdminPageContent />;
 }

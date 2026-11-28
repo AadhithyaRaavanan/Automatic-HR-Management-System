@@ -1,14 +1,40 @@
 "use client";
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 import { Monitor } from "lucide-react";
+
+const NARROW_VIEWPORT_ALLOWED_PREFIXES = [
+  "/login",
+  "/forgot-password",
+  "/mfa-setup",
+  "/mfa-challenge",
+  "/auth/confirm",
+  "/auth/callback",
+  "/select-organization",
+  "/onboarding",
+  "/privacy",
+  "/terms",
+];
+
+export function isNarrowViewportAllowedPath(pathname?: string | null): boolean {
+  if (!pathname) return false;
+  return NARROW_VIEWPORT_ALLOWED_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+}
 
 /**
  * Pure CSS Media Query Gatekeeper:
- * Enforces Desktop-Only experience strictly below 1024px viewport width.
- * No user-agent sniffing, no runtime data loading, zero app content rendered behind notice.
+ * Enforces Desktop-Only workspace notice below 1024px while keeping authentication,
+ * password recovery, MFA setup/challenge, and onboarding accessible at narrow widths.
  */
 export function DesktopOnlyGatekeeper({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  if (isNarrowViewportAllowedPath(pathname)) {
+    return <>{children}</>;
+  }
+
   return (
     <>
       {/* Full-page blocker visible exclusively below 1024px via pure CSS media query */}

@@ -244,6 +244,7 @@ vi.mock("@/features/notifications/recipients", () => ({
 
 import { computeKpi, evaluateMetricStatus, reconstructPeriodTasks } from "@/features/kpi/compute";
 import { getKolkataToday } from "@/features/kpi/date-helper";
+import { getEmployeeWorkDate } from "@/lib/date/timezone";
 import { GET as getOverview } from "@/app/api/kpi/route";
 import { GET as getDetail } from "@/app/api/kpi/detail/route";
 import { GET as getTeam } from "@/app/api/kpi/team/route";
@@ -782,5 +783,33 @@ describe("KPI End-to-End Correctness, Security & Parity", () => {
     expect(res.dataStatus).toBe("unavailable");
     expect(res.sourceErrors).toContain("attendance_days");
     expect(res.overallScore).toBeNull();
+  });
+
+  it("7. Intersects KPI schedule with joined_on, ignores pre-hire absent rows, handles new hires & UTC/night shifts", async () => {
+    // Reviewer joined on Nov 28, 2026 (Saturday) during 2026-11-01..2026-11-28 period
+    const targetEmp = state.employees.find((e) => e.id === "emp-a1")!;
+    targetEmp.joined_on = "2026-11-28";
+    targetEmp.timezone = "UTC";
+    // Persist bogus pre-hire absent row on Nov 27 (should be ignored!)
+    state.attendance_days.push({
+      employee_id: "emp-a1",
+      work_date: "2026-11-27",
+      status: "absent",
+      is_late: false,
+      total_minutes: 0,
+    });
+
+    const newHireRes = await computeKpi("emp-a1", "2026-11-01", "2026-11-28");
+    expect(newHireRes.joinedOn).toBe("2026-11-28");
+    expect(newHireRes.eligibleDaysElapsed).toBe(0);
+    expect(newHireRes.hasElapsedEligibleDays).toBe(false);
+    expect(newHireRes.actionableMissingDates).toEqual([]);
+    expect(newHireRes.overallScore).toBeNull();
+    expect(newHireRes.calendarDays.filter((d) => d.status === "missing")).toHaveLength(0);
+    expect(newHireRes.calendarDays.find((d) => d.date === "2026-11-27")?.status).toBe("not_employed");
+
+    // Cross-midnight shift preservation for explicit UTC timezone
+    const crossMidnight = getEmployeeWorkDate("UTC", new Date("2026-11-28T02:00:00Z"), "22:00:00", "06:00:00");
+    expect(crossMidnight).toBe("2026-11-27");
   });
 });

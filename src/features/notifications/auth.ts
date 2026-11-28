@@ -1,35 +1,20 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { Database } from "@/types/database.types";
-import { isSupabaseAdminConfigured, supabaseAdmin } from "@/lib/supabase/admin";
+import { resolveOnboardingCaller } from "@/features/auth/tenant-context";
 
 export interface NotificationAuthResult {
   user: any | null;
   supabase: ReturnType<typeof createServerClient<Database>>;
+  organizationId: string | null;
+  errorResponse?: NextResponse;
 }
 
-export async function getNotificationAuth(
-  request: NextRequest
-): Promise<NotificationAuthResult> {
-  const authHeader = request.headers.get("Authorization");
-  const bearerToken =
-    authHeader && authHeader.toLowerCase().startsWith("bearer ")
-      ? authHeader.slice(7).trim()
-      : undefined;
-
-  const supabase = createServerClient<Database>(
+function createAnonFallbackClient(request: NextRequest) {
+  return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
     {
-      ...(bearerToken
-        ? {
-            global: {
-              headers: {
-                Authorization: `Bearer ${bearerToken}`,
-              },
-            },
-          }
-        : {}),
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -38,24 +23,31 @@ export async function getNotificationAuth(
       },
     }
   );
+}
 
-  let user: any = null;
+export async function getNotificationAuth(
+  request: NextRequest
+): Promise<NotificationAuthResult> {
+  const resolved = await resolveOnboardingCaller(request);
 
-  if (bearerToken && isSupabaseAdminConfigured()) {
-    try {
-      const { data: tokenUser } = await supabaseAdmin.auth.getUser(bearerToken);
-      user = tokenUser?.user || null;
-    } catch {}
+  if ("response" in resolved) {
+    const supabase = createAnonFallbackClient(request);
+    if (resolved.response.status === 401) {
+      return { user: null, supabase, organizationId: null };
+    }
+    return {
+      user: null,
+      supabase,
+      organizationId: null,
+      errorResponse: resolved.response,
+    };
   }
 
-  if (!user) {
-    try {
-      const { data: cookieUser } = await supabase.auth.getUser(bearerToken);
-      user = cookieUser?.user || null;
-    } catch {}
-  }
-
-  return { user, supabase };
+  return {
+    user: resolved.user,
+    supabase: resolved.supabase,
+    organizationId: resolved.context.organizationId || null,
+  };
 }
 
 export async function getNotificationCaller(request: NextRequest) {

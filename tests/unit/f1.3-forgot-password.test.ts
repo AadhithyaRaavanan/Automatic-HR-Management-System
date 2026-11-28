@@ -153,17 +153,17 @@ describe("Section 1.3: Forgot Password with Email OTP Server Endpoints", () => {
     expect(await response.json()).toEqual({ error: expect.stringContaining("Email delivery") });
   });
 
-  it("4. [Verify OTP] enforces 6 to 8 numeric digits format and accepts 8-digit OTP", async () => {
-    const badReq = new NextRequest("http://localhost:3000/api/auth/verify-otp", {
+  it("4. [Verify OTP] enforces 6 numeric digits format and rejects 5-digit or 8-digit OTPs", async () => {
+    const shortReq = new NextRequest("http://localhost:3000/api/auth/verify-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: "user@remotehr.io", token: "12345" }),
     });
 
-    const badRes = await verifyOtpRoute(badReq);
-    expect(badRes.status).toBe(400);
-    const badBody = await badRes.json();
-    expect(badBody.error).toContain("6 to 8 digits");
+    const shortRes = await verifyOtpRoute(shortReq);
+    expect(shortRes.status).toBe(400);
+    const shortBody = await shortRes.json();
+    expect(shortBody.error).toContain("6 digits");
 
     const eightDigitReq = new NextRequest("http://localhost:3000/api/auth/verify-otp", {
       method: "POST",
@@ -172,11 +172,22 @@ describe("Section 1.3: Forgot Password with Email OTP Server Endpoints", () => {
     });
 
     const eightDigitRes = await verifyOtpRoute(eightDigitReq);
-    expect(eightDigitRes.status).toBe(200);
+    expect(eightDigitRes.status).toBe(400);
+    const eightBody = await eightDigitRes.json();
+    expect(eightBody.error).toContain("6 digits");
+
+    const sixDigitReq = new NextRequest("http://localhost:3000/api/auth/verify-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "user@remotehr.io", token: "123456" }),
+    });
+
+    const sixDigitRes = await verifyOtpRoute(sixDigitReq);
+    expect(sixDigitRes.status).toBe(200);
     expect(mockSupabase.verifyOtp).toHaveBeenCalledWith(
       expect.objectContaining({
         email: "user@remotehr.io",
-        token: "12345678",
+        token: "123456",
       })
     );
   });

@@ -8,18 +8,31 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await requireApprovedUser(request);
-    if ("response" in authResult) {
-      return authResult.response;
-    }
+    const showAll = request.nextUrl.searchParams.get("all") === "true";
 
-    const { role, organizationId: orgId } = authResult;
+    let role = "employee";
+    let orgId: string | undefined;
+
+    if (showAll) {
+      const adminAuth = await verifyAdminRouteCaller(request, ["admin", "hr"]);
+      if ("response" in adminAuth) {
+        return adminAuth.response;
+      }
+      role = adminAuth.context.role;
+      orgId = adminAuth.context.organizationId;
+    } else {
+      const authResult = await requireApprovedUser(request);
+      if ("response" in authResult) {
+        return authResult.response;
+      }
+      role = authResult.role;
+      orgId = authResult.organizationId;
+    }
 
     if (!orgId) {
       return NextResponse.json({ types: [] });
     }
 
-    const showAll = request.nextUrl.searchParams.get("all") === "true";
     const canViewAll = ["admin", "hr"].includes(role);
 
     // Query task types from database
@@ -130,6 +143,20 @@ export async function POST(request: NextRequest) {
     const cleanChecklist = Array.isArray(checklist)
       ? checklist.filter((item: any) => typeof item === "string" && item.trim().length > 0).map((s: any) => s.trim())
       : [];
+
+    if (department_id) {
+      const { data: deptRow } = await (supabaseAdmin.from("departments") as any)
+        .select("id")
+        .eq("id", department_id)
+        .eq("organization_id", context.organizationId)
+        .maybeSingle();
+      if (!deptRow?.id) {
+        return NextResponse.json(
+          { error: "Selected department does not belong to your organization." },
+          { status: 400 }
+        );
+      }
+    }
 
     const { data: newType, error } = await (supabaseAdmin as any)
       .from("task_types")

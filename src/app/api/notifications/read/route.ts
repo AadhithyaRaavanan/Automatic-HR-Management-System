@@ -6,9 +6,18 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
-    const { user, supabase } = await getNotificationAuth(request);
+    const { user, supabase, organizationId, errorResponse } = await getNotificationAuth(request);
+    if (errorResponse) {
+      return errorResponse;
+    }
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!organizationId) {
+      return NextResponse.json(
+        { error: "Forbidden: Active organization context is required." },
+        { status: 403 }
+      );
     }
 
     const body = await request.json().catch(() => ({}));
@@ -20,6 +29,7 @@ export async function POST(request: NextRequest) {
       let { data, error } = await (primaryClient.from("notifications") as any)
         .update({ read_at: nowIso })
         .eq("user_id", user.id)
+        .eq("organization_id", organizationId)
         .is("read_at", null)
         .select("id");
 
@@ -27,6 +37,7 @@ export async function POST(request: NextRequest) {
         const fallback = await (supabase.from("notifications") as any)
           .update({ read_at: nowIso })
           .eq("user_id", user.id)
+          .eq("organization_id", organizationId)
           .is("read_at", null)
           .select("id");
         data = fallback.data;
@@ -40,6 +51,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         count: (data || []).length,
+        organizationId,
       });
     }
 
@@ -47,6 +59,7 @@ export async function POST(request: NextRequest) {
       let { data, error } = await (primaryClient.from("notifications") as any)
         .update({ read_at: nowIso })
         .eq("user_id", user.id)
+        .eq("organization_id", organizationId)
         .in("id", ids)
         .is("read_at", null)
         .select("id");
@@ -55,6 +68,7 @@ export async function POST(request: NextRequest) {
         const fallback = await (supabase.from("notifications") as any)
           .update({ read_at: nowIso })
           .eq("user_id", user.id)
+          .eq("organization_id", organizationId)
           .in("id", ids)
           .is("read_at", null)
           .select("id");
@@ -69,6 +83,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         count: (data || []).length,
+        organizationId,
       });
     }
 

@@ -308,8 +308,8 @@ function LoginForm() {
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanCode = otpCode.replace(/\s+/g, "");
-    if (cleanCode.length < 6 || cleanCode.length > 8) {
-      toast.error("Please enter the 6 to 8 digit code received in your email.");
+    if (!/^\d{6}$/.test(cleanCode)) {
+      toast.error("Please enter the 6-digit verification code received in your email.");
       return;
     }
     setIsAuthenticating(true);
@@ -382,7 +382,7 @@ function LoginForm() {
   const isFormDisabled = isLoading || isAuthenticating;
 
   return (
-    <div className="w-full max-w-md bg-white rounded-[14px] border border-[#E6E6E6] p-8 relative overflow-hidden shadow-none">
+    <div className="w-full max-w-md bg-white rounded-[14px] border border-[#E6E6E6] p-5 sm:p-8 relative overflow-hidden shadow-none">
       {/* Completely Opaque Authentication Loading Overlay (Zero Background Bleed) */}
       {isAuthenticating && (
         <div className="absolute inset-0 z-50 bg-white flex flex-col items-center justify-center p-8 text-center select-none animate-in fade-in duration-100">
@@ -421,16 +421,22 @@ function LoginForm() {
             {authMode === "otp-request"
               ? "Forgot password"
               : authMode === "otp-verify"
+              ? "Enter recovery code"
+              : authMode === "link-sent"
               ? "Check your email"
-              : authMode === "link-sent" ? "Check your email" : "Sign in to Pulse"}
+              : authMode === "magic-link"
+              ? "Sign in with email link"
+              : "Sign in to Pulse"}
           </h1>
           <p className="text-xs text-[#4D4D4D] mt-1">
             {authMode === "otp-request"
-              ? "Enter your work email to reset your password."
+              ? "Enter your registered work email to receive a 6-digit password reset code."
               : authMode === "otp-verify"
-              ? `Enter the password reset code sent to ${email}.`
+              ? `Enter the 6-digit password reset code sent to ${email}.`
               : authMode === "link-sent"
-              ? `Open the sign-in link sent to ${email} to continue.`
+              ? `We sent a one-time sign-in link to ${email}.`
+              : authMode === "magic-link"
+              ? "Enter your work email and we will send you a one-time sign-in link—no password required."
               : "Enter your credentials to access your account."}
           </p>
         </div>
@@ -491,20 +497,20 @@ function LoginForm() {
           <form onSubmit={handleVerifyOtp} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-black mb-1.5">
-                Verification code (6–8 digits)
+                6-digit verification code
               </label>
               <div className="relative">
                 <KeyRound className="w-4 h-4 text-[#808080] absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   required
-                  maxLength={8}
+                  maxLength={6}
                   inputMode="numeric"
-                  pattern="[0-9]*"
+                  pattern="[0-9]{6}"
                   disabled={isFormDisabled}
                   value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
-                  placeholder="12345678"
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="123456"
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-white border border-[#E6E6E6] text-center font-mono tracking-widest text-base font-semibold text-black placeholder:text-[#808080] focus:outline-none focus:border-black focus:ring-1 focus:ring-black transition-colors disabled:opacity-50"
                 />
               </div>
@@ -512,7 +518,7 @@ function LoginForm() {
 
             <button
               type="submit"
-              disabled={isFormDisabled || otpCode.length < 6}
+              disabled={isFormDisabled || otpCode.length !== 6}
               className="w-full mt-2 py-2.5 px-4 rounded-lg bg-black hover:bg-[#1A1A1A] text-white text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-xs"
             >
               <span>{isAuthenticating ? "Verifying..." : "Verify and sign in"}</span>
@@ -543,11 +549,30 @@ function LoginForm() {
         )}
 
         {authMode === "link-sent" && (
-          <div className="flex items-center justify-between text-sm">
-            <button type="button" disabled={isLoading} onClick={() => setAuthMode("magic-link")}>Change email</button>
-            <button type="button" disabled={isLoading} onClick={() => handleMagicLinkRequest(email)}>
-              Resend sign-in link
-            </button>
+          <div className="space-y-4">
+            <div className="p-3.5 rounded-xl bg-[#F5F5F5] border border-[#E6E6E6] text-xs text-[#4D4D4D] leading-relaxed">
+              Open the email sent to <strong className="text-black">{email}</strong> on this device, click <strong>Sign In to Pulse</strong>, and choose <strong>Continue</strong> to complete sign-in. Each link is single-use and expires automatically.
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-1">
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={() => setAuthMode("magic-link")}
+                className="text-[#808080] hover:text-black font-medium inline-flex items-center gap-1 cursor-pointer hover:underline disabled:opacity-50"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Change email</span>
+              </button>
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={() => handleMagicLinkRequest(email)}
+                className="text-black font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={cn("w-3 h-3", isLoading && "animate-spin")} />
+                <span>Resend sign-in link</span>
+              </button>
+            </div>
           </div>
         )}
 

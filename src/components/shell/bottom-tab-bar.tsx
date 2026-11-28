@@ -14,6 +14,8 @@ import {
   CheckSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FEATURES } from "@/lib/features";
+import { useAppSession } from "@/components/shell/app-shell";
 
 const baseMobileTabs = [
   { label: "Home", href: "/", icon: LayoutDashboard },
@@ -34,6 +36,7 @@ export function BottomTabBar({
   userRole?: "employee" | "team_lead" | "manager" | "hr" | "admin";
 }) {
   const pathname = usePathname();
+  const session = useAppSession();
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -51,14 +54,18 @@ export function BottomTabBar({
       ? (localStorage.getItem("remotehr_cached_role") as any) || getCookieRole()
       : null;
 
-  const privilegedRoles = ["admin", "hr", "manager", "team_lead"];
-  const userRole =
-    (propRole && privilegedRoles.includes(propRole) ? propRole : null) ||
-    cachedRole ||
-    propRole ||
-    "employee";
+  const userRole = propRole
+    ? propRole
+    : session.isLoaded
+    ? session.userRole
+    : cachedRole || session.userRole || "employee";
+
   const visibleTabs = baseMobileTabs
-    .filter((tab) => !tab.roles || tab.roles.includes(userRole))
+    .filter((tab) => {
+      if (tab.href === "/tasks" && !FEATURES.TASKS) return false;
+      if (!tab.roles) return true;
+      return tab.roles.includes(userRole);
+    })
     .slice(0, 5);
 
   return (

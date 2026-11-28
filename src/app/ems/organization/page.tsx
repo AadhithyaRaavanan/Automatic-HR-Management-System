@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { AppShell } from "@/components/shell/app-shell";
+import { AppShell, useAppSession } from "@/components/shell/app-shell";
 import { EmsNavigationHeader } from "@/features/ems/components/ems-navigation-header";
 import {
   GitPullRequest,
@@ -18,7 +18,17 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-export default function EmsOrganizationTreePage() {
+function EmsOrganizationTreeContent() {
+  const { organizationName } = useAppSession();
+  const orgDisplayName = organizationName?.trim() || "Organization";
+  const orgInitials = React.useMemo(() => {
+    const words = orgDisplayName.split(/\s+/).filter(Boolean);
+    if (words.length >= 2) {
+      return `${words[0][0]}${words[1][0]}`.toUpperCase();
+    }
+    return orgDisplayName.slice(0, 2).toUpperCase() || "OR";
+  }, [orgDisplayName]);
+
   const [departments, setDepartments] = React.useState<any[]>([]);
   const [teams, setTeams] = React.useState<any[]>([]);
   const [employees, setEmployees] = React.useState<any[]>([]);
@@ -61,14 +71,15 @@ export default function EmsOrganizationTreePage() {
   const topLevelDepts = departments.filter((d) => !d.parent_department_id);
 
   return (
-    <AppShell>
       <div className="space-y-6 max-w-7xl mx-auto">
         <EmsNavigationHeader />
 
         <div>
-          <h2 className="text-base font-bold text-text-primary">ZEN XEA Organizational Hierarchy</h2>
+          <h2 className="text-base font-bold text-text-primary">
+            {orgDisplayName} Organizational Hierarchy
+          </h2>
           <p className="text-xs text-text-secondary mt-0.5">
-            Interactive reporting tree visualizing main departments, child subdepartments (SEO), teams, and staff.
+            Interactive reporting tree visualizing departments, subdepartments, teams, and staff.
           </p>
         </div>
 
@@ -77,14 +88,16 @@ export default function EmsOrganizationTreePage() {
           <div className="h-64 rounded-3xl bg-card/40 border border-border-light animate-pulse" />
         ) : (
           <div className="p-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border-light shadow-sm space-y-6">
-            {/* Root Node: ZEN XEA */}
+            {/* Root Node */}
             <div className="p-4 rounded-xl bg-card border border-border-light flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-lg bg-card-subtle border border-border-light text-text-secondary flex items-center justify-center font-medium text-xs">
-                  ZX
+                  {orgInitials}
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-text-primary">Zenxea Headquarters</h3>
+                  <h3 className="text-sm font-semibold text-text-primary">
+                    {orgDisplayName} Headquarters
+                  </h3>
                   <p className="text-xs text-text-secondary">Organization root</p>
                 </div>
               </div>
@@ -180,6 +193,13 @@ export default function EmsOrganizationTreePage() {
           </div>
         )}
       </div>
+  );
+}
+
+export default function EmsOrganizationTreePage() {
+  return (
+    <AppShell>
+      <EmsOrganizationTreeContent />
     </AppShell>
   );
 }

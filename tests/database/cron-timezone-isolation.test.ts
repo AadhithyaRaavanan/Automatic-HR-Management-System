@@ -146,8 +146,8 @@ describe("Final Review Item 3: Timezone-Correct 15-Minute Crons (IST, UTC+5:45, 
         [e.org, e.id]
       );
       await pg.query(
-        `INSERT INTO public.employees (id, organization_id, email, full_name, work_mode, primary_location_id, timezone, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'active');`,
+        `INSERT INTO public.employees (id, organization_id, email, full_name, work_mode, primary_location_id, timezone, status, joined_on)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', '2026-01-01');`,
         [e.id, e.org, e.email, e.email, e.mode, e.loc, e.tz]
       );
     }

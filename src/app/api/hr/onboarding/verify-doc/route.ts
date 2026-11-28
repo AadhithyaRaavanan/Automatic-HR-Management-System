@@ -32,11 +32,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Fetch document record
+    const orgId = authResult.context.organizationId;
+
+    // 1. Fetch document record (scoped to caller's organization)
     const { data: doc, error: fetchErr } = await (supabaseAdmin as any)
       .from("onboarding_documents")
       .select("*")
       .eq("id", documentId)
+      .eq("organization_id", orgId)
       .maybeSingle();
 
     if (fetchErr || !doc) {
@@ -51,11 +54,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Block modifying documents if candidate profile is already approved
+    // Block modifying documents if candidate profile is already approved in this org
     const { data: profile } = await (supabaseAdmin as any)
       .from("onboarding_profiles")
       .select("status")
       .eq("user_id", doc.user_id)
+      .eq("organization_id", orgId)
       .maybeSingle();
 
     if (profile?.status === "approved") {
@@ -81,12 +85,13 @@ export async function POST(request: NextRequest) {
         .eq("id", documentId);
     } catch {}
 
-    // Store verified document state inside profile JSONB so it is guaranteed to persist regardless of schema column migrations
+    // Store verified document state inside profile JSONB scoped to caller organization
     try {
       const { data: currentProf } = await (supabaseAdmin as any)
         .from("onboarding_profiles")
         .select("education_details")
         .eq("user_id", doc.user_id)
+        .eq("organization_id", orgId)
         .maybeSingle();
 
       const existingVerified = currentProf?.education_details?.verified_docs || {};
@@ -110,7 +115,8 @@ export async function POST(request: NextRequest) {
           updated_at: nowIso,
           ...(action === "reject" ? { status: "changes_requested" } : {}),
         })
-        .eq("user_id", doc.user_id);
+        .eq("user_id", doc.user_id)
+        .eq("organization_id", orgId);
     } catch (profErr) {
       console.warn("[verify-doc] profile verified_docs update warning:", profErr);
     }
@@ -124,7 +130,8 @@ export async function POST(request: NextRequest) {
             status: "changes_requested",
             updated_at: nowIso,
           })
-          .eq("user_id", doc.user_id);
+          .eq("user_id", doc.user_id)
+          .eq("organization_id", orgId);
       } catch {}
 
       // Audit Log

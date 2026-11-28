@@ -17,7 +17,13 @@ import { toast } from "sonner";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { CheckSquare, Plus, LayoutGrid, List, Search, AlertTriangle, MessageSquare, FolderPlus, X, Calendar, Timer, Send, UserCheck, Repeat, Sparkles, Layers, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Target, Users, Download, Trash2, Play, RotateCcw } from "lucide-react";
 
-import { DueBadge, TaskTypeBadge, getInitials, FilterDropdownMenu, TableSortColumn, STATUS_SORT_ORDER, PRIORITY_SORT_ORDER, SortableTableHeader, TaskTableRow, KanbanTaskCard } from "./task-views";
+import {
+  buildBoardColumnStorageKey,
+  getInitialExpandedColumns,
+  loadSavedBoardColumnState,
+  saveBoardColumnState,
+} from "@/features/tasks/board-columns";
+import {DueBadge, TaskTypeBadge, getInitials, FilterDropdownMenu, TableSortColumn, STATUS_SORT_ORDER, PRIORITY_SORT_ORDER, SortableTableHeader, TaskTableRow, KanbanTaskCard } from "./task-views";
 import { AssignmentScopeControls } from "./assignment-scope-controls";
 import {
   ProjectAssignmentType,
@@ -77,6 +83,7 @@ function formatDueDateDisplay(dateStr: string): string {
 function TasksWorkspaceContent() {
   const {
     userId,
+    organizationId,
     userRole,
     fullName: currentUserName,
     userEmail: currentUserEmail,
@@ -142,8 +149,28 @@ function TasksWorkspaceContent() {
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = React.useState<boolean>(false);
   const [bulkDueDateOpen, setBulkDueDateOpen] = React.useState<boolean>(false);
   const [bulkCustomDueDate, setBulkCustomDueDate] = React.useState<string>("");
-  const [expandedColumn, setExpandedColumn] = React.useState<string | null>(null);
+  const [expandedColumns, setExpandedColumns] = React.useState<Record<string, boolean>>({});
+  const hasSavedBoardPrefRef = React.useRef<boolean>(false);
+  const boardInitializedKeyRef = React.useRef<string>("");
   const boardContainerRef = React.useRef<HTMLDivElement | null>(null);
+  const boardStorageKey = React.useMemo(
+    () => buildBoardColumnStorageKey(userId, organizationId),
+    [userId, organizationId]
+  );
+
+  // Load persisted column preferences when user/organization context changes
+  React.useEffect(() => {
+    const saved = loadSavedBoardColumnState(boardStorageKey);
+    if (saved) {
+      hasSavedBoardPrefRef.current = true;
+      boardInitializedKeyRef.current = boardStorageKey;
+      setExpandedColumns(saved);
+    } else {
+      hasSavedBoardPrefRef.current = false;
+      boardInitializedKeyRef.current = "";
+    }
+  }, [boardStorageKey]);
+
   const [createTaskOpen, setCreateTaskOpen] = React.useState(false);
   const [createProjectOpen, setCreateProjectOpen] = React.useState(false);
   const [projectToDelete, setProjectToDelete] = React.useState<{
@@ -155,48 +182,17 @@ function TasksWorkspaceContent() {
   const [rejectReason, setRejectReason] = React.useState("");
   const [dueDateError, setDueDateError] = React.useState("");
 
-  const toggleColumnAccordion = React.useCallback((statusId: string) => {
-    setExpandedColumn((prev) => (prev === statusId ? null : statusId));
-  }, []);
-
-  React.useEffect(() => {
-    if (!expandedColumn) return;
-
-    const handleOutsideMouseDown = (event: MouseEvent) => {
-      if (
-        selectedTaskId ||
-        createTaskOpen ||
-        createProjectOpen ||
-        projectToDelete ||
-        taskToDelete ||
-        rejectingTask
-      ) {
-        return;
-      }
-      const target = event.target as HTMLElement | null;
-      if (!target || !boardContainerRef.current) return;
-
-      // Keep column open when interacting inside a column or switching between columns
-      if (target.closest("[data-kanban-column='true']")) {
-        return;
-      }
-
-      setExpandedColumn(null);
-    };
-
-    document.addEventListener("mousedown", handleOutsideMouseDown);
-    return () => {
-      document.removeEventListener("mousedown", handleOutsideMouseDown);
-    };
-  }, [
-    expandedColumn,
-    selectedTaskId,
-    createTaskOpen,
-    createProjectOpen,
-    projectToDelete,
-    taskToDelete,
-    rejectingTask,
-  ]);
+  const toggleColumnAccordion = React.useCallback(
+    (statusId: string) => {
+      hasSavedBoardPrefRef.current = true;
+      setExpandedColumns((prev) => {
+        const next = { ...prev, [statusId]: !prev[statusId] };
+        saveBoardColumnState(boardStorageKey, next);
+        return next;
+      });
+    },
+    [boardStorageKey]
+  );
 
   // Active Holidays for working day calculation
   const [holidays, setHolidays] = React.useState<Array<{ date: string }>>([]);
@@ -858,6 +854,17 @@ function TasksWorkspaceContent() {
     searchQuery,
   ]);
 
+  // Expand all nonempty columns on first visit before any manual column toggle is saved
+  React.useEffect(() => {
+    if (isLoading || data === undefined || hasSavedBoardPrefRef.current) return;
+    if (boardInitializedKeyRef.current === boardStorageKey && filteredTasks.length === 0) return;
+    const nextExpanded = getInitialExpandedColumns(STATUS_COLUMNS, filteredTasks);
+    setExpandedColumns(nextExpanded);
+    if (filteredTasks.length > 0) {
+      boardInitializedKeyRef.current = boardStorageKey;
+    }
+  }, [isLoading, data, filteredTasks, boardStorageKey]);
+
   const handleSortTableColumn = React.useCallback(
     (column: TableSortColumn) => {
       if (tableSortBy === column) {
@@ -1248,7 +1255,6 @@ function TasksWorkspaceContent() {
 
   const handleSelectStatusFilter = React.useCallback(
     (nextStatus: string) => {
-      setExpandedColumn(null);
       setStatusFilter(nextStatus);
       if (
         (nextStatus === "done" || nextStatus === "cancelled") &&
@@ -1262,7 +1268,6 @@ function TasksWorkspaceContent() {
 
   const handleSelectDueFilter = React.useCallback(
     (nextDue: string) => {
-      setExpandedColumn(null);
       setDueFilter(nextDue);
       if (
         (nextDue === "overdue" || nextDue === "due_soon") &&
@@ -1276,7 +1281,6 @@ function TasksWorkspaceContent() {
 
   const handleToggleSummaryMetric = React.useCallback(
     (metric: "open" | "overdue" | "due_soon" | "completed") => {
-      setExpandedColumn(null);
       if (metric === "open") {
         if (statusFilter === "open") {
           setStatusFilter("all");
@@ -1308,7 +1312,6 @@ function TasksWorkspaceContent() {
   );
 
   const handleClearAllFilters = () => {
-    setExpandedColumn(null);
     setStatusFilter("all");
     setPriorityFilter("all");
     setTypeFilter("all");
@@ -1829,7 +1832,6 @@ function TasksWorkspaceContent() {
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
-                setExpandedColumn(null);
                 setSelectedTaskIds(new Set());
                 setBulkDeleteConfirmOpen(false);
                 setScope("mine");
@@ -1847,7 +1849,6 @@ function TasksWorkspaceContent() {
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
-                setExpandedColumn(null);
                 setSelectedTaskIds(new Set());
                 setBulkDeleteConfirmOpen(false);
                 setScope("team");
@@ -1869,7 +1870,6 @@ function TasksWorkspaceContent() {
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
-                setExpandedColumn(null);
                 setSelectedTaskIds(new Set());
                 setBulkDeleteConfirmOpen(false);
                 setViewMode("board");
@@ -1889,7 +1889,6 @@ function TasksWorkspaceContent() {
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
-                setExpandedColumn(null);
                 setSelectedTaskIds(new Set());
                 setBulkDeleteConfirmOpen(false);
                 setViewMode("list");
@@ -1914,7 +1913,6 @@ function TasksWorkspaceContent() {
             type="text"
             value={searchQuery}
             onChange={(e) => {
-              setExpandedColumn(null);
               setSearchQuery(e.target.value);
             }}
             aria-label="Search tasks"
@@ -1950,7 +1948,6 @@ function TasksWorkspaceContent() {
             })),
           ]}
           onSelect={(val) => {
-            setExpandedColumn(null);
             setPriorityFilter(val);
           }}
         />
@@ -1963,7 +1960,6 @@ function TasksWorkspaceContent() {
             ...taskTypes.map((t) => ({ value: t.id, label: `Type: ${t.name}` })),
           ]}
           onSelect={(val) => {
-            setExpandedColumn(null);
             setTypeFilter(val);
           }}
         />
@@ -1977,7 +1973,6 @@ function TasksWorkspaceContent() {
             { value: "one_time", label: "One-Time Only" },
           ]}
           onSelect={(val) => {
-            setExpandedColumn(null);
             setRecurringFilter(val);
           }}
         />
@@ -2015,7 +2010,6 @@ function TasksWorkspaceContent() {
             })),
           ]}
           onSelect={(val) => {
-            setExpandedColumn(null);
             setAssigneeFilter(val);
           }}
         />
@@ -2032,7 +2026,6 @@ function TasksWorkspaceContent() {
             })),
           ]}
           onSelect={(val) => {
-            setExpandedColumn(null);
             setProjectFilter(val);
           }}
         />
@@ -2288,7 +2281,7 @@ function TasksWorkspaceContent() {
             {STATUS_COLUMNS.map((col) => {
               const colTasks = filteredTasks.filter((t) => t.status === col.key);
               const isCancelledCol = col.key === "cancelled";
-              const isExpanded = expandedColumn === col.key;
+              const isExpanded = Boolean(expandedColumns[col.key]);
               const isCollapsed = !isExpanded;
 
               return (

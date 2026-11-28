@@ -14,8 +14,15 @@ vi.mock("@/lib/supabase/admin", () => ({
 import { createServerClient } from "@supabase/ssr";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { isDemoModeEnabled } from "@/lib/config/demo";
+import { GET as demoStateGet, POST as demoStatePost } from "@/app/api/demo/state/route";
 import { POST as demoTotpPost } from "@/app/api/auth/demo-totp/route";
 import { GET as attendanceExportGet } from "@/app/api/attendance/export/route";
+import {
+  assertAllowedTestOrigin,
+  getAllowedTestBaseUrl,
+  getAllowedTestSupabaseUrl,
+  sendAllowedTestApiRequest,
+} from "../helpers/auth";
 
 describe("Section 0a: Demo Routes & Production Exclusion Guards", () => {
   const originalEnv = { ...process.env };
@@ -192,6 +199,57 @@ describe("Section 0a: Demo Routes & Production Exclusion Guards", () => {
       expect(csv).toContain("'=CMD('calc')");
       expect(csv).toContain("'+evil@example.com");
       expect(csv).not.toContain("employee_id_mock");
+    });
+  });
+
+  describe("Opt-in demo flag, /api/demo/state shutdown, and test origin allowlist", () => {
+    it("leaves demo mode and /api/demo/state disabled in production & dev when flag is unset", async () => {
+      delete process.env.NEXT_PUBLIC_DEMO_MODE;
+      (process.env as Record<string, string | undefined>).NODE_ENV = "production";
+      expect(isDemoModeEnabled()).toBe(false);
+
+      const getRes = await demoStateGet();
+      expect(getRes.status).toBe(404);
+      const postRes = await demoStatePost(
+        new NextRequest("http://127.0.0.1:3000/api/demo/state", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ departments: [{ name: "Fake" }] }),
+        })
+      );
+      expect(postRes.status).toBe(404);
+
+      (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+      expect(isDemoModeEnabled()).toBe(false);
+    });
+
+    it("blocks hardcoded production origins before credentials or approval requests are sent and supports isolated local origins", async () => {
+      expect(() =>
+        assertAllowedTestOrigin("https://pulse.zenxea.com/api/leave/review", "approval test")
+      ).toThrow(/Blocked disallowed non-test origin/);
+      expect(() =>
+        assertAllowedTestOrigin("https://bycyebxvxhmhelrvglvf.supabase.co", "fixture write")
+      ).toThrow(/Blocked disallowed non-test origin/);
+
+      process.env.PLAYWRIGHT_TEST_BASE_URL = "https://pulse.zenxea.com";
+      expect(() => getAllowedTestBaseUrl()).toThrow(/Blocked disallowed non-test origin/);
+
+      process.env.NEXT_PUBLIC_SUPABASE_URL = "https://bycyebxvxhmhelrvglvf.supabase.co";
+      expect(() => getAllowedTestSupabaseUrl()).toThrow(/Blocked disallowed non-test origin/);
+
+      await expect(
+        sendAllowedTestApiRequest("https://pulse.zenxea.com/api/requests/review", { method: "POST" })
+      ).rejects.toThrow(/Blocked disallowed non-test origin/);
+
+      // Isolated local origin 1
+      process.env.PLAYWRIGHT_TEST_BASE_URL = "http://127.0.0.1:3101";
+      process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
+      expect(getAllowedTestBaseUrl()).toBe("http://127.0.0.1:3101");
+      expect(getAllowedTestSupabaseUrl()).toBe("http://127.0.0.1:54321");
+
+      // Isolated local origin 2
+      process.env.PLAYWRIGHT_TEST_BASE_URL = "http://localhost:3102";
+      expect(getAllowedTestBaseUrl()).toBe("http://localhost:3102");
     });
   });
 });

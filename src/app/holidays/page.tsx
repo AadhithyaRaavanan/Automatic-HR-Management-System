@@ -51,7 +51,7 @@ interface HolidayTemplateOption {
 }
 
 function HolidaysPageContent() {
-  const { userRole } = useAppSession();
+  const { userRole, organizationId } = useAppSession();
   const isHrOrAdmin = userRole === "hr" || userRole === "admin";
   const isAdmin = userRole === "admin";
   const supabase = React.useMemo(() => createClient(), []);
@@ -241,15 +241,25 @@ function HolidaysPageContent() {
       if (error) throw error;
 
       toast.success(`Holiday "${newName.trim()}" added.`);
-      fetch("/api/holidays/notify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "create",
-          holidayName: newName.trim(),
-          holidayDate: newDate,
-        }),
-      }).catch(() => {});
+      try {
+        const notifyHeaders: Record<string, string> = { "Content-Type": "application/json" };
+        if (organizationId) notifyHeaders["x-organization-id"] = organizationId;
+        const notifyRes = await fetch("/api/holidays/notify", {
+          method: "POST",
+          headers: notifyHeaders,
+          body: JSON.stringify({
+            action: "create",
+            holidayName: newName.trim(),
+            holidayDate: newDate,
+          }),
+        });
+        const notifyJson = await notifyRes.json().catch(() => null);
+        if (!notifyRes.ok || notifyJson?.success === false) {
+          toast.warning(notifyJson?.error || "Holiday added, but employee notification delivery failed.");
+        }
+      } catch {
+        toast.warning("Holiday added, but employee notification delivery failed.");
+      }
       setNewName("");
       setNewLocalName("");
       await loadHolidaysAndTemplates();
@@ -355,14 +365,24 @@ function HolidaysPageContent() {
         `Imported ${inserted} holiday(s) for ${year}${skipped > 0 ? ` (${skipped} duplicates skipped)` : ""}.`
       );
       if (inserted > 0) {
-        fetch("/api/holidays/notify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "import",
-            count: inserted,
-          }),
-        }).catch(() => {});
+        try {
+          const notifyHeaders: Record<string, string> = { "Content-Type": "application/json" };
+          if (organizationId) notifyHeaders["x-organization-id"] = organizationId;
+          const notifyRes = await fetch("/api/holidays/notify", {
+            method: "POST",
+            headers: notifyHeaders,
+            body: JSON.stringify({
+              action: "import",
+              count: inserted,
+            }),
+          });
+          const notifyJson = await notifyRes.json().catch(() => null);
+          if (!notifyRes.ok || notifyJson?.success === false) {
+            toast.warning(notifyJson?.error || "Holidays imported, but notification delivery failed.");
+          }
+        } catch {
+          toast.warning("Holidays imported, but notification delivery failed.");
+        }
       }
       setImportModalOpen(false);
       setSelectedYear(year);

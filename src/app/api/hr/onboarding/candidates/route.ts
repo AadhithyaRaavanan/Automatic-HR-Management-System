@@ -73,11 +73,13 @@ export async function GET(request: NextRequest) {
       (supabaseAdmin as any)
         .from("onboarding_profiles")
         .select("*")
+        .eq("organization_id", orgId)
         .in("user_id", orgUserIds)
         .order("created_at", { ascending: false }),
       (supabaseAdmin as any)
         .from("onboarding_documents")
         .select("*")
+        .eq("organization_id", orgId)
         .in("user_id", orgUserIds)
         .order("uploaded_at", { ascending: true }),
     ]);

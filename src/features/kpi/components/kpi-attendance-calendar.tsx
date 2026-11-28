@@ -107,6 +107,8 @@ export function KpiAttendanceCalendar({
                     ? "bg-rose-50 border-[#FF007A]/50 text-[#FF007A] font-bold"
                     : d.status === "holiday" || d.status === "leave"
                     ? "bg-card-subtle border-border-medium text-text-secondary font-semibold"
+                    : d.status === "not_employed"
+                    ? "bg-transparent border-transparent text-text-tertiary/35"
                     : "bg-card-subtle/40 border-transparent text-text-tertiary";
 
                 const tooltip = `${d.date} · ${d.label}${

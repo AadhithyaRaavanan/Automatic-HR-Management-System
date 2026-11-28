@@ -17,6 +17,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAppSession } from "@/components/shell/app-shell";
 
 interface EmsNavProps {
   currentTab?: string;
@@ -36,6 +37,7 @@ export const emsNavItems = [
 
 export function EmsNavigationHeader({ currentTab }: EmsNavProps) {
   const pathname = usePathname();
+  const { organizationName } = useAppSession();
 
   return (
     <div data-tour="ems-hub" data-tour-mgr="ems-department" className="space-y-4 min-w-0 w-full max-w-full">
@@ -44,7 +46,7 @@ export function EmsNavigationHeader({ currentTab }: EmsNavProps) {
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-text-primary tracking-tight">Employees</h1>
           <p className="text-xs text-text-secondary mt-0.5">
-            Manage staff, teams, organizational hierarchy, and internships for Zenxea.
+            Manage staff, teams, organizational hierarchy, and internships for {organizationName?.trim() || "your organization"}.
           </p>
         </div>
       </div>
