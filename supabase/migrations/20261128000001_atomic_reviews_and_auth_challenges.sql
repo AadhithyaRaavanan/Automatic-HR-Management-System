@@ -1231,6 +1231,12 @@ BEGIN
         WHERE a.organization_id IS NULL
           AND e.id = a.employee_id;
 
+        UPDATE public.employee_onboarding_audit a
+        SET organization_id = om.organization_id
+        FROM public.organization_members om
+        WHERE a.organization_id IS NULL
+          AND om.user_id = a.employee_id;
+
         CREATE INDEX IF NOT EXISTS idx_onboarding_audit_org_emp
             ON public.employee_onboarding_audit(organization_id, employee_id);
 
@@ -1238,10 +1244,16 @@ BEGIN
         CREATE POLICY "onboarding_audit_select_own_or_admin" ON public.employee_onboarding_audit
             FOR SELECT TO authenticated
             USING (
-                organization_id = (SELECT public.current_org_id())
-                AND (
-                    employee_id = (SELECT auth.uid())
-                    OR (SELECT public.current_user_role()) IN ('hr', 'admin')
+                (
+                    organization_id = (SELECT public.current_org_id())
+                    AND (
+                        employee_id = (SELECT auth.uid())
+                        OR (SELECT public.current_user_role()) IN ('hr', 'admin')
+                    )
+                )
+                OR (
+                    organization_id IS NULL
+                    AND employee_id = (SELECT auth.uid())
                 )
             );
     END IF;

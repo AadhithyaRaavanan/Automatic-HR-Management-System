@@ -393,9 +393,20 @@ export async function POST(request: NextRequest) {
     const designationName = empRecord?.job_titles?.title_name || "Employee";
 
     // 6. Record Audit Log
+    let resolvedOrgId: string | null = empRecord?.organization_id || null;
+    if (!resolvedOrgId) {
+      const { data: mem } = await (supabaseAdmin as any)
+        .from("organization_members")
+        .select("organization_id")
+        .eq("user_id", user.id)
+        .limit(1)
+        .maybeSingle();
+      resolvedOrgId = mem?.organization_id || null;
+    }
+
     try {
       await (supabaseAdmin as any).from("employee_onboarding_audit").insert({
-        organization_id: empRecord?.organization_id || null,
+        organization_id: resolvedOrgId,
         employee_id: user.id,
         action: nextStatus === "RESUBMITTED" ? "RESUBMITTED_FOR_VERIFICATION" : "SUBMITTED_FOR_VERIFICATION",
         performed_by: user.id,
@@ -407,7 +418,7 @@ export async function POST(request: NextRequest) {
 
     // 7. Trigger In-App Notification to HR Admins
     try {
-      const hrUserIds = await getHrUsers(empRecord?.organization_id);
+      const hrUserIds = await getHrUsers(resolvedOrgId);
       if (hrUserIds.length > 0) {
         await notify({
           userIds: hrUserIds,

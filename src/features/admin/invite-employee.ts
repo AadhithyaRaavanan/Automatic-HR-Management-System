@@ -157,11 +157,11 @@ export async function inviteSingleEmployee(
     };
   }
 
-  if (!/^[A-Za-z\s]{2,60}$/.test(normalizedName)) {
+  if (!/^[A-Za-z\s'-]{2,60}$/.test(normalizedName)) {
     return {
       ok: false,
       status: 400,
-      error: "Validation Error: Full name must only contain alphabet letters and spaces.",
+      error: "Validation Error: Full name must only contain alphabet letters, spaces, hyphens, or apostrophes.",
     };
   }
 

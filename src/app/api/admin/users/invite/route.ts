@@ -50,10 +50,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    revalidatePath("/ems");
-    revalidatePath("/ems/employees");
-    revalidatePath("/employees");
-    revalidatePath("/admin/users");
+    try {
+      revalidatePath("/ems");
+      revalidatePath("/ems/employees");
+      revalidatePath("/employees");
+      revalidatePath("/admin/users");
+    } catch {
+      // Skip cache revalidation when invoked outside an active Next.js static generation store
+    }
 
     return NextResponse.json({
       success: true,

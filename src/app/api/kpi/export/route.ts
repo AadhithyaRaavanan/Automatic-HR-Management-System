@@ -25,9 +25,20 @@ export async function GET(request: NextRequest) {
   const defaultDates = getKolkataPresetDates("month");
   const { searchParams } = new URL(request.url);
   const targetEmployeeId = searchParams.get("employee_id") || caller.userId;
+  const periodId = searchParams.get("periodId");
   const from = searchParams.get("from") || defaultDates.from;
   const to = searchParams.get("to") || defaultDates.to;
   const employeeType = searchParams.get("employee_type") || undefined;
+
+  if (periodId) {
+    const { data: periodRow } = await (supabaseAdmin.from("kpi_periods") as any)
+      .select("organization_id")
+      .eq("id", periodId)
+      .maybeSingle();
+    if (periodRow?.organization_id && periodRow.organization_id !== caller.organizationId) {
+      return NextResponse.json({ error: "Forbidden: KPI period belongs to another organization." }, { status: 403 });
+    }
+  }
 
   const isAllowed = await verifyEmployeeAccess(caller, targetEmployeeId);
   if (!isAllowed) {
