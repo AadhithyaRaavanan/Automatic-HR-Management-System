@@ -1225,17 +1225,40 @@ BEGIN
         ALTER TABLE public.employee_onboarding_audit
             ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE;
 
+        -- Attribute reviewer-led events unambiguously when performed_by belongs to a single org
+        UPDATE public.employee_onboarding_audit a
+        SET organization_id = src.organization_id
+        FROM (
+            SELECT om.user_id, MIN(om.organization_id::text)::uuid AS organization_id
+            FROM public.organization_members om
+            WHERE om.status IN ('active', 'invited')
+            GROUP BY om.user_id
+            HAVING COUNT(DISTINCT om.organization_id) = 1
+        ) src
+        WHERE a.organization_id IS NULL
+          AND a.performed_by IS NOT NULL
+          AND a.performed_by IS DISTINCT FROM a.employee_id
+          AND src.user_id = a.performed_by;
+
+        -- Attribute remaining events from 1:1 employee record when present
         UPDATE public.employee_onboarding_audit a
         SET organization_id = e.organization_id
         FROM public.employees e
         WHERE a.organization_id IS NULL
           AND e.id = a.employee_id;
 
+        -- Attribute remaining events from organization_members ONLY when membership is unambiguous (1 org)
         UPDATE public.employee_onboarding_audit a
-        SET organization_id = om.organization_id
-        FROM public.organization_members om
+        SET organization_id = src.organization_id
+        FROM (
+            SELECT om.user_id, MIN(om.organization_id::text)::uuid AS organization_id
+            FROM public.organization_members om
+            WHERE om.status IN ('active', 'invited')
+            GROUP BY om.user_id
+            HAVING COUNT(DISTINCT om.organization_id) = 1
+        ) src
         WHERE a.organization_id IS NULL
-          AND om.user_id = a.employee_id;
+          AND src.user_id = a.employee_id;
 
         CREATE INDEX IF NOT EXISTS idx_onboarding_audit_org_emp
             ON public.employee_onboarding_audit(organization_id, employee_id);
@@ -1246,9 +1269,13 @@ BEGIN
             USING (
                 (
                     organization_id = (SELECT public.current_org_id())
+                    AND (SELECT public.is_active_org_member())
                     AND (
                         employee_id = (SELECT auth.uid())
-                        OR (SELECT public.current_user_role()) IN ('hr', 'admin')
+                        OR (
+                            (SELECT public.current_user_role()) IN ('hr', 'admin')
+                            AND (SELECT public.aal2_ok())
+                        )
                     )
                 )
                 OR (
@@ -1330,3 +1357,40 @@ ALTER TABLE public.notifications ADD CONSTRAINT notifications_type_check CHECK (
         'onboarding_status'
     )
 );
+
+-- 12. Remove placeholder default org fallback from audit_logs derivation trigger
+CREATE OR REPLACE FUNCTION public.trg_derive_audit_log_org_id()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+    IF NEW.organization_id IS NULL THEN
+        NEW.organization_id := public.current_org_id();
+
+        IF NEW.organization_id IS NULL AND NEW.actor_id IS NOT NULL THEN
+            SELECT e.organization_id INTO NEW.organization_id
+            FROM public.employees e
+            WHERE e.id = NEW.actor_id;
+
+            IF NEW.organization_id IS NULL THEN
+                SELECT MIN(om.organization_id::text)::uuid INTO NEW.organization_id
+                FROM public.organization_members om
+                WHERE om.user_id = NEW.actor_id
+                  AND om.status IN ('active', 'invited')
+                GROUP BY om.user_id
+                HAVING COUNT(DISTINCT om.organization_id) = 1;
+            END IF;
+        END IF;
+
+        IF NEW.organization_id IS NULL THEN
+            RAISE EXCEPTION 'organization_id is required on audit_logs (no unambiguous organization context).'
+                USING ERRCODE = '23502';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.trg_derive_audit_log_org_id() FROM PUBLIC, anon;

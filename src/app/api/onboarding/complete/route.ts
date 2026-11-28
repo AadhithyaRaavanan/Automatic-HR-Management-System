@@ -1,50 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { Database } from "@/types/database.types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { notify } from "@/features/notifications/notify";
 import { getHrUsers } from "@/features/notifications/recipients";
 import { sendOnboardingSubmittedEmail } from "@/lib/email/resend";
 import { QUALIFICATION_DOC_MAP, HighestQualification } from "@/features/onboarding/types";
+import { resolveOnboardingCaller } from "@/features/auth/tenant-context";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
-    let response = NextResponse.next();
-    const supabase = createServerClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll();
-          },
-          setAll(cookiesToSet: Array<{ name: string; value: string; options?: any }>) {
-            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-            response = NextResponse.next();
-            cookiesToSet.forEach(({ name, value, options }) =>
-              response.cookies.set(name, value, options)
-            );
-          },
-        },
-      }
-    );
-
-    const authHeader = request.headers.get("Authorization");
-    let user = null;
-    if (authHeader?.startsWith("Bearer ")) {
-      const token = authHeader.substring(7);
-      const { data: tokenUser } = await supabaseAdmin.auth.getUser(token);
-      user = tokenUser?.user || null;
+    const authResult = await resolveOnboardingCaller(request);
+    if ("response" in authResult) {
+      return authResult.response;
     }
-    if (!user) {
-      const { data: cookieUser } = await supabase.auth.getUser();
-      user = cookieUser?.user || null;
-    }
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { user, context } = authResult;
 
     const payload = await request.json().catch(() => ({}));
     const { declaration } = payload;
@@ -127,11 +97,8 @@ export async function POST(request: NextRequest) {
     const uploadedDocs = docs || [];
     const docTypesUploaded = new Set(uploadedDocs.map((d: any) => d.doc_type));
 
-    // 3. Validate Mandatory Information
-    const { data: empRecord } = await (supabaseAdmin.from("employees") as any)
-      .select("id, organization_id, full_name, email, phone, emergency_contact, departments:department_id(name), job_titles:job_title_id(title_name)")
-      .eq("id", user.id)
-      .maybeSingle();
+    // 3. Validate Mandatory Information (use tenant-scoped employee profile from context)
+    const empRecord = context.employee;
 
     const edu = (onbProfile.education_details as any) || {};
     const emergencyFromEmp = empRecord?.emergency_contact || "";
@@ -361,9 +328,13 @@ export async function POST(request: NextRequest) {
         empUpdatePayload.emergency_contact = empEmergency;
       }
 
-      await (supabaseAdmin.from("employees") as any)
+      let empCompleteUpdQ = (supabaseAdmin.from("employees") as any)
         .update(empUpdatePayload)
         .eq("id", user.id);
+      if (context.organizationId) {
+        empCompleteUpdQ = empCompleteUpdQ.eq("organization_id", context.organizationId);
+      }
+      await empCompleteUpdQ;
 
       // Reset any rejected documents back to 'pending' upon candidate resubmission
       await (supabaseAdmin as any)
@@ -392,17 +363,8 @@ export async function POST(request: NextRequest) {
     const departmentName = empRecord?.departments?.name || "General";
     const designationName = empRecord?.job_titles?.title_name || "Employee";
 
-    // 6. Record Audit Log
-    let resolvedOrgId: string | null = empRecord?.organization_id || null;
-    if (!resolvedOrgId) {
-      const { data: mem } = await (supabaseAdmin as any)
-        .from("organization_members")
-        .select("organization_id")
-        .eq("user_id", user.id)
-        .limit(1)
-        .maybeSingle();
-      resolvedOrgId = mem?.organization_id || null;
-    }
+    // 6. Record Audit Log (scoped strictly to resolved onboarding organization)
+    const resolvedOrgId: string | null = context.organizationId;
 
     try {
       await (supabaseAdmin as any).from("employee_onboarding_audit").insert({
@@ -418,10 +380,11 @@ export async function POST(request: NextRequest) {
 
     // 7. Trigger In-App Notification to HR Admins
     try {
-      const hrUserIds = await getHrUsers(resolvedOrgId);
+      const hrUserIds = resolvedOrgId ? await getHrUsers(resolvedOrgId) : [];
       if (hrUserIds.length > 0) {
         await notify({
           userIds: hrUserIds,
+          organizationId: resolvedOrgId,
           type: "onboarding_submission",
           typeGroup: "onboarding",
           title: "New Employee Onboarding Submission",

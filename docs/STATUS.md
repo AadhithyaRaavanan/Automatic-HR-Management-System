@@ -1,33 +1,33 @@
-# Current handoff
+# Pulse Release Handoff Status
 
-Updated 28 November 2026.
+Last updated: 2026-11-28 (post-`7cf59f0` hardening + verification)
 
-## Multi-tenant release hardening summary
+## Summary of Latest Changes (Post-`7cf59f0`)
 
-All five phases of [PER_TENANT_RELEASE_PROMPT.md](PER_TENANT_RELEASE_PROMPT.md) are implemented across migrations, server authorization, atomic Postgres review RPCs, multi-instance recovery challenges, invite & onboarding-audit boundaries, reports/exports, and the workspace switcher UI.
+- **Onboarding workspace selection (`resolveOnboardingCaller`)**:
+  - Added `resolveOnboardingCaller` in `src/features/auth/tenant-context.ts`, unifying `GET`/`PATCH /api/onboarding/profile`, `POST /api/onboarding/draft`, `POST /api/onboarding/upload`, and `POST /api/onboarding/complete`.
+  - Reads non-suspended `organization_members` (`active` or `invited`), validates `x-organization-id` / `pulse_org_id` cookie UUIDs, returns `409 ORG_SELECTION_REQUIRED` when a candidate belongs to multiple organizations without an explicit selection, and rejects non-member or suspended organizations with `403`.
+  - Updated `src/app/api/auth/organizations/route.ts` (`GET`/`POST`) to include `invited` memberships alongside `active`, `src/features/onboarding/access.ts` (`getOnboardingGate`) to require an explicit `organizationId` or single-org membership (removing arbitrary `.limit(1)` role lookup), and `src/app/onboarding/page.tsx` to prompt organization selection on `409 ORG_SELECTION_REQUIRED` and allow switching via header selector when multiple organizations exist.
+- **Deterministic historical audit ownership**:
+  - Updated `supabase/migrations/20261128000001_atomic_reviews_and_auth_challenges.sql` (Section 9) so legacy `NULL` rows in `employee_onboarding_audit` are backfilled deterministically only when `performed_by`, `employees`, or single-org `organization_members` uniquely resolves to one organization (`HAVING COUNT(DISTINCT organization_id) = 1`), leaving ambiguous historical multi-org rows `NULL` with self-only read access (`employee_id = auth.uid()`).
+  - Updated `trg_derive_audit_log_org_id()` (Section 12) to remove the placeholder default-org UUID fallback and raise SQLSTATE `23502` when `organization_id` cannot be uniquely derived.
 
-### Verified checks
+## Verified Checks (Latest Run)
 
-1. **Unit, docs, and TypeScript check**
-   - `npx tsc --noEmit --incremental false`: passed (`0` errors).
-   - `npx vitest run tests/unit`: `46` test files passed, `275` tests passed (including `multi-tenant-release.test.ts` and `invite-and-onboarding-audit.test.ts`).
-   - `npm run verify:docs`: passed (`scripts/verify-docs.mjs`).
-2. **Clean production build**
-   - `Remove-Item -Recurse -Force .next; npm run build`: passed cleanly (exit `0`, `54` static routes + dynamic API routes).
-3. **Database migrations & local DB suites**
-   - `verify-migrations.mjs` passed both full **fresh replay** (`20261107000001` through `20261128000001_atomic_reviews_and_auth_challenges.sql`) and **upgrade replay** from pre-`20261116` backup/restore (preserving legacy `kpi_reviews` row `22222222-2222-2222-2222-222222222222`). Temporary DBs cleaned up.
-   - Local Docker DB suites passing: `cross-tenant-isolation` (`32/32`), `leave-rpcs` (`28/28`), `phase3-rpc-matrix` (`37/37`), `section4-kpi` (`8/8`), `suspended-member-isolation` (`3/3`), `section1-hr-tools` (`9/9`), `cron-timezone-isolation` (`4/4`), `f1-multitenancy` (`9/9`), `f4-shifts` (`7/7`), `f5-leave` (`9/9`), `f6-tasks` (`7/7`), `f7-kpi` (`7/7`), `f12-persona-matrix` (`30/30`), `mfa-policy-matrix` (`6/6`), `f1.5-job-titles` (`5/5`), `section5-shifts-and-night-shifts` (`4/4`).
-   - `admin-routes-integration.test.ts` passed cross-tenant denials (`409` on cross-org invite) plus live invite, bulk-import, reset-mfa, force-signout, deactivate, and audit export workflows (only legacy pre-KPI-redesign assertions on `kpi/export` `.xlsx`/AAL2 remain mismatched).
-4. **Two-organization, dual-instance E2E suite** (`verify-two-org-e2e.mjs` against `:3101` & `:3102` with `NEXT_PUBLIC_DEMO_MODE=false` + local Supabase `127.0.0.1:54321`)
-   - Passed prior to the final invite/`onboarding/complete`/`kpi/export` patches: `Org Alpha` & `Org Beta` isolation with overlapping names (`Aarav Sharma`), delegated manager approvals, deactivated `403` blocks, multi-org `409` guard, concurrent leave & partial-shift regularization approvals (`[200, 409]` + `270m` recalculation), locked-period `400` refusal, idempotent cron accrual, org-scoped CSV export & `/reports` `320`-row pagination, field clearing, dual mail transports (Nodemailer SMTP sink + Supabase GoTrue/Mailpit `127.0.0.1:54324`), fail-closed mail transport error handling, password change re-auth + durable audits, and Playwright multi-org switcher + cross-instance MFA recovery challenge consumption.
+- **Typecheck (`npx tsc --noEmit --incremental false`)**: Passed (`0` errors).
+- **Unit suite (`npx vitest run tests/unit`)**: `46 passed (46)` files, `275 passed (275)` tests (includes `tests/unit/invite-and-onboarding-audit.test.ts` covering `409` ambiguous org, `403` forged org, and `200` selected-org audit stamping).
+- **Production build (`npm run build`)**: Clean `.next` build succeeded (`54/54` static pages generated, exit code `0`).
+- **Fresh & upgrade migration replays (`verify-migrations.mjs`)**: `ALL UPGRADE + FRESH REPLAYS PASSED AND CLEANED UP!` (against disposable local Postgres schemas on `127.0.0.1:54322`).
+- **Two-organization & multi-instance browser/API verification (`verify-two-org-e2e.mjs`)**: `ALL TWO-ORGANIZATION & MULTI-INSTANCE ACCEPTANCE CHECKS PASSED!`, including `/api/onboarding/profile` `409` on ambiguous multi-org without selection and `200` with `x-organization-id`, overlapping-name two-org policies, attendance/leave/KPI/export reconciliation, Playwright multi-org switcher, and cross-instance Mailpit MFA recovery.
+- **Database schema/contract check (`tests/database/schema-meta.test.ts`)**: `9 passed | 1 failed (10)` — `trg_derive_audit_log_org_id()` and `SECURITY DEFINER` grant checks passed; fails on global `user_id`-keyed table `notification_preferences` (plus `onboarding_documents`, `onboarding_profiles`, `profiles`) missing `organization_id` / exemption in `ORG_ID_EXEMPTIONS`.
 
-### Release blockers / staging items still open
+## Remaining Release Blockers (Local / Codebase)
 
-- **Staging provider verification:** Exercise live Resend / production SMTP email delivery, webhook/bounce handling, Upstash Redis distributed rate limiting (`UPSTASH_REDIS_REST_*`), and hosted cron triggers against staging.
-- **Re-run two-org E2E against final build:** Re-run `verify-two-org-e2e.mjs` built with `NEXT_PUBLIC_DEMO_MODE=false` and local Supabase URL if pre-deploy sign-off requires end-to-end replay after the final `invite` / `onboarding/complete` / `kpi/export` patches.
-- **Pre-existing DB suite drift:** Align legacy DB snapshot/design tests (`f11-design`, `f9-retention`, `policy-inventory`, `grants-snapshot`, `rpc-reconciliation`, `uuid-tenant-isolation`, `rls-database-matrix`, `section3-tasks`, `f1.4-provisioning-without-passwords`, `admin-routes-integration` `.xlsx`/AAL2 `kpi/export`, `schema-meta` global `user_id` profile/notification exemptions, `intra-tenant-authorization`, `section2-retention`, `f8-admin` stale seed rows) if CI gates on `tests/database`.
-- **Production configuration required on deploy:** Apply `20261128000001_atomic_reviews_and_auth_challenges.sql` after `pg_dump` backup, and set `CRON_SECRET`, `MFA_RECOVERY_HMAC_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_DEMO_MODE=false`, and mail credentials.
+- **Pre-existing local database test suite failures**: `tests/database/schema-meta.test.ts` (`9/10`, global user-keyed tables vs `ORG_ID_EXEMPTIONS`), `tests/database/admin-routes-integration.test.ts` (legacy `kpi/export` expectation), `tests/database/f8-admin.test.ts` (`[F8.2.5]` leftover fixture rows in `ORG_1_ID`), and legacy policy/grant/RLS inventory suites (`f11-design`, `f9-retention`, `policy-inventory`, `grants-snapshot`, `rpc-reconciliation`, `uuid-tenant-isolation`, `rls-database-matrix`, `section3-tasks`, `f1.4-provisioning-without-passwords`, `intra-tenant-authorization`, `section2-retention`) were not part of a clean 100% green `tests/database` pass.
+- **Full `tests/database` re-run after Section 12 migration edit**: Prior passing DB suites (`cross-tenant-isolation`, `leave-rpcs`, `phase3-rpc-matrix`, `section4-kpi`, `suspended-member-isolation`, `section1-hr-tools`, `cron-timezone-isolation`, `f1-multitenancy`, `f4-shifts`, `f5-leave`, `f6-tasks`, `f7-kpi`, `f12-persona-matrix`, `mfa-policy-matrix`, `f1.5-job-titles`, `section5-shifts-and-night-shifts`) passed before the final Section 12 trigger update; re-running the clean DB suite after pushing is recommended.
 
-## Module & feature references
+## Staging-Only Requirements (Not Runnable Locally)
 
-Start feature changes at [the module map](MODULES.md) and check [the document index](INDEX.md) for architecture and security requirements.
+- Apply `supabase/migrations/20261128000001_atomic_reviews_and_auth_challenges.sql` (and inspect any legacy ambiguous `NULL` rows in `employee_onboarding_audit` in staging data) during staged cutover.
+- Verify real SMTP/SES delivery (`AUTH_MAILBOX_URL` / Resend / Supabase Auth hooks), Supabase hosted JWT/MFA AAL2 session behavior, and production cron scheduler secrets (`CRON_SECRET`) against staging infrastructure.
+- Set production `NEXT_PUBLIC_DEMO_MODE=false` and staging Supabase URL/anon key in deployment environment variables before building release artifacts.

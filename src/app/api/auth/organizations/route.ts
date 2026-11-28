@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     .from("organization_members")
     .select("organization_id, role, status, department_id, organizations(id, name, slug, status, timezone)")
     .eq("user_id", user.id)
-    .eq("status", "active")
+    .in("status", ["active", "invited"])
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -100,13 +100,13 @@ export async function POST(request: NextRequest) {
       .select("organization_id, role, status, organizations!inner(id, name, status)")
       .eq("user_id", user.id)
       .eq("organization_id", organizationId)
-      .eq("status", "active")
+      .in("status", ["active", "invited"])
       .maybeSingle();
 
     const orgStatus = String(membership?.organizations?.status || "").toLowerCase();
     if (!membership || (orgStatus && !["active", "trial"].includes(orgStatus))) {
       return NextResponse.json(
-        { error: "Forbidden: Selected organization is not an active membership." },
+        { error: "Forbidden: Selected organization is not an active or invited membership." },
         { status: 403 }
       );
     }

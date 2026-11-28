@@ -59,6 +59,10 @@ export default function OnboardingPage() {
   const [savingDraft, setSavingDraft] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [uploadingDocKey, setUploadingDocKey] = React.useState<string | null>(null);
+  const [activeOrg, setActiveOrg] = React.useState<{ id: string; name: string } | null>(null);
+  const [orgChoices, setOrgChoices] = React.useState<Array<{ organizationId: string; organizationName: string; role: string }>>([]);
+  const [requiresOrgSelection, setRequiresOrgSelection] = React.useState(false);
+  const [switchingOrg, setSwitchingOrg] = React.useState(false);
 
   // Workflow State & Current Step (1 to 5, and 6 for Review)
   const [workflowStatus, setWorkflowStatus] = React.useState<OnboardingWorkflowStatus>("NOT_STARTED");
@@ -170,6 +174,14 @@ export default function OnboardingPage() {
         headers,
         cache: "no-store",
       });
+      if (res.status === 409) {
+        const conflictData = await res.json().catch(() => ({}));
+        if (conflictData?.code === "ORG_SELECTION_REQUIRED" && Array.isArray(conflictData.organizations)) {
+          setOrgChoices(conflictData.organizations);
+          setRequiresOrgSelection(true);
+          return;
+        }
+      }
       if (!res.ok) {
         if (res.status === 401) {
           router.replace("/login");
@@ -179,6 +191,11 @@ export default function OnboardingPage() {
       }
 
       const data = await res.json();
+      setRequiresOrgSelection(false);
+      setActiveOrg(data.organization || null);
+      if (Array.isArray(data.organizations)) {
+        setOrgChoices(data.organizations);
+      }
       if (data.user) {
         setEmployeeMeta({
           fullName: data.user.fullName || "",
@@ -681,12 +698,86 @@ export default function OnboardingPage() {
     }
   };
 
+  const handleSelectOrganization = React.useCallback(
+    async (organizationId: string) => {
+      if (!organizationId || switchingOrg) return;
+      setSwitchingOrg(true);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (sessionData?.session?.access_token) {
+          headers["Authorization"] = `Bearer ${sessionData.session.access_token}`;
+        }
+        const res = await fetch("/api/auth/organizations", {
+          method: "POST",
+          credentials: "same-origin",
+          headers,
+          body: JSON.stringify({ organizationId }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err?.error || "Unable to select organization.");
+        }
+        setLoading(true);
+        await fetchProfileData();
+      } catch (err: any) {
+        toast.error(err?.message || "Unable to select organization.");
+      } finally {
+        setSwitchingOrg(false);
+      }
+    },
+    [supabase, switchingOrg, fetchProfileData]
+  );
+
   if (loading) {
     return (
       <div className="min-h-screen bg-surface-ground flex items-center justify-center p-6">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-4 border-brand-purple border-t-transparent rounded-full animate-spin" />
           <p className="text-sm font-bold text-text-secondary">Loading onboarding portal...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (requiresOrgSelection && orgChoices.length > 1) {
+    return (
+      <div className="min-h-screen bg-surface-ground flex items-center justify-center p-6">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="onboarding-org-select-heading"
+          className="max-w-md w-full bg-white rounded-2xl border border-[#E6E6E6] p-6 shadow-xl space-y-4"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-black text-[#B7FF00] flex items-center justify-center">
+              <Building2 className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 id="onboarding-org-select-heading" className="text-base font-bold text-black">
+                Select Active Organization
+              </h2>
+              <p className="text-xs text-[#666666]">
+                Choose which organization workspace to complete onboarding for.
+              </p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {orgChoices.map((org) => (
+              <button
+                key={org.organizationId}
+                type="button"
+                disabled={switchingOrg}
+                onClick={() => handleSelectOrganization(org.organizationId)}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-[#E6E6E6] hover:border-black hover:bg-[#F5F5F5] text-left transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <span className="text-sm font-semibold text-black">{org.organizationName}</span>
+                <span className="text-[11px] font-medium uppercase px-2 py-0.5 rounded bg-black text-[#B7FF00]">
+                  {org.role}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -761,6 +852,26 @@ export default function OnboardingPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {orgChoices.length > 1 ? (
+            <select
+              aria-label="Onboarding organization"
+              value={activeOrg?.id || ""}
+              disabled={switchingOrg}
+              onChange={(e) => handleSelectOrganization(e.target.value)}
+              className="h-8 max-w-[200px] rounded-xl border border-border-light bg-card px-2.5 text-xs font-semibold text-text-primary cursor-pointer"
+            >
+              {orgChoices.map((org) => (
+                <option key={org.organizationId} value={org.organizationId}>
+                  {org.organizationName}
+                </option>
+              ))}
+            </select>
+          ) : activeOrg?.name ? (
+            <span className="inline-flex items-center gap-1.5 rounded-xl border border-border-light bg-card-subtle px-2.5 py-1 text-xs font-semibold text-text-primary">
+              <Building2 className="w-3.5 h-3.5 text-brand-purple" />
+              <span className="max-w-[160px] truncate">{activeOrg.name}</span>
+            </span>
+          ) : null}
           <button
             type="button"
             disabled={savingDraft}

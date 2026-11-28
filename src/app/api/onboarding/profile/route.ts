@@ -1,47 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { Database } from "@/types/database.types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { listCandidateDocs } from "@/features/onboarding/storage";
+import { resolveOnboardingCaller } from "@/features/auth/tenant-context";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
-    let response = NextResponse.next();
-    const supabase = createServerClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll();
-          },
-          setAll(cookiesToSet: Array<{ name: string; value: string; options?: any }>) {
-            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-            response = NextResponse.next();
-            cookiesToSet.forEach(({ name, value, options }) =>
-              response.cookies.set(name, value, options)
-            );
-          },
-        },
-      }
-    );
-
-    const authHeader = request.headers.get("Authorization");
-    let user = null;
-    if (authHeader?.startsWith("Bearer ")) {
-      const token = authHeader.substring(7);
-      const { data: tokenUser } = await supabaseAdmin.auth.getUser(token);
-      user = tokenUser?.user || null;
+    const authResult = await resolveOnboardingCaller(request);
+    if ("response" in authResult) {
+      return authResult.response;
     }
-    if (!user) {
-      const { data: cookieUser } = await supabase.auth.getUser();
-      user = cookieUser?.user || null;
-    }
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { user, context } = authResult;
 
     // Check profiles completion status
     const { data: profile } = await (supabaseAdmin as any)
@@ -57,23 +27,7 @@ export async function GET(request: NextRequest) {
       .eq("user_id", user.id)
       .maybeSingle();
 
-    // Fetch employee data joined with department and job title
-    const { data: employee } = await (supabaseAdmin.from("employees") as any)
-      .select(`
-        id,
-        full_name,
-        email,
-        phone,
-        emergency_contact,
-        department_id,
-        job_title_id,
-        status,
-        onboarding_completed,
-        departments:department_id(name),
-        job_titles:job_title_id(title_name)
-      `)
-      .eq("id", user.id)
-      .maybeSingle();
+    const employee = context.employee;
 
     // Fetch uploaded documents with signed URLs and status (with direct DB fallback)
     let documents: any[] = [];
@@ -108,7 +62,7 @@ export async function GET(request: NextRequest) {
       ? `EMP-${employee.id.slice(0, 6).toUpperCase()}`
       : `EMP-${user.id.slice(0, 6).toUpperCase()}`;
 
-    const userRole = (user.app_metadata?.user_role || user.user_metadata?.role || "employee").toLowerCase();
+    const userRole = context.role;
 
     return NextResponse.json(
       {
@@ -125,6 +79,10 @@ export async function GET(request: NextRequest) {
           emergency_contact: employee?.emergency_contact || "",
           storage_folder: onboardingProfile?.storage_folder || null,
         },
+        organization: context.organizationId
+          ? { id: context.organizationId, name: context.organizationName || "Organization" }
+          : null,
+        organizations: context.memberships,
         profile: {
           onboarding_completed: Boolean(
             (profile?.onboarding_completed || employee?.onboarding_completed) &&
@@ -154,40 +112,11 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    let response = NextResponse.next();
-    const supabase = createServerClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy-project.supabase.co",
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll();
-          },
-          setAll(cookiesToSet: Array<{ name: string; value: string; options?: any }>) {
-            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-            response = NextResponse.next();
-            cookiesToSet.forEach(({ name, value, options }) =>
-              response.cookies.set(name, value, options)
-            );
-          },
-        },
-      }
-    );
-
-    const authHeader = request.headers.get("Authorization");
-    let user = null;
-    if (authHeader?.startsWith("Bearer ")) {
-      const token = authHeader.substring(7);
-      const { data: tokenUser } = await supabaseAdmin.auth.getUser(token);
-      user = tokenUser?.user || null;
+    const authResult = await resolveOnboardingCaller(request);
+    if ("response" in authResult) {
+      return authResult.response;
     }
-    if (!user) {
-      const { data: cookieUser } = await supabase.auth.getUser();
-      user = cookieUser?.user || null;
-    }
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { user, context } = authResult;
 
     const body = await request.json().catch(() => ({}));
     const { fullName, phone, emergencyContact } = body;
@@ -197,9 +126,13 @@ export async function PATCH(request: NextRequest) {
     if (typeof phone === "string") empUpdates.phone = phone.trim() || null;
     if (typeof emergencyContact === "string") empUpdates.emergency_contact = emergencyContact.trim() || null;
 
-    const { error: empUpdateErr } = await ((supabaseAdmin as any).from("employees"))
+    let empUpdateQuery = ((supabaseAdmin as any).from("employees"))
       .update(empUpdates)
       .eq("id", user.id);
+    if (context.organizationId) {
+      empUpdateQuery = empUpdateQuery.eq("organization_id", context.organizationId);
+    }
+    const { error: empUpdateErr } = await empUpdateQuery;
 
     if (empUpdateErr) {
       return NextResponse.json(

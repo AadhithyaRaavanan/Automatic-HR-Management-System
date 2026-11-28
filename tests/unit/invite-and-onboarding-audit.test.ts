@@ -67,6 +67,7 @@ function buildTableMock(table: string) {
       return q;
     }),
     in: vi.fn(() => q),
+    order: vi.fn(() => q),
     limit: vi.fn(() => q),
     insert: vi.fn((row: any) => {
       mode = "insert";
@@ -255,20 +256,50 @@ describe("Invite security & onboarding audit org scoping", () => {
     expect(mockRevalidatePath).toHaveBeenCalled();
   });
 
-  it("records organization_id on employee_onboarding_audit during onboarding completion using membership fallback", async () => {
-    mockDb.employeeById = { id: "user-onb-1", organization_id: null, full_name: "Priya Candidate" };
-    mockDb.membershipsForTarget = [{ organization_id: "org-alpha-uuid" }];
+  it("records organization_id on employee_onboarding_audit during onboarding completion using selected org and rejects ambiguous/forged orgs", async () => {
+    const ORG_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const ORG_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    mockDb.employeeById = { id: "user-onb-1", organization_id: ORG_A, full_name: "Priya Candidate", status: "pending" };
+    mockDb.membershipsForTarget = [
+      { organization_id: ORG_A, role: "employee", status: "active", organizations: { id: ORG_A, name: "Org Alpha", status: "active" } },
+      { organization_id: ORG_B, role: "employee", status: "invited", organizations: { id: ORG_B, name: "Org Beta", status: "active" } },
+    ];
 
-    const req = new NextRequest("http://localhost:3000/api/onboarding/complete", {
+    // 1. Ambiguous multi-membership without selection must fail 409 (never pick arbitrary limit(1))
+    const conflictReq = new NextRequest("http://localhost:3000/api/onboarding/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ declaration: true }),
     });
+    const conflictRes = await completeOnboardingPost(conflictReq);
+    expect(conflictRes.status).toBe(409);
+    expect(mockDb.auditInserts).toHaveLength(0);
 
-    const res = await completeOnboardingPost(req);
-    expect(res.status).toBe(200);
+    // 2. Non-member org selection must fail 403
+    const forgedReq = new NextRequest("http://localhost:3000/api/onboarding/complete", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-organization-id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      },
+      body: JSON.stringify({ declaration: true }),
+    });
+    const forgedRes = await completeOnboardingPost(forgedReq);
+    expect(forgedRes.status).toBe(403);
+
+    // 3. Explicit valid organization selection stamps selected org cleanly on audit record
+    const okReq = new NextRequest("http://localhost:3000/api/onboarding/complete", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-organization-id": ORG_B,
+      },
+      body: JSON.stringify({ declaration: true }),
+    });
+    const okRes = await completeOnboardingPost(okReq);
+    expect(okRes.status).toBe(200);
     expect(mockDb.auditInserts).toHaveLength(1);
-    expect(mockDb.auditInserts[0].organization_id).toBe("org-alpha-uuid");
+    expect(mockDb.auditInserts[0].organization_id).toBe(ORG_B);
     expect(mockDb.auditInserts[0].employee_id).toBe("user-onb-1");
   });
 });

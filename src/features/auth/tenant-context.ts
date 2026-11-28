@@ -35,42 +35,24 @@ export interface ResolveTenantOptions {
   requireAal2ForPrivileged?: boolean;
 }
 
-/**
- * Authorizes scheduled / cron endpoints strictly via CRON_SECRET.
- * Fails closed even if CRON_SECRET is missing in environment configuration.
- */
-export function requireCronAuthorization(request: NextRequest): NextResponse | null {
-  const cronSecret = process.env.CRON_SECRET?.trim();
-  if (!cronSecret) {
-    return NextResponse.json(
-      { error: "Cron execution blocked: CRON_SECRET is not configured." },
-      { status: 503 }
-    );
-  }
-
-  const authHeader = request.headers.get("authorization");
-  const secretHeader = request.headers.get("x-cron-secret");
-  const isAuthorized =
-    authHeader === `Bearer ${cronSecret}` || secretHeader === cronSecret;
-
-  if (!isAuthorized) {
-    return NextResponse.json({ error: "Unauthorized cron execution" }, { status: 401 });
-  }
-  return null;
+export interface OnboardingCallerContext {
+  userId: string;
+  email: string;
+  organizationId: string | null;
+  organizationName: string | null;
+  role: EmployeeRole;
+  memberships: TenantMembershipSummary[];
+  employee: any | null;
 }
 
-/**
- * Single authoritative server-side tenant & RBAC context resolver.
- * - Verifies caller identity cryptographically via Supabase auth.
- * - Reads active memberships ONLY from `organization_members` (never editable user_metadata).
- * - Enforces explicit organization selection when a user holds multiple active memberships.
- * - Rejects deactivated employees, inactive organizations, unapproved onboarding, and missing AAL2.
- */
-export async function resolveTenantCaller(
-  request: NextRequest,
-  options: ResolveTenantOptions = {}
-): Promise<
-  | { context: TenantCallerContext; user: any; supabase: ReturnType<typeof createServerClient<Database>> }
+async function extractAuthenticatedRequestCaller(request: NextRequest): Promise<
+  | {
+      user: any;
+      supabase: ReturnType<typeof createServerClient<Database>>;
+      bearerToken: string | undefined;
+      rawRequestedOrgId: string | null;
+      dbClient: any;
+    }
   | { response: NextResponse }
 > {
   const response = NextResponse.next();
@@ -130,7 +112,6 @@ export async function resolveTenantCaller(
     };
   }
 
-  const dbClient: any = typeof (supabaseAdmin as any)?.from === "function" ? supabaseAdmin : supabase;
   const rawRequestedOrgId =
     request.headers.get("x-organization-id")?.trim() ||
     request.cookies.get(ORG_SELECTION_COOKIE)?.value?.trim() ||
@@ -145,14 +126,23 @@ export async function resolveTenantCaller(
     };
   }
 
-  // Fetch ALL active memberships with joined organization state (graceful fallback if minimal test mock lacks .order)
+  const dbClient: any = typeof (supabaseAdmin as any)?.from === "function" ? supabaseAdmin : supabase;
+  return { user, supabase, bearerToken, rawRequestedOrgId, dbClient };
+}
+
+async function fetchUserMemberships(dbClient: any, userId: string, allowInvited: boolean) {
   let membersQuery = dbClient
     .from("organization_members")
     .select(
       "organization_id, role, status, department_id, organizations(id, name, status, require_mfa_for_privileged, timezone)"
     )
-    .eq("user_id", user.id)
-    .eq("status", "active");
+    .eq("user_id", userId);
+
+  membersQuery = allowInvited
+    ? typeof membersQuery.in === "function"
+      ? membersQuery.in("status", ["active", "invited"])
+      : membersQuery
+    : membersQuery.eq("status", "active");
 
   const queryRes =
     typeof membersQuery.order === "function"
@@ -167,6 +157,200 @@ export async function resolveTenantCaller(
     : queryRes?.data
     ? [queryRes.data]
     : [];
+
+  return { memberError, membersRows };
+}
+
+/**
+ * Authorizes scheduled / cron endpoints strictly via CRON_SECRET.
+ * Fails closed even if CRON_SECRET is missing in environment configuration.
+ */
+export function requireCronAuthorization(request: NextRequest): NextResponse | null {
+  const cronSecret = process.env.CRON_SECRET?.trim();
+  if (!cronSecret) {
+    return NextResponse.json(
+      { error: "Cron execution blocked: CRON_SECRET is not configured." },
+      { status: 503 }
+    );
+  }
+
+  const authHeader = request.headers.get("authorization");
+  const secretHeader = request.headers.get("x-cron-secret");
+  const isAuthorized =
+    authHeader === `Bearer ${cronSecret}` || secretHeader === cronSecret;
+
+  if (!isAuthorized) {
+    return NextResponse.json({ error: "Unauthorized cron execution" }, { status: 401 });
+  }
+  return null;
+}
+
+/**
+ * Resolves caller identity and explicit organization selection for pre-approval
+ * onboarding routes. Never picks an arbitrary first organization when a user holds
+ * multiple active or invited memberships; rejects suspended memberships and invalid
+ * org selections cleanly.
+ */
+export async function resolveOnboardingCaller(
+  request: NextRequest
+): Promise<
+  | { context: OnboardingCallerContext; user: any; supabase: ReturnType<typeof createServerClient<Database>> }
+  | { response: NextResponse }
+> {
+  const auth = await extractAuthenticatedRequestCaller(request);
+  if ("response" in auth) return auth;
+  const { user, supabase, rawRequestedOrgId, dbClient } = auth;
+
+  const { memberError, membersRows } = await fetchUserMemberships(dbClient, user.id, true);
+  if (memberError && (memberError as any).code === "SUPABASE_ADMIN_NOT_CONFIGURED") {
+    return {
+      response: NextResponse.json(
+        { success: false, error: memberError.message },
+        { status: 500 }
+      ),
+    };
+  }
+
+  const eligibleMemberships: Array<{
+    organizationId: string;
+    organizationName: string;
+    role: EmployeeRole;
+    departmentId: string | null;
+  }> = [];
+  let hasSuspendedOnly = false;
+
+  for (const m of membersRows || []) {
+    const memberStatus = String(m.status || "active").toLowerCase();
+    if (memberStatus === "suspended") {
+      hasSuspendedOnly = true;
+      continue;
+    }
+    if (!["active", "invited"].includes(memberStatus)) continue;
+    const org = (m as any).organizations;
+    if (org && org.status && !["active", "trial"].includes(String(org.status).toLowerCase())) {
+      continue;
+    }
+    eligibleMemberships.push({
+      organizationId: m.organization_id,
+      organizationName: org?.name || "Organization",
+      role: String(m.role || "employee").toLowerCase() as EmployeeRole,
+      departmentId: m.department_id || null,
+    });
+  }
+
+  if (eligibleMemberships.length === 0 && hasSuspendedOnly) {
+    return {
+      response: NextResponse.json(
+        { error: "Forbidden: Organization membership is suspended." },
+        { status: 403 }
+      ),
+    };
+  }
+
+  let selected: (typeof eligibleMemberships)[number] | null = null;
+  if (rawRequestedOrgId) {
+    if (eligibleMemberships.length > 0) {
+      const matched = eligibleMemberships.find((m) => m.organizationId === rawRequestedOrgId);
+      if (!matched) {
+        return {
+          response: NextResponse.json(
+            { error: "Forbidden: Requested organization is not an active or invited membership for this account." },
+            { status: 403 }
+          ),
+        };
+      }
+      selected = matched;
+    } else {
+      return {
+        response: NextResponse.json(
+          { error: "Forbidden: Requested organization is not an active or invited membership for this account." },
+          { status: 403 }
+        ),
+      };
+    }
+  } else if (eligibleMemberships.length > 1) {
+    return {
+      response: NextResponse.json(
+        {
+          error: "Multiple organization memberships found. Please select an active organization to continue onboarding.",
+          code: "ORG_SELECTION_REQUIRED",
+          organizations: eligibleMemberships.map((m) => ({
+            organizationId: m.organizationId,
+            organizationName: m.organizationName,
+            role: m.role,
+          })),
+        },
+        { status: 409 }
+      ),
+    };
+  } else if (eligibleMemberships.length === 1) {
+    selected = eligibleMemberships[0];
+  }
+
+  let empRow: any = null;
+  try {
+    let empQ = dbClient
+      .from("employees")
+      .select(
+        "id, organization_id, full_name, email, phone, emergency_contact, department_id, job_title_id, status, onboarding_completed, departments:department_id(name), job_titles:job_title_id(title_name)"
+      )
+      .eq("id", user.id);
+    if (selected?.organizationId && typeof empQ.eq === "function") {
+      empQ = empQ.eq("organization_id", selected.organizationId);
+    }
+    const empRes = typeof empQ.maybeSingle === "function" ? await empQ.maybeSingle() : await empQ;
+    empRow = empRes?.data || null;
+  } catch {}
+
+  if (empRow && ["inactive", "deactivated", "suspended", "terminated"].includes(String(empRow.status || "").toLowerCase())) {
+    return {
+      response: NextResponse.json(
+        { error: "Forbidden: Employee account is inactive in this organization." },
+        { status: 403 }
+      ),
+    };
+  }
+
+  const organizationId = selected?.organizationId || empRow?.organization_id || null;
+  return {
+    user,
+    supabase,
+    context: {
+      userId: user.id,
+      email: user.email || empRow?.email || "",
+      organizationId,
+      organizationName: selected?.organizationName || null,
+      role: selected?.role || "employee",
+      memberships: eligibleMemberships.map((m) => ({
+        organizationId: m.organizationId,
+        organizationName: m.organizationName,
+        role: m.role,
+        departmentId: m.departmentId,
+      })),
+      employee: empRow || null,
+    },
+  };
+}
+
+/**
+ * Single authoritative server-side tenant & RBAC context resolver.
+ * - Verifies caller identity cryptographically via Supabase auth.
+ * - Reads active memberships ONLY from `organization_members` (never editable user_metadata).
+ * - Enforces explicit organization selection when a user holds multiple active memberships.
+ * - Rejects deactivated employees, inactive organizations, unapproved onboarding, and missing AAL2.
+ */
+export async function resolveTenantCaller(
+  request: NextRequest,
+  options: ResolveTenantOptions = {}
+): Promise<
+  | { context: TenantCallerContext; user: any; supabase: ReturnType<typeof createServerClient<Database>> }
+  | { response: NextResponse }
+> {
+  const auth = await extractAuthenticatedRequestCaller(request);
+  if ("response" in auth) return auth;
+  const { user, supabase, bearerToken, rawRequestedOrgId, dbClient } = auth;
+
+  const { memberError, membersRows } = await fetchUserMemberships(dbClient, user.id, false);
 
   if (memberError && (memberError as any).code === "SUPABASE_ADMIN_NOT_CONFIGURED") {
     return {
